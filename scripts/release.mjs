@@ -100,10 +100,12 @@ if (cargoOut === cargo) die("Impossible de mettre a jour la version dans Cargo.t
 writeFileSync(CARGO, cargoOut);
 
 // [Unreleased] devient la section datee, et une [Unreleased] vide est recreee au-dessus.
+// `[ \t]*` et non `\s*` : `\s` engloberait les sauts de ligne suivants, ce qui collerait
+// le premier `### Added` au titre de version.
 writeFileSync(
   CHANGELOG,
   changelog.replace(
-    /^## \[Unreleased\]\s*$/m,
+    /^## \[Unreleased\][ \t]*$/m,
     `## [Unreleased]\n\n## [${next}] — ${today}`
   )
 );
