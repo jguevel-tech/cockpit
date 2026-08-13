@@ -886,15 +886,23 @@ Le backend (`system/metrics.rs`) collecte :
 - **Reponses du terminal dans onData** : focus in/out, DA, CPR, reponses DCS/OSC arrivent par le
   meme canal que les frappes -> a filtrer (regex TERMINAL_REPLY) sinon toute heuristique de suivi
   de frappe se fait polluer.
-- **Attach UI = client tmux FRAIS, obligatoirement.** Un nouveau xterm doit recevoir la
-  sequence d'init complete du client (ecran alternatif, modes souris, redraw) : un client
-  conserve ne la renvoie jamais (molette morte, ecran vide) et rejouer un buffer enregistre
-  cree une course avec le live (ecran dechire, reponses DA/CPR parasites "1;2c0;276;0c").
-  Donc : attach_terminal TUE l'ancien client (suppress_exit pour ne pas emettre
-  terminal_exit) et en respawn un, events actifs des le premier octet. Le retour "replay"
-  d'attach_terminal est ignore par TerminalTab. init_command passe par `tmux send-keys`
-  vers la SESSION (pas le PTY du client, qui peut etre tue avant lecture). Historique
-  molette = copy-mode tmux (history-limit 10000).
+- **POOL PERSISTANT : ni detach ni re-attach au switch (doctrine du 2026-08-13, remplace
+  « client frais obligatoire »).** tmux SYNTHETISE des evenements focus vers l'application du
+  pane a CHAQUE attache/detache de client — meme avec `focus-events off`, qui ne gouverne que
+  le focus du terminal exterieur. Prouve en isolation : un cycle attache/tue/rattache sans
+  AUCUNE entree fait reagir claude (re-render), et ce re-render laissait un saut de ligne a
+  chaque changement de terminal. Trois correctifs (0.6.5, 0.6.7) ont vise d'autres maillons
+  sans eteindre le symptome. Donc : les xterm vivent dans un POOL au niveau module
+  (TerminalTab, `<script module>`), gares dans un div invisible au demontage et re-adoptes au
+  retour ; les clients tmux restent attaches en permanence ; attach_terminal REUTILISE un
+  client vivant (no-op) et ne respawn que s'il est mort. Les listeners terminal_output/exit
+  sont GLOBAUX pour alimenter les xterm meme demontes. Benefice : switch instantane.
+- **Un xterm NEUF, lui, exige toujours un client frais** (sequence d'init complete : ecran
+  alternatif, modes souris, redraw) — c'est le cas au premier attach d'une session, et c'est
+  pourquoi le pool conserve le xterm d'origine : il a deja recu l'init de son client. Le
+  retour "replay" d'attach_terminal reste ignore (course replay/live -> ecran dechire).
+  init_command passe par `tmux send-keys` vers la SESSION. Historique molette = copy-mode
+  tmux (history-limit 10000).
 - **Rendu xterm** : le renderer DOM + `monospace` generique derive visuellement sur les glyphes
   accentues. Le modele est sain (verifiable par `tmux -L cockpit capture-pane -p`) : addon WebGL
   + police explicite.

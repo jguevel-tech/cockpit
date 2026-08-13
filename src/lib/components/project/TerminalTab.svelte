@@ -1,3 +1,67 @@
+<script lang="ts" module>
+  import { listen as listenGlobal } from "@tauri-apps/api/event";
+  import type { Terminal as XTerminal } from "@xterm/xterm";
+  import type { FitAddon as XFitAddon } from "@xterm/addon-fit";
+
+  /// POOL PERSISTANT — LE COEUR DE L'ARCHITECTURE TERMINAUX (NE PAS RE-LOCALISER).
+  ///
+  /// Les instances xterm ET les clients tmux SURVIVENT au demontage de l'onglet. Changer de
+  /// projet ou d'onglet ne detache plus rien : on gare les elements DOM dans un conteneur
+  /// invisible et on les re-adopte au retour. Le switch est un pur masquer/montrer.
+  ///
+  /// Pourquoi c'est indispensable, et pas une optimisation (prouve le 2026-08-13) :
+  /// tmux FABRIQUE lui-meme des evenements focus (in/out) vers l'application du pane a CHAQUE
+  /// attache/detache de client — meme avec `focus-events off`, qui ne gouverne que le focus
+  /// venant du terminal exterieur. Demonstration en isolation : un cycle attache/tue/rattache
+  /// SANS AUCUNE entree fait emettre a claude sa reaction focus (`ESC(B SI CSI<u CSI>1u
+  /// CSI>4;2m` + re-render), et ce re-render laisse regulierement une ligne vide a l'ecran.
+  /// Trois correctifs (0.6.5, 0.6.7) ont vise d'autres maillons sans eteindre le symptome :
+  /// la seule solution est de NE PLUS churner les clients. Benefice annexe : switch instantane.
+  ///
+  /// L'ancienne doctrine « attach = client tmux frais obligatoirement » (sequence d'init,
+  /// molette, redraw) reste vraie pour un xterm NEUF — et c'est exactement pourquoi le pool
+  /// conserve le xterm d'origine : il a deja recu l'init de son client, les deux vieillissent
+  /// ensemble.
+  export type PoolEntry = { term: XTerminal; fit: XFitAddon; el: HTMLDivElement };
+  const pool = new Map<number, PoolEntry>();
+
+  let parkingEl: HTMLDivElement | null = null;
+  /// Garage DOM invisible : un canvas WebGL detache du document perd son contexte, on ne
+  /// laisse donc jamais un element du pool orphelin.
+  function parking(): HTMLDivElement {
+    if (!parkingEl) {
+      parkingEl = document.createElement("div");
+      parkingEl.style.display = "none";
+      document.body.appendChild(parkingEl);
+    }
+    return parkingEl;
+  }
+  function parkAll() {
+    for (const { el } of pool.values()) parking().appendChild(el);
+  }
+  function disposePoolEntry(id: number) {
+    const e = pool.get(id);
+    if (!e) return;
+    e.term.dispose();
+    e.el.remove();
+    pool.delete(id);
+  }
+
+  function b64ToBytes(data: string): Uint8Array {
+    return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+  }
+
+  // Listeners GLOBAUX, enregistres une fois pour la vie de l'app : la sortie doit continuer
+  // d'alimenter les xterm du pool meme quand aucun onglet Terminal n'est monte, sinon on
+  // retrouverait un ecran fige au retour.
+  listenGlobal<{ id: number; data: string }>("terminal_output", (e) => {
+    pool.get(e.payload.id)?.term.write(b64ToBytes(e.payload.data));
+  });
+  listenGlobal<number>("terminal_exit", (e) => {
+    pool.get(e.payload)?.term.write("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n");
+  });
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -13,7 +77,7 @@
   import { loadTerminals } from "../../stores/terminals";
   import {
     createTerminal, writeTerminal, resizeTerminal, closeTerminal,
-    attachTerminal, detachTerminal, renameTerminal, listTerminals,
+    attachTerminal, renameTerminal, listTerminals,
     listClaudeSessions, renameClaudeSession, setClipboard, getClipboard,
     terminalCopySelection, openUrl,
   } from "../../api/workspace";
@@ -40,8 +104,9 @@
 
   const project = $derived($projects.find((p) => p.name === name));
 
-  // Instances xterm par session (non reactif : objets lourds)
-  const terms = new Map<number, { term: Terminal; fit: FitAddon; el: HTMLDivElement }>();
+  // Les instances xterm vivent dans le POOL persistant (script module ci-dessus) : elles
+  // survivent au demontage. Ce Set trace uniquement les ids adoptes par CE montage.
+  const mounted = new Set<number>();
   let unlisteners: UnlistenFn[] = [];
   let resizeObserver: ResizeObserver | null = null;
   let fitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -116,22 +181,14 @@
     light: { background: "#ffffff", foreground: "#24292f", cursor: "#24292f", selectionBackground: "#b6d7ff80" },
   };
 
-  function b64ToBytes(data: string): Uint8Array {
-    return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-  }
-
   onMount(() => {
     (async () => {
-      unlisteners.push(
-        await listen<{ id: number; data: string }>("terminal_output", (e) => {
-          terms.get(e.payload.id)?.term.write(b64ToBytes(e.payload.data));
-        })
-      );
+      // La sortie et le message de fin sont geres par les listeners GLOBAUX du pool
+      // (script module) : ici on ne suit que l'etat d'UI de ce montage.
       unlisteners.push(
         await listen<number>("terminal_exit", (e) => {
           const s = sessions.find((s) => s.id === e.payload);
           if (s) s.alive = false;
-          terms.get(e.payload)?.term.write("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n");
         })
       );
 
@@ -159,11 +216,12 @@
     return () => {
       resizeObserver?.disconnect();
       unlisteners.forEach((u) => u());
-      // Detache cote backend (plus d'events IPC) et libere l'UI ;
-      // les shells continuent de tourner, tmux repeindra au prochain attach.
-      terms.forEach((_, id) => { detachTerminal(id); });
-      terms.forEach(({ term }) => term.dispose());
-      terms.clear();
+      // NI detach, NI dispose : clients tmux et xterm restent vivants dans le pool.
+      // Detacher/rattacher ferait synthetiser par tmux des evenements focus vers les
+      // applications (voir le commentaire du pool) — c'etait la cause du saut de ligne.
+      // On gare simplement les elements DOM hors du document visible.
+      parkAll();
+      mounted.clear();
     };
   });
 
@@ -181,7 +239,8 @@
   // Suit le theme de l'app
   $effect(() => {
     const t = $themeBase;
-    terms.forEach(({ term }) => (term.options.theme = XTERM_THEMES[t]));
+    // Tout le pool suit le theme, y compris les terminaux gares d autres projets.
+    pool.forEach(({ term }) => (term.options.theme = XTERM_THEMES[t]));
   });
 
   // --- Copier / Coller (clic droit) ---
@@ -189,7 +248,7 @@
   // selection copy-mode tmux (surlignage bleu). Chemin souris uniquement.
   async function copySelection() {
     if (activeId === null) return;
-    const entry = terms.get(activeId);
+    const entry = pool.get(activeId);
     if (entry?.term.hasSelection()) {
       const sel = entry.term.getSelection();
       entry.term.clearSelection();
@@ -202,7 +261,7 @@
 
   async function pasteClipboard() {
     if (activeId === null) return;
-    const entry = terms.get(activeId);
+    const entry = pool.get(activeId);
     if (!entry) return;
     try {
       const text = await getClipboard();
@@ -293,7 +352,7 @@
     // On mesure AVANT de creer le PTY : le shell (et une TUI lancee via
     // init_command) demarre directement a la bonne taille, pas en 80x24.
     const entry = createXterm();
-    terms.forEach(({ el }) => { el.style.display = "none"; });
+    mounted.forEach((tid) => { const e = pool.get(tid); if (e) e.el.style.display = "none"; });
     entry.el.style.display = "block";
     try { entry.fit.fit(); } catch {}
     const cols = entry.term.cols || 80;
@@ -301,7 +360,8 @@
 
     try {
       const id = await createTerminal(name, project.path, cols, rows, initCommand);
-      terms.set(id, entry);
+      pool.set(id, entry);
+      mounted.add(id);
       lastSentSize.set(id, `${cols}x${rows}`);
       sessions.push({ id, alive: true, name: "" });
       try { await attachTerminal(id, cols, rows); } catch {}
@@ -316,24 +376,46 @@
     }
   }
 
+  function showOnly(id: number) {
+    mounted.forEach((tid) => {
+      const e = pool.get(tid);
+      if (e) e.el.style.display = tid === id ? "block" : "none";
+    });
+  }
+
   async function activate(id: number) {
     activeId = id;
-    if (!terms.has(id)) await attachExisting(id);
-    terms.forEach(({ el }, tid) => { el.style.display = tid === id ? "block" : "none"; });
+    const existing = pool.get(id);
+    if (existing && !mounted.has(id)) {
+      // RE-ADOPTION : le xterm et son client tmux ont surveu au demontage precedent — on
+      // remet simplement l'element dans le conteneur. Aucun detach/attach, donc tmux ne
+      // synthetise aucun evenement focus vers l'application : c'est LE correctif du saut
+      // de ligne au switch (voir le commentaire du pool).
+      container?.appendChild(existing.el);
+      mounted.add(id);
+      // Si le client est mort entre-temps (reboot du serveur tmux), le backend en relance
+      // un ; s'il est vivant, l'appel est un no-op silencieux.
+      try { existing.fit.fit(); } catch {}
+      try { await attachTerminal(id, existing.term.cols || 80, existing.term.rows || 24); } catch {}
+    } else if (!existing) {
+      await attachExisting(id);
+    }
+    showOnly(id);
     requestAnimationFrame(() => {
       fitActive();
-      terms.get(id)?.term.focus();
+      pool.get(id)?.term.focus();
     });
   }
 
   async function attachExisting(id: number) {
     if (!container) return;
     const entry = createXterm();
-    terms.set(id, entry);
+    pool.set(id, entry);
+    mounted.add(id);
 
     // Fit AVANT l'attach : le client tmux demarre a la bonne taille et
     // repeint l'ecran de la session tout seul.
-    terms.forEach(({ el }, tid) => { el.style.display = tid === id ? "block" : "none"; });
+    showOnly(id);
     try { entry.fit.fit(); } catch {}
     const cols = entry.term.cols || 80;
     const rows = entry.term.rows || 24;
@@ -350,9 +432,8 @@
       await attachTerminal(id, cols, rows);
     } catch (e) {
       // Session morte cote tmux : on la retire de la liste
-      entry.term.dispose();
-      entry.el.remove();
-      terms.delete(id);
+      mounted.delete(id);
+      disposePoolEntry(id);
       sessions = sessions.filter((s) => s.id !== id);
       return;
     }
@@ -362,7 +443,7 @@
 
   function fitActive() {
     if (activeId === null) return;
-    const entry = terms.get(activeId);
+    const entry = pool.get(activeId);
     if (!entry || entry.el.style.display === "none") return;
     try {
       entry.fit.fit();
@@ -371,9 +452,9 @@
   }
 
   async function closeTab(id: number) {
-    try { await closeTerminal(id); } catch {}
-    const entry = terms.get(id);
-    if (entry) { entry.term.dispose(); entry.el.remove(); terms.delete(id); }
+    try { await closeTerminal(id); } catch (e) { notify(String(e)); }
+    mounted.delete(id);
+    disposePoolEntry(id);
     sessions = sessions.filter((s) => s.id !== id);
     if (activeId === id) {
       if (sessions.length > 0) await activate(sessions[sessions.length - 1].id);

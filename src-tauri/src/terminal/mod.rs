@@ -558,15 +558,25 @@ impl TerminalState {
             return Err("session terminee (le processus n'existe plus)".into());
         }
 
-        // TOUJOURS repartir d'un client tmux FRAIS : lui seul renvoie la
-        // sequence d'initialisation complete (ecran alternatif, modes souris,
-        // redraw) dont le nouveau xterm a besoin. Un client conserve ne
-        // redessine jamais spontanement et ses modes sont perdus pour l'UI.
-        if let Some(old) = self.live.lock().unwrap().remove(&id) {
-            old.suppress_exit.store(true, std::sync::atomic::Ordering::SeqCst);
-            let mut killer = old.killer;
-            let _ = killer.kill();
+        // REUTILISER un client vivant, ne JAMAIS le remplacer (revirement du 2026-08-13).
+        //
+        // L'ancienne doctrine — « toujours un client frais, lui seul renvoie la sequence
+        // d'initialisation complete » — reste vraie pour un xterm NEUF. Mais le frontend
+        // conserve desormais les xterm dans un pool persistant (TerminalTab, script module) :
+        // le xterm d'origine revit au retour sur l'onglet, avec ses modes deja inities.
+        //
+        // Et tuer/respawner avait un cout invisible, prouve par mesure : tmux SYNTHETISE des
+        // evenements focus (in/out) vers l'application du pane a chaque attache/detache de
+        // client — meme avec focus-events off, qui ne gouverne que le focus du terminal
+        // exterieur. Un cycle attache/tue/rattache SANS AUCUNE entree fait reagir claude
+        // (re-render), et ce re-render laissait des sauts de ligne a chaque switch.
+        if let Some(l) = self.live.lock().unwrap().get(&id) {
+            if l.alive.load(std::sync::atomic::Ordering::SeqCst) {
+                return Ok(String::new());
+            }
         }
+        // Client mort (serveur tmux redemarre, crash...) : on nettoie l'entree et on respawn.
+        self.live.lock().unwrap().remove(&id);
 
         // Taille fixee AVANT l'attach (NE PAS DEPLACER APRES).
         //

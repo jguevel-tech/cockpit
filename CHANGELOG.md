@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Saut de ligne au changement de terminal — cause racine éliminée.** tmux fabrique lui-même
+  des événements « focus » vers l'application à chaque attache/détache de client, même avec
+  `focus-events off` (prouvé en isolant : un cycle attache/détache sans aucune entrée fait
+  redessiner Claude Code, et ce redraw laissait la ligne vide). Les correctifs précédents
+  visaient d'autres maillons. Désormais Cockpit ne détache plus rien au switch : les terminaux
+  et leurs clients tmux restent vivants en permanence, changer d'onglet est un simple
+  masquer/montrer. Bénéfice annexe : le retour sur un terminal est instantané.
+
 ## [0.7.0] — 2026-08-13
 
 ### Changed
