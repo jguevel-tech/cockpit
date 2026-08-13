@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-08-13
+
 ### Fixed
 
 - **Impossible de créer un terminal depuis la 0.6.5** : l'option tmux `window-size manual`,
