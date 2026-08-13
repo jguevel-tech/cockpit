@@ -533,6 +533,13 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
 `cache-on-failure` est actif pour qu'un echec ne reparte pas d'une compilation complete.
 
 **Pieges** :
+- **`Error updating policy` en fin de release** : incident transitoire de l'API GitHub, pas une
+  erreur du workflow. Il survient APRES le build et laisse une release incomplete (AppImage
+  uploade, mais ni `.sig` ni `latest.json`) — donc `latest.json` en 404 et plus aucune mise a
+  jour detectee chez les utilisateurs. Remede : `gh run rerun <id> --failed`. tauri-action
+  retrouve la release existante et y ajoute les fichiers manquants. Constate sur la v0.6.2.
+  **Toujours verifier apres publication** : `curl -sL -o /dev/null -w "%{http_code}"
+  https://github.com/jguevel-tech/cockpit/releases/latest/download/latest.json` doit rendre 200.
 - Sous Linux l'updater ne remplace qu'un **AppImage**. Un binaire brut (`--no-bundle`) ne peut
   pas se mettre a jour : pour tester le flow reel, lancer l'AppImage, pas `target/release/cockpit`.
 - En local `npx tauri build` (avec bundle) **echoue** faute de cle privee : c'est voulu, la

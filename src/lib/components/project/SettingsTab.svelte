@@ -57,7 +57,7 @@
 
 <div class="settings-tab">
   <div class="settings-layout">
-    <div class="settings-form">
+    <div class="settings-form card">
       <h3>Parametres de {name}</h3>
 
       <label>
@@ -107,7 +107,12 @@
 <style>
   .settings-tab { width: 100%; }
   .settings-layout { display: flex; gap: 2rem; align-items: flex-start; }
-  .settings-form { flex: 1; max-width: 500px; }
+  /*  porte le fond : sans panneau, les libelles et les champs etaient poses a meme
+     l image de fond, illisibles. Le padding est local,  ne le definit pas. */
+  /* La classe .card porte le fond : sans panneau, les libelles et les champs etaient poses a
+     meme l'image de fond, illisibles. Le padding est local, .card ne le definit pas. */
+  .settings-form { flex: 1; max-width: 500px; padding: 1.35rem 1.4rem; }
+  /* Pas de .card ici : UrlList fournit deja son propre panneau, on aurait un double cadre. */
   .settings-urls { flex: 1; }
   h3 { margin-bottom: 1rem; }
   label { display: block; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }

@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Contenu posé à même l'image de fond** dans plusieurs écrans. Sur onze vues, sept n'avaient
+  aucun panneau : les paramètres d'un projet, Workspace, Docker, Plugins, Git, Fichiers, le
+  monitoring et la bibliothèque d'agents affichaient leurs libellés et leurs champs directement
+  sur la photo, illisibles. Tous les onglets de projet reposent désormais sur un panneau continu.
+- **Nom du projet illisible** sur une image de fond : l'en-tête n'avait pas de fond non plus. En-tête,
+  barre d'onglets et contenu forment maintenant un seul panneau, du haut vers le bas.
+
 ## [0.6.2] — 2026-08-13
 
 ### Fixed

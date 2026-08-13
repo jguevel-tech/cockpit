@@ -137,6 +137,54 @@ html.has-wallpaper nav {
   padding: 0.35rem;
 }
 
+/* AUCUN CONTENU SUR L'IMAGE BRUTE.
+   Releve du 2026-08-13 : sur 11 racines de vue, 7 n'avaient aucun fond (workspace, docker-tab,
+   plugins-tab, git-tab, files-tab, system, agents-view). Leur contenu — libelles, champs,
+   listes — reposait donc directement sur la photo.
+
+   On traite le CONTENEUR COMMUN des onglets de projet plutot que les 7 vues une par une :
+   une regle au lieu de sept, et les onglets ajoutes plus tard en beneficient sans rien faire.
+   C'est la generalisation de `.stack` aux vues qui n'empilent pas des cartes. */
+html.has-wallpaper .tab-content,
+html.has-wallpaper .system {
+  background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
+  backdrop-filter: blur(16px) saturate(118%);
+  border: 1px solid var(--border-color);
+  /* Coins hauts droits : la barre d'onglets se poursuit juste au-dessus, les deux doivent
+     se lire comme un seul panneau. */
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  padding: 1.25rem;
+}
+html.has-wallpaper .system {
+  border-radius: var(--radius-lg);
+}
+/* La barre d'onglets se colle au panneau : plus d'interstice entre les deux. */
+html.has-wallpaper .tabs {
+  margin-bottom: 0;
+  border-bottom-color: var(--border-color);
+  border-radius: 0;
+}
+
+/* L'en-tete de projet (nom, description, bouton d'enregistrement, liens) n'a pas de fond non
+   plus : le titre se retrouvait illisible sur la photo. Il coiffe la barre d'onglets, donc
+   l'ensemble en-tete + onglets + contenu forme un seul panneau du haut vers le bas. */
+html.has-wallpaper .project-header {
+  background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
+  backdrop-filter: blur(16px) saturate(118%);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 0.9rem 1.25rem 0.6rem;
+  margin: 0;
+}
+/* La barre d'onglets s'insere entre les deux : bords lateraux continus, aucun coin arrondi. */
+html.has-wallpaper .tabs {
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
 /* La barre d'onglets n'a normalement AUCUN fond (juste une bordure basse) : il lui en faut
    un ici, sinon les onglets flottent. */
 html.has-wallpaper .tabs {
