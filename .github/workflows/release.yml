@@ -42,6 +42,28 @@ jobs:
       - name: Tests Rust
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      # Les notes de version viennent du CHANGELOG.md, pas du message de commit : c'est ce
+      # texte que les utilisateurs lisent dans le modal de mise a jour. On extrait la section
+      # de la version taguee, delimitee par le titre suivant.
+      - name: Extraire les notes du CHANGELOG
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { inside = 1; next }
+            inside && /^## \[/ { exit }
+            inside { print }
+          ' CHANGELOG.md)
+          if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+            echo "::error::Aucune section [$VERSION] trouvee dans CHANGELOG.md — release interrompue."
+            exit 1
+          fi
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$NOTES"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # Construit l'AppImage, le signe avec la cle privee, cree la Release GitHub
       # et publie latest.json (le manifeste que l'app interroge).
       - name: Build, signature et publication
@@ -60,10 +82,9 @@ jobs:
           args: -b appimage
           tagName: ${{ github.ref_name }}
           releaseName: Cockpit ${{ github.ref_name }}
-          # Le corps de la Release vient du message du tag, que le script de release
-          # remplit avec la section correspondante du CHANGELOG.md. C'est ce texte que
-          # les utilisateurs voient dans le modal de mise a jour.
-          releaseBody: ${{ github.event.head_commit.message }}
+          # Section du CHANGELOG.md extraite a l'etape precedente : c'est exactement ce
+          # texte que les utilisateurs voient dans le modal de mise a jour.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
