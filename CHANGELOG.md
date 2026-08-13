@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Saut de ligne à chaque changement de terminal.** Chaque session tmux conservait la taille du
+  dernier client qui s'y était attaché : quinze terminaux portaient cinq tailles différentes.
+  Revenir sur un terminal déclenchait donc un redimensionnement, et les applications en plein
+  écran (Claude Code, vim) se redessinaient en laissant une ligne vide. Cockpit fixe désormais la
+  taille avant de s'attacher, et la maîtrise de bout en bout.
+
 ## [0.6.4] — 2026-08-13
 
 ### Fixed

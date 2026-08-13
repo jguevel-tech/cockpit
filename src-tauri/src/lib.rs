@@ -646,7 +646,7 @@ fn write_terminal(id: i64, data: String, state: tauri::State<'_, AppState>) -> R
 
 #[tauri::command]
 fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.resize(id, cols, rows)
+    state.terminals.resize(&state.db, id, cols, rows)
 }
 
 #[tauri::command]

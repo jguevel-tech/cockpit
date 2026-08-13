@@ -229,6 +229,14 @@ const TMUX_CONF: &str = "set -g status off\n\
 set -g mouse on\n\
 set -g history-limit 10000\n\
 set -g escape-time 10\n\
+# TAILLE DE FENETRE PILOTEE PAR COCKPIT (NE PAS RETIRER).\n\
+# Par defaut (window-size latest) la taille suit le DERNIER client attache : elle devient\n\
+# un effet de bord du va-et-vient des clients. Constate le 2026-08-13 : quinze sessions,\n\
+# cinq tailles differentes (227x55, 218x53, 183x44, 177x41, 164x42). Revenir sur un\n\
+# terminal declenchait alors un redimensionnement, donc un SIGWINCH, donc un repaint du\n\
+# TUI qui laissait un saut de ligne. En manual, Cockpit fixe la taille AVANT l'attach et\n\
+# le client ne la change plus.\n\
+set -g window-size manual\n\
 set -s set-clipboard on\n\
 set -sa terminal-features ',xterm*:clipboard:RGB:strikethrough:usstyle'\n\
 set -g mode-style 'bg=#4f7cff,fg=#ffffff'\n\
@@ -260,6 +268,8 @@ pub fn apply_server_options() {
         ["set", "-s", "set-clipboard", "on"].as_slice(),
         ["set", "-sa", "terminal-features", ",xterm*:clipboard:RGB:strikethrough:usstyle"].as_slice(),
         ["set", "-g", "mode-style", "bg=#4f7cff,fg=#ffffff"].as_slice(),
+        // Voir la conf generee : sans manual, la taille de fenetre suit le dernier client.
+        ["set", "-g", "window-size", "manual"].as_slice(),
         // La selection reste affichee au relachement ; copie a la demande
         ["bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
         ["bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
@@ -488,6 +498,24 @@ impl TerminalState {
             let _ = killer.kill();
         }
 
+        // Taille fixee AVANT l'attach (NE PAS DEPLACER APRES).
+        //
+        // Avec `window-size manual`, la fenetre garde la taille qu'on lui donne. Si on
+        // attachait d'abord, le client se dessinerait a l'ancienne taille de la session puis
+        // le redimensionnement provoquerait un SIGWINCH : le TUI se redessine et laisse un
+        // saut de ligne. C'est le bug constate en switchant de terminal — les sessions
+        // portaient cinq tailles differentes, heritees de clients successifs.
+        let _ = tmux_cmd(&[
+            "resize-window",
+            "-t",
+            &row.tmux_name,
+            "-x",
+            &cols.to_string(),
+            "-y",
+            &rows.to_string(),
+        ])
+        .output();
+
         // -u : force UTF-8. -d : detache les autres clients (tailles concurrentes)
         let args: Vec<String> =
             ["-u", "-L", TMUX_SOCKET, "attach-session", "-d", "-t", &row.tmux_name]
@@ -511,12 +539,29 @@ impl TerminalState {
         l.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())
     }
 
-    pub fn resize(&self, id: i64, cols: u16, rows: u16) -> Result<(), String> {
-        let live = self.live.lock().unwrap();
-        let l = live.get(&id).ok_or("terminal non attache")?;
-        l.master
-            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
-            .map_err(|e| e.to_string())
+    pub fn resize(&self, db: &Database, id: i64, cols: u16, rows: u16) -> Result<(), String> {
+        {
+            let live = self.live.lock().unwrap();
+            let l = live.get(&id).ok_or("terminal non attache")?;
+            l.master
+                .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+                .map_err(|e| e.to_string())?;
+        }
+        // Avec `window-size manual`, redimensionner le PTY du client ne suffit plus : la
+        // fenetre tmux ne suit pas toute seule, il faut le lui dire.
+        if let Ok(row) = db.get_terminal_row(id) {
+            let _ = tmux_cmd(&[
+                "resize-window",
+                "-t",
+                &row.tmux_name,
+                "-x",
+                &cols.to_string(),
+                "-y",
+                &rows.to_string(),
+            ])
+            .output();
+        }
+        Ok(())
     }
 
     pub fn rename(&self, db: &Database, id: i64, name: &str) -> Result<(), String> {
