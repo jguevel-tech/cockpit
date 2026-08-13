@@ -119,11 +119,22 @@ html.has-wallpaper {
    flou — donc tout leur contenu se retrouvait pose a meme l'image. */
 html.has-wallpaper header,
 html.has-wallpaper aside,
+html.has-wallpaper nav,
 html.has-wallpaper .tabs,
 html.has-wallpaper .card,
 html.has-wallpaper .input,
 html.has-wallpaper .badge {
   backdrop-filter: blur(16px) saturate(118%);
+}
+
+/* Les menus lateraux (tableau de bord, parametres) sont des <nav> sans fond : leurs entrees
+   flotteraient sur l'image. On donne le fond au MENU, pas a chaque entree — c'est ce qui evite
+   la rangee de pastilles grises. */
+html.has-wallpaper nav {
+  background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.35rem;
 }
 
 /* La barre d'onglets n'a normalement AUCUN fond (juste une bordure basse) : il lui en faut
@@ -139,26 +150,13 @@ html.has-wallpaper .tabs {
    la fonctionnalite au lieu de l'ameliorer. Les trous se traitent par `.stack` (un panneau
    continu au lieu de cartes espacees), ce qui laisse `main` transparent et l'image visible. */
 
-/* 2. TOUS LES CONTROLES.
-   `!important` est DELIBERE et strictement limite a ce mode. 58 controles repartis dans 25
-   composants declarent `background: none` dans leur style scoped, ce qui l'emporte sur toute
-   regle globale par specificite. Les patcher un par un laisserait forcement des oublis — et
-   le besoin est justement qu'AUCUN bouton ne devienne invisible, y compris dans des ecrans
-   qu'on n'a pas inspectes.
-
-   Exclusions : les controles qui portent DEJA une couleur porteuse de sens (action primaire,
-   destructive, etat actif) et le logo, qui est un titre et non un bouton a chrome. */
-html.has-wallpaper:root button:not(.primary):not(.danger):not(.active):not(.logo-btn),
-html.has-wallpaper:root select,
-html.has-wallpaper:root summary {
-  background-color: var(--control-bg) !important;
-  backdrop-filter: blur(12px) saturate(115%);
-}
-
-/* Le survol reste distinguable malgre l'override ci-dessus. */
-html.has-wallpaper:root button:not(.primary):not(.danger):not(.active):hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--surface-raised) 100%, transparent) !important;
-}
+/* 2. PAS d'override global sur les boutons.
+   Tentative abandonnee : une regle `!important` donnait un fond a tout `<button>`. Elle
+   rendait bien les boutons visibles, mais peignait AUSSI tous ceux deja poses sur une
+   surface blanche — resultat, des pastilles grises partout, y compris la ou elles n'avaient
+   aucune utilite. Le remede etait pire que le mal.
+   La visibilite se traite au niveau des CONTENEURS (bloc 1) : un bouton sans fond propre est
+   parfaitement lisible des lors que ce qui l'entoure en a un. */
 
 /* 3. EXCEPTIONS ASSUMEES.
    Le terminal reste opaque et sans flou (canvas WebGL, cf. Pieges connus). Les cases a cocher

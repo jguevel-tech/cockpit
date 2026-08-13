@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
@@ -62,8 +63,18 @@
   function queueResize(id: number, cols: number, rows: number) {
     const key = `${cols}x${rows}`;
     if (lastSentSize.get(id) === key) return;
+    // DIAGNOSTIC TEMPORAIRE (sauts de ligne au retour sur l'onglet Terminal) : on cherche a
+    // savoir si un resize part JUSTE APRES l'attach. Un resize d'une ligne sur un TUI deja
+    // dessine provoque un repaint qui peut laisser une ligne vide. A retirer une fois tranche.
+    diag(`resize id=${id} ${lastSentSize.get(id) ?? "?"} -> ${key}`);
     lastSentSize.set(id, key);
     enqueue(id, () => resizeTerminal(id, cols, rows));
+  }
+
+  /// DIAGNOSTIC TEMPORAIRE — ecrit dans /tmp/cockpit-debug.log via la commande debug_log.
+  function diag(line: string) {
+    const t = new Date().toISOString().slice(11, 23);
+    invoke("debug_log", { line: `[${t}] ${line}` }).catch(() => {});
   }
 
   // Frappe -> PTY. Certains accents (é, à) arrivent sous WebKitGTK dans un seul
@@ -302,6 +313,7 @@
     const cols = entry.term.cols || 80;
     const rows = entry.term.rows || 24;
     lastSentSize.set(id, `${cols}x${rows}`);
+    diag(`attach   id=${id} ${cols}x${rows}`);
 
     try {
       // Le replay retourne est IGNORE volontairement : le client tmux

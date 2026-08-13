@@ -17,6 +17,9 @@ secrets.json
 # Reglages locaux Claude Code (specifiques a la machine)
 .claude/settings.local.json
 
+# Specs et plans de travail : utiles en local, sans interet pour qui clone le projet.
+docs/superpowers/
+
 # Divers
 *.log
 .DS_Store
