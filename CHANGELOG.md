@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-13
+
 ### Changed
 
 - Les nouveaux terminaux sont nommés d'après leur projet : « COCKPIT - 1 », « COCKPIT - 2 »…
