@@ -130,10 +130,10 @@
 </section>
 
 <style>
-  .themes { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .themes { display: flex; flex-wrap: wrap; gap: 0.75rem; }
   .swatch {
-    display: flex; flex-direction: column; gap: 0.4rem; align-items: center;
-    padding: 0.5rem 0.55rem;
+    display: flex; flex-direction: column; gap: 0.5rem; align-items: center;
+    padding: 0.6rem 0.7rem;
     background: none; cursor: pointer;
     border: 1px solid var(--border-color); border-radius: var(--radius);
     color: var(--text-secondary); font-family: inherit; font-size: 0.75rem;
@@ -163,10 +163,12 @@
     cursor: pointer;
   }
 
-  .sliders { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
-  .sliders label { display: flex; flex-direction: column; gap: 0.25rem; }
+  /* Chaque reglage est un bloc separe : titre, curseur, explication. Sans cet espacement,
+     les trois curseurs et leurs legendes se melangeaient visuellement. */
+  .sliders { display: flex; flex-direction: column; gap: 1.5rem; margin-top: 1.5rem; }
+  .sliders label { display: flex; flex-direction: column; gap: 0.5rem; }
   .slider-label { font-size: 0.83rem; color: var(--text-primary); }
   .slider-label em { color: var(--text-secondary); font-style: normal; font-variant-numeric: tabular-nums; }
-  .sliders input[type="range"] { width: 100%; accent-color: var(--accent); }
-  .hint { font-size: 0.76rem; color: var(--text-muted); }
+  .sliders input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .hint { font-size: 0.76rem; color: var(--text-muted); line-height: 1.45; }
 </style>

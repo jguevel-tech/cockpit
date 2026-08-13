@@ -385,13 +385,15 @@
   /* Contenu */
   .settings-content {
     flex: 1; min-width: 0;
-    display: flex; flex-direction: column; gap: 1rem;
+    /* 1rem etait trop serre : les cartes se lisaient comme un seul bloc, surtout sur une
+       image de fond ou leurs bordures se fondent. */
+    display: flex; flex-direction: column; gap: 1.25rem;
   }
   .card {
     background: var(--bg-secondary); border: 1px solid var(--border-color);
     border-radius: 8px; padding: 1.1rem 1.25rem;
   }
-  .card-head { margin-bottom: 0.9rem; }
+  .card-head { margin-bottom: 1.1rem; }
   .card-head h3 { margin: 0 0 0.25rem; font-size: 1rem; }
   .card-head p { margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }
   .count {

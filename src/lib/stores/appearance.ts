@@ -35,8 +35,9 @@ const DEFAULTS = {
   theme: "dark",
   /** null = accent de la palette. Sinon un hex `#rrggbb`. */
   accent: null as string | null,
-  /** Opacite des surfaces au-dessus de l'image, en %. */
-  surfaceAlpha: 82,
+  /** Opacite des surfaces au-dessus de l'image, en %. 92 et non 82 : a 82 le texte sur une
+   *  image chargee restait penible malgre le flou. Le curseur permet de descendre. */
+  surfaceAlpha: 92,
   /** Voile au-dessus de l'image, 0..1. */
   wallpaperDim: 0.55,
   /** Flou de l'image, en px. */

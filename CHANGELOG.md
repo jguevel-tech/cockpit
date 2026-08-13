@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Boutons invisibles avec une image de fond : les contrôles sans fond propre — barres d'onglets,
+  menu du tableau de bord, sidebar — se retrouvaient posés à même l'image. Tous les boutons ont
+  désormais un fond, et les conteneurs structurels (en-tête, sidebar, barres d'onglets) reçoivent
+  le même verre dépoli que les cartes, qui n'était appliqué qu'à ces dernières.
+- Paramètres à l'étroit : espacement des cartes, des pastilles de thème et des curseurs revu.
+- Opacité des surfaces à 92 % par défaut au lieu de 82 % — le texte restait pénible à lire
+  sur une image chargée.
+
 ## [0.5.0] — 2026-08-13
 
 ### Changed

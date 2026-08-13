@@ -99,6 +99,28 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - `catch {}` muet ou `catch (e: any)` : toujours `catch (e) { notify(String(e)); }`
 - SQL : valeurs toujours en parametres `?`, jamais interpolees (les noms de tables/colonnes
   en `format!()` doivent etre des constantes hardcodees)
+- **Un controle cliquable ecrit autrement qu'avec un vrai `<button>`** (pas de `<div onclick>`,
+  pas de `<span role="button">`). Voir la regle « Tout controle doit rester visible » ci-dessous :
+  c'est le selecteur `button` qui garantit sa visibilite sur une image de fond. Un `div` y echappe
+  silencieusement.
+- Retirer le `!important` de la couche `html.has-wallpaper` de `components.css` : il est
+  delibere et documente sur place.
+
+**Tout controle doit rester visible, y compris sur une image de fond** :
+- Le mode image de fond rend les surfaces translucides. Un bouton sans fond propre — et c'est le
+  cas de la majorite dans ce projet (58 `background: none` dans 25 composants) — devient alors
+  du texte flottant sur une photo, illisible.
+- Une couche d'override dans `components.css` (`html.has-wallpaper:root button...`) donne
+  automatiquement un fond a **tout** `<button>`, `<select>` et `<summary>`. Rien a faire en
+  ecrivant un nouveau composant, A CONDITION d'utiliser un vrai element interactif.
+- Sont exclus de l'override, volontairement : `.primary`, `.danger`, `.active` (ils portent deja
+  une couleur porteuse de sens), `.logo-btn`, les `input` de type checkbox/radio/range/color, et
+  tout le `.term-container`.
+- **Un nouveau CONTENEUR structurel** (barre d'onglets, panneau lateral, en-tete de section) doit
+  etre ajoute a la liste des conteneurs floutes de `components.css`. C'est l'oubli qui a rendu la
+  sidebar illisible en v0.5.0 : le flou n'etait pose que sur les cartes.
+- Reflexe de verification : activer une image de fond chargee et parcourir l'ecran ajoute. Un
+  contraste correct en theme sombre uni ne prouve rien.
 
 **Reflexes obligatoires** :
 - Nouvelle table referencant un projet -> l'ajouter a `PROJECT_SCOPED_TABLES` (storage/projects.rs),

@@ -104,15 +104,73 @@
    Le TERMINAL est volontairement exclu et reste opaque : xterm dessine dans un canvas
    WebGL, et le rendre translucide est un terrain connu pour ses regressions d'affichage
    (voir "Pieges connus" du CLAUDE.md). Un terminal doit rester lisible avant d'etre joli. */
-html.has-wallpaper .card,
-html.has-wallpaper .input,
-html.has-wallpaper .btn,
-html.has-wallpaper .badge {
-  backdrop-filter: blur(14px) saturate(120%);
-}
-
-/* Les bordures gagnent en contraste : sur une image, une bordure a 6 % d'opacite disparait. */
 html.has-wallpaper {
+  /* Fond des controles : presque opaque, pour qu'un bouton se lise comme une pastille
+     posee sur l'image et non comme du texte flottant. */
+  --control-bg: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  /* Les bordures gagnent en contraste : sur une image, une bordure a 6 % d'opacite disparait. */
   --border-color: color-mix(in srgb, var(--text-muted) 38%, transparent);
   --border-strong: color-mix(in srgb, var(--text-muted) 58%, transparent);
+}
+
+/* 1. CONTENEURS STRUCTURELS.
+   C'etait le trou de la premiere version : le flou n'etait pose que sur les cartes. La
+   sidebar et les barres d'onglets, elles, passaient de `--bg-secondary` a translucide SANS
+   flou — donc tout leur contenu se retrouvait pose a meme l'image. */
+html.has-wallpaper header,
+html.has-wallpaper aside,
+html.has-wallpaper .tabs,
+html.has-wallpaper .card,
+html.has-wallpaper .input,
+html.has-wallpaper .badge {
+  backdrop-filter: blur(16px) saturate(118%);
+}
+
+/* La barre d'onglets n'a normalement AUCUN fond (juste une bordure basse) : il lui en faut
+   un ici, sinon les onglets flottent. */
+html.has-wallpaper .tabs {
+  background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* Les cartes se detachent de l'image ET les unes des autres : sans ombre, une pile de
+   cartes claires sur un fond charge se lit comme un seul bloc. */
+html.has-wallpaper .card {
+  box-shadow: var(--shadow-lg);
+}
+
+/* 2. TOUS LES CONTROLES.
+   `!important` est DELIBERE et strictement limite a ce mode. 58 controles repartis dans 25
+   composants declarent `background: none` dans leur style scoped, ce qui l'emporte sur toute
+   regle globale par specificite. Les patcher un par un laisserait forcement des oublis — et
+   le besoin est justement qu'AUCUN bouton ne devienne invisible, y compris dans des ecrans
+   qu'on n'a pas inspectes.
+
+   Exclusions : les controles qui portent DEJA une couleur porteuse de sens (action primaire,
+   destructive, etat actif) et le logo, qui est un titre et non un bouton a chrome. */
+html.has-wallpaper:root button:not(.primary):not(.danger):not(.active):not(.logo-btn),
+html.has-wallpaper:root select,
+html.has-wallpaper:root summary {
+  background-color: var(--control-bg) !important;
+  backdrop-filter: blur(12px) saturate(115%);
+}
+
+/* Le survol reste distinguable malgre l'override ci-dessus. */
+html.has-wallpaper:root button:not(.primary):not(.danger):not(.active):hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--surface-raised) 100%, transparent) !important;
+}
+
+/* 3. EXCEPTIONS ASSUMEES.
+   Le terminal reste opaque et sans flou (canvas WebGL, cf. Pieges connus). Les cases a cocher
+   et boutons radio gardent leur rendu natif : un fond force les rendrait illisibles. */
+html.has-wallpaper .term-container,
+html.has-wallpaper .term-container * {
+  backdrop-filter: none;
+}
+html.has-wallpaper:root input[type="checkbox"],
+html.has-wallpaper:root input[type="radio"],
+html.has-wallpaper:root input[type="range"],
+html.has-wallpaper:root input[type="color"] {
+  background-color: initial !important;
+  backdrop-filter: none;
 }
