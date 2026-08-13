@@ -542,9 +542,8 @@ dependencies = [
 
 [[package]]
 name = "cockpit"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
- "anyhow",
  "arboard",
  "base64 0.22.1",
  "chrono",
@@ -552,13 +551,11 @@ dependencies = [
  "ignore",
  "log",
  "portable-pty",
- "quick-xml 0.36.2",
  "regex",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",
  "serde_json",
- "similar",
  "sysinfo",
  "tauri",
  "tauri-build",
@@ -569,7 +566,6 @@ dependencies = [
  "tauri-plugin-store",
  "tauri-plugin-updater",
  "tokio",
- "url",
 ]
 
 [[package]]
@@ -3358,15 +3354,6 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.38.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
@@ -4324,12 +4311,6 @@ name = "simd-adler32"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
-
-[[package]]
-name = "similar"
-version = "2.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "siphasher"

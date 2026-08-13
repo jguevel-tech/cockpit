@@ -110,11 +110,6 @@ Entirely optional: projects without a compose file simply don't show this tab.
 Records your microphone and system audio at once, transcribes both, then drops an automatic summary
 as a note in the project. The summary prompt is configurable globally and overridable per project.
 
-### Sitemap diff
-
-Compare two sitemaps and get a unified HTML diff, URL by URL — useful for spotting what a deployment
-actually changed.
-
 ### System monitoring
 
 Global and per-core CPU, detailed memory (cache, buffers, ZFS ARC), disks, and the twenty hungriest
@@ -197,7 +192,7 @@ src-tauri/src/        Rust backend
   storage/            SQLite: projects, notes, todos, settings
   gitdiff/            Git status and diff parsing
   docker/             Compose orchestration, dependency graph, containers
-  lsp/  recorder/  sitemap/  system/  agents/
+  lsp/  recorder/  system/  agents/  appearance/
 ```
 
 Frontend and backend talk exclusively over Tauri's IPC: `invoke` for calls, events for real-time

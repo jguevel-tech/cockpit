@@ -8,7 +8,6 @@ pub mod settings;
 pub mod terminals;
 pub mod todos;
 pub mod urls;
-pub mod sitemap_pairs;
 
 pub use db::Database;
 pub use project_folders::*;
@@ -18,4 +17,3 @@ pub use recordings::*;
 pub use terminals::*;
 pub use todos::*;
 pub use urls::*;
-pub use sitemap_pairs::*;

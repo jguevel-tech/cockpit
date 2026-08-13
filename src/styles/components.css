@@ -133,10 +133,23 @@ html.has-wallpaper .tabs {
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
-/* Les cartes se detachent de l'image ET les unes des autres : sans ombre, une pile de
-   cartes claires sur un fond charge se lit comme un seul bloc. */
+/* UN FOND UNI PAR VUE.
+   Sans lui, l'image BRUTE apparaissait dans chaque intervalle entre deux cartes et a droite
+   des contenus etroits : des trous visuellement violents au milieu d'une interface. Le verre
+   depoli se joue donc au niveau du panneau entier, pas carte par carte — l'image reste visible
+   a travers, mais uniformement adoucie. */
+html.has-wallpaper main {
+  background-color: color-mix(in srgb, var(--surface-canvas) var(--surface-alpha), transparent);
+  backdrop-filter: blur(22px) saturate(112%);
+}
+
+/* Du coup les cartes deviennent OPAQUES : elles se posent sur le panneau au lieu d'etre des
+   ilots flottants. Deux couches translucides superposees donnaient un rendu sale, et une
+   ombre portee n'a plus de sens sans image brute derriere. */
 html.has-wallpaper .card {
-  box-shadow: var(--shadow-lg);
+  background-color: var(--surface-base);
+  backdrop-filter: none;
+  box-shadow: var(--shadow-sm);
 }
 
 /* 2. TOUS LES CONTROLES.
@@ -173,4 +186,46 @@ html.has-wallpaper:root input[type="range"],
 html.has-wallpaper:root input[type="color"] {
   background-color: initial !important;
   backdrop-filter: none;
+}
+
+/* --- Panneau unifie ---
+   Une pile de `.card` dans un `.stack` ne forme plus des ilots separes mais UN seul panneau,
+   ses sections delimitees par des filets.
+
+   Pourquoi : des cartes espacees laissent apparaitre le fond entre elles. Sur un theme uni
+   c'est discret, sur une image de fond ce sont des trous en plein milieu de l'interface —
+   un ecran de parametres devient illisible. Un panneau continu n'a aucun interstice.
+
+   Le padding reste a la charge du composant : `.card` ne le definit pas. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.stack > .card {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-top: 1px solid var(--border-color);
+  /* Impose ici et pas dans le composant : les sections peuvent venir d'un composant enfant
+     (AppearanceSettings dans GlobalSettings), que les styles scopes du parent n'atteignent pas. */
+  padding: 1.35rem 1.4rem;
+}
+.stack > .card:first-child { border-top: none; }
+
+/* Sous image de fond, c'est le PANNEAU qui porte le verre depoli, plus chaque carte —
+   sinon on empile deux couches translucides et le rendu devient sale. */
+html.has-wallpaper .stack {
+  background-color: var(--surface-base);
+  backdrop-filter: blur(16px) saturate(118%);
+}
+html.has-wallpaper .stack > .card {
+  background: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }

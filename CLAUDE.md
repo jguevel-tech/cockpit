@@ -43,7 +43,12 @@ lit dans le contenu de `[Unreleased]` :
 |---|---|
 | Seulement `### Fixed` | `patch` |
 | Au moins un `### Added` ou `### Changed` visible | `minor` |
-| Un `### Removed`, ou un `Changed` qui casse un usage existant | `major` |
+| Un `### Removed`, ou un `Changed` qui casse un usage existant | `minor` en 0.x, `major` a partir de 1.0.0 |
+
+**Pourquoi une rupture n'est pas un `major` en 0.x** : SemVer est explicite sur la 0.y.z
+(« Anything MAY change at any time. The public API SHOULD NOT be considered stable. »). Publier
+une 1.0.0 pour une suppression de fonctionnalite signalerait une stabilite que le projet n'a pas
+encore atteinte. Le script applique cette regle et redeviendra strict des la 1.0.0.
 
 `scripts/release.mjs` refuse les incoherences (un `Added` avec un bump `patch`, un `Removed` sans
 `major`), donc une erreur de jugement est rattrapee avant le tag. En cas de doute entre deux
@@ -224,7 +229,6 @@ sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
 │                                            │  claude_auth││
 │                                            │  system/    ││
 │                                            │  scanner/   ││
-│                                            │  sitemap/   ││
 │                                            │  agents/    ││
 │                                            │  plugin/    ││
 │                                            └────────────┘│
@@ -268,13 +272,6 @@ ai-workforce/
 │       │   ├── settings.rs         # Cle/valeur globales (upsert)
 │       │   ├── recordings.rs       # Suivi pipeline reunions + summary_prompt par projet
 │       │   ├── terminals.rs        # Metadonnees terminaux persistants (nom, session tmux)
-│       │   └── sitemap_pairs.rs    # Paires de sitemap pour diff HTML
-│       ├── sitemap/
-│       │   ├── mod.rs
-│       │   ├── parser.rs           # Parse sitemap XML (quick-xml)
-│       │   ├── fetcher.rs          # Client reqwest + helpers query/URL
-│       │   ├── diff.rs             # Diff HTML unifie (similar)
-│       │   └── runner.rs           # Orchestration ping + diff, events progress
 │       ├── recorder/
 │       │   ├── mod.rs              # Pipeline reunion (recording -> transcribing -> summarizing -> done/error)
 │       │   ├── capture.rs          # 2x pw-record (micro + monitor sink), PCM brut s16 mono 16 kHz
@@ -346,8 +343,6 @@ ai-workforce/
 │   │   │   │   ├── TerminalTab.svelte    # Multi-terminaux tmux, sessions Claude (fixes accents NE PAS RETIRER)
 │   │   │   │   ├── FilesTab.svelte       # Arbre lazy gitignore-aware + viewer Shiki
 │   │   │   │   ├── GitTab.svelte         # Status + diff viewer (hunks colores)
-│   │   │   │   ├── SitemapTab.svelte     # CRUD paires + ping/diff + logs
-│   │   │   │   ├── SitemapPairForm.svelte # Formulaire paire partage add/edit
 │   │   │   │   ├── PluginsTab.svelte     # Marketplace agents par projet
 │   │   │   │   └── SettingsTab.svelte    # Parametres projet + URLs + override prompt resume
 │   │   │   ├── todos/
@@ -419,7 +414,6 @@ En-tete : nom renommable (double-clic), description, bouton ⏺ Enregistrer (reu
 - **Fichiers** : arbre lazy gitignore-aware + viewer Shiki + Ctrl+clic "aller a la definition" (LSP)
   + edition avec coloration (✎ / Ctrl+S)
 - **Git** : gestion complete (stage/unstage, commit, push, branches) + diff colore
-- **Sitemap** : CRUD paires + ping/diff HTML
 - **Plugins** : marketplace d'agents par projet
 - **Parametres** : formulaire projet (chemin, compose, description, dependances), URLs, override du prompt de resume
 
@@ -616,7 +610,6 @@ SQLite stockee dans `~/.local/share/com.cockpit.dev/data.db` (ou via `COCKPIT_DB
 | `note_files` | Fichiers de notes dans les dossiers (content Markdown, cascade delete) |
 | `todos` | Taches par projet (text, done, position) |
 | `urls` | Liens rapides par projet (label, url, position) |
-| `sitemap_pairs` | Paires de sitemap (ref + check + query params + limit_urls) pour diff HTML |
 | `settings` | Cle/valeur globales (openai_api_key, summary_prompt, summary_model) |
 | `recordings` | Enregistrements de reunions (project, started_at, duration_secs, state, error, dir) |
 | `terminals` | Terminaux persistants (project, name, tmux_name) |
@@ -628,7 +621,7 @@ La colonne `summary_prompt` (nullable) sur `projects` surcharge le prompt global
 Le champ `depends_on` dans `projects` est un JSON array stocke comme TEXT (ex: `["docker-devbox"]`).
 
 Index : idx_notes_project, idx_note_folders_project, idx_note_files_project, idx_note_files_folder,
-idx_todos_project, idx_urls_project, idx_sitemap_pairs_project, idx_projects_folder,
+idx_todos_project, idx_urls_project, idx_projects_folder,
 idx_recordings_project, idx_terminals_project, idx_command_history_ts.
 
 Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign keys actives.
@@ -650,9 +643,6 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 ### URLs
 - `get_urls`, `create_url`, `update_url`, `delete_url`
 
-### Sitemap pairs
-- `get_sitemap_pairs`, `create_sitemap_pair`, `update_sitemap_pair`, `delete_sitemap_pair`
-- `run_sitemap_ping`, `run_sitemap_diff`, `cancel_sitemap_check`
 
 ### Project Folders
 - `get_project_folders`, `create_project_folder`, `rename_project_folder`, `delete_project_folder`, `reorder_project_folders`, `move_project_to_folder`
@@ -704,7 +694,6 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 ## Events Tauri (backend -> frontend)
 
 - `status_update` : emis toutes les 5s par le monitor apres refresh des statuts Docker
-- `sitemap_check_progress` : emis par URL lors d'un run ping/diff (pair_id, mode, done, total, current_url, status, detail)
 - `recording_status` : emis a chaque changement d'etat du pipeline reunion (recording_id, project, state, error, started_at)
 - `terminal_output` : octets du PTY encodes base64 ({id, data}), consommes par xterm.js
 - `terminal_exit` : id de la session dont le shell s'est termine
@@ -823,7 +812,7 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 | `memoryHistory` | `stores/system.ts` | Historique memoire (60 points FIFO) |
 | `activeView` | `stores/ui.ts` | Vue top-niveau (dashboard/project/settings/system/agents) |
 | `selectedProject` | `stores/ui.ts` | Projet selectionne (utilise quand activeView === "project") |
-| `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/sitemap/plugins/settings) |
+| `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/plugins/settings) |
 | `dashboardView` | `stores/ui.ts` | Sous-vue du tableau de bord (tasks/monitoring/terminals/containers) |
 | `pendingTerminalId` | `stores/ui.ts` | Session terminal a activer a l'arrivee sur l'onglet Terminal |
 | `theme` | `stores/appearance.ts` | Palette active (identifiant), persiste localStorage |

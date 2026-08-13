@@ -10,7 +10,6 @@
   import DockerTab from "./DockerTab.svelte";
   import WorkspaceTab from "./WorkspaceTab.svelte";
   import SettingsTab from "./SettingsTab.svelte";
-  import SitemapTab from "./SitemapTab.svelte";
   import PluginsTab from "./PluginsTab.svelte";
   import TerminalTab from "./TerminalTab.svelte";
   import FilesTab from "./FilesTab.svelte";
@@ -105,7 +104,6 @@
     { id: "terminal" as const, label: "Terminal", component: TerminalTab },
     { id: "files" as const, label: "Fichiers", component: FilesTab },
     { id: "git" as const, label: "Git", component: GitTab },
-    { id: "sitemap" as const, label: "Sitemap", component: SitemapTab },
     { id: "plugins" as const, label: "Plugins", component: PluginsTab },
     { id: "settings" as const, label: "Parametres", component: SettingsTab },
   ];

@@ -7,7 +7,6 @@ mod lsp;
 mod plugin;
 mod recorder;
 mod scanner;
-mod sitemap;
 pub mod storage;
 mod system;
 mod terminal;
@@ -27,7 +26,6 @@ pub struct AppState {
     pub db_path: String,
     pub orchestrator: Arc<Orchestrator>,
     pub collector: Arc<Mutex<Collector>>,
-    pub sitemap_cancel: Arc<std::sync::atomic::AtomicBool>,
     pub recorder: recorder::RecorderState,
     pub terminals: terminal::TerminalState,
     pub claude_login: claude_auth::ClaudeLoginState,
@@ -269,95 +267,6 @@ fn update_url(id: i64, label: String, url: String, state: tauri::State<'_, AppSt
 #[tauri::command]
 fn delete_url(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.db.delete_url(id)
-}
-
-// --- Tauri Commands: Sitemap Pairs ---
-
-#[tauri::command]
-fn get_sitemap_pairs(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::SitemapPair>, String> {
-    state.db.get_sitemap_pairs(&project)
-}
-
-#[tauri::command]
-fn create_sitemap_pair(
-    project: String,
-    label: String,
-    sitemap_ref_url: String,
-    sitemap_check_url: String,
-    ref_query: String,
-    check_query: String,
-    limit_urls: Option<i64>,
-    state: tauri::State<'_, AppState>,
-) -> Result<storage::SitemapPair, String> {
-    state.db.create_sitemap_pair(&project, &label, &sitemap_ref_url, &sitemap_check_url, &ref_query, &check_query, limit_urls)
-}
-
-#[tauri::command]
-fn update_sitemap_pair(
-    id: i64,
-    label: String,
-    sitemap_ref_url: String,
-    sitemap_check_url: String,
-    ref_query: String,
-    check_query: String,
-    limit_urls: Option<i64>,
-    state: tauri::State<'_, AppState>,
-) -> Result<storage::SitemapPair, String> {
-    state.db.update_sitemap_pair(id, &label, &sitemap_ref_url, &sitemap_check_url, &ref_query, &check_query, limit_urls)
-}
-
-#[tauri::command]
-fn delete_sitemap_pair(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.db.delete_sitemap_pair(id)
-}
-
-#[tauri::command]
-async fn run_sitemap_ping(
-    app: tauri::AppHandle,
-    pair_id: i64,
-    skip_urls: Option<Vec<String>>,
-    state: tauri::State<'_, AppState>,
-) -> Result<sitemap::PingReport, String> {
-    let pair = state.db.get_sitemap_pair(pair_id)?;
-    state.sitemap_cancel.store(false, std::sync::atomic::Ordering::SeqCst);
-    sitemap::run_ping(
-        app,
-        pair.id,
-        &pair.sitemap_ref_url,
-        &pair.ref_query,
-        skip_urls.unwrap_or_default(),
-        pair.limit_urls.map(|v| v as usize),
-        state.sitemap_cancel.clone(),
-    )
-    .await
-}
-
-#[tauri::command]
-async fn run_sitemap_diff(
-    app: tauri::AppHandle,
-    pair_id: i64,
-    skip_paths: Option<Vec<String>>,
-    state: tauri::State<'_, AppState>,
-) -> Result<sitemap::DiffReport, String> {
-    let pair = state.db.get_sitemap_pair(pair_id)?;
-    state.sitemap_cancel.store(false, std::sync::atomic::Ordering::SeqCst);
-    sitemap::run_diff(
-        app,
-        pair.id,
-        &pair.sitemap_ref_url,
-        &pair.sitemap_check_url,
-        &pair.ref_query,
-        &pair.check_query,
-        skip_paths.unwrap_or_default(),
-        pair.limit_urls.map(|v| v as usize),
-        state.sitemap_cancel.clone(),
-    )
-    .await
-}
-
-#[tauri::command]
-fn cancel_sitemap_check(state: tauri::State<'_, AppState>) {
-    state.sitemap_cancel.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 // --- Tauri Commands: Project Folders ---
@@ -1204,7 +1113,6 @@ pub fn run() {
                 db_path: db_path.clone(),
                 orchestrator: orchestrator.clone(),
                 collector,
-                sitemap_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 recorder: recorder::RecorderState::default(),
                 terminals: terminal::TerminalState::default(),
                 claude_login: claude_auth::ClaudeLoginState::default(),
@@ -1268,14 +1176,6 @@ pub fn run() {
             create_url,
             update_url,
             delete_url,
-            // Sitemap pairs
-            get_sitemap_pairs,
-            create_sitemap_pair,
-            update_sitemap_pair,
-            delete_sitemap_pair,
-            run_sitemap_ping,
-            run_sitemap_diff,
-            cancel_sitemap_check,
             // Project Folders
             get_project_folders,
             create_project_folder,

@@ -173,7 +173,7 @@
       {/each}
     </nav>
 
-    <div class="settings-content">
+    <div class="settings-content stack">
       {#if view === "general"}
         <section class="card">
           <div class="card-head">
@@ -385,14 +385,12 @@
   /* Contenu */
   .settings-content {
     flex: 1; min-width: 0;
-    /* 1rem etait trop serre : les cartes se lisaient comme un seul bloc, surtout sur une
-       image de fond ou leurs bordures se fondent. */
-    display: flex; flex-direction: column; gap: 1.25rem;
+    /* Le gap disparait : les sections sont delimitees par des filets, pas par des interstices
+       ou le fond apparaissait. Voir .stack dans components.css. */
+    display: flex; flex-direction: column;
   }
-  .card {
-    background: var(--bg-secondary); border: 1px solid var(--border-color);
-    border-radius: 8px; padding: 1.1rem 1.25rem;
-  }
+  /* Fond, bordure, rayon et padding viennent desormais de `.stack` (components.css) : les
+     sections forment un panneau continu au lieu d'ilots separes par des interstices. */
   .card-head { margin-bottom: 1.1rem; }
   .card-head h3 { margin: 0 0 0.25rem; font-size: 1rem; }
   .card-head p { margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }

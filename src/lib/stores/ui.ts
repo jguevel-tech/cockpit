@@ -7,7 +7,7 @@ export type ActiveView = "dashboard" | "project" | "settings" | "system";
 
 export const activeView = writable<ActiveView>("dashboard");
 export const selectedProject = writable<string | null>(null);
-export const activeTab = writable<"workspace" | "docker" | "terminal" | "files" | "git" | "sitemap" | "settings" | "plugins">("workspace");
+export const activeTab = writable<"workspace" | "docker" | "terminal" | "files" | "git" | "settings" | "plugins">("workspace");
 // Session terminal a activer a l'arrivee sur l'onglet Terminal (navigation depuis le dashboard)
 export const pendingTerminalId = writable<number | null>(null);
 // Sous-vue active du tableau de bord

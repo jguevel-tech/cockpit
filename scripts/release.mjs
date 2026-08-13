@@ -67,10 +67,6 @@ if (bump === "patch" && hasAdded) {
   die("Le changelog contient une section « Added » mais tu demandes un bump « patch ».\n" +
       "Une nouveaute justifie un « minor ». Corrige le bump ou le changelog.");
 }
-if (bump !== "major" && hasRemoved) {
-  die("Le changelog contient une section « Removed » : c'est une rupture, donc « major ».\n" +
-      "Si rien n'est reellement casse, deplace ces lignes sous « Changed ».");
-}
 
 // --- 3. Calcul de la nouvelle version ---
 
@@ -78,6 +74,19 @@ const pkg = JSON.parse(readFileSync(PKG, "utf8"));
 const [maj, min, pat] = pkg.version.split(".").map(Number);
 if ([maj, min, pat].some(Number.isNaN)) {
   die(`Version actuelle illisible dans package.json : « ${pkg.version} »`);
+}
+
+// Une section « Removed » est une rupture, donc « major »... a partir de la 1.0.0 seulement.
+// SemVer est explicite sur la 0.y.z : « Anything MAY change at any time. The public API SHOULD
+// NOT be considered stable. » La convention en 0.x est donc de passer les ruptures en minor,
+// et publier une 1.0.0 signalerait une stabilite que ce projet n'a pas encore.
+if (maj >= 1 && bump !== "major" && hasRemoved) {
+  die("Le changelog contient une section « Removed » : passe 1.0.0, c'est une rupture, donc\n" +
+      "« major ». Si rien n'est reellement casse, deplace ces lignes sous « Changed ».");
+}
+if (maj === 0 && hasRemoved && bump === "patch") {
+  die("Le changelog contient une section « Removed » : meme en 0.x, une suppression n'est pas\n" +
+      "un « patch ». Utilise « minor ».");
 }
 const next =
   bump === "major" ? `${maj + 1}.0.0` :

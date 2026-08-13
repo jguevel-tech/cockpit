@@ -68,6 +68,16 @@ export const themeBase = derived(theme, (id): "dark" | "light" =>
 // --- Persistance des reglages legers (localStorage) ---
 // L'image, elle, est un fichier cote Rust : trop lourde pour localStorage (quota ~5 Mo).
 
+/// Filet contre un bug qui a coute une version (0.5.1 -> 0.5.2) : `subscribe()` de Svelte
+/// declenche IMMEDIATEMENT son callback avec la valeur courante. Les abonnements etant
+/// enregistres avant `loadSettings()`, ils sauvegardaient les valeurs par defaut et ecrasaient
+/// les reglages de l'utilisateur AVANT qu'ils ne soient relus — le theme choisi revenait a
+/// sombre a chaque redemarrage.
+///
+/// L'ordre est corrige, mais ce drapeau rend le module insensible a l'ordre : tant que le
+/// chargement initial n'a pas eu lieu, aucune ecriture n'est possible.
+let loaded = false;
+
 function loadSettings() {
   if (typeof window === "undefined") return;
   try {
@@ -90,7 +100,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !loaded) return;
   try {
     localStorage.setItem(
       KEY,
@@ -144,6 +154,12 @@ function applyWallpaperVars() {
   root.classList.toggle("has-wallpaper", get(wallpaper) !== null);
 }
 
+// L'ORDRE EST CRITIQUE — lire la note sur `loaded` plus haut avant de le modifier.
+// 1. Charger d'abord : les stores portent alors les valeurs de l'utilisateur.
+loadSettings();
+
+// 2. S'abonner ensuite. Chaque `subscribe` se declenche immediatement, ce qui applique
+//    les valeurs chargees au DOM — inutile d'appeler les `apply*` a la main.
 theme.subscribe((id) => { applyTheme(id); saveSettings(); });
 accent.subscribe((hex) => { applyAccent(hex); saveSettings(); });
 surfaceAlpha.subscribe(() => { applyWallpaperVars(); saveSettings(); });
@@ -151,10 +167,8 @@ wallpaperDim.subscribe(() => { applyWallpaperVars(); saveSettings(); });
 wallpaperBlur.subscribe(() => { applyWallpaperVars(); saveSettings(); });
 wallpaper.subscribe(() => applyWallpaperVars());
 
-loadSettings();
-applyTheme(get(theme));
-applyAccent(get(accent));
-applyWallpaperVars();
+// 3. N'autoriser les ecritures qu'apres tout ca.
+loaded = true;
 
 /** Charge l'image persistee. Appele une fois au demarrage. */
 export async function loadWallpaper() {

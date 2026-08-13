@@ -12,6 +12,23 @@ le script de release.
 
 ## [Unreleased]
 
+### Removed
+
+- **Onglet Sitemap** et toute la comparaison de sitemaps. ⚠️ Les paires enregistrées sont
+  supprimées de la base au premier démarrage de cette version.
+
+### Changed
+
+- **Les écrans de paramètres forment un panneau continu** au lieu d'une pile de cartes séparées.
+  Les sections sont délimitées par des filets, plus par des interstices où le fond apparaissait —
+  ce qui donnait des trous au milieu de l'interface, particulièrement visibles avec une image de
+  fond. Chaque vue reçoit également un fond uni.
+
+### Fixed
+
+- Le thème choisi n'était pas conservé : au redémarrage, l'application revenait au thème sombre.
+  Il en allait de même pour la couleur d'accent et les réglages de l'image de fond.
+
 ## [0.5.1] — 2026-08-13
 
 ### Fixed

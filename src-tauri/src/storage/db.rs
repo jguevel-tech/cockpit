@@ -154,25 +154,8 @@ impl Database {
              DROP TABLE IF EXISTS agent_roles;",
         )?;
 
-        // Migration: sitemap pairs for HTML diff checks
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS sitemap_pairs (
-                id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                project           TEXT NOT NULL,
-                label             TEXT NOT NULL,
-                sitemap_ref_url   TEXT NOT NULL,
-                sitemap_check_url TEXT NOT NULL,
-                ref_query         TEXT NOT NULL DEFAULT '',
-                check_query       TEXT NOT NULL DEFAULT '',
-                position          INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE INDEX IF NOT EXISTS idx_sitemap_pairs_project ON sitemap_pairs(project);",
-        )?;
-        // Migration: add limit_urls column if missing (nullable, NULL = no limit)
-        let _ = conn.execute(
-            "ALTER TABLE sitemap_pairs ADD COLUMN limit_urls INTEGER DEFAULT NULL",
-            [],
-        );
+        // Migration: drop the removed sitemap diff feature.
+        conn.execute_batch("DROP TABLE IF EXISTS sitemap_pairs;")?;
 
         // Migration: settings key/value + recordings (enregistrement de reunions)
         conn.execute_batch(
