@@ -1,0 +1,74 @@
+/* Tokens de design — source de verite du theming.
+   Les composants ne doivent utiliser QUE ces variables (jamais de couleur en dur). */
+
+:root {
+  /* Surfaces : canvas legerement gris, cartes blanches */
+  --bg-primary: #f6f7f9;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eceef2;
+  --bg-hover: #f0f2f5;
+
+  --text-primary: #16181d;
+  --text-secondary: #5b6270;
+  --text-muted: #9aa1af;
+
+  --border-color: #e2e5ea;
+  --border-strong: #cdd2da;
+
+  --accent: #4f7cff;
+  --accent-hover: #3d6af5;
+  --accent-soft: rgba(79, 124, 255, 0.12);
+
+  --success: #21a35b;
+  --success-soft: rgba(33, 163, 91, 0.12);
+  --warning: #e8930c;
+  --error: #e5484d;
+  --error-soft: rgba(229, 72, 77, 0.1);
+
+  /* Geometrie */
+  --sidebar-width: 260px;
+  --header-height: 48px;
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 13px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.16);
+
+  --font-mono: "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", monospace;
+}
+
+html.dark {
+  --bg-primary: #0e1015;
+  --bg-secondary: #161922;
+  --bg-tertiary: #1e222e;
+  --bg-hover: #1a1e29;
+
+  --text-primary: #e7eaf1;
+  --text-secondary: #a4abbd;
+  --text-muted: #697083;
+
+  --border-color: #262b39;
+  --border-strong: #343b4d;
+
+  --accent: #6d8dff;
+  --accent-hover: #86a1ff;
+  --accent-soft: rgba(109, 141, 255, 0.16);
+
+  --success: #3dd47f;
+  --success-soft: rgba(61, 212, 127, 0.14);
+  --warning: #f5a623;
+  --error: #f2555a;
+  --error-soft: rgba(242, 85, 90, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.55);
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}

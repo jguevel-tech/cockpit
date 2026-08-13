@@ -1,0 +1,97 @@
+/* Classes partagees entre composants — tout ce qui etait recopie en scoped.
+   Boutons, cartes, inputs, badges, etats de drag & drop. */
+
+/* --- Boutons --- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.85rem; font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.btn:hover:not(:disabled) { background: var(--bg-tertiary); border-color: var(--border-strong); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn.primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn.danger { color: var(--error); }
+.btn.danger:hover:not(:disabled) { background: var(--error-soft); border-color: var(--error); }
+
+.btn.ghost { background: none; border-color: transparent; color: var(--text-secondary); }
+.btn.ghost:hover:not(:disabled) { background: var(--bg-tertiary); color: var(--text-primary); }
+
+.btn.small { padding: 0.22rem 0.55rem; font-size: 0.78rem; }
+
+/* Bouton icone carre (actions de ligne) */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  background: none; border: none; border-radius: var(--radius-sm);
+  color: var(--text-secondary); cursor: pointer; font-size: 0.85rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.icon-btn:hover:not(:disabled) { background: var(--bg-tertiary); color: var(--text-primary); }
+.icon-btn.danger:hover:not(:disabled) { background: var(--error-soft); color: var(--error); }
+.icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* --- Surfaces --- */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Inputs --- */
+.input {
+  padding: 0.45rem 0.65rem;
+  font: inherit; font-size: 0.87rem;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input::placeholder { color: var(--text-muted); }
+
+/* --- Badges --- */
+.badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.74rem; font-weight: 600;
+  border-radius: 999px;
+  background: var(--bg-tertiary); color: var(--text-secondary);
+}
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.error { background: var(--error-soft); color: var(--error); }
+.badge.accent { background: var(--accent-soft); color: var(--accent); }
+
+/* --- Etats vides / erreurs de panneau --- */
+.empty {
+  color: var(--text-muted); font-size: 0.88rem;
+  text-align: center; padding: 1.5rem 1rem;
+}
+.empty.error { color: var(--error); }
+
+/* --- Drag & drop (classes posees par use:reorderable) --- */
+.dragging { opacity: 0.45; }
+.drag-over-top { box-shadow: 0 -2px 0 0 var(--accent); }
+.drag-over-bottom { box-shadow: 0 2px 0 0 var(--accent); }
+
+/* --- Scrollbars discretes --- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong); border-radius: 5px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--text-muted); }

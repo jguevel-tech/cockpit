@@ -1,0 +1,263 @@
+//! Explorateur de fichiers du projet : listing lazy gitignore-aware + lecture de fichiers.
+
+pub mod claude_sessions;
+
+use ignore::WalkBuilder;
+use serde::Serialize;
+use std::path::{Path, PathBuf};
+
+/// Au-dela de cette taille, le contenu est tronque (viewer, pas editeur de gros fichiers).
+const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+
+#[derive(Serialize, Clone)]
+pub struct DirEntry {
+    pub name: String,
+    pub rel_path: String,
+    pub is_dir: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct FileContent {
+    pub content: String,
+    pub size: u64,
+    pub truncated: bool,
+    pub binary: bool,
+}
+
+/// Joint `rel` a la racine du projet en interdisant de sortir de la racine.
+fn secure_join(root: &str, rel: &str) -> Result<(PathBuf, PathBuf), String> {
+    let root = Path::new(root)
+        .canonicalize()
+        .map_err(|e| format!("racine projet: {}", e))?;
+    let joined = if rel.is_empty() { root.clone() } else { root.join(rel) };
+    let resolved = joined
+        .canonicalize()
+        .map_err(|e| format!("chemin {}: {}", rel, e))?;
+    if !resolved.starts_with(&root) {
+        return Err("chemin hors du projet".into());
+    }
+    Ok((root, resolved))
+}
+
+/// Liste un repertoire (non recursif) en respectant .gitignore, comme l'arbre de Warp.
+pub fn list_dir(project_path: &str, rel_path: &str) -> Result<Vec<DirEntry>, String> {
+    let (root, dir) = secure_join(project_path, rel_path)?;
+    if !dir.is_dir() {
+        return Err("pas un repertoire".into());
+    }
+
+    let mut entries: Vec<DirEntry> = WalkBuilder::new(&dir)
+        .max_depth(Some(1))
+        .hidden(false) // on montre les fichiers caches (.env, .gitlab-ci.yml...)
+        .filter_entry(|e| e.file_name() != ".git")
+        .build()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.depth() == 1)
+        .filter_map(|e| {
+            let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let rel = e.path().strip_prefix(&root).ok()?.to_string_lossy().to_string();
+            Some(DirEntry {
+                name: e.file_name().to_string_lossy().to_string(),
+                rel_path: rel,
+                is_dir,
+            })
+        })
+        .collect();
+
+    entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    Ok(entries)
+}
+
+pub fn read_project_file(project_path: &str, rel_path: &str) -> Result<FileContent, String> {
+    let (_, path) = secure_join(project_path, rel_path)?;
+    if !path.is_file() {
+        return Err("pas un fichier".into());
+    }
+
+    let size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    let truncated = size > MAX_FILE_BYTES;
+
+    let bytes = if truncated {
+        use std::io::Read;
+        let mut buf = vec![0u8; MAX_FILE_BYTES as usize];
+        let mut f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+        let n = f.read(&mut buf).map_err(|e| e.to_string())?;
+        buf.truncate(n);
+        buf
+    } else {
+        std::fs::read(&path).map_err(|e| e.to_string())?
+    };
+
+    let binary = bytes.iter().take(8192).any(|&b| b == 0);
+    let content = if binary {
+        String::new()
+    } else {
+        String::from_utf8_lossy(&bytes).to_string()
+    };
+
+    Ok(FileContent { content, size, truncated, binary })
+}
+
+/// Ecrit un fichier EXISTANT du projet (editeur de l'onglet Fichiers).
+/// Chemin verrouille a la racine comme la lecture ; pas de creation ici.
+pub fn write_project_file(project_path: &str, rel_path: &str, content: &str) -> Result<(), String> {
+    let (_, path) = secure_join(project_path, rel_path)?;
+    if !path.is_file() {
+        return Err("pas un fichier".into());
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize, Clone)]
+pub struct SymbolHit {
+    pub rel_path: String,
+    /// 0-indexee (convention LSP, comme le frontend)
+    pub line: u32,
+    pub preview: String,
+}
+
+const SYMBOL_MAX_HITS: usize = 30;
+const SYMBOL_MAX_FILE: u64 = 512 * 1024;
+const CODE_EXTS: &[&str] = &[
+    "php", "rs", "ts", "js", "mjs", "cjs", "tsx", "jsx", "svelte", "vue",
+    "py", "rb", "go", "java", "kt", "c", "h", "cpp", "hpp", "cs", "swift", "twig",
+];
+
+/// Recherche heuristique de DECLARATIONS d'un symbole dans le projet
+/// (repli quand aucun serveur LSP n'est disponible pour le langage).
+/// Couvre les formes classiques : class/interface/trait/enum/struct/type X,
+/// function/fn/def/func X(, const X =, X = function/arrow.
+pub fn find_symbol(project_path: &str, symbol: &str) -> Result<Vec<SymbolHit>, String> {
+    let (root, _) = secure_join(project_path, "")?;
+    if symbol.is_empty() || !symbol.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return Err("symbole invalide".into());
+    }
+
+    let patterns = [
+        format!(r"^\s*(?:export\s+)?(?:abstract\s+|final\s+)?(?:class|interface|trait|enum|struct|type)\s+{}\b", symbol),
+        format!(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:public\s+|private\s+|protected\s+|static\s+)*(?:function|fn|def|func)\s+&?{}\s*[(<]", symbol),
+        format!(r"^\s*(?:export\s+)?(?:public\s+|private\s+|protected\s+)?const\s+{}\b", symbol),
+        format!(r"^\s*(?:export\s+)?(?:const|let|var)\s+{}\s*=", symbol),
+    ];
+    let regexes: Vec<regex::Regex> = patterns
+        .iter()
+        .filter_map(|p| regex::Regex::new(p).ok())
+        .collect();
+
+    let mut hits = Vec::new();
+    let walker = WalkBuilder::new(&root).hidden(true).build();
+    'files: for entry in walker.filter_map(|e| e.ok()) {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !CODE_EXTS.contains(&ext) {
+            continue;
+        }
+        if entry.metadata().map(|m| m.len() > SYMBOL_MAX_FILE).unwrap_or(true) {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(path) else { continue };
+        for (i, line) in text.lines().enumerate() {
+            if regexes.iter().any(|r| r.is_match(line)) {
+                hits.push(SymbolHit {
+                    rel_path: path.strip_prefix(&root).unwrap_or(path).to_string_lossy().to_string(),
+                    line: i as u32,
+                    preview: line.trim().chars().take(120).collect(),
+                });
+                if hits.len() >= SYMBOL_MAX_HITS {
+                    break 'files;
+                }
+            }
+        }
+    }
+    Ok(hits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_dir_respects_gitignore_and_sorts() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::create_dir_all(dir.join("node_modules")).unwrap();
+        std::fs::write(dir.join(".gitignore"), "node_modules/\n").unwrap();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+
+        let entries = list_dir(dir.to_str().unwrap(), "").unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+
+        assert!(names.contains(&"src"));
+        assert!(names.contains(&"a.txt"));
+        assert!(!names.contains(&".git"));
+        assert!(!names.contains(&"node_modules"), "gitignore doit etre respecte: {:?}", names);
+        // Dossiers d'abord
+        assert!(entries[0].is_dir);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_read_file_and_path_escape() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_read_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("f.txt"), "contenu").unwrap();
+
+        let f = read_project_file(dir.to_str().unwrap(), "f.txt").unwrap();
+        assert_eq!(f.content, "contenu");
+        assert!(!f.binary && !f.truncated);
+
+        assert!(read_project_file(dir.to_str().unwrap(), "../../../etc/passwd").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_write_project_file() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_write_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("f.txt"), "avant").unwrap();
+
+        write_project_file(dir.to_str().unwrap(), "f.txt", "apres").unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("f.txt")).unwrap(), "apres");
+        // Pas de creation de nouveaux fichiers ni d'evasion
+        assert!(write_project_file(dir.to_str().unwrap(), "nouveau.txt", "x").is_err());
+        assert!(write_project_file(dir.to_str().unwrap(), "../evil.txt", "x").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_find_symbol_declarations() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_sym_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("src/a.php"),
+            "<?php\nclass ManifestManager {\n  public function loadIfExists($id) {}\n}\n$x = new ManifestManager();\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/b.ts"), "export const SITE_IDS = ['a'];\nuse(SITE_IDS);\n").unwrap();
+
+        let hits = find_symbol(dir.to_str().unwrap(), "ManifestManager").unwrap();
+        assert_eq!(hits.len(), 1, "declaration seulement, pas l'usage: {:?}", hits.iter().map(|h| &h.preview).collect::<Vec<_>>());
+        assert_eq!(hits[0].line, 1);
+
+        let hits = find_symbol(dir.to_str().unwrap(), "loadIfExists").unwrap();
+        assert_eq!(hits.len(), 1);
+
+        let hits = find_symbol(dir.to_str().unwrap(), "SITE_IDS").unwrap();
+        assert_eq!(hits.len(), 1);
+
+        assert!(find_symbol(dir.to_str().unwrap(), "a; DROP").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

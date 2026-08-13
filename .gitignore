@@ -1,0 +1,22 @@
+# Dependances
+node_modules/
+
+# Builds
+dist/
+src-tauri/target/
+
+# Cle privee de signature des mises a jour : NE JAMAIS COMMITER.
+# Elle vit en secret GitHub (TAURI_SIGNING_PRIVATE_KEY) et en local hors du repo.
+*.key
+*.key.pub
+cockpit-updater.key*
+
+# Secrets applicatifs (cle OpenAI importee au premier lancement)
+secrets.json
+
+# Reglages locaux Claude Code (specifiques a la machine)
+.claude/settings.local.json
+
+# Divers
+*.log
+.DS_Store

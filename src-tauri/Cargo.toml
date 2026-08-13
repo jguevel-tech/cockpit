@@ -1,0 +1,49 @@
+[package]
+name = "cockpit"
+version = "0.1.0"
+edition = "2021"
+description = "Desktop Docker orchestration app"
+
+[lib]
+name = "cockpit_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "cockpit"
+path = "src/main.rs"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-store = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "process", "sync"] }
+sysinfo = "0.30"
+anyhow = "1"
+log = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "json", "multipart"] }
+chrono = "0.4"
+portable-pty = "0.9"
+base64 = "0.22"
+ignore = "0.4"
+quick-xml = "0.36"
+similar = "2"
+futures = "0.3"
+url = "2"
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+regex = "1.13.1"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# Profil optimise pour l'iteration : thin LTO + codegen parallele.
+# Le fat LTO (lto = true, codegen-units = 1) gagnait ~2-5% de perf/taille
+# mais re-linkait tout le monde a chaque build (~plusieurs minutes).
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 16

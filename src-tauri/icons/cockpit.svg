@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a9eff"/>
+      <stop offset="100%" style="stop-color:#22c55e"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Outer ring -->
+  <circle cx="256" cy="240" r="155" fill="none" stroke="url(#ring)" stroke-width="12" opacity="0.3"/>
+  <!-- Gauge arc (top half) -->
+  <path d="M 120 300 A 155 155 0 0 1 392 300" fill="none" stroke="url(#ring)" stroke-width="14" stroke-linecap="round"/>
+  <!-- Gauge ticks -->
+  <line x1="256" y1="90" x2="256" y2="110" stroke="#4a9eff" stroke-width="4" stroke-linecap="round"/>
+  <line x1="152" y1="128" x2="162" y2="145" stroke="#4a9eff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="360" y1="128" x2="350" y2="145" stroke="#4a9eff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="105" y1="220" x2="125" y2="225" stroke="#4a9eff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="407" y1="220" x2="387" y2="225" stroke="#4a9eff" stroke-width="3" stroke-linecap="round"/>
+  <!-- Needle -->
+  <line x1="256" y1="240" x2="180" y2="155" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+  <!-- Center dot -->
+  <circle cx="256" cy="240" r="14" fill="#22c55e"/>
+  <circle cx="256" cy="240" r="8" fill="#1a1a2e"/>
+  <!-- Bottom bar indicators -->
+  <rect x="140" y="340" width="70" height="6" rx="3" fill="#22c55e" opacity="0.8"/>
+  <rect x="222" y="340" width="70" height="6" rx="3" fill="#4a9eff" opacity="0.8"/>
+  <rect x="304" y="340" width="70" height="6" rx="3" fill="#f59e0b" opacity="0.8"/>
+  <!-- Docker-like container blocks -->
+  <rect x="155" y="370" width="40" height="28" rx="4" fill="#4a9eff" opacity="0.6"/>
+  <rect x="205" y="370" width="40" height="28" rx="4" fill="#22c55e" opacity="0.6"/>
+  <rect x="255" y="370" width="40" height="28" rx="4" fill="#4a9eff" opacity="0.6"/>
+  <rect x="305" y="370" width="40" height="28" rx="4" fill="#22c55e" opacity="0.4"/>
+  <!-- Text "C" -->
+  <text x="256" y="455" text-anchor="middle" font-family="system-ui, sans-serif" font-size="42" font-weight="700" fill="#e0e0e0" letter-spacing="4">COCKPIT</text>
+</svg>
