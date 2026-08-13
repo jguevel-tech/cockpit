@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-08-13
+
 ### Fixed
 
 - **Saut de ligne au changement de terminal — cause racine éliminée.** tmux fabrique lui-même
