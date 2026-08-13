@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-13
+
 ### Added
 
 - Mise à jour automatique : une cloche apparaît dans l'en-tête quand une nouvelle version est
