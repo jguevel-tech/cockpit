@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-13
+
 ### Fixed
 
 - **L'image de fond était devenue invisible** en 0.6.0 : le fond uni posé sur chaque vue la
