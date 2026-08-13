@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-13
+
 ### Added
 
 - Centre de notifications : la cloche est désormais **toujours présente** dans l'en-tête, avec un
