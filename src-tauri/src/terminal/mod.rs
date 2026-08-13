@@ -86,19 +86,34 @@ fn utf8_locale() -> String {
     "C.UTF-8".to_string()
 }
 
-/// Sessions tmux vivantes sur notre socket (vide si le serveur ne tourne pas).
-fn tmux_alive_sessions() -> HashSet<String> {
-    tmux_cmd(&["list-sessions", "-F", "#S"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .map(|s| s.trim().to_string())
-                .collect()
-        })
-        .unwrap_or_default()
+/// Sessions tmux vivantes, ou `None` si on n'a PAS PU le savoir.
+///
+/// La distinction est critique : la version precedente renvoyait un ensemble vide aussi bien
+/// quand aucune session n'existait que quand `tmux list-sessions` avait echoue. Les appelants
+/// en concluaient que la session etait morte et SUPPRIMAIENT la ligne en base — des terminaux
+/// bien vivants disparaissaient de l'interface. Constate le 2026-08-13 : sept attach en sept
+/// secondes suffisent a solliciter le serveur tmux, et un seul `list-sessions` en echec
+/// suffisait a perdre un terminal.
+///
+/// Regle : en cas de doute, on NE DETRUIT RIEN.
+fn tmux_alive_sessions() -> Option<HashSet<String>> {
+    let out = tmux_cmd(&["list-sessions", "-F", "#S"]).output().ok()?;
+    // "no server running" sort en code != 0 : c'est un echec, pas une absence de session.
+    if !out.status.success() {
+        return None;
+    }
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|s| s.trim().to_string())
+            .collect(),
+    )
+}
+
+/// `true` seulement si on a pu interroger tmux ET que la session n'y figure pas.
+/// A utiliser partout ou la reponse declenche une SUPPRESSION.
+fn tmux_session_is_gone(name: &str) -> bool {
+    tmux_alive_sessions().is_some_and(|alive| !alive.contains(name))
 }
 
 /// CLIs d'agents LLM reconnus (basename du binaire ou du script node).
@@ -215,7 +230,7 @@ set -g mouse on\n\
 set -g history-limit 10000\n\
 set -g escape-time 10\n\
 set -s set-clipboard on\n\
-set -sa terminal-features ',xterm*:clipboard'\n\
+set -sa terminal-features ',xterm*:clipboard:RGB:strikethrough:usstyle'\n\
 set -g mode-style 'bg=#4f7cff,fg=#ffffff'\n\
 # Selection souris : elle RESTE affichee au relachement (pas de copie auto).\n\
 # C'est l'utilisateur qui copie : Ctrl+C (avec selection) ou clic droit Cockpit.\n\
@@ -243,7 +258,7 @@ fn tmux_conf_path(app: &AppHandle) -> Option<PathBuf> {
 pub fn apply_server_options() {
     for args in [
         ["set", "-s", "set-clipboard", "on"].as_slice(),
-        ["set", "-sa", "terminal-features", ",xterm*:clipboard"].as_slice(),
+        ["set", "-sa", "terminal-features", ",xterm*:clipboard:RGB:strikethrough:usstyle"].as_slice(),
         ["set", "-g", "mode-style", "bg=#4f7cff,fg=#ffffff"].as_slice(),
         // La selection reste affichee au relachement ; copie a la demande
         ["bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
@@ -277,7 +292,9 @@ impl TerminalState {
     /// Au demarrage : supprime les lignes dont la session tmux n'existe plus
     /// (reboot machine, kill manuel...).
     pub fn purge_dead(db: &Database) {
-        let alive = tmux_alive_sessions();
+        // Sans reponse de tmux, on ne purge RIEN : mieux vaut une ligne obsolete qu'un
+        // terminal vivant supprime.
+        let Some(alive) = tmux_alive_sessions() else { return };
         if let Ok(rows) = db.get_terminal_rows(None) {
             for row in rows {
                 if !alive.contains(&row.tmux_name) {
@@ -371,7 +388,9 @@ impl TerminalState {
             let session = tmux_name.to_string();
             std::thread::spawn(move || {
                 for _ in 0..40 {
-                    if tmux_alive_sessions().contains(&session) {
+                    // Ici on ATTEND une presence : un echec de tmux equivaut a "pas encore
+                    // pret", donc on retente. `is_some_and` s'en charge sans rien detruire.
+                    if tmux_alive_sessions().is_some_and(|a| a.contains(&session)) {
                         let _ = tmux_cmd(&["send-keys", "-t", &session, &cmd_line, "Enter"]).output();
                         return;
                     }
@@ -423,7 +442,9 @@ impl TerminalState {
                 }
                 // Shell termine (session tmux disparue) -> on nettoie la ligne.
                 // Client simplement detache (session encore la) -> on garde.
-                if !tmux_alive_sessions().contains(&tmux_name) {
+                // tmux injoignable -> on garde AUSSI : c'est ce qui faisait disparaitre des
+                // terminaux vivants quand `list-sessions` echouait sous la charge des attach.
+                if tmux_session_is_gone(&tmux_name) {
                     let _ = db.delete_terminal_row(id);
                 }
                 let _ = app.emit("terminal_exit", id);
@@ -449,7 +470,10 @@ impl TerminalState {
     ) -> Result<String, String> {
         let row = db.get_terminal_row(id)?;
 
-        if !tmux_alive_sessions().contains(&row.tmux_name) {
+        // Uniquement si tmux a REPONDU que la session n'existe pas. S'il est injoignable, on
+        // tente l'attach : au pire il echoue, ce qui est reversible — contrairement a une
+        // suppression de ligne.
+        if tmux_session_is_gone(&row.tmux_name) {
             let _ = db.delete_terminal_row(id);
             return Err("session terminee (le processus n'existe plus)".into());
         }
@@ -537,6 +561,9 @@ impl TerminalState {
     }
 
     pub fn list(&self, db: &Database, project: Option<&str>) -> Vec<TerminalInfo> {
+        // tmux injoignable -> on annonce les terminaux comme VIVANTS plutot que morts. Le
+        // store `terminals` du frontend filtre sur ce flag et les ferait disparaitre de la
+        // sidebar a chaque hoquet de tmux.
         let alive = tmux_alive_sessions();
         let llm = tmux_llm_sessions();
         db.get_terminal_rows(project)
@@ -546,7 +573,7 @@ impl TerminalState {
                 id: row.id,
                 project: row.project,
                 name: row.name,
-                alive: alive.contains(&row.tmux_name),
+                alive: alive.as_ref().is_none_or(|a| a.contains(&row.tmux_name)),
                 llm: llm.contains(&row.tmux_name),
             })
             .collect()

@@ -12,6 +12,18 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Caractères parasites dans les terminaux** (`^[[?1;2c^[[>0;276;0c`, puis `1;2c0;276;0c` tapé
+  dans l'invite) et sauts de ligne intempestifs en revenant sur l'onglet Terminal. Les réponses du
+  terminal aux questions de tmux repartaient dans le shell au lieu d'être consommées : en
+  rattachant, l'ancien client tmux est remplacé, et ses réponses arrivaient au nouveau, qui n'avait
+  rien demandé.
+- **Terminaux qui disparaissaient tout seuls.** Un échec passager de `tmux list-sessions` était
+  interprété comme « la session n'existe plus », et le terminal était supprimé de la base — alors
+  qu'il tournait toujours. Cockpit ne supprime désormais un terminal que si tmux a explicitement
+  répondu que sa session avait disparu ; en cas de doute, rien n'est détruit.
+
 ## [0.6.3] — 2026-08-13
 
 ### Fixed

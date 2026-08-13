@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
@@ -63,18 +62,8 @@
   function queueResize(id: number, cols: number, rows: number) {
     const key = `${cols}x${rows}`;
     if (lastSentSize.get(id) === key) return;
-    // DIAGNOSTIC TEMPORAIRE (sauts de ligne au retour sur l'onglet Terminal) : on cherche a
-    // savoir si un resize part JUSTE APRES l'attach. Un resize d'une ligne sur un TUI deja
-    // dessine provoque un repaint qui peut laisser une ligne vide. A retirer une fois tranche.
-    diag(`resize id=${id} ${lastSentSize.get(id) ?? "?"} -> ${key}`);
     lastSentSize.set(id, key);
     enqueue(id, () => resizeTerminal(id, cols, rows));
-  }
-
-  /// DIAGNOSTIC TEMPORAIRE — ecrit dans /tmp/cockpit-debug.log via la commande debug_log.
-  function diag(line: string) {
-    const t = new Date().toISOString().slice(11, 23);
-    invoke("debug_log", { line: `[${t}] ${line}` }).catch(() => {});
   }
 
   // Frappe -> PTY. Certains accents (é, à) arrivent sous WebKitGTK dans un seul
@@ -82,9 +71,37 @@
   // de composition GTK. On retire uniquement ce motif precis (un espace SUIVI
   // d'un insecable, ou un insecable seul) — jamais un espace normal isole.
   function sendInput(id: number, data: string) {
+    // Voir TERMINAL_REPLY : une reponse du terminal n'est pas une frappe, elle ne doit pas
+    // repartir dans le PTY. NE PAS RETIRER.
+    if (TERMINAL_REPLY.test(data)) return;
     const clean = data.indexOf("\u00a0") === -1 ? data : data.replace(/\u0020?\u00a0/g, "");
     if (clean) queueWrite(id, clean);
   }
+
+  /// REPONSES du terminal, a ne PAS renvoyer au PTY (NE PAS RETIRER).
+  ///
+  /// Un client tmux interroge le terminal a son demarrage : attributs (DA1 `ESC[c`,
+  /// DA2 `ESC[>c`), position du curseur (`ESC[6n`), etat. xterm.js repond par le MEME canal
+  /// `onData` que les frappes. En regime etabli la reponse est consommee par le client qui a
+  /// pose la question, et tout va bien.
+  ///
+  /// Mais `attach` TUE l'ancien client et en lance un neuf — indispensable, seul un client
+  /// frais renvoie la sequence d'initialisation complete. Les reponses aux questions de
+  /// l'ANCIEN client arrivent apres coup et partent dans le PTY du NOUVEAU, qui n'a rien
+  /// demande. tmux ne les reconnait donc pas comme des reponses et les transmet au pane : le
+  /// shell affiche `^[[?1;2c^[[>0;276;0c`, et `1;2c0;276;0c` atterrit dans l'invite.
+  ///
+  /// Diagnostique le 2026-08-13 PAR INSTRUMENTATION : le log ne montrait aucun `resize` apres
+  /// les `attach`, ce qui a elimine l'hypothese d'un repaint du a un changement de taille —
+  /// hypothese qu'on aurait autrement "corrigee" a tort.
+  ///
+  /// tmux ne perd rien : les capacites qu'il tirait de ces sondages sont declarees
+  /// explicitement dans `terminal-features` (conf generee, terminal/mod.rs).
+  ///
+  /// Volontairement PAS filtres : les evenements de focus (`ESC[I` / `ESC[O`). xterm ne les
+  /// emet que si l'application a active le mode 1004, ils lui sont donc bien destines.
+  const TERMINAL_REPLY =
+    /^(?:\x1b\[(?:\?[0-9;]*c|>[0-9;]*c|[0-9;]*R|[0-9;]*n)|\x1bP[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))+$/;
 
   const XTERM_THEMES = {
     dark: { background: "#111318", foreground: "#d4d7dd", cursor: "#d4d7dd", selectionBackground: "#33415580" },
@@ -313,7 +330,6 @@
     const cols = entry.term.cols || 80;
     const rows = entry.term.rows || 24;
     lastSentSize.set(id, `${cols}x${rows}`);
-    diag(`attach   id=${id} ${cols}x${rows}`);
 
     try {
       // Le replay retourne est IGNORE volontairement : le client tmux
