@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { toggleTheme, goHome, openSettings, openAgents } from "../../stores/ui";
+  import { goHome, openSettings, openAgents } from "../../stores/ui";
+  import { toggleBase } from "../../stores/appearance";
   import { zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
   import { recordingStatus } from "../../stores/recording";
   import { unreadCount } from "../../stores/notifications";
@@ -50,7 +51,7 @@
     <button class="header-btn agents-btn" onclick={openAgents} title="Agents (marketplace)">Agents</button>
     <button class="header-btn" onclick={restartApp} title="Redémarrer l'application (recharge le dernier build)">&#8635;</button>
     <button class="header-btn" onclick={openSettings} title="Parametres">&#9881;</button>
-    <button class="header-btn" onclick={toggleTheme} title="Changer le theme">&#9681;</button>
+    <button class="header-btn" onclick={toggleBase} title="Changer le theme">&#9681;</button>
   </div>
 </header>
 

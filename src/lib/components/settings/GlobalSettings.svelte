@@ -11,6 +11,7 @@
   import { updateState, checkForUpdate } from "../../stores/update";
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
+  import AppearanceSettings from "./AppearanceSettings.svelte";
   import { marked } from "marked";
   // Le CHANGELOG.md est embarque au build (Vite ?raw) : consultable hors ligne, et toujours
   // celui de la version installee — pas celui d'une branche distante.
@@ -18,11 +19,12 @@
 
   const changelogHtml = marked.parse(changelogRaw, { async: false });
 
-  type SettingsView = "general" | "claude" | "meetings" | "projects";
+  type SettingsView = "general" | "appearance" | "claude" | "meetings" | "projects";
   let view: SettingsView = $state("general");
 
   const MENU: { id: SettingsView; icon: string; label: string }[] = [
     { id: "general", icon: "⚙", label: "Général" },
+    { id: "appearance", icon: "◐", label: "Apparence" },
     { id: "claude", icon: "✳", label: "Claude & IA" },
     { id: "meetings", icon: "⏺", label: "Réunions" },
     { id: "projects", icon: "▤", label: "Projets" },
@@ -221,6 +223,9 @@
             <p class="feedback" class:error={importResult.startsWith('Erreur')}>{importResult}</p>
           {/if}
         </section>
+
+      {:else if view === "appearance"}
+        <AppearanceSettings />
 
       {:else if view === "claude"}
         <section class="card">

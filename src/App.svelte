@@ -6,6 +6,7 @@
   import { loadProjects } from "./lib/stores/projects";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
+  import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
 
   // Ctrl+molette = zoom, y compris au-dessus d'un terminal.
@@ -28,6 +29,7 @@
 
   onMount(() => {
     loadProjects();
+    loadWallpaper();
     const stopUpdateWatcher = startUpdateWatcher();
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
@@ -36,6 +38,19 @@
     };
   });
 </script>
+
+{#if $wallpaper}
+  <!-- Deux couches distinctes : l'image, puis un voile de la couleur du theme. Separer les
+       deux permet de flouter l'image SANS flouter le voile, et de regler l'un sans l'autre.
+       `scale` compense le debordement transparent que le flou cree sur les bords. -->
+  <div
+    class="wallpaper"
+    style:background-image="url({$wallpaper})"
+    style:filter={$wallpaperBlur > 0 ? `blur(${$wallpaperBlur}px)` : "none"}
+    style:transform={$wallpaperBlur > 0 ? `scale(${1 + $wallpaperBlur / 100})` : "none"}
+  ></div>
+  <div class="wallpaper-dim" style:opacity={$wallpaperDim}></div>
+{/if}
 
 <div class="app">
   <Header />
@@ -47,11 +62,32 @@
 </div>
 
 <style>
+  .wallpaper,
+  .wallpaper-dim {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .wallpaper {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  .wallpaper-dim {
+    /* Couleur du canvas de la palette : on assombrit sur un theme sombre, on eclaircit
+       sur un theme clair. Sans ca, un voile noir sur theme clair serait absurde. */
+    background: var(--surface-canvas);
+    transition: opacity 0.15s ease;
+  }
   .app {
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    /* Au-dessus des deux couches de fond. */
+    position: relative;
+    z-index: 1;
   }
   .content {
     display: flex;

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { highlightCode } from "../../shiki";
-  import { theme } from "../../stores/ui";
+  // themeBase : Shiki n a que deux jeux (github-dark / github-light), pas une palette par theme.
+  import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
   import { notify } from "../../stores/toast";
   import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition } from "../../api/workspace";
@@ -112,7 +113,7 @@
       fileTruncated = f.truncated;
       if (f.truncated) fileNotice = `Fichier tronqué à 2 Mo (taille réelle : ${formatSize(f.size)})`;
       fileRaw = f.content;
-      fileHtml = await highlightCode(f.content, langFor(relPath), $theme === "dark");
+      fileHtml = await highlightCode(f.content, langFor(relPath), $themeBase === "dark");
     } catch (e) { fileNotice = String(e); }
     finally { loadingFile = false; }
   }
@@ -142,7 +143,7 @@
     try {
       await writeProjectFile(project.path, selectedPath, draft);
       fileRaw = draft;
-      fileHtml = await highlightCode(draft, langFor(selectedPath), $theme === "dark");
+      fileHtml = await highlightCode(draft, langFor(selectedPath), $themeBase === "dark");
       notify("Fichier sauvegardé", "success");
     } catch (e) { notify(String(e)); }
     finally { saving = false; }
@@ -334,7 +335,7 @@
         <p class="viewer-notice">Chargement…</p>
       {:else if editing}
         <div class="editor-host">
-          <CodeEditor bind:value={draft} lang={langFor(selectedPath)} dark={$theme === "dark"} onSave={save} />
+          <CodeEditor bind:value={draft} lang={langFor(selectedPath)} dark={$themeBase === "dark"} onSave={save} />
         </div>
       {:else if fileHtml}
         <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->

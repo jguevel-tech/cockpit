@@ -6,7 +6,9 @@
   import { WebglAddon } from "@xterm/addon-webgl";
   import { WebLinksAddon } from "@xterm/addon-web-links";
   import "@xterm/xterm/css/xterm.css";
-  import { theme, pendingTerminalId, TERMINAL_FONT_SIZE } from "../../stores/ui";
+  import { pendingTerminalId, TERMINAL_FONT_SIZE } from "../../stores/ui";
+  // themeBase et non la palette : xterm n a que deux jeux de couleurs.
+  import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
   import { loadTerminals } from "../../stores/terminals";
   import {
@@ -142,7 +144,7 @@
 
   // Suit le theme de l'app
   $effect(() => {
-    const t = $theme;
+    const t = $themeBase;
     terms.forEach(({ term }) => (term.options.theme = XTERM_THEMES[t]));
   });
 
@@ -192,7 +194,7 @@
       fontSize: TERMINAL_FONT_SIZE,
       scrollback: 5000,
       rescaleOverlappingGlyphs: true,
-      theme: XTERM_THEMES[$theme],
+      theme: XTERM_THEMES[$themeBase],
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -597,6 +599,12 @@
     overflow: hidden; padding: 4px; background: #111318;
   }
   :global(html:not(.dark)) .term-container { background: #ffffff; }
+  /* Le terminal reste OPAQUE meme avec une image de fond, et ne recoit aucun flou.
+     xterm dessine dans un canvas WebGL : le rendre translucide est un terrain a
+     regressions d'affichage (voir "Pieges connus" du CLAUDE.md), et un terminal doit
+     rester lisible avant d'etre joli. Les couleurs viennent de XTERM_THEMES. */
+  :global(html.has-wallpaper) .term-container { background: #111318; backdrop-filter: none; }
+  :global(html.has-wallpaper:not(.dark)) .term-container { background: #ffffff; }
   .term-container :global(.term-host) { width: 100%; height: 100%; }
   .term-empty {
     display: flex; align-items: center; justify-content: center; height: 100%;

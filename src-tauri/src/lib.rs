@@ -1,4 +1,5 @@
 mod agents;
+mod appearance;
 mod claude_auth;
 mod docker;
 mod gitdiff;
@@ -541,6 +542,36 @@ async fn get_system_metrics(state: tauri::State<'_, AppState>) -> Result<system:
 async fn kill_process(pid: u32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let collector = state.collector.lock().await;
     system::process::kill_process_with_sys(collector.system(), pid)
+}
+
+// --- Tauri Commands: Apparence (image de fond) ---
+
+/// Resout `<app_data>`, ou toutes les donnees de l'app vivent deja (DB, enregistrements, tmux.conf).
+fn app_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir indisponible : {}", e))
+}
+
+#[tauri::command]
+fn set_wallpaper(app: tauri::AppHandle, data_url: String) -> Result<(), String> {
+    appearance::set_wallpaper(&app_data_dir(&app)?, &data_url)
+}
+
+#[tauri::command]
+fn get_wallpaper(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    appearance::get_wallpaper(&app_data_dir(&app)?)
+}
+
+#[tauri::command]
+fn clear_wallpaper(app: tauri::AppHandle) -> Result<(), String> {
+    appearance::clear_wallpaper(&app_data_dir(&app)?)
+}
+
+#[tauri::command]
+fn read_image_as_data_url(path: String) -> Result<String, String> {
+    appearance::read_image_as_data_url(&path)
 }
 
 // --- Tauri Commands: Zoom ---
@@ -1276,6 +1307,11 @@ pub fn run() {
             kill_process,
             // Zoom
             set_webview_zoom,
+            // Apparence
+            set_wallpaper,
+            get_wallpaper,
+            clear_wallpaper,
+            read_image_as_data_url,
             // Terminal
             open_terminal,
             // Migration

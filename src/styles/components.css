@@ -95,3 +95,24 @@
   border: 2px solid transparent; background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background-color: var(--text-muted); }
+
+/* --- Verre depoli quand une image de fond est active ---
+   Les tokens `--bg-*` sont deja devenus translucides (theme.css). Il reste a FLOUTER ce
+   qui passe derriere, sinon du texte sur une image chargee est illisible. On cible les
+   surfaces porteuses de contenu, pas le texte.
+
+   Le TERMINAL est volontairement exclu et reste opaque : xterm dessine dans un canvas
+   WebGL, et le rendre translucide est un terrain connu pour ses regressions d'affichage
+   (voir "Pieges connus" du CLAUDE.md). Un terminal doit rester lisible avant d'etre joli. */
+html.has-wallpaper .card,
+html.has-wallpaper .input,
+html.has-wallpaper .btn,
+html.has-wallpaper .badge {
+  backdrop-filter: blur(14px) saturate(120%);
+}
+
+/* Les bordures gagnent en contraste : sur une image, une bordure a 6 % d'opacite disparait. */
+html.has-wallpaper {
+  --border-color: color-mix(in srgb, var(--text-muted) 38%, transparent);
+  --border-strong: color-mix(in srgb, var(--text-muted) 58%, transparent);
+}

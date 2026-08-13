@@ -12,29 +12,9 @@ export const activeTab = writable<"workspace" | "docker" | "terminal" | "files" 
 export const pendingTerminalId = writable<number | null>(null);
 // Sous-vue active du tableau de bord
 export const dashboardView = writable<"tasks" | "monitoring" | "terminals" | "containers">("tasks");
-export const theme = writable<"light" | "dark">("dark");
-
-// Initialize theme from localStorage
-if (typeof window !== "undefined") {
-  const saved = localStorage.getItem("cockpit-theme") as "light" | "dark" | null;
-  if (saved) {
-    theme.set(saved);
-    document.documentElement.classList.toggle("dark", saved === "dark");
-  } else {
-    document.documentElement.classList.add("dark");
-  }
-}
-
-theme.subscribe((t) => {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("cockpit-theme", t);
-    document.documentElement.classList.toggle("dark", t === "dark");
-  }
-});
-
-export function toggleTheme() {
-  theme.update((t) => (t === "dark" ? "light" : "dark"));
-}
+// Le theme a demenage dans stores/appearance.ts : ce n'est plus un booleen sombre/clair mais
+// une palette parmi plusieurs, accompagnee d'un accent personnalisable et d'une image de fond.
+// Consommer `theme` (identifiant de palette) ou `themeBase` ("dark" | "light") depuis la.
 
 // --- Zoom global ---
 

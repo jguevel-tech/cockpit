@@ -524,12 +524,41 @@ non realloue) — les deux auraient rendu 200 % flou, pas net. Changer `TERMINAL
 les paliers suivent. L'UI (racine 14 px) ne peut pas etre exacte simultanement : 13z et 14z entiers
 implique z entier, donc seuls 100 % et 200 % ; l'ecart residuel est de 0,08 a 0,46 px.
 
-### Theme
+### Apparence : palettes, accent, image de fond
 
-- Dark (defaut) et light
-- Variables CSS dans `theme.css`, toggle dans le Header
-- Persiste dans localStorage (cle `cockpit-theme`)
-- Classe `dark` sur `<html>`
+`stores/appearance.ts` + `settings/AppearanceSettings.svelte`. **Le theme n'est plus un booleen
+sombre/clair** : c'est une palette parmi plusieurs. L'ancien store `theme` de `stores/ui.ts` a
+demenage.
+
+**DEUX mecanismes CSS complementaires — ne pas les confondre** :
+- la classe `html.dark` porte la **base** (sombre ou claire). C'est elle que lisent le theme xterm
+  (`XTERM_THEMES`), Shiki (`FilesTab`) et le selecteur `html:not(.dark) .term-container`. Toute
+  palette sombre doit donc aussi porter cette classe.
+- l'attribut `html[data-theme]` porte la **palette** et surcharge les tokens.
+
+Consommer `themeBase` (derive, `"dark" | "light"`) partout ou le choix est binaire, jamais `theme` :
+sinon chaque nouvelle palette casse un `Record` a deux entrees.
+
+**Ajouter une palette = 3 endroits** : un bloc `html[data-theme="x"]` dans theme.css, sa ligne de
+couleurs OPAQUES (`--surface-canvas/base/raised`, indispensable au verre depoli), et une entree
+dans `THEMES` (appearance.ts).
+
+**Image de fond** : stockee en FICHIER dans `<app_data>/wallpaper.<ext>` (module `appearance/`),
+pas dans la table `settings` — `get_app_settings()` renvoie toutes les cles d'un coup et y glisser
+des centaines de Ko de base64 alourdirait chaque lecture. Le frontend redimensionne (canvas,
+2560 px max, WebP 0.85) et extrait la couleur dominante ; Rust ne fait que valider et ecrire.
+Lecture du fichier source par `read_image_as_data_url` cote Rust, PAS par `@tauri-apps/plugin-fs`
+(non installe cote JS, et il faudrait des permissions de lecture bien trop larges).
+
+**Lisibilite** : quand `html.has-wallpaper` est pose, les tokens `--bg-*` deviennent translucides
+via `color-mix` et les surfaces recoivent un `backdrop-filter: blur()` (components.css). Le
+**TERMINAL reste opaque et sans flou** : xterm dessine dans un canvas WebGL, le rendre translucide
+est un terrain a regressions (voir Pieges connus), et un terminal doit rester lisible avant d'etre
+joli. Ne pas "harmoniser" ce cas particulier.
+
+Le bouton ◑ du Header (`toggleBase`) bascule sombre <-> clair ; les palettes de couleur se
+choisissent dans Parametres -> Apparence. Reglages persistes en localStorage sous la cle
+`cockpit-appearance` (migration automatique depuis l'ancienne cle `cockpit-theme`).
 
 ## Base de donnees
 
@@ -756,7 +785,10 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 | `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/sitemap/plugins/settings) |
 | `dashboardView` | `stores/ui.ts` | Sous-vue du tableau de bord (tasks/monitoring/terminals/containers) |
 | `pendingTerminalId` | `stores/ui.ts` | Session terminal a activer a l'arrivee sur l'onglet Terminal |
-| `theme` | `stores/ui.ts` | Theme dark/light, persiste localStorage |
+| `theme` | `stores/appearance.ts` | Palette active (identifiant), persiste localStorage |
+| `themeBase` | `stores/appearance.ts` | Base derivee "dark" ou "light" — a consommer pour xterm et Shiki |
+| `wallpaper` | `stores/appearance.ts` | Data URL de l image de fond, ou null (fichier cote Rust) |
+| `notices` | `stores/notifications.ts` | Notifications visibles, non-lues comptees par `unreadCount` |
 | `zoom` | `stores/ui.ts` | Zoom global (paliers ZOOM_LEVELS 0.7->2), persiste localStorage `cockpit-zoom` |
 | `toasts` | `stores/toast.ts` | Notifications non bloquantes — emettre via `notify(msg, kind?)` |
 | `recordingStatus` | `stores/recording.ts` | Pipeline reunion en cours (null sinon) |

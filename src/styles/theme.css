@@ -68,6 +68,134 @@ html.dark {
   --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.55);
 }
 
+/* ---------------------------------------------------------------------------
+   Palettes supplementaires.
+
+   DEUX mecanismes complementaires, a ne pas confondre :
+   - la classe `html.dark` dit si la base est SOMBRE ou CLAIRE. Elle pilote le theme xterm
+     et le selecteur `html:not(.dark) .term-container` de TerminalTab. Toute palette sombre
+     doit donc aussi porter cette classe.
+   - l'attribut `html[data-theme]` choisit la PALETTE. Il surcharge les blocs ci-dessus.
+
+   Ajouter une palette = un bloc ici + une entree dans THEMES (stores/appearance.ts).
+   --------------------------------------------------------------------------- */
+
+/* Bleu nuit profond, plus sature que le sombre par defaut */
+html[data-theme="midnight"] {
+  --bg-primary: #0a0f1e;
+  --bg-secondary: #111830;
+  --bg-tertiary: #18213d;
+  --bg-hover: #141c36;
+  --text-primary: #e6ecff;
+  --text-secondary: #9fb0d9;
+  --text-muted: #64749c;
+  --border-color: #1f2a4a;
+  --border-strong: #2c3a63;
+  --accent: #5b9dff;
+  --accent-hover: #7cb2ff;
+  --accent-soft: rgba(91, 157, 255, 0.18);
+}
+
+/* Prune : violet sombre, chaud */
+html[data-theme="plum"] {
+  --bg-primary: #14101c;
+  --bg-secondary: #1d182a;
+  --bg-tertiary: #262036;
+  --bg-hover: #221c31;
+  --text-primary: #ece6f6;
+  --text-secondary: #b3a6c9;
+  --text-muted: #7a6d91;
+  --border-color: #2e2740;
+  --border-strong: #3f3555;
+  --accent: #b57cff;
+  --accent-hover: #c79aff;
+  --accent-soft: rgba(181, 124, 255, 0.18);
+}
+
+/* Foret : vert sombre, faible saturation */
+html[data-theme="forest"] {
+  --bg-primary: #0b1310;
+  --bg-secondary: #121d18;
+  --bg-tertiary: #182720;
+  --bg-hover: #15221c;
+  --text-primary: #e2efe7;
+  --text-secondary: #a0bdac;
+  --text-muted: #6a8676;
+  --border-color: #1e2f26;
+  --border-strong: #2b4235;
+  --accent: #4fc98a;
+  --accent-hover: #6fd9a0;
+  --accent-soft: rgba(79, 201, 138, 0.16);
+}
+
+/* Braise : brun chaud, ambiance lampe de bureau */
+html[data-theme="ember"] {
+  --bg-primary: #14100d;
+  --bg-secondary: #1e1814;
+  --bg-tertiary: #29211b;
+  --bg-hover: #241d18;
+  --text-primary: #f2e8de;
+  --text-secondary: #c2ab98;
+  --text-muted: #8a7666;
+  --border-color: #322820;
+  --border-strong: #46382d;
+  --accent: #ff9d4d;
+  --accent-hover: #ffb373;
+  --accent-soft: rgba(255, 157, 77, 0.18);
+}
+
+/* Papier : clair chaud, moins clinique que le clair par defaut */
+html[data-theme="paper"] {
+  --bg-primary: #f7f4ee;
+  --bg-secondary: #fffdf8;
+  --bg-tertiary: #efe9df;
+  --bg-hover: #f3ede3;
+  --text-primary: #201c16;
+  --text-secondary: #625a4e;
+  --text-muted: #9c9285;
+  --border-color: #e5ded1;
+  --border-strong: #cfc5b4;
+  --accent: #b7791f;
+  --accent-hover: #a06a1a;
+  --accent-soft: rgba(183, 121, 31, 0.14);
+}
+
+/* ---------------------------------------------------------------------------
+   Image de fond.
+
+   `html.has-wallpaper` est pose par le store quand une image est active. Le principe :
+   les SURFACES deviennent translucides et floutees (verre depoli), pas le texte. Comme
+   tous les composants passent par ces tokens, il n'y a rien a modifier ailleurs.
+
+   `--surface-alpha` (opacite des surfaces) et `--wallpaper-dim` (voile au-dessus de
+   l'image) sont pilotes en inline par le store, donc reglables au curseur.
+   --------------------------------------------------------------------------- */
+:root {
+  --surface-alpha: 82%;
+  --wallpaper-dim: 0.55;
+  --wallpaper-blur: 0px;
+}
+
+html.has-wallpaper {
+  --bg-primary: transparent;
+  --bg-secondary: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
+  --bg-tertiary: color-mix(in srgb, var(--surface-raised) var(--surface-alpha), transparent);
+  --bg-hover: color-mix(in srgb, var(--surface-raised) calc(var(--surface-alpha) + 8%), transparent);
+}
+
+/* Couleurs OPAQUES de reference, dupliquees exprès : une fois `--bg-*` devenu translucide,
+   il n'y a plus moyen de retrouver la teinte d'origine pour composer le verre depoli.
+   `--surface-canvas` sert de couleur de voile au-dessus de l'image — clair sur un theme
+   clair (on eclaircit), sombre sur un theme sombre (on assombrit).
+   Ajouter une palette = ajouter sa ligne ici aussi. */
+:root { --surface-canvas: #f6f7f9; --surface-base: #ffffff; --surface-raised: #eceef2; }
+html.dark { --surface-canvas: #0e1015; --surface-base: #161922; --surface-raised: #1e222e; }
+html[data-theme="midnight"] { --surface-canvas: #0a0f1e; --surface-base: #111830; --surface-raised: #18213d; }
+html[data-theme="plum"] { --surface-canvas: #14101c; --surface-base: #1d182a; --surface-raised: #262036; }
+html[data-theme="forest"] { --surface-canvas: #0b1310; --surface-base: #121d18; --surface-raised: #182720; }
+html[data-theme="ember"] { --surface-canvas: #14100d; --surface-base: #1e1814; --surface-raised: #29211b; }
+html[data-theme="paper"] { --surface-canvas: #f7f4ee; --surface-base: #fffdf8; --surface-raised: #efe9df; }
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);

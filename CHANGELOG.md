@@ -12,6 +12,18 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Thèmes** : sept palettes au choix dans Paramètres → Apparence — Sombre, Bleu nuit, Prune,
+  Forêt, Braise, Clair et Papier.
+- **Couleur d'accent personnalisable**, indépendamment de la palette.
+- **Image de fond** : importez une image et elle habille toute l'application. Les surfaces
+  deviennent translucides et floutées (verre dépoli) pour que le texte reste lisible, avec trois
+  réglages au curseur — voile, flou de l'image, opacité des surfaces. Cockpit peut aussi reprendre
+  la couleur dominante de l'image comme accent de l'interface.
+  L'image est redimensionnée et recompressée à l'import ; le terminal reste opaque, pour ne jamais
+  sacrifier sa lisibilité.
+
 ## [0.4.0] — 2026-08-13
 
 ### Added
