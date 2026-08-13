@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-13
+
 ### Removed
 
 - **Onglet Sitemap** et toute la comparaison de sitemaps. ⚠️ Les paires enregistrées sont
