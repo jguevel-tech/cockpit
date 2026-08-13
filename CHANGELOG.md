@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.7] — 2026-08-13
+
 ### Fixed
 
 - **Saut de ligne en changeant de terminal** : au switch, les événements « focus perdu / focus
