@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-08-13
+
 ### Fixed
 
 - **Fonds gris imposés à tous les boutons** avec une image de fond. Le correctif de la 0.5.1
