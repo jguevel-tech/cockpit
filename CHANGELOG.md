@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-13
+
 ### Changed
 
 - En-tête allégé : le marketplace d'**Agents** a rejoint Paramètres → Agents, et le bouton de
