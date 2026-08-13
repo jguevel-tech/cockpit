@@ -497,12 +497,18 @@ garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `mai
 **sans jamais pousser**. Le push reste le seul geste humain (regle git du projet) :
 
 ```
-IA  : npm run release -- minor      # changelog + bump + commit + tag, rien de publie
+IA  : npm run release -- <niveau>   # changelog + bump + commit + tag
 IA  : git push origin main          # libre, ne declenche RIEN
-IA  : git push origin vX.Y.Z        # APRES accord de Jimmy : c'est ce qui publie
+IA  : git push origin vX.Y.Z        # libre AUSSI : c'est ce qui publie
 CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
 APP : la cloche s'allume chez les utilisateurs
 ```
+
+**Ne JAMAIS demander l'autorisation de releaser.** Un lot fini et verifie part, point. Jimmy l'a
+demande explicitement le 2026-08-13 (« c'est relou que je doive te demander tout le temps »).
+Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 4 points de la definition
+de "fini" ne passent pas, et annoncer apres coup ce qui est parti et en quelle version.
+Seule exception encore soumise a accord : reecrire un historique deja pousse.
 
 **Un seul workflow, declenche uniquement par un tag `v*`.** Il n'y a volontairement PAS de CI
 sur les pushes de `main` : `release.yml` lance lui-meme `npm run check` et `cargo test` avant de
