@@ -24,8 +24,34 @@ rappeler aucune de ces etapes.
    Removed. Uniquement si l'utilisateur peut le constater ; une refonte interne n'y a pas sa place.
 4. **Commiter et pousser sur `main`** — libre, aucune confirmation a demander. Un push de branche
    ne declenche aucun deploiement (le workflow ne reagit qu'aux tags `v*`).
-5. **Proposer la release** quand un lot coherent est pret : `npm run release -- <patch|minor|major>`,
-   puis **demander avant de pousser le tag** — c'est ce qui publie une version visible par tous.
+5. **Releaser** : `npm run release -- <patch|minor|major>` puis pousser le tag.
+
+### Politique de release
+
+**Une fonctionnalite = une release.** C'est la regle par defaut : ce qui est fini part, on
+n'accumule pas dans `[Unreleased]` en attendant un lot. Jimmy demande des fonctionnalites, elles
+arrivent chez les utilisateurs.
+
+**Plusieurs fonctionnalites dans une meme release, c'est bon** — si elles sont terminees ensemble
+ou dependent l'une de l'autre, une seule version les embarque. Ce qu'il faut eviter, c'est le
+contraire : une fonctionnalite finie qui dort des jours dans `[Unreleased]`.
+
+**Choix du niveau — c'est a l'IA de trancher, pas de demander.** La regle est deterministe et se
+lit dans le contenu de `[Unreleased]` :
+
+| Contenu de `[Unreleased]` | Niveau |
+|---|---|
+| Seulement `### Fixed` | `patch` |
+| Au moins un `### Added` ou `### Changed` visible | `minor` |
+| Un `### Removed`, ou un `Changed` qui casse un usage existant | `major` |
+
+`scripts/release.mjs` refuse les incoherences (un `Added` avec un bump `patch`, un `Removed` sans
+`major`), donc une erreur de jugement est rattrapee avant le tag. En cas de doute entre deux
+niveaux, prendre le plus eleve : une version de trop ne coute rien, une rupture annoncee comme un
+patch trompe les utilisateurs.
+
+**Ne jamais laisser un numero de version au hasard** : `package.json` est la source unique, et
+seul le script y touche.
 
 ### Messages de commit
 
