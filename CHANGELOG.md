@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Fonds gris imposés à tous les boutons** avec une image de fond. Le correctif de la 0.5.1
+  donnait un fond à chaque bouton, y compris à ceux déjà posés sur une surface blanche — d'où des
+  pastilles grises un peu partout. La lisibilité est désormais assurée par les conteneurs : les
+  menus latéraux reçoivent le fond, plus chacune de leurs entrées.
+
 ## [0.6.1] — 2026-08-13
 
 ### Fixed

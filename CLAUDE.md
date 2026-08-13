@@ -500,6 +500,14 @@ APP : la cloche s'allume chez les utilisateurs
 
 **Ne JAMAIS demander l'autorisation de releaser.** Un lot fini et verifie part, point. Jimmy l'a
 demande explicitement le 2026-08-13 (« c'est relou que je doive te demander tout le temps »).
+
+**Jimmy ne lance PAS de build local** — il teste depuis la version publiee (« je test rien moi,
+je prend les maj et je test apres »). Consequences :
+- Ne jamais lui demander de relancer `target/release/cockpit` ni de reproduire sur un binaire local.
+- Une instrumentation de diagnostic doit etre PUBLIEE pour qu'il puisse l'exercer. C'est
+  acceptable : elle n'ecrit que dans `/tmp/cockpit-debug.log`. La retirer des la cause tranchee.
+- Le build local reste obligatoire pour l'IA (4e point de la definition de "fini"), simplement
+  il ne sert pas de moyen de test pour lui.
 Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 4 points de la definition
 de "fini" ne passent pas, et annoncer apres coup ce qui est parti et en quelle version.
 Seule exception encore soumise a accord : reecrire un historique deja pousse.
