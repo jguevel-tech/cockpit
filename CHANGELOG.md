@@ -12,6 +12,19 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Saut de ligne en changeant de terminal** : au switch, les événements « focus perdu / focus
+  repris » émis par l'interface traversaient jusqu'à l'application dans le terminal (Claude Code,
+  vim…), qui redessinait son écran — en laissant parfois une ligne vide. Mesuré octet par octet
+  sur une session réelle : ces événements étaient la seule chose reçue par l'application au moment
+  du switch. Ils ne sont plus transmis — changer d'onglet dans Cockpit n'est pas une perte de
+  focus.
+- **`python3` cassé dans les terminaux Cockpit** (lancé depuis l'AppImage) : l'environnement du
+  runtime AppImage (`PYTHONHOME`, `PYTHONPATH`, `LD_LIBRARY_PATH`…) fuyait dans tous les shells,
+  et python plantait avec « ModuleNotFoundError: encodings ». Ces variables sont retirées à la
+  création des terminaux, et purgées des serveurs tmux existants.
+
 ## [0.6.6] — 2026-08-13
 
 ### Fixed

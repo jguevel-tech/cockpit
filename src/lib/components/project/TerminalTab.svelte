@@ -98,10 +98,18 @@
   /// tmux ne perd rien : les capacites qu'il tirait de ces sondages sont declarees
   /// explicitement dans `terminal-features` (conf generee, terminal/mod.rs).
   ///
-  /// Volontairement PAS filtres : les evenements de focus (`ESC[I` / `ESC[O`). xterm ne les
-  /// emet que si l'application a active le mode 1004, ils lui sont donc bien destines.
+  /// Les evenements de focus (`ESC[I` / `ESC[O`) sont AUSSI filtres — revirement documente.
+  /// Une premiere version les laissait passer (« ils sont destines a l'application »). Or
+  /// c'est exactement eux qui causaient le saut de ligne au changement de terminal :
+  /// - pipe-pane sur la session reelle pendant un switch : la SEULE entree recue par claude
+  ///   etait blur+focus, et sa reaction capturee octet par octet (`ESC(B SI CSI<u CSI>1u
+  ///   CSI>4;2m` + re-render) ;
+  /// - les sauts de ligne coincidaient 1:1 avec les switchs, toutes les autres causes ayant
+  ///   ete eliminees par mesure (taille constante 177x41, churn d'attach innocente en labo).
+  /// Un changement d'onglet dans Cockpit n'est de toute facon pas une perte de focus du point
+  /// de vue de l'utilisateur. Cout : les TUI ne peuvent plus attenuer leur bordure au blur.
   const TERMINAL_REPLY =
-    /^(?:\x1b\[(?:\?[0-9;]*c|>[0-9;]*c|[0-9;]*R|[0-9;]*n)|\x1bP[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))+$/;
+    /^(?:\x1b\[(?:\?[0-9;]*c|>[0-9;]*c|[0-9;]*R|[0-9;]*n|\?[0-9;]*\$y|[IO])|\x1bP[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))+$/;
 
   const XTERM_THEMES = {
     dark: { background: "#111318", foreground: "#d4d7dd", cursor: "#d4d7dd", selectionBackground: "#33415580" },

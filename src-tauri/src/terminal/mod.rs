@@ -64,11 +64,27 @@ fn b64(data: &[u8]) -> String {
 
 // --- Helpers tmux (socket dedie) ---
 
+/// Variables du runtime AppImage a NE PAS transmettre aux shells.
+///
+/// L'AppImage pose PYTHONHOME/PYTHONPATH/LD_LIBRARY_PATH... pointant dans son montage
+/// /tmp/.mount_cockpi*. Le serveur tmux etant lance par Cockpit, chaque shell les heritait :
+/// `python3` plantait dans TOUS les terminaux Cockpit (« ModuleNotFoundError: encodings »,
+/// constate le 2026-08-13), et LD_LIBRARY_PATH pouvait derregler n'importe quel binaire.
+const APPIMAGE_LEAKED_VARS: &[&str] = &[
+    "PYTHONHOME", "PYTHONPATH", "LD_LIBRARY_PATH", "LD_PRELOAD",
+    "APPDIR", "APPIMAGE", "OWD", "GTK_PATH", "GDK_PIXBUF_MODULE_FILE",
+    "GIO_MODULE_DIR", "GSETTINGS_SCHEMA_DIR", "PERLLIB",
+];
+
 fn tmux_cmd(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new("tmux");
     // -u : force le mode UTF-8 quelle que soit la locale detectee
     cmd.arg("-u").arg("-L").arg(TMUX_SOCKET).args(args);
     cmd.env("LANG", utf8_locale()).env("LC_ALL", utf8_locale());
+    // Le serveur tmux (et donc tous les shells) herite de CET environnement.
+    for var in APPIMAGE_LEAKED_VARS {
+        cmd.env_remove(var);
+    }
     cmd
 }
 
@@ -321,6 +337,13 @@ pub fn apply_server_options() {
     ] {
         let _ = tmux_cmd(args).output();
     }
+
+    // Un serveur DEJA vivant a pu etre demarre par une version qui fuyait l'environnement
+    // AppImage : on marque ces variables pour retrait, les prochains shells naitront propres.
+    // (Les shells existants gardent leur environnement, c'est inevitable.)
+    for var in APPIMAGE_LEAKED_VARS {
+        let _ = tmux_cmd(&["set-environment", "-g", "-r", var]).output();
+    }
 }
 
 impl TerminalState {
@@ -416,6 +439,11 @@ impl TerminalState {
         // colonne (accents decales). On garantit une locale UTF-8 valide.
         cmd.env("LANG", utf8_locale());
         cmd.env("LC_ALL", utf8_locale());
+        // Ce client peut etre celui qui DEMARRE le serveur : meme nettoyage que tmux_cmd,
+        // sinon l'environnement AppImage fuite dans tous les shells (python3 casse).
+        for var in APPIMAGE_LEAKED_VARS {
+            cmd.env_remove(var);
+        }
 
         let child = pair
             .slave
