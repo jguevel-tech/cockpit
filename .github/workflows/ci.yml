@@ -37,6 +37,11 @@ jobs:
         with:
           workspaces: src-tauri
           cache-on-failure: true
+          # MEME cle que release.yml : sans `shared-key`, rust-cache inclut le nom du job
+          # dans la cle et les deux workflows entretiennent deux caches separes — la CI
+          # chauffait un cache que la release n'utilisait jamais. `main` etant la branche
+          # par defaut, le cache qu'elle produit est accessible depuis les tags.
+          shared-key: tauri
 
       - run: npm ci
 
