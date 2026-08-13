@@ -476,27 +476,31 @@ garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `mai
 
 ```
 IA  : npm run release -- minor      # changelog + bump + commit + tag, rien de publie
-IA  : git push origin main          # libre. Attendre que ci.yml passe.
+IA  : git push origin main          # libre, ne declenche RIEN
 IA  : git push origin vX.Y.Z        # APRES accord de Jimmy : c'est ce qui publie
 CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
 APP : la cloche s'allume chez les utilisateurs
 ```
 
-**Pousser main et le tag SEPAREMENT, jamais `--follow-tags`.** Sinon les deux workflows
-demarrent sur le meme commit et recompilent Rust en parallele pour rien (release.yml lance deja
-check + tests). En sequence, la CI de `main` valide et chauffe le cache partage, puis la release
-le restaure. Un garde-fou dans `ci.yml` saute de toute facon les commits dont le titre commence
-par `Release `, mais l'ordre reste le bon reflexe.
+**Un seul workflow, declenche uniquement par un tag `v*`.** Il n'y a volontairement PAS de CI
+sur les pushes de `main` : `release.yml` lance lui-meme `npm run check` et `cargo test` avant de
+builder, donc un commit casse ne peut de toute facon pas etre publie. Une CI de branche ne faisait
+que refaire ce travail en double. Ne pas la reintroduire — c'est une decision de Jimmy, prise deux
+fois. La verification avant un tag se fait en local (les 4 points de la definition de "fini").
 
 **Distribution** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
 avec entree de menu. C'est le `curl | sh` annonce dans le README. Il lit la derniere release via
 l'API GitHub — il n'y a donc rien a mettre a jour dedans quand une version sort.
 
-**Temps de CI** : ~12 min a froid, dont 11 min de compilation Rust. Les tests tournent en
-`--release` **volontairement** : en debug, cargo compilait tout une premiere fois pour les tests
-puis tauri-action recompilait tout en release (deux profils, aucun artefact partage). Ne pas
-"corriger" ce `--release` en pensant accelerer les tests, c'est l'inverse. `cache-on-failure` est
-actif pour qu'un echec de CI ne reparte pas d'une compilation complete.
+**Temps de release** : ~7 min avec le cache chaud (mesure v0.5.0), contre 12 min 36 avant
+optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
+- **Les tests tournent en `--release`** : en debug, cargo compilait tout une premiere fois pour
+  les tests puis tauri-action recompilait tout en release — deux profils, aucun artefact partage.
+  Ne pas "corriger" ce `--release` en croyant accelerer les tests, c'est l'inverse.
+- **`shared-key: tauri`** sur rust-cache : sans elle la cle derive du nom du job, et le cache
+  n'est pas reutilise d'une release a l'autre.
+
+`cache-on-failure` est actif pour qu'un echec ne reparte pas d'une compilation complete.
 
 **Pieges** :
 - Sous Linux l'updater ne remplace qu'un **AppImage**. Un binaire brut (`--no-bundle`) ne peut

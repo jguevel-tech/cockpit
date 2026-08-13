@@ -37,9 +37,9 @@ jobs:
           # Sauve le cache meme quand le job echoue : sans ca, chaque correctif de CI
           # repartait d'une compilation Rust complete (~11 min perdues par iteration).
           cache-on-failure: true
-          # MEME cle que ci.yml, pour reutiliser le cache deja chauffe par la verification
-          # de `main`. Sans elle, rust-cache derive la cle du nom du job et les deux
-          # workflows entretiennent chacun leur cache, sans jamais se servir mutuellement.
+          # Cle fixe et non derivee du nom du job : le cache est ainsi reutilise d'une release
+          # a la suivante tant que Cargo.lock ne bouge pas. C'est ce qui fait passer le run de
+          # ~12 min a ~7 min.
           shared-key: tauri
 
       - run: npm ci
