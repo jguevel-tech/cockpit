@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-08-13
+
 ### Fixed
 
 - Boutons invisibles avec une image de fond : les contrôles sans fond propre — barres d'onglets,
