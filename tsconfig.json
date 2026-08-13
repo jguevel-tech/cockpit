@@ -3,6 +3,9 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "module": "ESNext",
+    // Vite resout les imports : "bundler" est la valeur adaptee. Sans cette ligne,
+    // TypeScript retombe sur "node10", deprecie et supprime en TS 7.
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": true,
