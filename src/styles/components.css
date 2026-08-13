@@ -113,15 +113,57 @@ html.has-wallpaper {
   --border-strong: color-mix(in srgb, var(--text-muted) 58%, transparent);
 }
 
-/* 1. CONTENEURS STRUCTURELS.
-   C'etait le trou de la premiere version : le flou n'etait pose que sur les cartes. La
-   sidebar et les barres d'onglets, elles, passaient de `--bg-secondary` a translucide SANS
-   flou — donc tout leur contenu se retrouvait pose a meme l'image. */
+/* 1. CONTENEURS STRUCTURELS — LE FLOU VA SUR UNE COUCHE DEDIEE, JAMAIS SUR LE CONTENEUR.
+   ==========================================================================================
+   REGLE ARCHITECTURALE (NE PAS CONTOURNER) : ne jamais poser `backdrop-filter` sur un element
+   qui CONTIENT du contenu interactif.
+
+   Pourquoi : par la spec CSS, un filtre non nul fait de l'element le BLOC CONTENEUR de ses
+   descendants en `position: fixed`. Consequence constatee le 2026-08-13 : `backdrop-filter`
+   sur `.tab-content` a fait que le menu contextuel du terminal — en `fixed`, positionne aux
+   coordonnees du clic — se placait par rapport a `.tab-content` et non a la fenetre. Il
+   apparaissait donc a plusieurs centaines de pixels du clic. Modales, panneau de
+   notifications et menus etaient tous concernes.
+
+   Solution : le flou est porte par un `::before` en `position: absolute` qui remplit le
+   conteneur. Un pseudo-element n'est pas un ancetre du contenu, il ne peut donc pas alterer
+   son positionnement. Le conteneur, lui, ne recoit aucun filtre.
+
+   `isolation: isolate` garde le pseudo-element derriere le contenu sans avoir a manipuler
+   des z-index dans chaque composant.
+   ========================================================================================== */
 html.has-wallpaper header,
 html.has-wallpaper aside,
 html.has-wallpaper nav,
 html.has-wallpaper .tabs,
 html.has-wallpaper .card,
+html.has-wallpaper .stack,
+html.has-wallpaper .tab-content,
+html.has-wallpaper .system,
+html.has-wallpaper .project-header {
+  position: relative;
+  isolation: isolate;
+}
+html.has-wallpaper header::before,
+html.has-wallpaper aside::before,
+html.has-wallpaper nav::before,
+html.has-wallpaper .tabs::before,
+html.has-wallpaper .card::before,
+html.has-wallpaper .stack::before,
+html.has-wallpaper .tab-content::before,
+html.has-wallpaper .system::before,
+html.has-wallpaper .project-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  backdrop-filter: blur(16px) saturate(118%);
+  pointer-events: none;
+}
+
+/* Les champs et badges sont petits et ne contiennent rien de positionne : le filtre direct
+   est sans risque et evite un pseudo-element inutile. */
 html.has-wallpaper .input,
 html.has-wallpaper .badge {
   backdrop-filter: blur(16px) saturate(118%);
@@ -148,7 +190,6 @@ html.has-wallpaper nav {
 html.has-wallpaper .tab-content,
 html.has-wallpaper .system {
   background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
-  backdrop-filter: blur(16px) saturate(118%);
   border: 1px solid var(--border-color);
   /* Coins hauts droits : la barre d'onglets se poursuit juste au-dessus, les deux doivent
      se lire comme un seul panneau. */
@@ -170,7 +211,6 @@ html.has-wallpaper .tabs {
    l'ensemble en-tete + onglets + contenu forme un seul panneau du haut vers le bas. */
 html.has-wallpaper .project-header {
   background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
-  backdrop-filter: blur(16px) saturate(118%);
   border: 1px solid var(--border-color);
   border-bottom: none;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -257,7 +297,6 @@ html.has-wallpaper:root input[type="color"] {
    et l'image disparait sous le panneau. Le curseur permet de doser. */
 html.has-wallpaper .stack {
   background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
-  backdrop-filter: blur(16px) saturate(118%);
 }
 html.has-wallpaper .stack > .card {
   background: none;

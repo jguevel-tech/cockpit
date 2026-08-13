@@ -98,8 +98,15 @@ fn utf8_locale() -> String {
 /// Regle : en cas de doute, on NE DETRUIT RIEN.
 fn tmux_alive_sessions() -> Option<HashSet<String>> {
     let out = tmux_cmd(&["list-sessions", "-F", "#S"]).output().ok()?;
-    // "no server running" sort en code != 0 : c'est un echec, pas une absence de session.
     if !out.status.success() {
+        // « no server running » n'est PAS un echec : c'est une reponse definitive — pas de
+        // serveur, donc zero session. La confondre avec un echec transitoire laissait des
+        // lignes zombies infermables apres une mort du serveur : close() refusait de
+        // supprimer faute de confirmation, et purge_dead ne purgait jamais.
+        if String::from_utf8_lossy(&out.stderr).contains("no server running") {
+            return Some(HashSet::new());
+        }
+        // Tout AUTRE code != 0 (timeout, serveur occupe...) reste un « on ne sait pas ».
         return None;
     }
     Some(
@@ -216,8 +223,36 @@ fn tmux_llm_sessions() -> HashSet<String> {
     result
 }
 
-fn tmux_kill_session(name: &str) {
+/// Tue une session. `true` si elle n'existe plus apres l'appel.
+///
+/// Le retour compte : `close()` ne doit pas supprimer la ligne en base si la session a
+/// survecu, sinon elle devient une orpheline — une session vivante que l'interface ne peut
+/// plus jamais afficher, donc un shell qui tourne indefiniment sans que personne le sache.
+fn tmux_kill_session(name: &str) -> bool {
     let _ = tmux_cmd(&["kill-session", "-t", name]).output();
+    // On verifie plutot que de faire confiance au code de retour : `kill-session` sort en
+    // erreur quand la session n'existait deja plus, ce qui est le resultat souhaite.
+    tmux_session_is_gone(name)
+}
+
+/// Sessions de notre socket sans ligne en base : injoignables depuis l'interface, donc
+/// perdues. Elles proviennent de tout chemin ou la ligne a disparu sans que la session soit
+/// tuee — notamment l'ancien bug de suppression sur echec transitoire de `list-sessions`.
+/// Constate le 2026-08-13 : 3 terminaux affiches, 14 sessions vivantes.
+fn orphan_sessions(db: &Database) -> Vec<String> {
+    let Some(alive) = tmux_alive_sessions() else { return Vec::new() };
+    let known: HashSet<String> = db
+        .get_terminal_rows(None)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| r.tmux_name)
+        .collect();
+    alive
+        .into_iter()
+        // Uniquement NOS sessions : le prefixe garantit qu'on ne touche jamais a une session
+        // creee a la main sur ce socket.
+        .filter(|s| s.starts_with("ckpt_") && !known.contains(s))
+        .collect()
 }
 
 
@@ -229,14 +264,13 @@ const TMUX_CONF: &str = "set -g status off\n\
 set -g mouse on\n\
 set -g history-limit 10000\n\
 set -g escape-time 10\n\
-# TAILLE DE FENETRE PILOTEE PAR COCKPIT (NE PAS RETIRER).\n\
-# Par defaut (window-size latest) la taille suit le DERNIER client attache : elle devient\n\
-# un effet de bord du va-et-vient des clients. Constate le 2026-08-13 : quinze sessions,\n\
-# cinq tailles differentes (227x55, 218x53, 183x44, 177x41, 164x42). Revenir sur un\n\
-# terminal declenchait alors un redimensionnement, donc un SIGWINCH, donc un repaint du\n\
-# TUI qui laissait un saut de ligne. En manual, Cockpit fixe la taille AVANT l'attach et\n\
-# le client ne la change plus.\n\
-set -g window-size manual\n\
+# TAILLE DE FENETRE : PAS d'option `window-size manual` ici (NE PAS LA REMETTRE).\n\
+# `set -g window-size manual` dans un fichier de conf FAIT PLANTER tmux 3.4 au demarrage\n\
+# du serveur (« server exited unexpectedly ») : plus aucun terminal ne pouvait etre cree.\n\
+# Prouve par bissection le 2026-08-13 — la ligne seule suffit a tuer le serveur.\n\
+# La taille est pilotee par Cockpit via `resize-window` avant chaque attach (mod.rs), qui\n\
+# marque la fenetre en taille manuelle PAR FENETRE : meme effet anti-saut-de-ligne, sans\n\
+# le plantage.\n\
 set -s set-clipboard on\n\
 set -sa terminal-features ',xterm*:clipboard:RGB:strikethrough:usstyle'\n\
 set -g mode-style 'bg=#4f7cff,fg=#ffffff'\n\
@@ -268,8 +302,8 @@ pub fn apply_server_options() {
         ["set", "-s", "set-clipboard", "on"].as_slice(),
         ["set", "-sa", "terminal-features", ",xterm*:clipboard:RGB:strikethrough:usstyle"].as_slice(),
         ["set", "-g", "mode-style", "bg=#4f7cff,fg=#ffffff"].as_slice(),
-        // Voir la conf generee : sans manual, la taille de fenetre suit le dernier client.
-        ["set", "-g", "window-size", "manual"].as_slice(),
+        // PAS de ["set","-g","window-size","manual"] ici non plus : l'option plante tmux 3.4
+        // (voir la conf generee). Le dimensionnement passe par resize-window avant l'attach.
         // La selection reste affichee au relachement ; copie a la demande
         ["bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
         ["bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
@@ -311,6 +345,14 @@ impl TerminalState {
                     let _ = db.delete_terminal_row(row.id);
                 }
             }
+        }
+
+        // Nettoyage SYMETRIQUE : une ligne sans session etait deja traitee, mais une session
+        // sans ligne restait a tourner indefiniment. Elle est injoignable depuis l'interface —
+        // aucun onglet ne peut plus l'afficher — donc son shell est perdu et ne fait que
+        // consommer de la memoire. Ne concerne que nos sessions `ckpt_*`.
+        for session in orphan_sessions(db) {
+            tmux_kill_session(&session);
         }
     }
 
@@ -500,11 +542,11 @@ impl TerminalState {
 
         // Taille fixee AVANT l'attach (NE PAS DEPLACER APRES).
         //
-        // Avec `window-size manual`, la fenetre garde la taille qu'on lui donne. Si on
-        // attachait d'abord, le client se dessinerait a l'ancienne taille de la session puis
-        // le redimensionnement provoquerait un SIGWINCH : le TUI se redessine et laisse un
-        // saut de ligne. C'est le bug constate en switchant de terminal — les sessions
-        // portaient cinq tailles differentes, heritees de clients successifs.
+        // `resize-window` marque la fenetre en taille manuelle PAR FENETRE (l option globale
+        // plante tmux 3.4, voir la conf generee). Si on attachait d abord, le client se
+        // dessinerait a l ancienne taille puis le redimensionnement provoquerait un SIGWINCH :
+        // le TUI se redessine et laisse un saut de ligne. Bug constate en switchant de
+        // terminal — les sessions portaient cinq tailles differentes.
         let _ = tmux_cmd(&[
             "resize-window",
             "-t",
@@ -547,8 +589,8 @@ impl TerminalState {
                 .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
                 .map_err(|e| e.to_string())?;
         }
-        // Avec `window-size manual`, redimensionner le PTY du client ne suffit plus : la
-        // fenetre tmux ne suit pas toute seule, il faut le lui dire.
+        // La fenetre etant en taille manuelle (resize-window a l attach), redimensionner le
+        // PTY du client ne suffit plus : la fenetre tmux ne suit pas, il faut le lui dire.
         if let Ok(row) = db.get_terminal_row(id) {
             let _ = tmux_cmd(&[
                 "resize-window",
@@ -573,8 +615,16 @@ impl TerminalState {
         if let Some(mut l) = self.live.lock().unwrap().remove(&id) {
             let _ = l.killer.kill();
         }
-        if let Ok(row) = db.get_terminal_row(id) {
-            tmux_kill_session(&row.tmux_name);
+        // La session est tuee AVANT de toucher a la base, et la ligne n'est supprimee que si
+        // elle a bien disparu. L'ordre inverse creait des orphelines : quand la lecture de la
+        // ligne ou le kill echouait, la ligne partait quand meme et la session survivait —
+        // injoignable pour toujours, avec son shell qui continue de tourner.
+        let row = db.get_terminal_row(id)?;
+        if !tmux_kill_session(&row.tmux_name) {
+            return Err(format!(
+                "la session {} n'a pas pu etre arretee ; le terminal est conserve pour permettre un nouvel essai",
+                row.tmux_name
+            ));
         }
         db.delete_terminal_row(id)
     }

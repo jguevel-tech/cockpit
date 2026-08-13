@@ -12,6 +12,28 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Impossible de créer un terminal depuis la 0.6.5** : l'option tmux `window-size manual`,
+  introduite pour corriger les sauts de ligne, fait planter le serveur tmux 3.4 à son démarrage.
+  Plus aucun terminal ne pouvait être créé, et les terminaux existants étaient perdus. L'option
+  est retirée ; la taille est désormais fixée par `resize-window` juste avant chaque attache —
+  même effet contre les sauts de ligne, sans le plantage.
+- **Onglets de terminaux morts impossibles à fermer** quand le serveur tmux ne tourne plus :
+  « pas de serveur » était traité comme une erreur au lieu d'une réponse (zéro session). Ces
+  onglets sont maintenant nettoyés au démarrage et fermables à la main.
+- **Menu contextuel Copier/Coller décalé** : il s'affichait loin du clic. Le flou d'arrière-plan
+  posé sur les panneaux en 0.6.3 changeait le repère de positionnement des éléments flottants
+  (menus, modales) ; le flou est déplacé sur une couche dédiée qui ne peut plus interférer.
+- **Sessions fantômes qui continuaient de tourner.** Quand la ligne d'un terminal disparaissait
+  de la base sans que sa session tmux soit arrêtée, celle-ci restait vivante et injoignable :
+  aucun onglet ne pouvait plus l'afficher, mais son shell consommait toujours de la mémoire.
+  Trois terminaux affichés pouvaient ainsi masquer quatorze sessions actives. Cockpit les
+  détecte et les arrête au démarrage.
+- **Fermeture d'un terminal plus sûre** : la session est arrêtée avant que la ligne ne soit
+  supprimée, et si l'arrêt échoue le terminal est conservé pour permettre un nouvel essai —
+  au lieu de disparaître de l'interface en laissant son shell derrière lui.
+
 ## [0.6.5] — 2026-08-13
 
 ### Fixed
