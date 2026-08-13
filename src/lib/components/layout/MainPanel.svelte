@@ -4,7 +4,6 @@
   import ProjectDetail from "../project/ProjectDetail.svelte";
   import GlobalSettings from "../settings/GlobalSettings.svelte";
   import SystemMonitor from "../system/SystemMonitor.svelte";
-  import AgentsView from "../agents/AgentsView.svelte";
 </script>
 
 <main>
@@ -12,8 +11,6 @@
     <GlobalSettings />
   {:else if $activeView === "system"}
     <SystemMonitor />
-  {:else if $activeView === "agents"}
-    <AgentsView />
   {:else if $activeView === "project" && $selectedProject}
     {#key $selectedProject}
       <ProjectDetail name={$selectedProject} />

@@ -12,6 +12,7 @@
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
   import AppearanceSettings from "./AppearanceSettings.svelte";
+  import AgentsView from "../agents/AgentsView.svelte";
   import { marked } from "marked";
   // Le CHANGELOG.md est embarque au build (Vite ?raw) : consultable hors ligne, et toujours
   // celui de la version installee — pas celui d'une branche distante.
@@ -19,12 +20,13 @@
 
   const changelogHtml = marked.parse(changelogRaw, { async: false });
 
-  type SettingsView = "general" | "appearance" | "claude" | "meetings" | "projects";
+  type SettingsView = "general" | "appearance" | "agents" | "claude" | "meetings" | "projects";
   let view: SettingsView = $state("general");
 
   const MENU: { id: SettingsView; icon: string; label: string }[] = [
     { id: "general", icon: "⚙", label: "Général" },
     { id: "appearance", icon: "◐", label: "Apparence" },
+    { id: "agents", icon: "⬡", label: "Agents" },
     { id: "claude", icon: "✳", label: "Claude & IA" },
     { id: "meetings", icon: "⏺", label: "Réunions" },
     { id: "projects", icon: "▤", label: "Projets" },
@@ -154,7 +156,7 @@
   }
 </script>
 
-<div class="settings">
+<div class="settings" class:wide={view === "agents"}>
   <h2>Paramètres</h2>
 
   <div class="settings-layout">
@@ -226,6 +228,11 @@
 
       {:else if view === "appearance"}
         <AppearanceSettings />
+
+      {:else if view === "agents"}
+        <!-- Encastree dans les parametres : la grille de AgentsView est fluide, elle s'adapte
+             a la colonne. `.settings.wide` elargit la page pour lui laisser de l'air. -->
+        <div class="embedded-view"><AgentsView /></div>
 
       {:else if view === "claude"}
         <section class="card">
@@ -348,6 +355,11 @@
 
 <style>
   .settings { max-width: 1060px; }
+  /* La bibliotheque d'agents est en trois colonnes : elle respire mal a 1060 px. */
+  .settings.wide { max-width: 1500px; }
+  /* AgentsView est concu pour occuper une vue entiere (`height: 100%`). Encastre, son parent
+     n'a pas de hauteur imposee : on lui en donne une, sinon il s'ecrase a zero. */
+  .embedded-view { height: calc(100vh - var(--header-height) - 8rem); min-height: 26rem; }
   h2 { margin-bottom: 1.25rem; }
 
   .settings-layout { display: flex; gap: 1.5rem; align-items: flex-start; }

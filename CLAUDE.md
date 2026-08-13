@@ -308,7 +308,7 @@ ai-workforce/
 │   │   │   │   ├── ContextMenu.svelte  # Menu clic droit (items label/action/danger)
 │   │   │   │   └── Toast.svelte        # Rendu des notify() (monte dans App.svelte)
 │   │   │   ├── layout/
-│   │   │   │   ├── Header.svelte       # Barre superieure (logo, Agents, restart ↻, parametres, theme)
+│   │   │   │   ├── Header.svelte       # Barre superieure (logo, cloche notifs, zoom, parametres, theme)
 │   │   │   │   ├── Sidebar.svelte      # Terminaux + projets (DnD local : reorder + deplacement inter-dossiers)
 │   │   │   │   └── MainPanel.svelte    # Routeur sur activeView ({#key} pour remount au switch projet)
 │   │   │   ├── dashboard/
@@ -420,11 +420,20 @@ Accessible depuis le dashboard (integre) et comme page separee :
 
 ### Parametres globaux
 
-Page a menu lateral (4 vues, etat local `view` dans GlobalSettings.svelte, sections en cartes) :
-- **General** : chemin DB + build time, import depuis ancienne DB Go
+Page a menu lateral (6 vues, etat local `view` dans GlobalSettings.svelte, sections en cartes) :
+- **General** : chemin DB, version, build time, verification de mise a jour, changelog embarque,
+  import depuis ancienne DB Go
+- **Apparence** : palettes, accent, image de fond (`AppearanceSettings.svelte`)
+- **Agents** : marketplace d'agents Claude Code, `AgentsView.svelte` ENCASTREE ici — ce n'est plus
+  une vue top-niveau et il n'y a plus de bouton dans le Header. Sa grille est fluide
+  (`minmax`) pour tenir dans la colonne des parametres, qui passe a 1500 px sur cette vue
+  (`.settings.wide`) ; `.embedded-view` lui donne une hauteur, sinon `height: 100%` s'ecrase.
 - **Claude & IA** : connexion abonnement (badge statut + flow setup-token)
 - **Reunions** : cle OpenAI, modele et prompt systeme du resume
 - **Projets** : liste des projets enregistres (suppression)
+
+L'ancienne commande `restart_app` a ete SUPPRIMEE avec le bouton ↻ : l'updater relance
+l'application lui-meme via `@tauri-apps/plugin-process`.
 
 ### Centre de notifications
 
@@ -764,7 +773,7 @@ Un seul enregistrement a la fois. Cle API importee au premier lancement depuis `
 ## Navigation frontend
 
 Pas de routeur. Un seul enum dans le store `ui.ts` :
-- `activeView: "dashboard" | "project" | "settings" | "system" | "agents"` — MainPanel switch dessus
+- `activeView: "dashboard" | "project" | "settings" | "system"` — MainPanel switch dessus
 - `selectProject(name)` pose `activeView = "project"` (+ reset onglet), `openView(v)` pour le reste
 - Ajouter une vue top-niveau = etendre le type + un case dans MainPanel (rien d'autre)
 - Onglets projet : map `tabs` dans ProjectDetail.svelte (id, label, component) — ajouter un onglet

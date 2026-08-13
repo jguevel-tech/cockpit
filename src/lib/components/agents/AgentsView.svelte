@@ -662,7 +662,11 @@ You are the **${name}** agent.
 
   .layout {
     display: grid;
-    grid-template-columns: 280px 280px 1fr;
+    /* Colonnes FLUIDES et non 280px fixes : cette vue est encastree dans les parametres,
+       dont la colonne de contenu est plus etroite qu'une vue pleine page. Des largeurs
+       figees ecrasaient la troisieme colonne. `minmax` garde un plancher lisible et laisse
+       le detail de l'agent prendre le reste. */
+    grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(220px, 1.4fr);
     gap: 1rem;
     flex: 1;
     min-height: 0;

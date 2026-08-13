@@ -3,7 +3,7 @@ import { setWebviewZoom } from "../api/system";
 
 /// Vue top-niveau unique : une seule source de verite pour la navigation.
 /// Ajouter une vue = ajouter une entree ici + un case dans MainPanel.
-export type ActiveView = "dashboard" | "project" | "settings" | "system" | "agents";
+export type ActiveView = "dashboard" | "project" | "settings" | "system";
 
 export const activeView = writable<ActiveView>("dashboard");
 export const selectedProject = writable<string | null>(null);
@@ -92,5 +92,4 @@ export function selectProject(name: string | null) {
 
 export const openSettings = () => openView("settings");
 export const openSystem = () => openView("system");
-export const openAgents = () => openView("agents");
 export const goHome = () => openView("dashboard");

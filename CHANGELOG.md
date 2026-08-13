@@ -12,6 +12,11 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- En-tête allégé : le marketplace d'**Agents** a rejoint Paramètres → Agents, et le bouton de
+  redémarrage a été retiré — les mises à jour relancent l'application toutes seules.
+
 ### Added
 
 - **Thèmes** : sept palettes au choix dans Paramètres → Apparence — Sombre, Bleu nuit, Prune,

@@ -866,13 +866,6 @@ fn open_url(url: String) -> Result<(), String> {
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
-/// Redemarrage propre : relance le meme binaire (utile apres un rebuild) et
-/// quitte. Les terminaux tmux survivent, l'app se rattache au retour.
-#[tauri::command]
-fn restart_app(app: tauri::AppHandle) {
-    app.restart();
-}
-
 #[tauri::command]
 fn debug_log(line: String) {
     use std::io::Write;
@@ -1347,7 +1340,6 @@ pub fn run() {
             search_command_history,
             terminal_alt_screen,
             debug_log,
-            restart_app,
             // Connexion Claude Code
             claude_auth_status,
             start_claude_login,

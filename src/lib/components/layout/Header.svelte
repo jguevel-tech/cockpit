@@ -1,9 +1,6 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
-  import { goHome, openSettings, openAgents } from "../../stores/ui";
+  import { goHome, openSettings, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
   import { toggleBase } from "../../stores/appearance";
-  import { zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
-  import { recordingStatus } from "../../stores/recording";
   import { unreadCount } from "../../stores/notifications";
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
 
@@ -15,13 +12,6 @@
   const zoomPercent = $derived(Math.round($zoom * 100));
   const atMin = $derived($zoom <= ZOOM_LEVELS[0]);
   const atMax = $derived($zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]);
-
-  async function restartApp() {
-    if ($recordingStatus) {
-      if (!confirm("Un enregistrement de réunion est en cours — redémarrer va l'interrompre. Continuer ?")) return;
-    }
-    try { await invoke("restart_app"); } catch (e) { alert(e); }
-  }
 </script>
 
 <header>
@@ -48,8 +38,6 @@
       <button class="zoom-value" onclick={zoomReset} title="Revenir à 100 %">{zoomPercent}&nbsp;%</button>
       <button class="header-btn zoom-btn" onclick={zoomIn} disabled={atMax} aria-label="Zoomer">&#43;</button>
     </div>
-    <button class="header-btn agents-btn" onclick={openAgents} title="Agents (marketplace)">Agents</button>
-    <button class="header-btn" onclick={restartApp} title="Redémarrer l'application (recharge le dernier build)">&#8635;</button>
     <button class="header-btn" onclick={openSettings} title="Parametres">&#9881;</button>
     <button class="header-btn" onclick={toggleBase} title="Changer le theme">&#9681;</button>
   </div>
@@ -84,12 +72,6 @@
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
   .header-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-strong); }
-  .agents-btn {
-    width: auto;
-    padding: 0 0.6rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
   /* Cloche permanente : discrete au repos, accentuee des qu'il y a du non-lu. */
   .bell-btn { position: relative; }
   .bell-btn.has-unread { border-color: var(--accent); color: var(--accent); }
