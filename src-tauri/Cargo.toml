@@ -36,6 +36,8 @@ futures = "0.3"
 url = "2"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 regex = "1.13.1"
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -1,0 +1,66 @@
+name: Release
+
+# Se declenche sur un tag v* pousse par un humain (le script de release cree le tag,
+# il ne le pousse jamais). C'est le seul chemin de publication.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # necessaire pour creer la Release et y attacher les artefacts
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependances systeme Tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Les garde-fous du projet tournent aussi en CI : une release ne doit jamais
+      # partir depuis un etat qui ne passe pas les verifications.
+      - name: Verification des types frontend
+        run: npm run check
+
+      - name: Tests Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # Construit l'AppImage, le signe avec la cle privee, cree la Release GitHub
+      # et publie latest.json (le manifeste que l'app interroge).
+      - name: Build, signature et publication
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # `bundle.active` est volontairement absent de tauri.conf.json : l'y mettre a true
+          # ECRASE le --no-bundle de la CLI et casserait le build de dev local (il tenterait
+          # de signer sans cle privee). Le bundle est donc force ici, explicitement.
+          args: -b appimage
+          tagName: ${{ github.ref_name }}
+          releaseName: Cockpit ${{ github.ref_name }}
+          # Le corps de la Release vient du message du tag, que le script de release
+          # remplit avec la section correspondante du CHANGELOG.md. C'est ce texte que
+          # les utilisateurs voient dans le modal de mise a jour.
+          releaseBody: ${{ github.event.head_commit.message }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

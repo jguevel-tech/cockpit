@@ -5,6 +5,7 @@
   import Toast from "./lib/components/ui/Toast.svelte";
   import { loadProjects } from "./lib/stores/projects";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
+  import { startUpdateWatcher } from "./lib/stores/update";
   import { onMount } from "svelte";
 
   // Ctrl+molette = zoom, y compris au-dessus d'un terminal.
@@ -27,8 +28,12 @@
 
   onMount(() => {
     loadProjects();
+    const stopUpdateWatcher = startUpdateWatcher();
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
-    return () => window.removeEventListener("wheel", onWheel, { capture: true });
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+      stopUpdateWatcher();
+    };
   });
 </script>
 

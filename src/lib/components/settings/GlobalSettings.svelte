@@ -8,8 +8,15 @@
     type ClaudeAuthStatus,
   } from "../../api/workspace";
   import { loadProjects } from "../../stores/projects";
+  import { updateState, checkForUpdate } from "../../stores/update";
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
+  import { marked } from "marked";
+  // Le CHANGELOG.md est embarque au build (Vite ?raw) : consultable hors ligne, et toujours
+  // celui de la version installee — pas celui d'une branche distante.
+  import changelogRaw from "../../../../CHANGELOG.md?raw";
+
+  const changelogHtml = marked.parse(changelogRaw, { async: false });
 
   type SettingsView = "general" | "claude" | "meetings" | "projects";
   let view: SettingsView = $state("general");
@@ -174,9 +181,29 @@
             <code class="mono-value">{dbPath}</code>
           </div>
           <div class="field-row">
+            <span class="field-label">Version</span>
+            <span class="field-value">{$updateState.currentVersion || '…'}</span>
+          </div>
+          <div class="field-row">
             <span class="field-label">Build</span>
             <span class="field-value">{__BUILD_TIME__}</span>
           </div>
+          <div class="inline-row">
+            <button class="btn" onclick={() => checkForUpdate()} disabled={$updateState.phase === 'checking'}>
+              {$updateState.phase === 'checking' ? 'Vérification…' : 'Vérifier les mises à jour'}
+            </button>
+            {#if $updateState.newVersion}
+              <span class="feedback">Version {$updateState.newVersion} disponible — voir la cloche.</span>
+            {/if}
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>Journal des modifications</h3>
+            <p>Historique des versions, embarqué dans l'application.</p>
+          </div>
+          <div class="changelog">{@html changelogHtml}</div>
         </section>
 
         <section class="card">
@@ -430,4 +457,25 @@
   .name-cell { font-weight: 600; color: var(--text-primary); width: 22%; white-space: normal; }
   .path-cell { font-family: monospace; font-size: 0.76rem; color: var(--text-secondary); }
   th:last-child, .actions-cell { width: 92px; text-align: right; padding-right: 0; }
+
+  .changelog {
+    max-height: 45vh; overflow-y: auto;
+    font-size: 0.85rem; line-height: 1.65; color: var(--text-secondary);
+  }
+  .changelog :global(h1) { font-size: 1rem; color: var(--text-primary); margin: 0 0 0.5rem; }
+  .changelog :global(h2) {
+    font-size: 0.92rem; color: var(--text-primary);
+    margin: 1.1rem 0 0.4rem; padding-top: 0.6rem;
+    border-top: 1px solid var(--border-color);
+  }
+  .changelog :global(h1 + p), .changelog :global(h2 + p) { margin-top: 0; }
+  .changelog :global(h3) { font-size: 0.82rem; color: var(--text-primary); margin: 0.7rem 0 0.25rem; }
+  .changelog :global(p) { margin: 0 0 0.5rem; }
+  .changelog :global(ul) { padding-left: 1.1rem; margin: 0 0 0.5rem; }
+  .changelog :global(li) { margin: 0.15rem 0; }
+  .changelog :global(a) { color: var(--accent); }
+  .changelog :global(code) {
+    font-family: var(--font-mono); font-size: 0.9em;
+    background: var(--bg-tertiary); padding: 0.1em 0.3em; border-radius: 3px;
+  }
 </style>

@@ -7,3 +7,9 @@ declare module "shiki/core";
 declare module "shiki/engine/oniguruma";
 declare module "shiki/wasm";
 declare module "@xterm/xterm/css/xterm.css";
+
+// Import brut d'un fichier texte par Vite (CHANGELOG.md embarque dans les parametres)
+declare module "*.md?raw" {
+  const content: string;
+  export default content;
+}

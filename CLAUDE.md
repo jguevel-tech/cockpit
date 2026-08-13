@@ -5,11 +5,15 @@ Construite en Tauri v2 + Rust + Svelte 5 + TypeScript.
 
 ## Regles non negociables (a lire AVANT de coder)
 
-**Definition de "fini"** — une modification n'est livrable que si ces 3 commandes passent :
+**Definition de "fini"** — une modification n'est livrable que si ces 4 points passent :
 1. `npm run check` -> 0 erreur, 0 warning (c'est l'etat actuel, le maintenir)
 2. `cd src-tauri && cargo test` -> tous verts
 3. `npx tauri build --no-bundle` si on livre un binaire (JAMAIS `cargo build --release` seul :
    sans les env vars Tauri le binaire sort en mode dev et cherche Vite sur localhost:5173)
+4. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
+   `## [Unreleased]`**, dans la bonne section (Added / Changed / Fixed / Removed). Ce texte
+   n'est pas de la doc interne : il est affiche dans le logiciel ET sert de notes de version
+   dans le modal de mise a jour. Une refonte interne sans effet visible n'a rien a y faire.
 
 **Interdits absolus** :
 - Retirer ou "simplifier" du code marque `NE PAS RETIRER` (fixes accents/IME de TerminalTab.svelte
@@ -345,6 +349,45 @@ Page a menu lateral (4 vues, etat local `view` dans GlobalSettings.svelte, secti
 - **Claude & IA** : connexion abonnement (badge statut + flow setup-token)
 - **Reunions** : cle OpenAI, modele et prompt systeme du resume
 - **Projets** : liste des projets enregistres (suppression)
+
+### Mises a jour automatiques et versionnage
+
+Cloche dans le Header (`Header.svelte`) qui **n'existe que s'il y a une version plus recente** —
+pas d'icone permanente qui ne dit jamais rien. Clic -> `UpdateModal.svelte` : `version actuelle
+-> nouvelle version`, notes de version rendues en Markdown, bouton **Mettre a jour** qui
+telecharge, installe et relance. Store `stores/update.ts` (verification au demarrage puis toutes
+les 6 h, silencieuse : une machine hors ligne ne doit pas polluer l'UI).
+
+**Version : une seule source de verite = `package.json`.** `tauri.conf.json` la lit via
+`"version": "../package.json"` (verifie : le bundle sort en `Cockpit_<version>_amd64.AppImage`).
+Ne JAMAIS reintroduire un numero de version en dur dans `tauri.conf.json` : trois copies a
+maintenir a la main, c'est la garantie d'une derive ou l'app annonce une version et le manifeste
+une autre (cloche muette, ou mise a jour proposee en boucle).
+
+**Faire une release** — `npm run release -- <patch|minor|major>`. Le script (`scripts/release.mjs`)
+existe parce que c'est toujours une IA qui release et qu'une consigne en prose n'est pas une
+garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `main`, si
+`[Unreleased]` est vide, ou si le bump contredit le changelog (une section `Added` avec un bump
+`patch`, un `Removed` sans `major`). Puis il bump, date la section, commit et tag —
+**sans jamais pousser**. Le push reste le seul geste humain (regle git du projet) :
+
+```
+IA  : npm run release -- minor      # changelog + bump + commit + tag, rien de publie
+TOI : git push origin main --follow-tags
+CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
+APP : la cloche s'allume chez les utilisateurs
+```
+
+**Pieges** :
+- Sous Linux l'updater ne remplace qu'un **AppImage**. Un binaire brut (`--no-bundle`) ne peut
+  pas se mettre a jour : pour tester le flow reel, lancer l'AppImage, pas `target/release/cockpit`.
+- En local `npx tauri build` (avec bundle) **echoue** faute de cle privee : c'est voulu, la
+  signature n'a lieu qu'en CI. Pour un binaire de dev, garder `--no-bundle`.
+- Secrets GitHub requis : `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+  La cle publique est dans `tauri.conf.json`. Perdre la cle privee = plus aucune mise a jour
+  possible pour les utilisateurs deja installes (reinstallation manuelle obligatoire).
+- Le `CHANGELOG.md` est embarque au build (`?raw` + `marked`) et affiche dans
+  Parametres -> General. Il est donc toujours celui de la version installee.
 
 ### Zoom global
 

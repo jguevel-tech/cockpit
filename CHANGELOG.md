@@ -14,6 +14,11 @@ le script de release.
 
 ### Added
 
+- Mise à jour automatique : une cloche apparaît dans l'en-tête quand une nouvelle version est
+  disponible. Elle affiche la version installée, la version proposée et ses notes ; un clic
+  télécharge, installe et relance l'application.
+- Journal des modifications consultable dans Paramètres → Général, avec la version installée
+  et un bouton de vérification manuelle.
 - Zoom global de l'interface : contrôle `− 100 % +` dans l'en-tête et Ctrl+molette partout,
   terminaux compris. Le niveau est conservé entre les lancements.
 

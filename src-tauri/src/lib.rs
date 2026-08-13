@@ -1106,6 +1106,10 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Mise a jour automatique : verifie la Release GitHub la plus recente, telecharge
+        // et installe l'AppImage signe. `process` sert a relancer l'app juste apres.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // Check for --db CLI argument or env var, otherwise use app data dir
             let db_path = std::env::var("COCKPIT_DB")

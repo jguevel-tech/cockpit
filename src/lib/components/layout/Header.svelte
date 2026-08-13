@@ -3,6 +3,12 @@
   import { toggleTheme, goHome, openSettings, openAgents } from "../../stores/ui";
   import { zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
   import { recordingStatus } from "../../stores/recording";
+  import { updateState } from "../../stores/update";
+  import UpdateModal from "../update/UpdateModal.svelte";
+
+  // La cloche n'existe que s'il y a du neuf : pas d'icone permanente qui ne dit jamais rien.
+  let showUpdate = $state(false);
+  const updateAvailable = $derived($updateState.newVersion !== null);
 
   const zoomPercent = $derived(Math.round($zoom * 100));
   const atMin = $derived($zoom <= ZOOM_LEVELS[0]);
@@ -21,6 +27,17 @@
     <button class="logo-btn" onclick={goHome}>Cockpit</button>
   </h1>
   <div class="header-right">
+    {#if updateAvailable}
+      <button
+        class="header-btn bell-btn"
+        onclick={() => (showUpdate = true)}
+        title="Mise à jour disponible : {$updateState.currentVersion} → {$updateState.newVersion}"
+        aria-label="Mise à jour disponible"
+      >
+        &#128276;
+        <span class="bell-dot"></span>
+      </button>
+    {/if}
     <div class="zoom-group" title="Zoom de l'interface (Ctrl+molette)">
       <button class="header-btn zoom-btn" onclick={zoomOut} disabled={atMin} aria-label="Dézoomer">&#8722;</button>
       <button class="zoom-value" onclick={zoomReset} title="Revenir à 100 %">{zoomPercent}&nbsp;%</button>
@@ -32,6 +49,10 @@
     <button class="header-btn" onclick={toggleTheme} title="Changer le theme">&#9681;</button>
   </div>
 </header>
+
+{#if showUpdate}
+  <UpdateModal onClose={() => (showUpdate = false)} />
+{/if}
 
 <style>
   header {
@@ -63,6 +84,13 @@
     padding: 0 0.6rem;
     font-size: 0.8rem;
     font-weight: 600;
+  }
+  .bell-btn { position: relative; border-color: var(--accent); color: var(--accent); }
+  .bell-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .bell-dot {
+    position: absolute; top: 4px; right: 4px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
   }
   .zoom-group { display: flex; align-items: center; gap: 0.25rem; margin-right: 0.25rem; }
   .zoom-btn { width: 26px; height: 26px; font-size: 0.9rem; }

@@ -10,6 +10,8 @@
     "store:allow-set",
     "store:allow-save",
     "store:allow-load",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
