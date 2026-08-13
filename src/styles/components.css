@@ -133,24 +133,11 @@ html.has-wallpaper .tabs {
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
-/* UN FOND UNI PAR VUE.
-   Sans lui, l'image BRUTE apparaissait dans chaque intervalle entre deux cartes et a droite
-   des contenus etroits : des trous visuellement violents au milieu d'une interface. Le verre
-   depoli se joue donc au niveau du panneau entier, pas carte par carte — l'image reste visible
-   a travers, mais uniformement adoucie. */
-html.has-wallpaper main {
-  background-color: color-mix(in srgb, var(--surface-canvas) var(--surface-alpha), transparent);
-  backdrop-filter: blur(22px) saturate(112%);
-}
-
-/* Du coup les cartes deviennent OPAQUES : elles se posent sur le panneau au lieu d'etre des
-   ilots flottants. Deux couches translucides superposees donnaient un rendu sale, et une
-   ombre portee n'a plus de sens sans image brute derriere. */
-html.has-wallpaper .card {
-  background-color: var(--surface-base);
-  backdrop-filter: none;
-  box-shadow: var(--shadow-sm);
-}
+/* NE PAS poser de fond opaque sur `main`.
+   Tentative abandonnee : `main` recevait `--surface-canvas` a `--surface-alpha` (92 %) pour
+   masquer les trous entre cartes. Resultat, l'image de fond devenait invisible — on supprimait
+   la fonctionnalite au lieu de l'ameliorer. Les trous se traitent par `.stack` (un panneau
+   continu au lieu de cartes espacees), ce qui laisse `main` transparent et l'image visible. */
 
 /* 2. TOUS LES CONTROLES.
    `!important` est DELIBERE et strictement limite a ce mode. 58 controles repartis dans 25
@@ -219,9 +206,11 @@ html.has-wallpaper:root input[type="color"] {
 .stack > .card:first-child { border-top: none; }
 
 /* Sous image de fond, c'est le PANNEAU qui porte le verre depoli, plus chaque carte —
-   sinon on empile deux couches translucides et le rendu devient sale. */
+   sinon on empile deux couches translucides et le rendu devient sale.
+   Translucide via `--surface-alpha` et non opaque : sinon le `backdrop-filter` ne sert a rien
+   et l'image disparait sous le panneau. Le curseur permet de doser. */
 html.has-wallpaper .stack {
-  background-color: var(--surface-base);
+  background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
   backdrop-filter: blur(16px) saturate(118%);
 }
 html.has-wallpaper .stack > .card {

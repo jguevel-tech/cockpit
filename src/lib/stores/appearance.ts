@@ -214,9 +214,23 @@ async function processImage(dataUrl: string): Promise<{ dataUrl: string; accent:
   if (!ctx) throw new Error("canvas 2d indisponible");
   ctx.drawImage(img, 0, 0, w, h);
 
-  // WebP a 0.85 : bien plus compact que JPEG a qualite visuelle egale, et supporte par WebKit.
-  const out = canvas.toDataURL("image/webp", 0.85);
-  return { dataUrl: out, accent: dominantColor(ctx, w, h) };
+  return { dataUrl: encode(canvas), accent: dominantColor(ctx, w, h) };
+}
+
+/**
+ * Encode le canvas en verifiant le format REELLEMENT obtenu.
+ *
+ * `toDataURL` ne signale pas un type non supporte : la spec impose de retomber
+ * silencieusement sur PNG. WebKitGTK n'encode pas le WebP, donc demander `image/webp`
+ * produisait un PNG non compresse — une image de 4 Mo restait a 4 Mo, rechargee en base64
+ * (x1.33) a chaque demarrage. On verifie donc le prefixe et on bascule sur JPEG, qui est
+ * universellement supporte et parfaitement adapte a une photo de fond (la transparence
+ * n'a aucun interet ici).
+ */
+function encode(canvas: HTMLCanvasElement): string {
+  const webp = canvas.toDataURL("image/webp", 0.85);
+  if (webp.startsWith("data:image/webp")) return webp;
+  return canvas.toDataURL("image/jpeg", 0.85);
 }
 
 /**

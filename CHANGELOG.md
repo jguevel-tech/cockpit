@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **L'image de fond était devenue invisible** en 0.6.0 : le fond uni posé sur chaque vue la
+  masquait entièrement. Le panneau continu suffit à supprimer les trous entre sections ; la vue
+  reste transparente et l'image réapparaît.
+- **Image de fond stockée sans compression** : Cockpit demandait un encodage WebP, que le moteur
+  de rendu ne sait pas produire — il retombait silencieusement sur du PNG. Une photo de 4 Mo
+  restait donc à 4 Mo sur le disque et était rechargée telle quelle à chaque démarrage. Le format
+  obtenu est désormais vérifié, avec bascule sur JPEG. Réimportez votre image pour en profiter.
+
 ## [0.6.0] — 2026-08-13
 
 ### Removed

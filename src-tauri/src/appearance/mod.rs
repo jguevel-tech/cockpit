@@ -205,7 +205,26 @@ mod tests {
         assert!(set_wallpaper(&dir, "data:image/png;base64,").is_err(), "image vide");
     }
 
-    fn tempdir() -> PathBuf {
+    /// Dossier temporaire qui se supprime a la fin du test.
+    ///
+    /// Un simple `PathBuf` laissait un dossier par execution dans /tmp — quelques dizaines
+    /// apres une journee de `cargo test`. Le Drop garantit le nettoyage meme si le test panique.
+    struct TempDir(PathBuf);
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    impl std::ops::Deref for TempDir {
+        type Target = Path;
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    fn tempdir() -> TempDir {
         let p = std::env::temp_dir().join(format!(
             "cockpit-wallpaper-test-{}-{:?}",
             std::process::id(),
@@ -213,6 +232,6 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
-        p
+        TempDir(p)
     }
 }
