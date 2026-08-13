@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-13
+
 ### Added
 
 - Installation en une commande : `curl -fsSL .../install.sh | sh` installe la dernière version
