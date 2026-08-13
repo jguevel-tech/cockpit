@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-08-13
+
 ### Fixed
 
 - **Saut de ligne à chaque changement de terminal.** Chaque session tmux conservait la taille du
