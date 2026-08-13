@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Installation en une commande : `curl -fsSL .../install.sh | sh` installe la dernière version
+  dans `~/.local/bin` avec une entrée au menu des applications, sans droits root.
+- README complet : installation, prérequis, fonctionnalités, utilisation, raccourcis clavier.
+- Licence MIT.
+
 ## [0.2.0] — 2026-08-13
 
 ### Added

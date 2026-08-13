@@ -19,7 +19,8 @@ jobs:
       - name: Dependances systeme Tauri
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
 
       - uses: actions/setup-node@v4
         with:
@@ -31,6 +32,9 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Sauve le cache meme quand le job echoue : sans ca, chaque correctif de CI
+          # repartait d'une compilation Rust complete (~11 min perdues par iteration).
+          cache-on-failure: true
 
       - run: npm ci
 
@@ -39,8 +43,13 @@ jobs:
       - name: Verification des types frontend
         run: npm run check
 
+      # `--release` est volontaire : sans lui, cargo compile TOUT une premiere fois en debug
+      # pour les tests, puis tauri-action recompile TOUT en release pour l'AppImage — deux
+      # profils, aucun artefact partage. Mesure sur le run 31691474888 : 2 min 45 de tests
+      # + 8 min 44 de build = ~12 min. En release, les deux etapes partagent le meme
+      # target/release. Aucun `debug_assert!` dans le code, donc rien n'est perdu.
       - name: Tests Rust
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml
 
       # Les notes de version viennent du CHANGELOG.md, pas du message de commit : c'est ce
       # texte que les utilisateurs lisent dans le modal de mise a jour. On extrait la section

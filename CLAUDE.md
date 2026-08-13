@@ -3,6 +3,52 @@
 Application desktop de gestion et d'orchestration de projets Docker Compose.
 Construite en Tauri v2 + Rust + Svelte 5 + TypeScript.
 
+Repo : `github.com/jguevel-tech/cockpit` (public, MIT). Compte `jguevel-tech`, **distinct** du
+compte `jguevel` utilise chez CCM — ne jamais melanger les deux.
+
+## Workflow IA — a lire en premier a chaque session
+
+**Ce repo est pilote a 100 % par l'IA.** Jimmy demande des fonctionnalites, l'IA s'occupe de tout
+le reste : code, tests, changelog, numero de version, commit, push, release. Il ne doit avoir a
+rappeler aucune de ces etapes.
+
+### A chaque fonctionnalite
+
+1. **Coder**, en respectant les regles non negociables ci-dessous.
+2. **Verifier** — les 4 points de la definition de "fini". Aucun n'est optionnel.
+3. **Consigner** dans `CHANGELOG.md` sous `## [Unreleased]`, section Added / Changed / Fixed /
+   Removed. Uniquement si l'utilisateur peut le constater ; une refonte interne n'y a pas sa place.
+4. **Commiter et pousser sur `main`** — libre, aucune confirmation a demander. Un push de branche
+   ne declenche aucun deploiement (le workflow ne reagit qu'aux tags `v*`).
+5. **Proposer la release** quand un lot coherent est pret : `npm run release -- <patch|minor|major>`,
+   puis **demander avant de pousser le tag** — c'est ce qui publie une version visible par tous.
+
+### Messages de commit
+
+**JAMAIS de `Co-Authored-By: Claude` ni aucune mention d'IA.** Claude Code l'ajoute par defaut, il
+faut activement l'omettre. Le message decrit le changement, pas l'outil.
+
+Style attendu : une ligne de titre a l'imperatif, puis un corps qui explique **pourquoi**, pas quoi
+(le diff dit deja quoi). Mentionner ce qui a ete verifie.
+
+### Outils disponibles
+
+`gh` est installe et authentifie sur `jguevel-tech`. L'IA peut donc lire les logs de CI, diagnostiquer
+un build rate, gerer les secrets et les releases seule — sans jamais demander a Jimmy de copier des
+logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
+
+### Pieges d'environnement
+
+- **Registre npm** : la config npm globale de la machine pointe sur le registre prive CCM
+  (`npm.ccmbg.com`). Le `.npmrc` du projet la surcharge vers le registre public — **ne pas le
+  retirer**, sinon `npm ci` echoue en E401 sur le runner et un hostname interne fuite dans un repo
+  public. Si le `package-lock.json` doit etre regenere : supprimer `node_modules` AVANT, sinon
+  npm reutilise les metadonnees de l'arbre existant et conserve les anciennes URLs.
+- **Codes de sortie** : ne jamais lire `$?` derriere un pipe (`cmd | tail`) — c'est celui du dernier
+  maillon. Rediriger vers un fichier puis tester, sinon on annonce des succes inexistants.
+- **Sorties de `grep`** : le proxy `rtk` les reformate et fausse les `grep -c`. Passer par
+  `rtk proxy grep ...` quand le comptage compte.
+
 ## Regles non negociables (a lire AVANT de coder)
 
 **Definition de "fini"** — une modification n'est livrable que si ces 4 points passent :
@@ -373,10 +419,21 @@ garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `mai
 
 ```
 IA  : npm run release -- minor      # changelog + bump + commit + tag, rien de publie
-TOI : git push origin main --follow-tags
+IA  : git push origin main          # libre
+IA  : git push origin vX.Y.Z        # APRES accord de Jimmy : c'est ce qui publie
 CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
 APP : la cloche s'allume chez les utilisateurs
 ```
+
+**Distribution** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
+avec entree de menu. C'est le `curl | sh` annonce dans le README. Il lit la derniere release via
+l'API GitHub — il n'y a donc rien a mettre a jour dedans quand une version sort.
+
+**Temps de CI** : ~12 min a froid, dont 11 min de compilation Rust. Les tests tournent en
+`--release` **volontairement** : en debug, cargo compilait tout une premiere fois pour les tests
+puis tauri-action recompilait tout en release (deux profils, aucun artefact partage). Ne pas
+"corriger" ce `--release` en pensant accelerer les tests, c'est l'inverse. `cache-on-failure` est
+actif pour qu'un echec de CI ne reparte pas d'une compilation complete.
 
 **Pieges** :
 - Sous Linux l'updater ne remplace qu'un **AppImage**. Un binaire brut (`--no-bundle`) ne peut
