@@ -1,143 +1,160 @@
 <h1 align="center">Cockpit</h1>
 
 <p align="center">
-  <strong>Le poste de pilotage de vos projets Docker Compose.</strong><br>
-  Orchestration, terminaux persistants, notes, Git et monitoring — dans une seule application native.
+  <strong>One place to run all your projects.</strong><br>
+  Persistent terminals, notes, files, Git, containers and system monitoring —<br>
+  everything around a project, in a single native app.
 </p>
 
 <p align="center">
-  <a href="https://github.com/jguevel-tech/cockpit/releases/latest"><img alt="Derniere version" src="https://img.shields.io/github/v/release/jguevel-tech/cockpit?style=flat-square&color=2f81f7"></a>
+  <a href="https://github.com/jguevel-tech/cockpit/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/jguevel-tech/cockpit?style=flat-square&color=2f81f7"></a>
   <a href="https://github.com/jguevel-tech/cockpit/actions/workflows/release.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/jguevel-tech/cockpit/release.yml?style=flat-square"></a>
-  <img alt="Plateforme" src="https://img.shields.io/badge/plateforme-Linux%20x86__64-informational?style=flat-square">
-  <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/badge/licence-MIT-green?style=flat-square"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20x86__64-informational?style=flat-square">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat-square"></a>
 </p>
 
 ---
 
-## Installation
+## Install
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jguevel-tech/cockpit/main/scripts/install.sh | sh
 ```
 
-C'est tout. Le script installe la derniere version dans `~/.local/bin`, ajoute une entree au menu
-des applications, et n'a besoin d'aucun privilege root.
+That's it. The script installs the latest release into `~/.local/bin`, adds a desktop entry, and
+needs no root privileges.
 
-Ensuite, lancez :
+Then run:
 
 ```sh
 cockpit
 ```
 
-> **Les mises a jour se font depuis l'application.** Quand une nouvelle version parait, une cloche
-> apparait dans l'en-tete : un clic affiche les nouveautes et installe la mise a jour. Vous n'aurez
-> plus a relancer ce script.
+> **Updates happen inside the app.** When a new version ships, a bell appears in the header: one
+> click shows what changed and installs it. You won't need this script again.
 
 <details>
-<summary><strong>Autres methodes d'installation</strong></summary>
+<summary><strong>Other install methods</strong></summary>
 
 <br>
 
-**AppImage manuelle** — telechargez la derniere depuis la [page des releases](https://github.com/jguevel-tech/cockpit/releases/latest) :
+**Manual AppImage** — grab the latest from the [releases page](https://github.com/jguevel-tech/cockpit/releases/latest):
 
 ```sh
 chmod +x Cockpit_*_amd64.AppImage
 ./Cockpit_*_amd64.AppImage
 ```
 
-**Depuis les sources** — voir [Developpement](#developpement).
+**From source** — see [Development](#development).
 
 </details>
 
-### Prerequis
+### Requirements
 
-Cockpit fonctionne sans rien d'autre, mais certaines fonctions s'appuient sur des outils du systeme :
+None. Cockpit runs as-is — a project is just a name and a folder.
 
-| Outil | Necessaire pour |
+Individual features lean on the tool they concern, and stay quietly inactive when it is missing:
+
+| Tool | Unlocks |
 |---|---|
-| `docker` + `docker compose` | l'orchestration des projets |
-| `git` | l'onglet Git |
-| `tmux` (>= 3) | la persistance des terminaux |
-| `pw-record` (PipeWire) | l'enregistrement de reunions |
+| `tmux` (>= 3) | persistent terminals |
+| `git` | Git tab |
+| `docker` + `docker compose` | containers tab |
+| `pw-record` (PipeWire) | meeting recording |
+| LSP servers (`rust-analyzer`, `intelephense`…) | go-to-definition |
 
 ```sh
-sudo apt install docker.io docker-compose-plugin git tmux pipewire-audio-client-libraries
+sudo apt install tmux git docker.io docker-compose-plugin pipewire-audio-client-libraries
 ```
 
 ---
 
-## Fonctionnalites
+## Features
 
-### Orchestration Docker
+### Persistent terminals
 
-Demarrez et arretez vos projets Compose dans le bon ordre. Cockpit resout les dependances par tri
-topologique, detecte les cycles avant de lancer quoi que ce soit, et arrete recursivement les
-dependances devenues orphelines. Une vue globale liste tous les conteneurs, volumes et images de la
-machine, avec les actions de nettoyage.
+Every terminal is a `tmux` session on a dedicated socket: close the app and your processes keep
+running — you pick them back up on the next launch. A green dot marks sessions where an AI agent is
+working, and your project's Claude Code conversations are listed and resumable in one click.
 
-### Terminaux persistants
+Mouse selection, `Ctrl`+`C` to copy, `Ctrl`+click to open links. Nothing sits between your keystrokes
+and the shell.
 
-Chaque terminal est une session `tmux` sur un socket dedie : fermez l'application, vos processus
-continuent de tourner et vous les retrouvez au redemarrage. Un point vert signale les sessions ou un
-agent IA travaille. Les conversations Claude Code du projet sont listees et reprenables en un clic.
+### Per-project workspace
 
-### Espace de travail par projet
+Tree-organised Markdown notes with a WYSIWYG editor and autosave, drag-and-drop todos, quick links.
+Everything is scoped to the project and follows it when you rename it.
 
-Notes Markdown arborescentes avec editeur WYSIWYG et sauvegarde automatique, todos reordonnables au
-glisser-deposer, liens rapides. Tout est rattache au projet et suit ses renommages.
+### Files and code
 
-### Fichiers et Git
+A file browser that respects your `.gitignore`, syntax highlighting for about thirty languages, and
+in-place editing. `Ctrl`+click on a symbol jumps to its definition, using whichever LSP servers are
+installed on your machine — with a regex fallback when none is.
 
-Un explorateur qui respecte votre `.gitignore`, une coloration syntaxique sur une trentaine de
-langages, l'edition en place, et un « aller a la definition » branche sur les serveurs LSP presents
-sur votre machine (`rust-analyzer`, `intelephense`, `typescript-language-server`...).
+### Git
 
-L'onglet Git couvre le quotidien : status, diff colore, stage par fichier, commit, push, gestion des
-branches.
+The daily loop, without leaving the app: status, coloured diff, per-file staging, commit, push and
+branch management.
 
-### Enregistrement de reunions
+### Containers
 
-Capture simultanee du micro et du son systeme, transcription, puis resume automatique depose en note
-dans le projet. Le prompt de resume est configurable globalement et surchargeable par projet.
+Start and stop Docker Compose projects in the right order — Cockpit resolves dependencies by
+topological sort, detects cycles before launching anything, and recursively stops dependencies that
+became orphaned. A global view lists every container, volume and image on the machine, with cleanup
+actions.
 
-### Monitoring
+Entirely optional: projects without a compose file simply don't show this tab.
 
-CPU global et par coeur, memoire detaillee (cache, buffers, ARC ZFS), disques, et les vingt processus
-les plus gourmands — avec l'historique sur une minute.
+### Meeting recording
+
+Records your microphone and system audio at once, transcribes both, then drops an automatic summary
+as a note in the project. The summary prompt is configurable globally and overridable per project.
+
+### Sitemap diff
+
+Compare two sitemaps and get a unified HTML diff, URL by URL — useful for spotting what a deployment
+actually changed.
+
+### System monitoring
+
+Global and per-core CPU, detailed memory (cache, buffers, ZFS ARC), disks, and the twenty hungriest
+processes, with one minute of history.
 
 ---
 
-## Utilisation
+## Usage
 
-### Ajouter un projet
+### Add a project
 
-Depuis la barre laterale, `+` puis indiquez le chemin du dossier contenant votre `docker-compose.yml`.
-Cockpit sait aussi scanner un repertoire parent pour detecter tous les projets Compose d'un coup.
+From the sidebar, hit `+` and give it a name and a folder. That's the whole requirement — everything
+else is optional and can be filled in later from the project's **Settings** tab.
 
-### Declarer des dependances
+Cockpit can also scan a parent directory to detect several projects at once.
 
-Dans l'onglet **Parametres** d'un projet, listez les projets dont il depend. Au demarrage, Cockpit
-lancera automatiquement la chaine complete dans l'ordre, et vous previendra si vous avez cree un
-cycle.
+### Declare dependencies
+
+In a project's **Settings** tab, list the projects it depends on. Starting it will then bring up the
+whole chain in order, and Cockpit will warn you if you have created a cycle.
 
 ### Zoom
 
-`Ctrl` + molette n'importe ou dans l'application, ou les boutons `− +` de l'en-tete. Le reglage est
-conserve entre les sessions.
+`Ctrl`+scroll anywhere in the app, or the `−` `+` buttons in the header. The level persists across
+restarts.
 
-### Raccourcis utiles
+### Handy shortcuts
 
-| Action | Raccourci |
+| Action | Shortcut |
 |---|---|
-| Zoomer / dezoomer | `Ctrl` + molette |
-| Sauvegarder un fichier ouvert | `Ctrl` + `S` |
-| Valider un commit | `Ctrl` + `Entree` |
-| Copier depuis un terminal | selection souris, puis `Ctrl` + `C` |
-| Ouvrir un lien du terminal | `Ctrl` + clic |
+| Zoom in / out | `Ctrl`+scroll |
+| Save the open file | `Ctrl`+`S` |
+| Commit | `Ctrl`+`Enter` |
+| Copy from a terminal | select with the mouse, then `Ctrl`+`C` |
+| Open a link from a terminal | `Ctrl`+click |
+| Go to definition | `Ctrl`+click on a symbol |
 
 ---
 
-## Developpement
+## Development
 
 ```sh
 git clone https://github.com/jguevel-tech/cockpit.git
@@ -146,65 +163,66 @@ npm install
 npx tauri dev
 ```
 
-### Dependances de compilation
+### Build dependencies
 
 ```sh
 sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
 ```
 
-### Commandes
+### Commands
 
-| Commande | Effet |
+| Command | What it does |
 |---|---|
-| `npx tauri dev` | developpement avec rechargement a chaud |
-| `npm run check` | verification des types frontend |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | tests Rust |
-| `npx tauri build --no-bundle` | binaire de developpement |
+| `npx tauri dev` | development with hot reload |
+| `npm run check` | frontend type checking |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | Rust tests |
+| `npx tauri build --no-bundle` | development binary |
 
-> Pour produire un binaire, utilisez toujours `npx tauri build`, jamais `cargo build --release`
-> seul : sans les variables d'environnement de la CLI Tauri, le binaire sort en mode developpement
-> et cherche un serveur Vite sur `localhost:5173`.
+> Always build with `npx tauri build`, never `cargo build --release` alone: without the Tauri CLI's
+> environment variables the binary comes out in development mode and looks for a Vite server on
+> `localhost:5173`.
 
 ### Architecture
 
 ```
-src/                  Frontend Svelte 5 (runes) + TypeScript
-  lib/api/            Wrappers types autour des commandes Tauri
-  lib/components/     Composants, groupes par domaine
-  lib/stores/         Etat reactif partage
-  styles/             Tokens de theme et classes partagees
+src/                  Svelte 5 (runes) + TypeScript frontend
+  lib/api/            Typed wrappers around Tauri commands
+  lib/components/     Components, grouped by domain
+  lib/stores/         Shared reactive state
+  styles/             Theme tokens and shared classes
 
-src-tauri/src/        Backend Rust
-  docker/             Orchestrateur, graphe de dependances, conteneurs
-  storage/            SQLite : projets, notes, todos, parametres
-  terminal/           Sessions tmux et historique de commandes
-  workspace/          Explorateur de fichiers, sessions Claude
-  gitdiff/  lsp/  recorder/  sitemap/  system/  agents/
+src-tauri/src/        Rust backend
+  terminal/           tmux sessions and command history
+  workspace/          File browser, Claude sessions
+  storage/            SQLite: projects, notes, todos, settings
+  gitdiff/            Git status and diff parsing
+  docker/             Compose orchestration, dependency graph, containers
+  lsp/  recorder/  sitemap/  system/  agents/
 ```
 
-La communication frontend/backend passe exclusivement par l'IPC de Tauri : `invoke` pour les appels,
-des evenements pour les mises a jour temps reel. Ni serveur HTTP, ni WebSocket.
+Frontend and backend talk exclusively over Tauri's IPC: `invoke` for calls, events for real-time
+updates. No HTTP server, no WebSocket.
 
-Les conventions du projet — regles non negociables, pieges connus, processus de release — sont
-detaillees dans [CLAUDE.md](CLAUDE.md).
+Project conventions — non-negotiable rules, known pitfalls, release process — live in
+[CLAUDE.md](CLAUDE.md).
 
 ---
 
-## Contribuer
+## Contributing
 
-Les issues et les pull requests sont bienvenues.
+Issues and pull requests are welcome.
 
-Une contribution est prete quand ces trois commandes passent :
+A change is ready when these three commands pass:
 
 ```sh
-npm run check                                   # 0 erreur, 0 warning
-cargo test --manifest-path src-tauri/Cargo.toml # tous verts
-npx tauri build --no-bundle                     # compile
+npm run check                                   # 0 errors, 0 warnings
+cargo test --manifest-path src-tauri/Cargo.toml # all green
+npx tauri build --no-bundle                     # compiles
 ```
 
-Et quand la modification est consignee dans [CHANGELOG.md](CHANGELOG.md), sous `## [Unreleased]`,
-si elle est visible par l'utilisateur.
+And when it is recorded in [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]`, if a user can
+notice it.
 
-## Licence
+## License
 
 [MIT](LICENSE)

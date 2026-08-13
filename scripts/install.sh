@@ -96,7 +96,7 @@ cat > "${DESKTOP_DIR}/cockpit.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Cockpit
-Comment=Orchestration de projets Docker Compose
+Comment=One place to run all your projects
 Exec=${BIN_DIR}/cockpit
 Icon=cockpit
 Terminal=false

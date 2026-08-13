@@ -1,5 +1,7 @@
 name: Release
 
+run-name: Release · ${{ github.ref_name }}
+
 # Se declenche sur un tag v* pousse par un humain (le script de release cree le tag,
 # il ne le pousse jamais). C'est le seul chemin de publication.
 on:

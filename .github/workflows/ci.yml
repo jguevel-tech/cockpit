@@ -1,5 +1,9 @@
 name: CI
 
+# Nom lisible dans la liste des runs : sans ca, GitHub affiche le message de commit et
+# deux workflows sur le meme commit paraissent etre le meme run lance deux fois.
+run-name: CI · ${{ github.ref_name }}
+
 # Verification continue de `main`. Ne publie RIEN : seul release.yml, declenche par un
 # tag v*, cree une release. L'interet est d'attraper une regression avant le tag, pour
 # qu'une release ne se casse jamais sur un test qu'on aurait pu voir venir.
@@ -16,6 +20,14 @@ concurrency:
 
 jobs:
   verify:
+    # Un commit de release est deja verifie par release.yml, qui lance les memes `npm run
+    # check` et `cargo test` avant de builder. Comme le tag et `main` sont pousses ensemble
+    # (`git push --follow-tags`), les deux workflows demarraient sur le meme commit et
+    # recompilaient Rust en parallele pour rien. On saute donc les commits de release.
+    # La condition sur pull_request est necessaire : `head_commit` est nul sur cet evenement.
+    if: >-
+      github.event_name == 'pull_request' ||
+      !startsWith(github.event.head_commit.message, 'Release ')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

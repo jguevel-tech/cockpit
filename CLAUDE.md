@@ -1,7 +1,11 @@
 # Cockpit (ai-workforce)
 
-Application desktop de gestion et d'orchestration de projets Docker Compose.
-Construite en Tauri v2 + Rust + Svelte 5 + TypeScript.
+Application desktop qui regroupe tout ce qui tourne autour d'un projet : terminaux persistants,
+notes, fichiers, Git, conteneurs, monitoring. Construite en Tauri v2 + Rust + Svelte 5 + TypeScript.
+
+**Positionnement** : Docker n'est qu'UN onglet parmi huit, et le fichier compose est optionnel
+(`compose_file TEXT NOT NULL DEFAULT ''`). Ne pas remettre Docker en avant dans le README ni dans
+la description du repo — un projet Cockpit, c'est un nom et un dossier.
 
 Repo : `github.com/jguevel-tech/cockpit` (public, MIT). Compte `jguevel-tech`, **distinct** du
 compte `jguevel` utilise chez CCM — ne jamais melanger les deux.
@@ -419,11 +423,17 @@ garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `mai
 
 ```
 IA  : npm run release -- minor      # changelog + bump + commit + tag, rien de publie
-IA  : git push origin main          # libre
+IA  : git push origin main          # libre. Attendre que ci.yml passe.
 IA  : git push origin vX.Y.Z        # APRES accord de Jimmy : c'est ce qui publie
 CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
 APP : la cloche s'allume chez les utilisateurs
 ```
+
+**Pousser main et le tag SEPAREMENT, jamais `--follow-tags`.** Sinon les deux workflows
+demarrent sur le meme commit et recompilent Rust en parallele pour rien (release.yml lance deja
+check + tests). En sequence, la CI de `main` valide et chauffe le cache partage, puis la release
+le restaure. Un garde-fou dans `ci.yml` saute de toute facon les commits dont le titre commence
+par `Release `, mais l'ordre reste le bon reflexe.
 
 **Distribution** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
 avec entree de menu. C'est le `curl | sh` annonce dans le README. Il lit la derniere release via
