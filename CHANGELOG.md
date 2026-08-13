@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-08-13
+
 ### Fixed
 
 - **Contenu posé à même l'image de fond** dans plusieurs écrans. Sur onze vues, sept n'avaient
