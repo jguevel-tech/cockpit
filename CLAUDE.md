@@ -426,13 +426,31 @@ Page a menu lateral (4 vues, etat local `view` dans GlobalSettings.svelte, secti
 - **Reunions** : cle OpenAI, modele et prompt systeme du resume
 - **Projets** : liste des projets enregistres (suppression)
 
+### Centre de notifications
+
+Cloche **toujours visible** dans le Header, badge du nombre de non-lues, clic ->
+`notifications/NotificationPanel.svelte`. C'est le point d'entree UNIQUE : ne jamais remettre une
+information de ce type derriere les parametres (l'utilisateur ne doit pas aller la chercher).
+
+**Architecture — les notices ne sont JAMAIS persistees.** Elles sont recreees a chaque lancement
+par leur producteur ; seul l'etat utilisateur (lu / ecarte) va en localStorage, indexe par l'`id`.
+Deux consequences : une notice peut porter une `action` sous forme de callback (impossible si on
+serialisait), et **ajouter une source de notifications = appeler `pushNotice()` depuis un nouveau
+module**, sans toucher ni au store ni au panneau. `id` stable et prefixe par producteur
+(`update:0.3.0`) -> dedoublonnage, et `removeNoticesByPrefix()` pour retirer les siennes.
+
 ### Mises a jour automatiques et versionnage
 
-Cloche dans le Header (`Header.svelte`) qui **n'existe que s'il y a une version plus recente** —
-pas d'icone permanente qui ne dit jamais rien. Clic -> `UpdateModal.svelte` : `version actuelle
--> nouvelle version`, notes de version rendues en Markdown, bouton **Mettre a jour** qui
-telecharge, installe et relance. Store `stores/update.ts` (verification au demarrage puis toutes
-les 6 h, silencieuse : une machine hors ligne ne doit pas polluer l'UI).
+L'updater est le premier producteur de notices : quand `check()` trouve une version, il pose une
+notice `update:<version>` avec l'action **Mettre a jour** (telecharge, installe, relance).
+
+**Cadence** : demarrage, puis toutes les heures, plus un controle au retour de focus sur la fenetre
+si la derniere verification a plus de 15 min. Ne pas descendre a 10 min : une release sort quelques
+fois par jour au plus, c'est le controle au focus qui donne la sensation d'immediatete. Verification
+silencieuse — une machine hors ligne ne doit pas polluer l'UI.
+
+Le bouton de verification manuelle existe a deux endroits : dans le panneau et dans
+Parametres -> General (qui affiche aussi la version installee et le changelog).
 
 **Version : une seule source de verite = `package.json`.** `tauri.conf.json` la lit via
 `"version": "../package.json"` (verifie : le bundle sort en `Cockpit_<version>_amd64.AppImage`).

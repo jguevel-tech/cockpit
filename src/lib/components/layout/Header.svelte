@@ -3,12 +3,13 @@
   import { toggleTheme, goHome, openSettings, openAgents } from "../../stores/ui";
   import { zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
   import { recordingStatus } from "../../stores/recording";
-  import { updateState } from "../../stores/update";
-  import UpdateModal from "../update/UpdateModal.svelte";
+  import { unreadCount } from "../../stores/notifications";
+  import NotificationPanel from "../notifications/NotificationPanel.svelte";
 
-  // La cloche n'existe que s'il y a du neuf : pas d'icone permanente qui ne dit jamais rien.
-  let showUpdate = $state(false);
-  const updateAvailable = $derived($updateState.newVersion !== null);
+  // Cloche TOUJOURS visible : c'est le point d'entree unique des notifications, l'utilisateur
+  // ne doit pas avoir a fouiller les parametres pour savoir s'il y a du neuf. Le badge porte
+  // le nombre de non-lues.
+  let showNotifications = $state(false);
 
   const zoomPercent = $derived(Math.round($zoom * 100));
   const atMin = $derived($zoom <= ZOOM_LEVELS[0]);
@@ -27,17 +28,20 @@
     <button class="logo-btn" onclick={goHome}>Cockpit</button>
   </h1>
   <div class="header-right">
-    {#if updateAvailable}
-      <button
-        class="header-btn bell-btn"
-        onclick={() => (showUpdate = true)}
-        title="Mise à jour disponible : {$updateState.currentVersion} → {$updateState.newVersion}"
-        aria-label="Mise à jour disponible"
-      >
-        &#128276;
-        <span class="bell-dot"></span>
-      </button>
-    {/if}
+    <button
+      class="header-btn bell-btn"
+      class:has-unread={$unreadCount > 0}
+      onclick={() => (showNotifications = !showNotifications)}
+      title={$unreadCount > 0
+        ? `${$unreadCount} notification${$unreadCount > 1 ? "s" : ""} non lue${$unreadCount > 1 ? "s" : ""}`
+        : "Notifications"}
+      aria-label="Notifications"
+    >
+      &#128276;
+      {#if $unreadCount > 0}
+        <span class="badge">{$unreadCount > 9 ? "9+" : $unreadCount}</span>
+      {/if}
+    </button>
     <div class="zoom-group" title="Zoom de l'interface (Ctrl+molette)">
       <button class="header-btn zoom-btn" onclick={zoomOut} disabled={atMin} aria-label="Dézoomer">&#8722;</button>
       <button class="zoom-value" onclick={zoomReset} title="Revenir à 100 %">{zoomPercent}&nbsp;%</button>
@@ -50,8 +54,8 @@
   </div>
 </header>
 
-{#if showUpdate}
-  <UpdateModal onClose={() => (showUpdate = false)} />
+{#if showNotifications}
+  <NotificationPanel onClose={() => (showNotifications = false)} />
 {/if}
 
 <style>
@@ -85,12 +89,19 @@
     font-size: 0.8rem;
     font-weight: 600;
   }
-  .bell-btn { position: relative; border-color: var(--accent); color: var(--accent); }
-  .bell-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-  .bell-dot {
-    position: absolute; top: 4px; right: 4px;
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--accent);
+  /* Cloche permanente : discrete au repos, accentuee des qu'il y a du non-lu. */
+  .bell-btn { position: relative; }
+  .bell-btn.has-unread { border-color: var(--accent); color: var(--accent); }
+  .bell-btn.has-unread:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .badge {
+    position: absolute; top: -4px; right: -4px;
+    min-width: 15px; height: 15px; padding: 0 3px;
+    border-radius: 8px;
+    background: var(--accent); color: #fff;
+    font-size: 0.62rem; font-weight: 700; line-height: 15px;
+    text-align: center;
+    /* Detache le badge du fond de l'en-tete pour qu'il reste lisible sur la bordure. */
+    box-shadow: 0 0 0 2px var(--bg-secondary);
   }
   .zoom-group { display: flex; align-items: center; gap: 0.25rem; margin-right: 0.25rem; }
   .zoom-btn { width: 26px; height: 26px; font-size: 0.9rem; }

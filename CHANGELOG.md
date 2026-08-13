@@ -12,6 +12,20 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Centre de notifications : la cloche est désormais **toujours présente** dans l'en-tête, avec un
+  badge du nombre de messages non lus. Un clic ouvre un panneau listant les notifications, la plus
+  récente en premier, chacune avec son action. Les mises à jour y apparaissent comme une
+  notification parmi d'autres — plus besoin de passer par les paramètres pour savoir s'il y a du
+  neuf.
+
+### Changed
+
+- Vérification des mises à jour plus réactive : au démarrage, puis toutes les heures, et à chaque
+  retour sur la fenêtre si la dernière vérification date de plus de 15 minutes (auparavant toutes
+  les 6 heures).
+
 ## [0.3.0] — 2026-08-13
 
 ### Added
