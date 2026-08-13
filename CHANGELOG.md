@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- Les nouveaux terminaux sont nommés d'après leur projet : « COCKPIT - 1 », « COCKPIT - 2 »…
+  au lieu de « Terminal 1 ». La numérotation est propre à chaque projet et ne produit jamais
+  de doublon, même après des fermetures ; les terminaux renommés à la main ne sont pas touchés.
+
 ## [0.6.7] — 2026-08-13
 
 ### Fixed
