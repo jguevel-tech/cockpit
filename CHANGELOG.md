@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-08-14
+
 ### Added
 
 - **Statut des liens rapides** : chaque URL du projet porte une pastille — verte en ligne,
