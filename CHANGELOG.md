@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-14
+
 ### Changed
 
 - Le logo Claude s'affiche dans la sidebar et le tableau de bord quand un agent IA tourne dans
