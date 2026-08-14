@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-14
+
 ### Added
 
 - **Logs des conteneurs** : bouton « Logs » sur chaque conteneur (onglet Docker du projet et
