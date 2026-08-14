@@ -363,7 +363,11 @@
       pool.set(id, entry);
       mounted.add(id);
       lastSentSize.set(id, `${cols}x${rows}`);
-      sessions.push({ id, alive: true, name: "" });
+      // Le nom par defaut (« PROJET - N ») est genere EN BASE a la creation : on le relit
+      // pour que l'onglet affiche la meme chose que la sidebar, au lieu de pousser un nom
+      // vide qui retombait sur le fallback « Terminal N ».
+      const created = (await listTerminals(name)).find((t) => t.id === id);
+      sessions.push({ id, alive: true, name: created?.name ?? "" });
       try { await attachTerminal(id, cols, rows); } catch {}
       entry.term.onData((data) => sendInput(id, data));
       activeId = id;

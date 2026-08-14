@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Nom d'onglet incohérent à la création d'un terminal** : la sidebar affichait bien
+  « COCKPIT - 1 » mais l'onglet restait sur « Terminal 1 ». Le nom, généré en base, n'était pas
+  relu par l'onglet fraîchement créé.
+
 ## [0.7.1] — 2026-08-13
 
 ### Fixed
