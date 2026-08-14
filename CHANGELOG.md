@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-08-14
+
 ### Added
 
 - **Palette de commandes (Ctrl+K)** : tape quelques lettres et saute n'importe où —
