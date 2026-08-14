@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-08-14
+
 ### Fixed
 
 - **Le modal « Nouveau projet » était invisible quand une image de fond était active** : la
