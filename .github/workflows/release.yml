@@ -14,11 +14,24 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-22.04
+    # Matrice Linux + macOS : les deux jobs publient sur la MEME release (meme tagName),
+    # et tauri-action FUSIONNE latest.json plateforme par plateforme — l'updater de chaque
+    # OS y trouve son artefact. fail-fast: false pour qu'un echec macOS (plateforme beta,
+    # non testable en local) ne prive jamais les utilisateurs Linux de leur version.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: appimage
+          - os: macos-latest # Apple Silicon (aarch64)
+            bundles: dmg
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Dependances systeme Tauri
+      - name: Dependances systeme Tauri (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -37,16 +50,18 @@ jobs:
           # Sauve le cache meme quand le job echoue : sans ca, chaque correctif de CI
           # repartait d'une compilation Rust complete (~11 min perdues par iteration).
           cache-on-failure: true
-          # Cle fixe et non derivee du nom du job : le cache est ainsi reutilise d'une release
-          # a la suivante tant que Cargo.lock ne bouge pas. C'est ce qui fait passer le run de
-          # ~12 min a ~7 min.
+          # Cle fixe et non derivee du nom du job (rust-cache y ajoute l'OS de lui-meme) :
+          # le cache est reutilise d'une release a la suivante tant que Cargo.lock ne bouge
+          # pas. C'est ce qui fait passer le run de ~12 min a ~7 min.
           shared-key: tauri
 
       # tmux statique embarque dans l'AppImage : les terminaux marchent sans que
       # l'utilisateur n'installe RIEN. La cle de cache derive du script de build
       # (versions et checksums epingles dedans) : le binaire n'est reconstruit que
-      # quand la recette change (~2 min sinon 0).
+      # quand la recette change (~2 min sinon 0). Linux seulement : sur macOS le
+      # repli est le tmux systeme (brew), message dedie dans l'app.
       - name: Cache du tmux statique
+        if: runner.os == 'Linux'
         id: tmux-cache
         uses: actions/cache@v4
         with:
@@ -54,7 +69,7 @@ jobs:
           key: tmux-static-${{ hashFiles('scripts/build-tmux-static.sh') }}
 
       - name: Construire tmux statique (musl)
-        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        if: runner.os == 'Linux' && steps.tmux-cache.outputs.cache-hit != 'true'
         run: scripts/build-tmux-static.sh src-tauri/resources/bin/tmux
 
       - run: npm ci
@@ -65,7 +80,7 @@ jobs:
         run: npm run check
 
       # `--release` est volontaire : sans lui, cargo compile TOUT une premiere fois en debug
-      # pour les tests, puis tauri-action recompile TOUT en release pour l'AppImage — deux
+      # pour les tests, puis tauri-action recompile TOUT en release pour le bundle — deux
       # profils, aucun artefact partage. Mesure sur le run 31691474888 : 2 min 45 de tests
       # + 8 min 44 de build = ~12 min. En release, les deux etapes partagent le meme
       # target/release. Aucun `debug_assert!` dans le code, donc rien n'est perdu.
@@ -94,8 +109,9 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Construit l'AppImage, le signe avec la cle privee, cree la Release GitHub
-      # et publie latest.json (le manifeste que l'app interroge).
+      # Construit le bundle de la plateforme, le signe (signature updater minisign — la
+      # signature Apple/notarisation demanderait un compte developpeur), publie sur la
+      # Release et fusionne latest.json.
       - name: Build, signature et publication
         uses: tauri-apps/tauri-action@v0
         env:
@@ -109,7 +125,7 @@ jobs:
           # `bundle.active` est volontairement absent de tauri.conf.json : l'y mettre a true
           # ECRASE le --no-bundle de la CLI et casserait le build de dev local (il tenterait
           # de signer sans cle privee). Le bundle est donc force ici, explicitement.
-          args: -b appimage
+          args: -b ${{ matrix.bundles }}
           tagName: ${{ github.ref_name }}
           releaseName: Cockpit ${{ github.ref_name }}
           # Section du CHANGELOG.md extraite a l'etape precedente : c'est exactement ce

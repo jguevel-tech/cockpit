@@ -471,10 +471,11 @@ impl TerminalState {
     /// ce cas ne peut plus arriver dans l'AppImage — il reste possible en build de dev
     /// (--no-bundle, pas de ressource) sur une machine sans tmux.
     fn ensure_tmux() -> Result<(), String> {
+        let hint = if cfg!(target_os = "macos") { "brew install tmux" } else { "sudo apt-get install tmux" };
         std::process::Command::new(tmux_program())
             .arg("-V")
             .output()
-            .map_err(|_| "tmux introuvable — installe-le : sudo apt-get install tmux".to_string())?;
+            .map_err(|_| format!("tmux introuvable — installe-le : {}", hint))?;
         Ok(())
     }
 

@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Cockpit existe désormais pour macOS** (Apple Silicon, bêta) : un `.dmg` est publié avec
+  chaque version et les mises à jour intégrées fonctionnent. L'application n'étant pas
+  encore notarisée par Apple, le premier lancement se fait par clic droit → Ouvrir ; les
+  terminaux persistants demandent `brew install tmux` (l'application l'indique). Les
+  fonctionnalités liées à Linux (enregistrement de réunions, détail mémoire) s'y désactivent
+  proprement.
+
 ## [0.24.0] — 2026-08-14
 
 ### Changed
