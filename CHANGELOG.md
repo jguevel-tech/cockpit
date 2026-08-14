@@ -12,6 +12,20 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- Les boutons de la sidebar affichent désormais « + Projet » et « + Dossier » au lieu d'icônes
+  seules — le dossier 📁 n'était pas compris comme un bouton de création.
+
+### Fixed
+
+- **Projet fraîchement créé inutilisable** (onglet Docker vide, bouton + du terminal sans
+  réaction) : quand l'enregistrement auprès de l'orchestrateur échouait, le projet restait en
+  base mais disparaissait de la liste de l'application. Un projet en base apparaît maintenant
+  toujours, et ses terminaux, fichiers et Git fonctionnent même si Docker est indisponible.
+- **Le bouton + du terminal explique désormais pourquoi il ne peut pas créer** (projet sans
+  chemin, tmux manquant…) au lieu de ne rien faire silencieusement.
+
 ## [0.9.1] — 2026-08-14
 
 ### Fixed

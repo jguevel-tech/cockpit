@@ -53,13 +53,28 @@ async fn list_projects(state: tauri::State<'_, AppState>) -> Result<Vec<ProjectW
     let orch_map: std::collections::HashMap<String, docker::orchestrator::Project> =
         orch_projects.into_iter().map(|p| (p.name.clone(), p)).collect();
 
+    // Un projet EN BASE doit TOUJOURS apparaitre, meme si l'orchestrateur ne le connait pas
+    // (son add_project peut echouer silencieusement a la creation). L'ancienne version ne
+    // gardait que l'intersection : le projet fraichement cree devenait invisible du frontend,
+    // donc onglet Docker vide et bouton + du terminal inerte — constate chez le premier
+    // utilisateur externe le 2026-08-14. En secours on synthetise une entree arretee avec le
+    // chemin de la base, ce qui suffit aux terminaux, fichiers et git.
     let mut result: Vec<ProjectWithFolder> = db_projects
         .iter()
-        .filter_map(|db_p| {
-            orch_map.get(&db_p.name).map(|orch_p| ProjectWithFolder {
-                project: orch_p.clone(),
-                folder_id: db_p.folder_id,
-            })
+        .map(|db_p| ProjectWithFolder {
+            project: orch_map.get(&db_p.name).cloned().unwrap_or_else(|| {
+                docker::orchestrator::Project {
+                    name: db_p.name.clone(),
+                    path: db_p.path.clone(),
+                    description: db_p.description.clone(),
+                    depends_on: db_p.depends_on.clone(),
+                    depended_by: Vec::new(),
+                    state: docker::orchestrator::ProjectState::Stopped,
+                    containers: Vec::new(),
+                    error: String::new(),
+                }
+            }),
+            folder_id: db_p.folder_id,
         })
         .collect();
 

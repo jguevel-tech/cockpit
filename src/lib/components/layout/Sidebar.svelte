@@ -264,8 +264,8 @@
   <div class="sidebar-header">
     <span>Projets</span>
     <div class="header-actions">
-      <button class="add-btn" onclick={() => creatingFolder = true} title="Nouveau dossier">📁</button>
-      <button class="add-btn" onclick={() => showCreateModal = true} title="Nouveau projet">+</button>
+      <button class="add-btn labeled" onclick={() => showCreateModal = true} title="Créer un nouveau projet">+ Projet</button>
+      <button class="add-btn labeled" onclick={() => creatingFolder = true} title="Créer un dossier pour ranger des projets">+ Dossier</button>
     </div>
   </div>
 
@@ -471,6 +471,8 @@
     padding: 0;
   }
   .add-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  /* Libelles explicites : le 📁 seul n etait pas compris (retour utilisateur 2026-08-14) */
+  .add-btn.labeled { width: auto; padding: 0 0.5rem; font-size: 0.72rem; font-weight: 600; }
 
   .folder-create {
     display: flex; gap: 0.25rem; padding: 0.25rem 0.75rem; align-items: center;

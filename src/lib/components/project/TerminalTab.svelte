@@ -348,7 +348,17 @@
   }
 
   async function addTerminal(initCommand?: string) {
-    if (!project?.path || !container) return;
+    if (!container) return;
+    // JAMAIS de retour silencieux ici : c'est exactement ce qui a laisse le premier
+    // utilisateur externe cliquer sur + sans que rien ne se passe ni ne s'affiche.
+    if (!project) {
+      notify("Projet introuvable dans la liste — redémarre Cockpit ou vérifie sa configuration.");
+      return;
+    }
+    if (!project.path) {
+      notify("Ce projet n'a pas de chemin : renseigne-le dans l'onglet Paramètres du projet.");
+      return;
+    }
     // On mesure AVANT de creer le PTY : le shell (et une TUI lancee via
     // init_command) demarre directement a la bonne taille, pas en 80x24.
     const entry = createXterm();
@@ -376,7 +386,7 @@
     } catch (e) {
       entry.term.dispose();
       entry.el.remove();
-      alert(e);
+      notify(String(e));
     }
   }
 
