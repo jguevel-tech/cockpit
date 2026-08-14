@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-08-14
+
 ### Added
 
 - **tmux est maintenant embarqué dans Cockpit** : ouvrir un terminal ne demande plus
