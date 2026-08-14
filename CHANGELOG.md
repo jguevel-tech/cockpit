@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ouvrir un modal rendait le reste de la page transparent** (image de fond active) : le
+  moteur d'affichage désactive le verre dépoli de toute la page sous un voile de modal. Le
+  voile porte désormais son propre flou : tout ce qui est derrière le dialogue apparaît
+  élégamment flouté, et plus jamais transparent.
+
 ## [0.11.1] — 2026-08-14
 
 ### Fixed

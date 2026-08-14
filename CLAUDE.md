@@ -139,6 +139,15 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   deviennent translucides (color-mix), et une surface flottante n'est pas dans la liste des
   conteneurs floutes — le contenu du dessous transparait au travers (constate sur le modal
   de creation le 2026-08-14, juste apres le fix portal).
+- **Un voile plein ecran PEINT (fond rgba d'un modal) doit porter son propre
+  `backdrop-filter: blur(12px)`** : WebKitGTK desactive les backdrop-filter de toute la page
+  situee SOUS un tel voile — le verre depoli des panneaux meurt, l'image de fond apparait
+  nette au travers ("le reste devient transparent quand j'ouvre le modal"). Prouve par
+  reproduction isolee dans le WebKitGTK systeme (scenarios captures sous Xvfb, 2026-08-14) :
+  seuls les voiles peints declenchent le bug, les overlays TRANSPARENTS (ContextMenu,
+  NotificationPanel) et les petits elements fixed (toasts) sont inoffensifs — ne pas leur
+  ajouter de flou. Le blur du voile lui-meme fonctionne et masque l'artefact en floutant
+  tout ce qui est dessous.
 - Nouvelle table referencant un projet -> l'ajouter a `PROJECT_SCOPED_TABLES` (storage/projects.rs),
   sinon delete/rename laisseront des donnees orphelines
 - Modal, rename inline, menu contextuel, toast, DnD de liste -> utiliser `components/ui/`,

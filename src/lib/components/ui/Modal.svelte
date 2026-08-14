@@ -41,7 +41,10 @@
     position: fixed; inset: 0; z-index: 100;
     background: rgba(0, 0, 0, 0.45);
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(2px);
+    /* 12px et pas moins : WebKitGTK tue les backdrop-filter de la page sous un voile
+       peint (verre depoli des panneaux mort) — le flou du voile masque l'artefact.
+       Voir CreateProjectModal.svelte et CLAUDE.md. */
+    backdrop-filter: blur(12px);
   }
   .modal {
     width: calc(100% - 2rem);

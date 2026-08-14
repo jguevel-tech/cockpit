@@ -144,6 +144,11 @@
   .overlay {
     position: fixed; inset: 0; z-index: 1000;
     background: rgba(0, 0, 0, 0.5);
+    /* OBLIGATOIRE sur un voile plein ecran PEINT : WebKitGTK desactive les
+       backdrop-filter de toute la page situee dessous (verre depoli des panneaux mort,
+       image nette au travers — prouve par reproduction isolee le 2026-08-14). Le flou
+       du voile lui-meme fonctionne, lui, et masque totalement l'artefact. */
+    backdrop-filter: blur(12px);
     display: flex; align-items: center; justify-content: center;
   }
   .modal {
