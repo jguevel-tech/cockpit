@@ -105,6 +105,47 @@ pub async fn container_action(id: &str, action: &str) -> Result<(), String> {
     container_action_bulk(std::slice::from_ref(&id.to_string()), action).await
 }
 
+/// Dernieres lignes de logs d'un conteneur.
+///
+/// `docker logs` restitue le stdout ET le stderr du conteneur sur les DEUX flux du CLI :
+/// ne lire que stdout perdrait la moitie des logs (la plupart des serveurs loggent sur
+/// stderr). On demande les timestamps RFC3339 (tri lexicographique = tri chronologique),
+/// on fusionne les deux flux par tri, puis on retire le prefixe pour l'affichage.
+pub async fn container_logs(id: &str, tail: u32) -> Result<String, String> {
+    let tail_s = tail.to_string();
+    let output = tokio::time::timeout(
+        TIMEOUT,
+        Command::new("docker")
+            .args(["logs", "--tail", &tail_s, "--timestamps", id])
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| "docker logs: delai depasse".to_string())?
+    .map_err(|e| format!("docker introuvable ou erreur: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().chars().take(300).collect());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let mut lines: Vec<&str> = stdout.lines().chain(stderr.lines()).collect();
+    lines.sort_unstable();
+    Ok(lines.iter().map(|l| strip_log_timestamp(l)).collect::<Vec<_>>().join("\n"))
+}
+
+/// Retire le prefixe "2026-08-14T10:00:00.123456789Z " pose par --timestamps.
+/// Une ligne sans prefixe (continuation, log exotique) est rendue telle quelle.
+fn strip_log_timestamp(line: &str) -> &str {
+    let Some((ts, rest)) = line.split_once(' ') else { return line };
+    let looks_rfc3339 = ts.len() >= 20
+        && ts.ends_with('Z')
+        && ts.as_bytes().first().is_some_and(|b| b.is_ascii_digit())
+        && ts.contains('T');
+    if looks_rfc3339 { rest } else { line }
+}
+
 /// Applique une action a un lot de conteneurs (docker accepte plusieurs ids).
 pub async fn container_action_bulk(ids: &[String], action: &str) -> Result<(), String> {
     if ids.is_empty() {
@@ -244,4 +285,22 @@ pub async fn prune(target: &str) -> Result<String, String> {
         _ => return Err(format!("cible de prune inconnue: {}", target)),
     };
     run_docker_timeout(&args, TIMEOUT_LONG).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_log_timestamp;
+
+    #[test]
+    fn strip_log_timestamp_retire_le_prefixe_rfc3339() {
+        assert_eq!(
+            strip_log_timestamp("2026-08-14T10:00:00.123456789Z GET /health 200"),
+            "GET /health 200"
+        );
+        // Ligne sans prefixe : inchangee
+        assert_eq!(strip_log_timestamp("stack trace line"), "stack trace line");
+        // Un premier mot quelconque n'est pas confondu avec un timestamp
+        assert_eq!(strip_log_timestamp("ERROR something failed"), "ERROR something failed");
+        assert_eq!(strip_log_timestamp(""), "");
+    }
 }

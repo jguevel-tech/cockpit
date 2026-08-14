@@ -7,9 +7,11 @@
   } from "../../api/docker";
   import { groupBy } from "../../utils/reorder";
   import { notify } from "../../stores/toast";
+  import ContainerLogsModal from "../docker/ContainerLogsModal.svelte";
   import type { DockerContainer, DiskUsage, DockerVolume, DockerImage } from "../../types";
 
   let containers: DockerContainer[] = $state([]);
+  let logsFor: DockerContainer | null = $state(null);
   let containersLoaded = $state(false);
   let containersError = $state("");
   let containerBusy = $state("");
@@ -162,6 +164,7 @@
               </div>
               <span class="ctn-status">{c.status}</span>
               <div class="ctn-actions">
+                <button title="Voir les logs" onclick={() => (logsFor = c)}>≡</button>
                 {#if c.state === "running"}
                   <button title="Redémarrer" disabled={!!containerBusy} onclick={() => doContainerAction(c, "restart")}>⟳</button>
                   <button title="Arrêter" disabled={!!containerBusy} onclick={() => doContainerAction(c, "stop")}>⏹</button>
@@ -218,6 +221,10 @@
     {/if}
   {/if}
 </div>
+
+{#if logsFor}
+  <ContainerLogsModal id={logsFor.id} name={logsFor.name} onClose={() => (logsFor = null)} />
+{/if}
 
 <style>
   .containers-panel {

@@ -119,6 +119,11 @@ async fn container_action(id: String, action: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn container_logs(id: String, tail: u32) -> Result<String, String> {
+    docker::containers::container_logs(&id, tail).await
+}
+
+#[tauri::command]
 async fn container_action_bulk(ids: Vec<String>, action: String) -> Result<(), String> {
     docker::containers::container_action_bulk(&ids, &action).await
 }
@@ -1178,6 +1183,7 @@ pub fn run() {
             restart_project,
             list_all_containers,
             container_action,
+            container_logs,
             container_action_bulk,
             docker_disk_usage,
             list_docker_volumes,

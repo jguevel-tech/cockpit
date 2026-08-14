@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Logs des conteneurs** : bouton « Logs » sur chaque conteneur (onglet Docker du projet et
+  vue Conteneurs du tableau de bord) — les 500 dernières lignes, rafraîchies toutes les 2 s
+  tant que le suivi est actif, stdout et stderr fusionnés dans l'ordre chronologique.
+- **Shell dans un conteneur** : bouton « Shell » sur un conteneur en marche — ouvre un vrai
+  terminal Cockpit du projet avec `docker exec` (bash si l'image en a un, sinon sh).
+
 ## [0.13.0] — 2026-08-14
 
 ### Added

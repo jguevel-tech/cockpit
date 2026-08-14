@@ -10,6 +10,8 @@ export const restartProject = (name: string) => invoke("restart_project", { name
 export const listAllContainers = () => invoke<DockerContainer[]>("list_all_containers");
 export const containerAction = (id: string, action: "start" | "stop" | "restart" | "remove") =>
   invoke("container_action", { id, action });
+export const containerLogs = (id: string, tail: number) =>
+  invoke<string>("container_logs", { id, tail });
 export const containerActionBulk = (ids: string[], action: "start" | "stop" | "restart" | "remove") =>
   invoke("container_action_bulk", { ids, action });
 
