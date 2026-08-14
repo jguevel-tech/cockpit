@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Alertes système dans la cloche** : disque presque plein (≥ 90 %), mémoire ou CPU
+  saturés pendant plusieurs minutes — une notification avec le bouton « Voir le
+  monitoring », qui disparaît d'elle-même quand la situation redevient normale. Un pic
+  passager (compilation…) n'alerte jamais.
+
 ## [0.20.0] — 2026-08-14
 
 ### Added

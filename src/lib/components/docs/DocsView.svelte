@@ -332,6 +332,13 @@
         <p>Vérification au démarrage, toutes les heures, et au retour sur la fenêtre. La version installée et le changelog complet sont dans Paramètres → Général.</p>
       </div>
 
+      <div class="block">
+        <p><strong>Alertes système</strong> : disque presque plein, mémoire ou CPU saturés plusieurs minutes → la cloche prévient, et l'alerte se retire seule quand ça redescend.</p>
+        <div class="demo">
+          <div class="d-notif">⚠ <strong>Disque presque plein — /home</strong><br /><span class="d-muted">93 % utilisés, 12,4 Go libres</span> <span class="d-btn small primary">Voir le monitoring</span></div>
+        </div>
+      </div>
+
     {:else if section === "raccourcis"}
       <h3>⌨ Raccourcis</h3>
 

@@ -8,6 +8,7 @@
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
   import { startTodoDueWatcher } from "./lib/stores/todoAlerts";
+  import { startSystemAlerts } from "./lib/stores/systemAlerts";
   import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
 
@@ -34,11 +35,13 @@
     loadWallpaper();
     const stopUpdateWatcher = startUpdateWatcher();
     const stopTodoDueWatcher = startTodoDueWatcher();
+    const stopSystemAlerts = startSystemAlerts();
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
       stopUpdateWatcher();
       stopTodoDueWatcher();
+      stopSystemAlerts();
     };
   });
 </script>
