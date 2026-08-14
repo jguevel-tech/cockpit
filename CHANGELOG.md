@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-14
+
 ### Changed
 
 - Les boutons de la sidebar affichent désormais « + Projet » et « + Dossier » au lieu d'icônes
