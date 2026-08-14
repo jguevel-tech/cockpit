@@ -802,6 +802,45 @@ impl TerminalState {
         Ok(())
     }
 
+    /// Recherche dans l'historique du terminal via la recherche NATIVE du copy-mode tmux :
+    /// c'est tmux qui possede le scrollback (le buffer xterm ne contient qu'un ecran en
+    /// mode alternatif), donc c'est lui qui cherche, surligne les occurrences et affiche
+    /// le compteur (n/N) dans le coin du pane. Aucun octet n'est injecte dans le shell.
+    ///
+    /// action : "start" (entre en copy-mode et cherche `query` vers le haut),
+    /// "next"/"prev" (occurrence plus ancienne / plus recente), "cancel" (sort du copy-mode).
+    pub fn search(&self, db: &Database, id: i64, action: &str, query: &str) -> Result<(), String> {
+        let row = db.get_terminal_row(id).map_err(|e| e.to_string())?;
+        let target = row.tmux_name.clone();
+        let run = |args: &[&str]| -> Result<(), String> {
+            let out = tmux_cmd(args).output().map_err(|e| e.to_string())?;
+            if !out.status.success() {
+                return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+            }
+            Ok(())
+        };
+        match action {
+            "start" => {
+                if query.trim().is_empty() {
+                    return Err("recherche vide".into());
+                }
+                // no-op si le pane est deja en copy-mode
+                run(&["copy-mode", "-t", &target])?;
+                // Variante -text : sous-chaine LITTERALE, pas une regex — c'est une
+                // recherche d'utilisateur, "1.2.3" ne doit pas matcher "1x2y3".
+                run(&["send-keys", "-t", &target, "-X", "search-backward-text", query])
+            }
+            "next" => run(&["send-keys", "-t", &target, "-X", "search-again"]),
+            "prev" => run(&["send-keys", "-t", &target, "-X", "search-reverse"]),
+            "cancel" => {
+                // Best effort : hors copy-mode, sortir n'a rien a faire (et ne doit pas toaster)
+                let _ = tmux_cmd(&["send-keys", "-t", &target, "-X", "cancel"]).output();
+                Ok(())
+            }
+            _ => Err(format!("action de recherche inconnue: {}", action)),
+        }
+    }
+
     /// Le programme QUI TOURNE DANS la session tmux est-il en ecran alternatif
     /// (vim, claude, htop...) ? Ne pas confondre avec le buffer xterm : le
     /// client tmux met TOUJOURS le terminal hote en ecran alternatif.

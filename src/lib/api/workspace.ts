@@ -41,6 +41,9 @@ export const openUrl = (url: string) => invoke("open_url", { url });
 export const recordCommand = (project: string, command: string) =>
   invoke("record_command", { project, command });
 export const terminalAltScreen = (id: number) => invoke<boolean>("terminal_alt_screen", { id });
+// Recherche dans l'historique (copy-mode tmux : surlignage et compteur natifs)
+export const terminalSearch = (id: number, action: "start" | "next" | "prev" | "cancel", query = "") =>
+  invoke("terminal_search", { id, action, query });
 export const searchCommandHistory = (query: string, limit?: number) =>
   invoke<HistoryEntry[]>("search_command_history", { query, limit: limit ?? null });
 

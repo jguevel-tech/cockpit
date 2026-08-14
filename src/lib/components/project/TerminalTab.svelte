@@ -79,7 +79,7 @@
     createTerminal, writeTerminal, resizeTerminal, closeTerminal,
     attachTerminal, renameTerminal, listTerminals,
     listClaudeSessions, renameClaudeSession, setClipboard, getClipboard,
-    terminalCopySelection, openUrl,
+    terminalCopySelection, terminalSearch, openUrl,
   } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
@@ -397,7 +397,60 @@
     });
   }
 
+  // --- Recherche dans l'historique (copy-mode tmux) ---
+  // Le scrollback vit dans TMUX, pas dans xterm (ecran alternatif du client) : c'est donc
+  // la recherche NATIVE du copy-mode qui cherche, surligne et compte (n/N dans le pane).
+  // Aucune interception du chemin de frappe : la barre a son propre input, et le seul
+  // raccourci (Ctrl+Maj+F) est capte en phase capture sur window, AVANT xterm.
+  let searchOpen = $state(false);
+  let searchQuery = $state("");
+  let searchStarted = $state(false);
+  let searchInputEl: HTMLInputElement | undefined = $state();
+
+  function openSearch() {
+    if (activeId === null) return;
+    searchOpen = true;
+    requestAnimationFrame(() => { searchInputEl?.focus(); searchInputEl?.select(); });
+  }
+
+  async function runSearch() {
+    if (activeId === null || !searchQuery.trim()) return;
+    try {
+      await terminalSearch(activeId, "start", searchQuery.trim());
+      searchStarted = true;
+    } catch (e) { notify(String(e)); }
+  }
+
+  async function searchStep(dir: "next" | "prev") {
+    if (activeId === null || !searchStarted) return;
+    try { await terminalSearch(activeId, dir); } catch (e) { notify(String(e)); }
+  }
+
+  async function closeSearch(forId: number | null = activeId, refocus = true) {
+    searchOpen = false;
+    if (forId !== null && searchStarted) {
+      searchStarted = false;
+      try { await terminalSearch(forId, "cancel"); } catch { /* best effort */ }
+    }
+    if (refocus && activeId !== null) pool.get(activeId)?.term.focus();
+  }
+
+  function onSearchShortcut(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+      e.preventDefault();
+      e.stopPropagation();
+      openSearch();
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener("keydown", onSearchShortcut, { capture: true });
+    return () => window.removeEventListener("keydown", onSearchShortcut, { capture: true });
+  });
+
   async function activate(id: number) {
+    // Une recherche ouverte concerne l'ANCIEN terminal : on la clot chez lui
+    if (searchOpen) await closeSearch(activeId, false);
     activeId = id;
     const existing = pool.get(id);
     if (existing && !mounted.has(id)) {
@@ -583,6 +636,26 @@
     {/each}
     <button class="term-add" onclick={() => addTerminal()} title="Nouveau terminal">+</button>
 
+    {#if searchOpen}
+      <span class="term-search">
+        <input
+          class="term-search-input"
+          bind:this={searchInputEl}
+          bind:value={searchQuery}
+          placeholder="Rechercher dans l'historique…"
+          onkeydown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); runSearch(); }
+            else if (e.key === "Escape") closeSearch();
+          }}
+        />
+        <button class="term-search-btn" onclick={() => searchStep("next")} title="Occurrence plus ancienne" disabled={!searchStarted}>↑</button>
+        <button class="term-search-btn" onclick={() => searchStep("prev")} title="Occurrence plus récente" disabled={!searchStarted}>↓</button>
+        <button class="term-search-btn" onclick={() => closeSearch()} title="Fermer (Échap)">×</button>
+      </span>
+    {:else}
+      <button class="term-search-btn" onclick={openSearch} title="Rechercher dans l'historique (Ctrl+Maj+F)">🔍</button>
+    {/if}
+
     <div class="claude-menu">
       <button class="term-claude" onclick={toggleClaude} title="Reprendre une conversation Claude Code">
         ✳ Claude ▾
@@ -678,6 +751,19 @@
     border: 1px solid var(--border-color); border-radius: 4px;
     background: var(--bg-secondary); color: var(--text-secondary);
   }
+  .term-search { display: inline-flex; align-items: center; gap: 0.25rem; }
+  .term-search-input {
+    width: 15rem; font-size: 0.78rem; padding: 0.2rem 0.45rem;
+    border: 1px solid var(--border-color); border-radius: 4px;
+    background: var(--bg-primary); color: var(--text-primary);
+  }
+  .term-search-btn {
+    padding: 0.2rem 0.4rem; font-size: 0.8rem; cursor: pointer;
+    border: 1px solid var(--border-color); border-radius: 4px;
+    background: var(--bg-secondary); color: var(--text-secondary);
+  }
+  .term-search-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
+  .term-search-btn:disabled { opacity: 0.45; cursor: default; }
   .term-add:hover { color: var(--accent); border-color: var(--accent); }
 
   .claude-menu { position: relative; margin-left: auto; }

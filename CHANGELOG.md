@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Recherche dans l'historique du terminal** (bouton 🔍 ou Ctrl+Maj+F) : tape ton texte,
+  Entrée cherche vers le haut, ↑/↓ naviguent entre les occurrences — surlignage et compteur
+  affichés directement dans le terminal, Échap referme et rend la main au shell. La frappe
+  normale n'est jamais interceptée (Ctrl+F reste au shell).
+
 ## [0.17.0] — 2026-08-14
 
 ### Added

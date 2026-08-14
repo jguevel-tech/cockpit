@@ -806,6 +806,11 @@ fn terminal_alt_screen(id: i64, state: tauri::State<'_, AppState>) -> bool {
     state.terminals.inner_alternate(&state.db, id)
 }
 
+#[tauri::command]
+fn terminal_search(id: i64, action: String, query: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.terminals.search(&state.db, id, &action, &query)
+}
+
 // --- Tauri Commands: Connexion Claude Code (abonnement) ---
 
 #[tauri::command]
@@ -1335,6 +1340,7 @@ pub fn run() {
             set_clipboard,
             get_clipboard,
             terminal_copy_selection,
+            terminal_search,
             list_claude_sessions,
             rename_claude_session,
             record_command,
