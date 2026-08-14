@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-08-14
+
 ### Added
 
 - **Alertes système dans la cloche** : disque presque plein (≥ 90 %), mémoire ou CPU
