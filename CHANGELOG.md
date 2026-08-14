@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-14
+
 ### Added
 
 - **Recherche dans le fichier ouvert (Ctrl+F)** : barre de recherche avec compteur
