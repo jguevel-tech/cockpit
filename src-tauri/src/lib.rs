@@ -345,7 +345,17 @@ async fn add_project(
     state: tauri::State<'_, AppState>,
 ) -> Result<storage::Project, String> {
     let proj = state.db.create_project(&name, &path, &compose_file, &description, &depends_on)?;
-    let _ = state.orchestrator.add_project(&name, &path, &compose_file, &description, depends_on).await;
+    // Seul echec possible : le nom existe deja dans l'orchestrateur (creation precedente
+    // avortee, suppression partielle). Mettre a jour au lieu d'avaler l'erreur — c'est ce
+    // silence qui rendait un projet frais invisible/fige chez le premier utilisateur externe.
+    if state
+        .orchestrator
+        .add_project(&name, &path, &compose_file, &description, depends_on.clone())
+        .await
+        .is_err()
+    {
+        state.orchestrator.update_project(&name, &path, &compose_file, &description, depends_on).await;
+    }
     Ok(proj)
 }
 

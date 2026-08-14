@@ -3,6 +3,7 @@
   import { loadProjects } from "../../stores/projects";
   import { selectProject } from "../../stores/ui";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
+  import { portal } from "../../actions/portal";
 
   async function browsePath() {
     try {
@@ -79,7 +80,7 @@
 {#if open}
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <!-- svelte-ignore a11y_interactive_supports_focus -->
-<div class="overlay" role="dialog" aria-modal="true" onclick={onOverlayClick} onkeydown={onKeydown}>
+<div class="overlay" role="dialog" aria-modal="true" use:portal onclick={onOverlayClick} onkeydown={onKeydown}>
   <div class="modal">
     <div class="modal-header">
       <h3>Nouveau projet</h3>

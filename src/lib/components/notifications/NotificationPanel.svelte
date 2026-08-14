@@ -3,6 +3,7 @@
   import { notices, markAllRead, dismiss } from "../../stores/notifications";
   import { checkForUpdate, updateState } from "../../stores/update";
   import { notify } from "../../stores/toast";
+  import { portal } from "../../actions/portal";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -50,11 +51,11 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
 
-<div class="overlay" role="presentation" onclick={onClose}></div>
+<div class="overlay" role="presentation" use:portal onclick={onClose}></div>
 
 <!-- Pas de stopPropagation : l'overlay est un FRERE, pas un parent — un clic dans le panneau
      ne traverse pas son onclick. tabindex requis par le role dialog. -->
-<div class="panel" role="dialog" aria-label="Notifications" tabindex="-1">
+<div class="panel" role="dialog" aria-label="Notifications" tabindex="-1" use:portal>
   <header>
     <h3>Notifications</h3>
     <button

@@ -116,6 +116,14 @@ impl Compose {
         .map_err(|_| format!("docker compose ps timeout in {:?}", self.project_dir))?
         .map_err(|e| format!("docker compose ps failed in {:?}: {}", self.project_dir, e))?;
 
+        // Un echec (docker.sock inaccessible, docker absent...) laissait stdout vide et
+        // sortait Ok(vec![]) : le projet restait "stopped" sans explication. L'erreur doit
+        // remonter pour etre affichee.
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("docker compose ps: {}", stderr.trim()));
+        }
+
         let stdout = String::from_utf8_lossy(&output.stdout);
         let trimmed = stdout.trim();
         if trimmed.is_empty() {
@@ -139,6 +147,63 @@ impl Compose {
                 .collect()
         }
     }
+}
+
+/// Repli quand aucun fichier compose n'est trouvable dans le dossier : `docker compose up`
+/// etiquette chaque conteneur avec le dossier d'ou il a ete lance
+/// (label com.docker.compose.project.working_dir). On retrouve donc les conteneurs du projet
+/// meme si le fichier porte un nom non standard ou a ete passe en -f depuis ailleurs.
+/// Seuls les conteneurs EN COURS sont listes (pas de -a) : meme semantique que compose ps,
+/// c'est ce que le calcul d'etat attend.
+pub async fn ps_by_working_dir(project_dir: &std::path::Path) -> Result<Vec<ContainerStatus>, String> {
+    let filter = format!(
+        "label=com.docker.compose.project.working_dir={}",
+        project_dir.display()
+    );
+    let output = tokio::time::timeout(PS_TIMEOUT, async {
+        Command::new("docker")
+            .args(["ps", "--format", "json", "--filter", &filter])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+    })
+    .await
+    .map_err(|_| format!("docker ps timeout in {:?}", project_dir))?
+    .map_err(|e| format!("docker ps failed: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("docker ps: {}", stderr.trim()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(parse_docker_ps_line)
+        .collect()
+}
+
+/// `docker ps --format json` sort du NDJSON avec d'autres cles que compose ps
+/// (Names, State, Ports, Labels). Le nom de service est extrait du label compose.
+fn parse_docker_ps_line(line: &str) -> Result<ContainerStatus, String> {
+    let val: serde_json::Value =
+        serde_json::from_str(line).map_err(|e| format!("JSON parse error: {}", e))?;
+    let get = |key: &str| val.get(key).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let labels = get("Labels");
+    let service = labels
+        .split(',')
+        .find_map(|kv| kv.strip_prefix("com.docker.compose.service="))
+        .unwrap_or("")
+        .to_string();
+    Ok(ContainerStatus {
+        name: get("Names"),
+        service,
+        status: get("State"),
+        health: String::new(),
+        ports: get("Ports"),
+    })
 }
 
 fn parse_container(raw: &serde_json::Value) -> Result<ContainerStatus, String> {
@@ -192,5 +257,23 @@ mod tests {
     fn test_has_compose_file() {
         let c = Compose::new("/nonexistent", "");
         assert!(!c.has_compose_file());
+    }
+
+    #[test]
+    fn test_parse_docker_ps_line() {
+        let line = r#"{"Names":"web-1","State":"running","Ports":"80/tcp","Labels":"com.docker.compose.project=demo,com.docker.compose.service=web,com.docker.compose.project.working_dir=/srv/demo"}"#;
+        let cs = parse_docker_ps_line(line).unwrap();
+        assert_eq!(cs.name, "web-1");
+        assert_eq!(cs.service, "web");
+        assert_eq!(cs.status, "running");
+        assert_eq!(cs.ports, "80/tcp");
+    }
+
+    #[test]
+    fn test_parse_docker_ps_line_sans_label_service() {
+        let line = r#"{"Names":"solo","State":"running","Ports":"","Labels":""}"#;
+        let cs = parse_docker_ps_line(line).unwrap();
+        assert_eq!(cs.name, "solo");
+        assert_eq!(cs.service, "");
     }
 }

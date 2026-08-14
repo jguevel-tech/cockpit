@@ -12,6 +12,22 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Le modal « Nouveau projet » était invisible quand une image de fond était active** : la
+  zone se grisait sans qu'aucune fenêtre n'apparaisse. Tous les modals, menus contextuels et
+  panneaux sont maintenant rendus au-dessus de l'application quelle que soit l'apparence.
+- **Un projet dont les conteneurs tournaient déjà restait affiché « stopped »** : les
+  conteneurs en cours ne sont plus adoptés uniquement au démarrage de l'application, mais à
+  chaque rafraîchissement — un projet créé en cours de session est reconnu immédiatement.
+- **Une panne d'accès à Docker était silencieuse** (permissions sur docker.sock, docker
+  absent…) : le projet paraissait simplement arrêté. L'onglet Docker affiche désormais la
+  cause exacte.
+- **Les conteneurs sont retrouvés même sans fichier compose au nom standard** : détection de
+  repli par les labels que Docker Compose pose sur chaque conteneur (dossier de lancement).
+- Un projet recréé après une suppression incomplète pouvait rester figé : la création répare
+  maintenant l'enregistrement au lieu d'échouer en silence.
+
 ## [0.10.0] — 2026-08-14
 
 ### Changed

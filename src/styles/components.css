@@ -131,6 +131,12 @@ html.has-wallpaper {
 
    `isolation: isolate` garde le pseudo-element derriere le contenu sans avoir a manipuler
    des z-index dans chaque composant.
+
+   COROLLAIRE (2026-08-14) : `isolation: isolate` fait de chaque conteneur un CONTEXTE
+   D'EMPILEMENT. Un overlay `position: fixed` reste enfant d'un de ces conteneurs est peint
+   sous les conteneurs suivants du DOM, quel que soit son z-index — le modal de creation de
+   projet (enfant de la sidebar) etait invisible sous wallpaper. D'ou la regle : tout overlay
+   fixed porte `use:portal` (actions/portal.ts) et vit dans <body>.
    ========================================================================================== */
 html.has-wallpaper header,
 html.has-wallpaper aside,

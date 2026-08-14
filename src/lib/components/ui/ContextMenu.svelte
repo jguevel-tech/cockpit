@@ -5,6 +5,8 @@
     action: () => void;
   }
 
+  import { portal } from "../../actions/portal";
+
   let {
     x,
     y,
@@ -37,7 +39,7 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
 
-<div class="overlay" role="presentation" onclick={onClose} oncontextmenu={(e) => { e.preventDefault(); onClose(); }}>
+<div class="overlay" role="presentation" use:portal onclick={onClose} oncontextmenu={(e) => { e.preventDefault(); onClose(); }}>
   <div bind:this={menuEl} class="menu" style="left: {pos.left}px; top: {pos.top}px" role="menu" tabindex="-1">
     {#each items as item}
       <button class="item" class:danger={item.danger} role="menuitem" onclick={() => pick(item)}>

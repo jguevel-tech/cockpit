@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { portal } from "../../actions/portal";
 
   let {
     title = "",
@@ -20,7 +21,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="backdrop" role="presentation" onclick={onClose}>
+<div class="backdrop" role="presentation" use:portal onclick={onClose}>
   <div
     class="modal"
     style="max-width: {width}"

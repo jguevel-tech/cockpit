@@ -28,6 +28,9 @@ pub struct Project {
     pub error: String,
 }
 
+/// Prefixe des erreurs posees par le refresh de statuts — voir refresh_statuses.
+const PS_ERROR_PREFIX: &str = "État Docker indisponible : ";
+
 // --- Decisions pures (separees des locks et de docker pour etre testables) ---
 
 /// Dependants encore actifs (Running/Starting) d'un projet — ils bloquent son arret.
@@ -64,23 +67,25 @@ where
 }
 
 /// Transition d'etat calculee par le monitor a partir des conteneurs observes.
-/// None = l'etat ne change pas. `initial_done` : avant le premier refresh complet,
-/// un projet Stopped dont les conteneurs tournent est adopte comme Running.
+/// None = l'etat ne change pas. Un projet Stopped dont tous les conteneurs tournent est
+/// adopte comme Running a TOUT moment, pas seulement au premier refresh : l'ancienne garde
+/// `initial_done` laissait un projet cree en cours de session avec des conteneurs deja
+/// lances afficher "stopped" jusqu'au redemarrage de l'app (constate chez le premier
+/// utilisateur externe le 2026-08-14). Afficher la realite ne se perime pas.
 fn refreshed_state(
     current: &ProjectState,
     has_containers: bool,
     all_running: bool,
-    initial_done: bool,
 ) -> Option<ProjectState> {
     let was_active = matches!(current, ProjectState::Running | ProjectState::Error);
     if !has_containers {
         return if was_active { Some(ProjectState::Stopped) } else { None };
     }
-    if was_active {
-        if all_running { Some(ProjectState::Running) } else { None }
-    } else if !initial_done && all_running {
+    if all_running {
         Some(ProjectState::Running)
     } else {
+        // Conteneurs partiellement up : on ne tranche pas, l'etat courant reste
+        // (Error reste Error, Running reste Running, Stopped reste Stopped).
         None
     }
 }
@@ -90,7 +95,6 @@ pub struct Orchestrator {
     graph: Arc<RwLock<Graph>>,
     reverse: Arc<RwLock<Graph>>,
     composers: Arc<RwLock<HashMap<String, Compose>>>,
-    initial_refresh_done: Arc<RwLock<bool>>,
 }
 
 impl Orchestrator {
@@ -140,7 +144,6 @@ impl Orchestrator {
             graph: Arc::new(RwLock::new(dep_graph)),
             reverse: Arc::new(RwLock::new(rev_graph)),
             composers: Arc::new(RwLock::new(composers)),
-            initial_refresh_done: Arc::new(RwLock::new(false)),
         })
     }
 
@@ -508,7 +511,13 @@ impl Orchestrator {
                     let res = c.ps().await;
                     results.push((name.clone(), res));
                 }
-                _ => {
+                // Un chemin sans fichier compose au nom standard : docker retrouve quand
+                // meme les conteneurs compose lances depuis ce dossier via leur label.
+                Some(c) => {
+                    let res = super::compose::ps_by_working_dir(&c.project_dir).await;
+                    results.push((name.clone(), res));
+                }
+                None => {
                     results.push((name.clone(), Ok(vec![])));
                 }
             }
@@ -516,14 +525,8 @@ impl Orchestrator {
 
         // Phase 3: apply results under write lock
         let mut projects = self.projects.write().await;
-        let initial_done = *self.initial_refresh_done.read().await;
 
         for (name, result) in &results {
-            let containers = match result {
-                Ok(c) => c,
-                Err(_) => continue,
-            };
-
             let proj = match projects.get_mut(name.as_str()) {
                 Some(p) => p,
                 None => continue,
@@ -533,18 +536,32 @@ impl Orchestrator {
                 continue;
             }
 
+            // Une erreur d'observation (docker.sock inaccessible, docker absent...) doit
+            // s'afficher au lieu de laisser croire a un projet arrete. Le prefixe sert de
+            // marqueur : on n'efface au refresh suivant QUE nos propres messages, jamais
+            // une erreur posee par un start/stop que l'utilisateur n'a pas encore lue.
+            let containers = match result {
+                Ok(c) => {
+                    if proj.error.starts_with(PS_ERROR_PREFIX) {
+                        proj.error.clear();
+                    }
+                    c
+                }
+                Err(e) => {
+                    proj.error = format!("{}{}", PS_ERROR_PREFIX, e);
+                    continue;
+                }
+            };
+
             proj.containers = containers.clone();
 
             let all_running = containers.iter().all(|c| c.status == "running");
             if let Some(new_state) =
-                refreshed_state(&proj.state, !containers.is_empty(), all_running, initial_done)
+                refreshed_state(&proj.state, !containers.is_empty(), all_running)
             {
                 proj.state = new_state;
             }
         }
-
-        drop(projects);
-        *self.initial_refresh_done.write().await = true;
     }
 }
 
@@ -613,47 +630,48 @@ mod tests {
     #[test]
     fn refresh_running_without_containers_becomes_stopped() {
         assert_eq!(
-            refreshed_state(&ProjectState::Running, false, true, true),
+            refreshed_state(&ProjectState::Running, false, true),
             Some(ProjectState::Stopped)
         );
         assert_eq!(
-            refreshed_state(&ProjectState::Error, false, true, true),
+            refreshed_state(&ProjectState::Error, false, true),
             Some(ProjectState::Stopped)
         );
     }
 
     #[test]
     fn refresh_stopped_without_containers_stays() {
-        assert_eq!(refreshed_state(&ProjectState::Stopped, false, true, true), None);
+        assert_eq!(refreshed_state(&ProjectState::Stopped, false, true), None);
     }
 
     #[test]
     fn refresh_error_recovers_when_all_running() {
         assert_eq!(
-            refreshed_state(&ProjectState::Error, true, true, true),
+            refreshed_state(&ProjectState::Error, true, true),
             Some(ProjectState::Running)
         );
         // Conteneurs partiellement up : on reste en erreur
-        assert_eq!(refreshed_state(&ProjectState::Error, true, false, true), None);
+        assert_eq!(refreshed_state(&ProjectState::Error, true, false), None);
     }
 
     #[test]
-    fn refresh_adopts_running_containers_only_on_initial_scan() {
-        // Premier refresh apres demarrage de l'app : adoption
+    fn refresh_adopts_running_containers_anytime() {
+        // Un projet Stopped dont les conteneurs tournent est adopte comme Running,
+        // y compris longtemps apres le demarrage de l'app : c'est le cas d'un projet
+        // cree en cours de session alors que ses conteneurs tournaient deja.
         assert_eq!(
-            refreshed_state(&ProjectState::Stopped, true, true, false),
+            refreshed_state(&ProjectState::Stopped, true, true),
             Some(ProjectState::Running)
         );
-        // Ensuite : un projet Stopped avec des conteneurs n'est pas adopte
-        // (demarrage externe, c'est le comportement historique)
-        assert_eq!(refreshed_state(&ProjectState::Stopped, true, true, true), None);
+        // Partiellement up : on n'invente pas un etat
+        assert_eq!(refreshed_state(&ProjectState::Stopped, true, false), None);
     }
 
     #[test]
     fn refresh_never_touches_transitional_states_here() {
         // Starting/Stopping sont filtres en amont par refresh_statuses ;
-        // la fonction pure ne les promeut pas non plus.
-        assert_eq!(refreshed_state(&ProjectState::Starting, true, true, true), None);
-        assert_eq!(refreshed_state(&ProjectState::Stopping, false, false, true), None);
+        // la fonction pure ne les promeut pas si partiellement up.
+        assert_eq!(refreshed_state(&ProjectState::Starting, true, false), None);
+        assert_eq!(refreshed_state(&ProjectState::Stopping, false, false), None);
     }
 }
