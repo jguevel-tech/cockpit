@@ -111,19 +111,43 @@
 </script>
 
 <div class="detail">
-  <div class="project-header">
+  <!-- UNE seule barre : titre a gauche, onglets, puis les actions — Enregistrer tout au bout.
+       Les deux bandeaux d'avant (titre puis onglets) empilaient deux jeux de coins arrondis. -->
+  <div class="project-bar">
     {#if renaming}
       <span class="title-edit">
         <InlineEdit value={name} onCommit={commitRename} onCancel={() => (renaming = false)} />
       </span>
     {:else}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <h2 ondblclick={startRename}>{name}</h2>
+      <h2
+        ondblclick={startRename}
+        title={project?.description ? `${project.description} — double-clic pour renommer` : "Double-clic pour renommer"}
+      >{name}</h2>
     {/if}
-    {#if project?.description}
-      <span class="project-desc">{project.description}</span>
-    {/if}
+
+    <div class="tabs">
+      {#each tabs as tab}
+        <button
+          class="tab" class:active={$activeTab === tab.id}
+          onclick={() => activeTab.set(tab.id)}
+        >{tab.label}</button>
+      {/each}
+    </div>
+
     <div class="header-actions">
+      {#if urls.length > 0}
+        {#each urls as u}
+          <a class="quick-url" href={u.url} target="_blank" rel="noopener noreferrer">{u.label}</a>
+        {/each}
+      {/if}
+      {#if failedRecordings.length > 0}
+        <span class="rec-failed" title={failedRecordings[0].error ?? ""}>
+          ⚠ Réunion en échec
+          <button class="rec-failed-action" onclick={() => doRetryRecording(failedRecordings[0].id)} title="Réessayer la transcription">↻</button>
+          <button class="rec-failed-action" onclick={() => doDeleteRecording(failedRecordings[0].id)} title="Supprimer">✕</button>
+        </span>
+      {/if}
       {#if recHere?.state === "recording"}
         <span class="rec-timer"><span class="rec-dot"></span>{recElapsed}</span>
         <button class="rec-btn stop" onclick={toggleRecording} disabled={recBusy} title="Arreter l'enregistrement">⏹ Stop</button>
@@ -141,28 +165,7 @@
           title={rec ? `Enregistrement en cours sur "${rec.project}"` : "Enregistrer la réunion (micro + son système)"}
         >⏺ Enregistrer</button>
       {/if}
-      {#if failedRecordings.length > 0}
-        <span class="rec-failed" title={failedRecordings[0].error ?? ""}>
-          ⚠ Réunion en échec
-          <button class="rec-failed-action" onclick={() => doRetryRecording(failedRecordings[0].id)} title="Réessayer la transcription">↻</button>
-          <button class="rec-failed-action" onclick={() => doDeleteRecording(failedRecordings[0].id)} title="Supprimer">✕</button>
-        </span>
-      {/if}
-      {#if urls.length > 0}
-        {#each urls as u}
-          <a class="quick-url" href={u.url} target="_blank" rel="noopener noreferrer">{u.label}</a>
-        {/each}
-      {/if}
     </div>
-  </div>
-
-  <div class="tabs">
-    {#each tabs as tab}
-      <button
-        class="tab" class:active={$activeTab === tab.id}
-        onclick={() => activeTab.set(tab.id)}
-      >{tab.label}</button>
-    {/each}
   </div>
 
   <div class="tab-content">
@@ -172,14 +175,21 @@
 
 <style>
   .detail { display: flex; flex-direction: column; height: 100%; }
-  .project-header {
-    display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
-    padding-bottom: 0.5rem;
+  /* Barre unique : les enfants s'etirent pour que le soulignement des onglets touche la
+     bordure basse ; titre et actions se recentrent individuellement. */
+  .project-bar {
+    display: flex; align-items: stretch; gap: 1rem; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-color);
   }
-  .project-header h2 { margin: 0; font-size: 1.2rem; cursor: default; }
-  .title-edit { display: inline-block; width: 14rem; font-size: 1.2rem; font-weight: 700; }
-  .project-desc { color: var(--text-muted); font-size: 0.85rem; }
-  .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto; align-items: center; }
+  .project-bar h2 {
+    margin: 0; font-size: 1.05rem; cursor: default; align-self: center;
+    white-space: nowrap; padding-bottom: 2px;
+  }
+  .title-edit { display: inline-block; width: 14rem; font-size: 1.05rem; font-weight: 700; align-self: center; }
+  .header-actions {
+    display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto;
+    align-items: center; align-self: center; padding-bottom: 2px;
+  }
   .rec-btn {
     font-size: 0.8rem; padding: 0.15rem 0.6rem; border: 1px solid var(--error);
     border-radius: var(--radius-sm); background: var(--bg-secondary); color: var(--error); cursor: pointer;
@@ -217,12 +227,13 @@
     transition: background 0.12s ease;
   }
   .quick-url:hover { background: var(--bg-tertiary); text-decoration: underline; }
-  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem; }
+  .tabs { display: flex; gap: 0; align-items: stretch; }
   .tab {
-    padding: 0.5rem 1rem; border: none; background: none; color: var(--text-secondary);
+    display: flex; align-items: center;
+    padding: 0.55rem 0.9rem; border: none; background: none; color: var(--text-secondary);
     cursor: pointer; font-size: 0.9rem; border-bottom: 2px solid transparent;
   }
   .tab:hover { color: var(--text-primary); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-content { flex: 1; overflow-y: auto; }
+  .tab-content { flex: 1; overflow-y: auto; margin-top: 1rem; }
 </style>

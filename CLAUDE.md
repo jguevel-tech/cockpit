@@ -337,7 +337,7 @@ ai-workforce/
 │   │   │   │   ├── TerminalsView.svelte  # Terminaux par projet, clic = navigation
 │   │   │   │   └── ContainersView.svelte # Conteneurs/Volumes/Images + df + prune
 │   │   │   ├── project/
-│   │   │   │   ├── ProjectDetail.svelte  # En-tete (⏺ record, URLs) + map d'onglets (1 entree = 1 onglet)
+│   │   │   │   ├── ProjectDetail.svelte  # Barre unique (titre + onglets + actions ⏺/URLs), map tabs
 │   │   │   │   ├── DockerTab.svelte      # Start/stop/restart, dependances, conteneurs
 │   │   │   │   ├── WorkspaceTab.svelte   # Notes (gauche, flex:2) + Todos (droite, flex:1)
 │   │   │   │   ├── TerminalTab.svelte    # Multi-terminaux tmux, sessions Claude (fixes accents NE PAS RETIRER)
@@ -540,6 +540,8 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
   retrouve la release existante et y ajoute les fichiers manquants. Constate sur la v0.6.2.
   **Toujours verifier apres publication** : `curl -sL -o /dev/null -w "%{http_code}"
   https://github.com/jguevel-tech/cockpit/releases/latest/download/latest.json` doit rendre 200.
+  Nuance : un 404 dans les ~2 premieres minutes apres publication est la propagation CDN de
+  GitHub, pas l incident — re-tester avant de relancer quoi que ce soit (constate sur la 0.8.0).
 - Sous Linux l'updater ne remplace qu'un **AppImage**. Un binaire brut (`--no-bundle`) ne peut
   pas se mettre a jour : pour tester le flow reel, lancer l'AppImage, pas `target/release/cockpit`.
 - En local `npx tauri build` (avec bundle) **echoue** faute de cle privee : c'est voulu, la

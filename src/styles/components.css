@@ -135,24 +135,22 @@ html.has-wallpaper {
 html.has-wallpaper header,
 html.has-wallpaper aside,
 html.has-wallpaper nav,
-html.has-wallpaper .tabs,
+html.has-wallpaper .project-bar,
 html.has-wallpaper .card,
 html.has-wallpaper .stack,
 html.has-wallpaper .tab-content,
-html.has-wallpaper .system,
-html.has-wallpaper .project-header {
+html.has-wallpaper .system {
   position: relative;
   isolation: isolate;
 }
 html.has-wallpaper header::before,
 html.has-wallpaper aside::before,
 html.has-wallpaper nav::before,
-html.has-wallpaper .tabs::before,
+html.has-wallpaper .project-bar::before,
 html.has-wallpaper .card::before,
 html.has-wallpaper .stack::before,
 html.has-wallpaper .tab-content::before,
-html.has-wallpaper .system::before,
-html.has-wallpaper .project-header::before {
+html.has-wallpaper .system::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -191,45 +189,18 @@ html.has-wallpaper .tab-content,
 html.has-wallpaper .system {
   background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
   border: 1px solid var(--border-color);
-  /* Coins hauts droits : la barre d'onglets se poursuit juste au-dessus, les deux doivent
-     se lire comme un seul panneau. */
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
 }
-html.has-wallpaper .system {
-  border-radius: var(--radius-lg);
-}
-/* La barre d'onglets se colle au panneau : plus d'interstice entre les deux. */
-html.has-wallpaper .tabs {
-  margin-bottom: 0;
-  border-bottom-color: var(--border-color);
-  border-radius: 0;
-}
 
-/* L'en-tete de projet (nom, description, bouton d'enregistrement, liens) n'a pas de fond non
-   plus : le titre se retrouvait illisible sur la photo. Il coiffe la barre d'onglets, donc
-   l'ensemble en-tete + onglets + contenu forme un seul panneau du haut vers le bas. */
-html.has-wallpaper .project-header {
+/* La barre unique d'un projet (titre + onglets + actions, ProjectDetail) : son propre panneau,
+   arrondi sur les quatre coins — c'est l'empilement de deux bandeaux a coins arrondis qui
+   produisait l'escalier de courbures corrige le 2026-08-14. */
+html.has-wallpaper .project-bar {
   background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
   border: 1px solid var(--border-color);
-  border-bottom: none;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 0.9rem 1.25rem 0.6rem;
-  margin: 0;
-}
-/* La barre d'onglets s'insere entre les deux : bords lateraux continus, aucun coin arrondi. */
-html.has-wallpaper .tabs {
-  border-left: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-/* La barre d'onglets n'a normalement AUCUN fond (juste une bordure basse) : il lui en faut
-   un ici, sinon les onglets flottent. */
-html.has-wallpaper .tabs {
-  background-color: color-mix(in srgb, var(--surface-base) var(--surface-alpha), transparent);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--radius-lg);
+  padding: 0.35rem 1rem 0;
 }
 
 /* NE PAS poser de fond opaque sur `main`.

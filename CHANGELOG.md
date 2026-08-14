@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- **La vue projet tient sur une seule barre** : le titre du projet à gauche, les onglets au
+  centre, et les actions (liens rapides, ⏺ Enregistrer) tout à droite. L'ancien empilement
+  de deux bandeaux créait des doubles courbures disgracieuses avec une image de fond. La
+  description du projet reste visible au survol du titre.
+
 ## [0.8.0] — 2026-08-14
 
 ### Changed
