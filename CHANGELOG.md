@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.11.2] — 2026-08-14
+
 ### Fixed
 
 - **Ouvrir un modal rendait le reste de la page transparent** (image de fond active) : le
