@@ -4,6 +4,7 @@
   // themeBase : Shiki n a que deux jeux (github-dark / github-light), pas une palette par theme.
   import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
+  import { pendingFilePath } from "../../stores/ui";
   import { notify } from "../../stores/toast";
   import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard, createProjectFile, createProjectDir, renameProjectEntry, trashProjectEntry } from "../../api/workspace";
   import ContextMenu from "../ui/ContextMenu.svelte";
@@ -85,6 +86,16 @@
   }
 
   onMount(loadRoot);
+
+  // Fichier demande par la palette Ctrl+K : consomme puis remis a null (meme
+  // mecanique que pendingTerminalId dans TerminalTab).
+  $effect(() => {
+    const p = $pendingFilePath;
+    if (p) {
+      pendingFilePath.set(null);
+      openFileByPath(p);
+    }
+  });
 
   async function loadRoot() {
     treeError = "";

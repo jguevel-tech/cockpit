@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Palette de commandes (Ctrl+K)** : tape quelques lettres et saute n'importe où —
+  projets, terminaux ouverts, onglets du projet courant, vues du tableau de bord,
+  commandes rapides (lancées directement), et fichiers du projet par leur nom.
+  ↑↓ pour naviguer, Entrée pour ouvrir, Échap pour fermer. Quand le focus est dans un
+  terminal, Ctrl+K reste au shell — clique ailleurs pour ouvrir la palette.
+
 ## [0.18.0] — 2026-08-14
 
 ### Added

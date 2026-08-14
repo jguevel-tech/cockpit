@@ -10,6 +10,9 @@ export const selectedProject = writable<string | null>(null);
 export const activeTab = writable<"workspace" | "docker" | "terminal" | "files" | "git" | "settings" | "plugins">("workspace");
 // Session terminal a activer a l'arrivee sur l'onglet Terminal (navigation depuis le dashboard)
 export const pendingTerminalId = writable<number | null>(null);
+/** Fichier a ouvrir a l'arrivee sur l'onglet Fichiers (palette Ctrl+K), meme mecanique
+ *  que pendingTerminalId : pose puis consomme et remis a null par FilesTab. */
+export const pendingFilePath = writable<string | null>(null);
 // Sous-vue active du tableau de bord
 export const dashboardView = writable<"tasks" | "monitoring" | "terminals" | "containers">("tasks");
 // Le theme a demenage dans stores/appearance.ts : ce n'est plus un booleen sombre/clair mais

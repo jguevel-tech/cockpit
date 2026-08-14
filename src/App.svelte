@@ -3,6 +3,7 @@
   import Sidebar from "./lib/components/layout/Sidebar.svelte";
   import MainPanel from "./lib/components/layout/MainPanel.svelte";
   import Toast from "./lib/components/ui/Toast.svelte";
+  import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
   import { loadProjects } from "./lib/stores/projects";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
@@ -62,6 +63,7 @@
     <MainPanel />
   </div>
   <Toast />
+  <CommandPalette />
 </div>
 
 <style>
