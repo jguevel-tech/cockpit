@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-08-14
+
 ### Added
 
 - **Documentation intégrée** : le bouton « i » en haut à droite ouvre un guide illustré de
