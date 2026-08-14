@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-14
+
 ### Changed
 
 - **La vue projet tient sur une seule barre** : le titre du projet à gauche, les onglets au
