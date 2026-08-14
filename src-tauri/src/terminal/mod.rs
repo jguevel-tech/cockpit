@@ -153,6 +153,25 @@ fn is_llm_command(cmd: &str) -> bool {
     LLM_COMMANDS.contains(&cmd)
 }
 
+/// Le BINAIRE REEL du process est-il un CLI LLM ? (`/proc/<pid>/exe`)
+///
+/// Necessaire parce que argv[0] peut mentir : constate le 2026-08-14, un claude natif lance
+/// depuis un shell ou trainait la variable APPIMAGE (fuite corrigee en 0.6.7) s'affichait
+/// comme `.../target/release/cockpit -r` dans `ps` ET dans `pane_current_command` — la
+/// detection par nom de commande devenait aveugle. `/proc/exe` pointe, lui, sur le vrai
+/// binaire (`~/.local/share/claude/versions/2.1.231`) : on matche chaque composant du chemin
+/// (le basename est un numero de version, c'est le dossier `claude` qui signe).
+fn exe_is_llm(pid: u32) -> bool {
+    let Ok(exe) = std::fs::read_link(format!("/proc/{}/exe", pid)) else {
+        return false;
+    };
+    exe.components().any(|c| {
+        c.as_os_str()
+            .to_str()
+            .is_some_and(|s| is_llm_command(s.trim_end_matches(".js").trim_end_matches(".mjs")))
+    })
+}
+
 /// Une ligne de commande complete correspond-elle a un CLI LLM ?
 /// Reconnait `claude ...`, `/usr/bin/claude`, mais aussi `node /path/gemini.js`.
 fn args_are_llm(args: &str) -> bool {
@@ -227,7 +246,9 @@ fn tmux_llm_sessions() -> HashSet<String> {
     for (session, root) in need_tree {
         let mut stack = vec![root];
         while let Some(pid) = stack.pop() {
-            if args_of.get(&pid).map(|a| args_are_llm(a)).unwrap_or(false) {
+            if args_of.get(&pid).map(|a| args_are_llm(a)).unwrap_or(false)
+                || exe_is_llm(pid)
+            {
                 result.insert(session.clone());
                 break;
             }

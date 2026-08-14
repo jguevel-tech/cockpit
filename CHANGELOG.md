@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- Le logo Claude s'affiche dans la sidebar et le tableau de bord quand un agent IA tourne dans
+  un terminal, à la place de la pastille verte.
+
+### Fixed
+
+- **Détection des agents IA perdue** : un claude lancé depuis un shell où traînait
+  l'environnement AppImage se présentait sous un faux nom de processus, invisible pour la
+  détection. Elle vérifie désormais le binaire réellement exécuté, insensible au déguisement.
+
 ## [0.7.2] — 2026-08-14
 
 ### Fixed

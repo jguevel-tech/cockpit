@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import claudeLogo from "../../assets/claude-logo.svg";
   import { listAllTerminals } from "../../api/workspace";
   import { selectProject, activeTab, pendingTerminalId } from "../../stores/ui";
   import { groupBy } from "../../utils/reorder";
@@ -49,7 +50,7 @@
         </button>
         {#each group.terminals as t, i (t.id)}
           <button class="term-row" onclick={() => gotoTerminal(t)} title="Aller à ce terminal">
-            <span class="term-dot" class:llm={t.llm && t.alive} class:dead={!t.alive} title={t.llm ? "Agent IA en cours" : "Terminal"}></span>
+            {#if t.llm && t.alive}<img class="term-llm" src={claudeLogo} alt="Claude" title="Claude en cours dans ce terminal" />{:else}<span class="term-dot" class:dead={!t.alive} title="Terminal"></span>{/if}
             <span class="term-label">{terminalLabel(t, i)}</span>
             {#if !t.alive}<span class="term-state">terminé</span>{/if}
             <span class="term-go">→</span>
@@ -103,7 +104,7 @@
     width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
     background: var(--text-muted);
   }
-  .term-dot.llm { background: var(--success); }
+  .term-llm { width: 12px; height: 12px; flex-shrink: 0; }
   .term-dot.dead { background: var(--border-strong); }
   .term-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .term-state { font-size: 0.72rem; color: var(--text-muted); font-style: italic; }

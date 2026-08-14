@@ -10,6 +10,9 @@
   import CreateProjectModal from "./CreateProjectModal.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import ContextMenu from "../ui/ContextMenu.svelte";
+  // Logo officiel Claude (fill terracotta embarque dans le SVG) : affiche quand un agent
+  // IA tourne dans le terminal, a la place de l ancienne pastille verte.
+  import claudeLogo from "../../assets/claude-logo.svg";
   import { notify } from "../../stores/toast";
   import { onMount } from "svelte";
 
@@ -232,7 +235,7 @@
           <li>
             {#if renamingTermId === t.id}
               <div class="terminal-item">
-                <span class="term-dot" class:llm={t.llm} title={t.llm ? "Agent IA en cours" : "Terminal"}></span>
+                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title="Claude en cours dans ce terminal" />{:else}<span class="term-dot" title="Terminal"></span>{/if}
                 <InlineEdit
                   value={t.name}
                   placeholder="Nom du terminal"
@@ -247,7 +250,7 @@
                 oncontextmenu={(e) => openTermContextMenu(e, t)}
                 title="Aller à ce terminal ({t.project}) — clic droit pour renommer"
               >
-                <span class="term-dot" class:llm={t.llm} title={t.llm ? "Agent IA en cours" : "Terminal"}></span>
+                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title="Claude en cours dans ce terminal" />{:else}<span class="term-dot" title="Terminal"></span>{/if}
                 <span class="terminal-name">{terminalLabel(t)}</span>
                 <span class="terminal-project">{t.project}</span>
               </button>
@@ -451,7 +454,8 @@
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
     background: var(--text-muted);
   }
-  .term-dot.llm { background: var(--success); }
+  /* Icone Claude (✳) quand un agent IA tourne — plus parlant qu une pastille verte */
+  .term-llm { width: 11px; height: 11px; flex-shrink: 0; }
   .terminal-name {
     font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     flex-shrink: 1; min-width: 0;

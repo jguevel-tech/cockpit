@@ -13,3 +13,9 @@ declare module "*.md?raw" {
   const content: string;
   export default content;
 }
+
+// Import d'un SVG par Vite : renvoie l'URL de l'asset (logo Claude dans la sidebar)
+declare module "*.svg" {
+  const url: string;
+  export default url;
+}
