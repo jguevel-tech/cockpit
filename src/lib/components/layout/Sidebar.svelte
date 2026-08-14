@@ -129,6 +129,15 @@
   }
 
   async function deleteFolder(id: number) {
+    // Un dossier ne se supprime que VIDE : le supprimer plein detacherait ses projets
+    // vers la racine en silence — surprise garantie. On explique au lieu d'agir.
+    const count = getFolderProjects(id).length;
+    if (count > 0) {
+      notify(count === 1
+        ? "Ce dossier contient encore un projet : déplace-le d'abord."
+        : `Ce dossier contient encore ${count} projets : déplace-les d'abord.`);
+      return;
+    }
     try {
       await deleteProjectFolder(id);
       await loadFolders();
@@ -304,6 +313,13 @@
             >{folder.name}</span>
           {/if}
           <span class="folder-count">{getFolderProjects(folder.id).length}</span>
+          <button
+            class="folder-delete"
+            title={getFolderProjects(folder.id).length > 0
+              ? "Vide le dossier pour pouvoir le supprimer"
+              : "Supprimer le dossier"}
+            onclick={() => deleteFolder(folder.id)}
+          >🗑</button>
         </div>
         {#if !collapsedIds.has(folder.id)}
           <ul class="folder-projects">
@@ -501,6 +517,16 @@
   }
   .folder-name { flex: 1; font-weight: 600; cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .folder-count { font-size: 0.7rem; color: var(--text-muted); }
+  /* Corbeille discrete : visible au survol de l'en-tete (et au focus clavier).
+     Le clic sur un dossier plein EXPLIQUE au lieu de supprimer — le bouton reste donc
+     toujours cliquable, pas de disabled muet. */
+  .folder-delete {
+    background: none; border: none; cursor: pointer; padding: 0 0.2rem;
+    font-size: 0.75rem; color: var(--text-muted); line-height: 1;
+    opacity: 0; transition: opacity 0.1s ease;
+  }
+  .folder-header:hover .folder-delete, .folder-delete:focus-visible { opacity: 1; }
+  .folder-delete:hover { color: var(--error); }
 
   .folder-projects { padding-left: 0.5rem; }
   .root-drop-zone { min-height: 2rem; }

@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Suppression des dossiers de projets** : une corbeille apparaît au survol d'un dossier
+  dans la sidebar. Un dossier qui contient encore des projets n'est jamais supprimé : un
+  message explique qu'il faut d'abord les déplacer (le clic droit sur le dossier suit la
+  même règle).
+
 ## [0.11.2] — 2026-08-14
 
 ### Fixed
