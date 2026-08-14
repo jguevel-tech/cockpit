@@ -102,6 +102,15 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - Ajouter une surcouche sur le chemin de frappe xterm (`onData` -> PTY doit rester direct)
 - Couleur/taille en dur dans un composant : uniquement les tokens de `styles/theme.css`
 - `catch {}` muet ou `catch (e: any)` : toujours `catch (e) { notify(String(e)); }`
+- **Un silence, c'est un bug** (lecon du premier utilisateur externe, 2026-08-14) :
+  - garde silencieuse sur une action utilisateur (`if (!x) return;` sur un clic) : INTERDIT —
+    notifier POURQUOI l'action ne peut pas se faire ;
+  - erreur d'observation avalee (`Err(_) => continue`, `let _ =` sur un enregistrement) :
+    INTERDIT — l'erreur remonte dans l'etat et s'affiche. Trois bugs distincts venaient de la :
+    projet invisible (add_project avale), Docker "stopped" a tort (ps sans check du code de
+    sortie), bouton + du terminal inerte (garde muette) ;
+  - toute commande externe D'OBSERVATION doit verifier `status.success()` — un echec qui
+    retourne une liste vide fabrique un mensonge ("aucun conteneur" != "docker en panne").
 - SQL : valeurs toujours en parametres `?`, jamais interpolees (les noms de tables/colonnes
   en `format!()` doivent etre des constantes hardcodees)
 - **Un controle cliquable ecrit autrement qu'avec un vrai `<button>`** (pas de `<div onclick>`,
@@ -419,9 +428,15 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
 
 - Section **Terminaux** en haut (repliable, masquee si vide) : raccourcis vers toutes les sessions
   tmux vivantes (nom + projet), clic = navigation directe vers la session (pendingTerminalId),
-  clic droit = Renommer/Fermer. Point VERT = un agent IA (claude, codex...) tourne dans la session,
-  gris = terminal normal. Alimentee par le store `terminals` (stores/terminals.ts) : recharge sur
+  clic droit = Renommer/Fermer. Logo Claude = un agent IA (claude, codex...) tourne dans la
+  session (detection par /proc/<pid>/exe, insensible a l'usurpation d'argv), point gris =
+  terminal normal. Alimentee par le store `terminals` (stores/terminals.ts) : recharge sur
   terminal_exit, apres creation/fermeture/renommage, et toutes les 5 s (suivi du flag llm).
+- Boutons **« + Projet »** et **« + Dossier »** en toutes lettres (une icone seule n'etait pas
+  comprise — retour utilisateur 2026-08-14, ne pas revenir aux icones).
+- Dossiers de projets : repliables, renommables (double-clic ou clic droit), supprimables par
+  la **corbeille au survol** de l'en-tete — UNIQUEMENT s'ils sont vides, sinon un message
+  explique combien de projets restent a deplacer (pas de detachement silencieux vers la racine).
 - Liste de tous les projets avec :
   - Dot de couleur selon l'etat (running/starting/stopping/error/stopped)
   - Nom du projet
@@ -726,6 +741,9 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 ### Explorateur de fichiers / Git
 - `list_project_dir`, `read_project_file`, `write_project_file` (fichiers existants, racine verrouillee)
+- `search_project` (recherche globale : noms de dossiers/fichiers + contenu, gitignore-aware,
+  insensible a la casse, bornee a 100 noms / 400 occurrences avec flag `truncated` ;
+  `spawn_blocking` pour ne pas bloquer le runtime)
 - `goto_definition` (LSP si serveur dispo pour le langage, sinon repli `find_symbol`)
 - `git_status` (staged/unstaged par fichier, +/- via --numstat, ahead/behind), `git_diff_file`
 - `git_stage`, `git_unstage`, `git_stage_all`, `git_unstage_all` (add / reset)
@@ -766,7 +784,7 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
   gardee en vie sinon le presse-papier X11 meurt avec elle). Shift+glisser = selection xterm locale
   dans les TUI qui capturent la souris (claude, vim).
 - **Liens** : addon web-links, Ctrl+clic ouvre l'URL (http/https) dans le navigateur via open_url.
-- **Detection agents IA** : point VERT dans la sidebar/dashboard quand un CLI LLM tourne dans la
+- **Detection agents IA** : logo Claude dans la sidebar/dashboard quand un CLI LLM tourne dans la
   session (claude, codex, gemini, aider... — constante LLM_COMMANDS dans terminal/mod.rs, detection
   pane_current_command + arbre de process pour les CLIs node), point gris sinon. Store terminals
   rafraichi toutes les 5 s.
@@ -948,6 +966,34 @@ Le backend (`system/metrics.rs`) collecte :
   l'extraction locale (bandeau ⚡) pour l'interactif.
 - **Profil release** : `lto = "thin"` + `codegen-units = 16` (le fat LTO doublait+ le temps de build
   pour ~2-5 % de perf).
+- **Un projet en base doit TOUJOURS apparaitre dans l'UI** : l'ancienne `list_projects` ne
+  renvoyait que l'intersection base∩orchestrateur — un `add_project` orchestrateur qui echouait
+  en silence rendait le projet invisible (onglet Docker vide, terminal inerte, premier retour
+  utilisateur externe). `list_projects` synthetise desormais une entree Stopped pour tout
+  projet DB-only, et la creation met a jour l'orchestrateur au lieu d'echouer si le nom existe.
+- **`refreshed_state` adopte un projet Stopped dont les conteneurs tournent A TOUT MOMENT**,
+  pas seulement au premier scan apres demarrage. L'ancienne garde `initial_done` laissait un
+  projet cree en cours de session afficher "stopped" jusqu'au redemarrage. Afficher la realite
+  ne se perime pas — ne pas reintroduire cette garde.
+- **WebKitGTK et les overlays (3 bugs distincts, 2026-08-14, tous sous image de fond)** :
+  1. overlay enfant d'un conteneur `isolation: isolate` = peint SOUS le reste -> `use:portal` ;
+  2. surface flottante en tokens `--bg-*` = translucide -> tokens opaques `--surface-*` ;
+  3. voile plein ecran PEINT = WebKitGTK desactive les backdrop-filter de toute la page
+     en dessous -> le voile porte son propre `blur(12px)`.
+  Les trois regles detaillees sont dans « Interdits/Reflexes » ci-dessus et components.css.
+- **Bug de RENDU (flou, transparence, empilement) : reproduire dans le WebKitGTK systeme
+  AVANT de corriger.** Harnais : page HTML minimale + script python3/gi (Gtk 3.0 + WebKit2 4.1,
+  le moteur exact de Tauri), capture `Gdk.pixbuf_get_from_window`, lance sous `xvfb-run -a`
+  (aucune fenetre visible), UNE PAGE FRAICHE PAR SCENARIO (les styles injectes persistent).
+  L'outil Read affiche les PNG : comparaison a l'oeil, preuve en images. C'est ce banc qui a
+  identifie le bug n°3 ci-dessus et invalide deux fausses pistes en 10 minutes.
+- **Le shell Claude tourne DANS un terminal Cockpit** : il herite des fuites AppImage
+  (PYTHONHOME casse python3, LD_LIBRARY_PATH casse curl). Prefixer les outils sensibles par
+  `env -u PYTHONHOME -u PYTHONPATH -u LD_LIBRARY_PATH ...`.
+- **Commandes de fond (run_in_background) : chemins ABSOLUS uniquement.** Le cwd du shell varie
+  d'un appel a l'autre (`cd src-tauri` a echoue car le shell y etait deja) et un `&&` casse en
+  tete fait rater TOUTES les etapes suivantes en silence. Toujours relire le log de sortie
+  reel avant d'annoncer un succes — la notification de fin ne prouve rien.
 
 ## Conventions
 
