@@ -181,6 +181,12 @@ impl Database {
             [],
         );
 
+        // Migration: echeance optionnelle d'une tache (date ISO "2026-08-20", NULL = sans)
+        let _ = conn.execute(
+            "ALTER TABLE todos ADD COLUMN due_date TEXT DEFAULT NULL",
+            [],
+        );
+
         // Migration: terminaux persistants (sessions tmux)
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS terminals (

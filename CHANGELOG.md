@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Échéances sur les tâches** : un 📅 apparaît au survol d'une tâche pour lui donner une
+  date (vider le champ la retire). Badge coloré sur la tâche — gris à venir, orange
+  aujourd'hui, rouge en retard — dans le projet comme dans le tableau de bord. Et la
+  **cloche prévient** : une tâche pour aujourd'hui ou en retard pose une notification avec
+  un bouton « Voir le projet » ; elle disparaît d'elle-même quand la tâche est terminée.
+
 ## [0.14.0] — 2026-08-14
 
 ### Added

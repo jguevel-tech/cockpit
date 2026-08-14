@@ -45,6 +45,8 @@ export interface Todo {
   done: boolean;
   position: number;
   created_at: string;
+  /** Échéance optionnelle, date ISO "2026-08-20" (null = sans échéance) */
+  due_date: string | null;
 }
 
 export interface Note {

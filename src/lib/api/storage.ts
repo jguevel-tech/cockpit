@@ -5,6 +5,7 @@ import type { Todo, Note, NoteTree, NoteFolder, NoteFile, Url } from "../types";
 export const getTodos = (project: string) => invoke<Todo[]>("get_todos", { project });
 export const createTodo = (project: string, text: string) => invoke<Todo>("create_todo", { project, text });
 export const updateTodo = (id: number, text: string, done: boolean) => invoke<Todo>("update_todo", { id, text, done });
+export const setTodoDue = (id: number, dueDate: string | null) => invoke<Todo>("set_todo_due", { id, dueDate });
 export const deleteTodo = (id: number) => invoke("delete_todo", { id });
 export const reorderTodos = (ids: number[]) => invoke("reorder_todos", { ids });
 export const moveTodo = (id: number, newProject: string) => invoke("move_todo", { id, newProject });

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getTodos, createTodo, updateTodo, deleteTodo, reorderTodos } from "../../api/storage";
+  import { getTodos, createTodo, updateTodo, deleteTodo, reorderTodos, setTodoDue } from "../../api/storage";
+  import { dueLabel, dueUrgency } from "../../utils/due";
   import type { Todo } from "../../types";
   import { onMount } from "svelte";
   import { reorderable } from "../../actions/reorderable";
@@ -13,6 +14,7 @@
   let newText = $state("");
   let showDone = $state(false);
   let editingId: number | null = $state(null);
+  let editingDueId: number | null = $state(null);
 
   let pendingTodos = $derived(todos.filter(t => !t.done));
   let doneTodos = $derived(todos.filter(t => t.done));
@@ -40,6 +42,11 @@
   async function commitEdit(t: Todo, next: string) {
     editingId = null;
     try { await updateTodo(t.id, next, t.done); await load(); } catch (e) { notify(String(e)); }
+  }
+
+  async function commitDue(t: Todo, value: string) {
+    editingDueId = null;
+    try { await setTodoDue(t.id, value || null); await load(); } catch (e) { notify(String(e)); }
   }
 
   function onKeydown(e: KeyboardEvent) { if (e.key === "Enter") add(); }
@@ -92,6 +99,26 @@
             onclick={() => (editingId = todo.id)}
             title="Cliquer pour editer"
           >{todo.text}</button>
+        {/if}
+        {#if editingDueId === todo.id}
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            class="due-input"
+            type="date"
+            value={todo.due_date ?? ""}
+            autofocus
+            onchange={(e) => commitDue(todo, e.currentTarget.value)}
+            onblur={() => (editingDueId = null)}
+            onkeydown={(e) => e.key === "Escape" && (editingDueId = null)}
+          />
+        {:else if todo.due_date}
+          <button
+            class="due-badge {dueUrgency(todo.due_date)}"
+            onclick={() => (editingDueId = todo.id)}
+            title="Échéance {todo.due_date} — cliquer pour modifier (vider = retirer)"
+          >{dueLabel(todo.due_date)}</button>
+        {:else if !todo.done}
+          <button class="due-add" onclick={() => (editingDueId = todo.id)} title="Ajouter une échéance">📅</button>
         {/if}
         <button class="del" onclick={() => remove(todo.id)} title="Supprimer">×</button>
       </li>
@@ -169,5 +196,24 @@
   li.done .text-btn { text-decoration: line-through; color: var(--text-muted); }
   .del { background: none; border: none; cursor: pointer; color: var(--error); font-size: 1.1rem; padding: 0; opacity: 0; flex-shrink: 0; }
   li:hover .del { opacity: 1; }
+  /* Echeances : badge colore par urgence ; le 📅 n'apparait qu'au survol (comme la croix) */
+  .due-badge {
+    flex-shrink: 0; border: 1px solid var(--border-color); border-radius: 10px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+    font-size: 0.7rem; padding: 0.08rem 0.45rem; cursor: pointer; white-space: nowrap;
+  }
+  .due-badge.today { border-color: var(--warning); color: var(--warning); }
+  .due-badge.overdue { border-color: var(--error); color: var(--error); }
+  .due-add {
+    background: none; border: none; cursor: pointer; padding: 0; font-size: 0.8rem;
+    opacity: 0; flex-shrink: 0;
+  }
+  li:hover .due-add { opacity: 0.7; }
+  .due-add:hover { opacity: 1 !important; }
+  .due-input {
+    flex-shrink: 0; font-size: 0.75rem; padding: 0.1rem 0.3rem;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-primary); color: var(--text-primary);
+  }
   .empty { color: var(--text-muted); }
 </style>

@@ -7,6 +7,7 @@
   import { reorderable } from "../../actions/reorderable";
   import { reorder, groupBy, type DropPosition } from "../../utils/reorder";
   import { notify } from "../../stores/toast";
+  import { dueLabel, dueUrgency } from "../../utils/due";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { Todo } from "../../types";
 
@@ -235,6 +236,11 @@
                 title="Cliquer pour editer"
               >{todo.text}</button>
             {/if}
+            {#if todo.due_date}
+              <span class="due-badge {dueUrgency(todo.due_date)}" title="Échéance {todo.due_date}">
+                {dueLabel(todo.due_date)}
+              </span>
+            {/if}
             <button
               class="todo-del"
               title="Supprimer"
@@ -328,6 +334,13 @@
     background: var(--bg-tertiary);
     border-color: var(--border-color);
   }
+  .due-badge {
+    flex-shrink: 0; border: 1px solid var(--border-color); border-radius: 10px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+    font-size: 0.7rem; padding: 0.08rem 0.45rem; white-space: nowrap;
+  }
+  .due-badge.today { border-color: var(--warning); color: var(--warning); }
+  .due-badge.overdue { border-color: var(--error); color: var(--error); }
   .todo-del {
     flex-shrink: 0; background: none; border: none;
     color: var(--error); font-size: 1.1rem; padding: 0; cursor: pointer;

@@ -6,6 +6,7 @@
   import { loadProjects } from "./lib/stores/projects";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
+  import { startTodoDueWatcher } from "./lib/stores/todoAlerts";
   import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
 
@@ -31,10 +32,12 @@
     loadProjects();
     loadWallpaper();
     const stopUpdateWatcher = startUpdateWatcher();
+    const stopTodoDueWatcher = startTodoDueWatcher();
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
       stopUpdateWatcher();
+      stopTodoDueWatcher();
     };
   });
 </script>

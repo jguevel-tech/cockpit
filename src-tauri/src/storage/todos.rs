@@ -9,6 +9,8 @@ pub struct Todo {
     pub done: bool,
     pub position: i32,
     pub created_at: String,
+    /// Echeance optionnelle, date ISO "2026-08-20" (NULL = sans echeance)
+    pub due_date: Option<String>,
 }
 
 impl Todo {
@@ -20,6 +22,7 @@ impl Todo {
             done: row.get::<_, i32>(3)? != 0,
             position: row.get(4)?,
             created_at: row.get(5)?,
+            due_date: row.get(6)?,
         })
     }
 }
@@ -28,7 +31,7 @@ impl Database {
     pub fn get_todos(&self, project: &str) -> Result<Vec<Todo>, String> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare("SELECT id, project, text, done, position, created_at FROM todos WHERE project=?1 ORDER BY position, id")
+            .prepare("SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE project=?1 ORDER BY position, id")
             .map_err(|e| e.to_string())?;
 
         let rows = stmt
@@ -50,7 +53,7 @@ impl Database {
 
         let id = conn.last_insert_rowid();
         conn.query_row(
-            "SELECT id, project, text, done, position, created_at FROM todos WHERE id=?1",
+            "SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE id=?1",
             [id],
             Todo::from_row,
         )
@@ -66,7 +69,24 @@ impl Database {
         .map_err(|e| e.to_string())?;
 
         conn.query_row(
-            "SELECT id, project, text, done, position, created_at FROM todos WHERE id=?1",
+            "SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE id=?1",
+            [id],
+            Todo::from_row,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    /// Pose ou retire l'echeance d'une tache (None = retirer).
+    pub fn set_todo_due(&self, id: i64, due_date: Option<&str>) -> Result<Todo, String> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE todos SET due_date=?1 WHERE id=?2",
+            rusqlite::params![due_date, id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.query_row(
+            "SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE id=?1",
             [id],
             Todo::from_row,
         )
@@ -99,7 +119,7 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT t.id, t.project, t.text, t.done, t.position, t.created_at
+                "SELECT t.id, t.project, t.text, t.done, t.position, t.created_at, t.due_date
                  FROM todos t
                  LEFT JOIN projects p ON t.project = p.name
                  WHERE t.done = 0
@@ -134,6 +154,24 @@ mod tests {
         db.delete_todo(updated.id).unwrap();
         let todos = db.get_todos("proj").unwrap();
         assert!(todos.is_empty());
+    }
+
+    #[test]
+    fn test_todo_due_date() {
+        let db = Database::new(":memory:").unwrap();
+        let t = db.create_todo("proj", "Rendre le rapport").unwrap();
+        assert_eq!(t.due_date, None);
+
+        let with_due = db.set_todo_due(t.id, Some("2026-08-20")).unwrap();
+        assert_eq!(with_due.due_date.as_deref(), Some("2026-08-20"));
+
+        // L'echeance survit aux autres mises a jour et sort dans les listes
+        db.update_todo(t.id, "Rendre le rapport final", false).unwrap();
+        assert_eq!(db.get_todos("proj").unwrap()[0].due_date.as_deref(), Some("2026-08-20"));
+        assert_eq!(db.get_pending_todos().unwrap()[0].due_date.as_deref(), Some("2026-08-20"));
+
+        let cleared = db.set_todo_due(t.id, None).unwrap();
+        assert_eq!(cleared.due_date, None);
     }
 
     #[test]
