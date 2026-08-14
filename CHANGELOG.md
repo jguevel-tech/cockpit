@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-08-14
+
 ### Added
 
 - **Commandes rapides par projet** : déclare tes commandes habituelles (`make up`,
