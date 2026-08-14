@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-14
+
 ### Changed
 
 - **Fini la « sur-brillance » du verre dépoli** : la saturation des couleurs derrière les
