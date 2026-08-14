@@ -883,6 +883,16 @@ fn write_project_file(project_path: String, rel_path: String, content: String) -
 }
 
 #[tauri::command]
+fn read_project_image(project_path: String, rel_path: String) -> Result<String, String> {
+    workspace::read_project_image(&project_path, &rel_path)
+}
+
+#[tauri::command]
+fn backup_database(dest: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.db.backup_to(&dest)
+}
+
+#[tauri::command]
 fn create_project_file(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
     workspace::create_project_file(&project_path, &rel_dir, &name)
 }
@@ -1379,6 +1389,8 @@ pub fn run() {
             list_project_dir,
             read_project_file,
             search_project,
+            read_project_image,
+            backup_database,
             create_project_file,
             create_project_dir,
             rename_project_entry,

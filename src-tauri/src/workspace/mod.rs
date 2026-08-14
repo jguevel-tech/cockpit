@@ -175,6 +175,45 @@ pub fn find_symbol(project_path: &str, symbol: &str) -> Result<Vec<SymbolHit>, S
     Ok(hits)
 }
 
+// --- Apercu d'images (onglet Fichiers) ---
+
+const IMAGE_MAX_BYTES: u64 = 10 * 1024 * 1024;
+
+fn image_mime(ext: &str) -> Option<&'static str> {
+    Some(match ext.to_ascii_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "svg" => "image/svg+xml",
+        "avif" => "image/avif",
+        _ => return None,
+    })
+}
+
+/// Lit une image du projet en data URL pour l'apercu (racine verrouillee, 10 Mo max).
+pub fn read_project_image(project_path: &str, rel_path: &str) -> Result<String, String> {
+    use base64::Engine;
+    let (_, path) = secure_join(project_path, rel_path)?;
+    if !path.is_file() {
+        return Err("pas un fichier".into());
+    }
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let mime = image_mime(ext).ok_or("pas une image")?;
+    let size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    if size > IMAGE_MAX_BYTES {
+        return Err("image trop lourde pour l'aperçu (10 Mo max)".into());
+    }
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    Ok(format!(
+        "data:{};base64,{}",
+        mime,
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
 // --- Gestion de fichiers (creation, renommage, suppression) ---
 
 /// Valide un nom de FEUILLE (fichier ou dossier) : pas de separateur, pas de traversee.
@@ -391,6 +430,25 @@ mod tests {
         // Pas de creation de nouveaux fichiers ni d'evasion
         assert!(write_project_file(dir.to_str().unwrap(), "nouveau.txt", "x").is_err());
         assert!(write_project_file(dir.to_str().unwrap(), "../evil.txt", "x").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_read_project_image() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_img_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("pixel.png"), [0x89, 0x50, 0x4E, 0x47]).unwrap();
+        std::fs::write(dir.join("code.rs"), "fn main() {}").unwrap();
+        let root = dir.to_str().unwrap();
+
+        let url = read_project_image(root, "pixel.png").unwrap();
+        assert!(url.starts_with("data:image/png;base64,"));
+        // Pas une image : refuse
+        assert!(read_project_image(root, "code.rs").is_err());
+        // Evasion : refuse
+        assert!(read_project_image(root, "../pixel.png").is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

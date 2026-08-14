@@ -234,9 +234,39 @@ impl Database {
     }
 }
 
+impl Database {
+    /// Sauvegarde la base VIVANTE vers `dest` via l'API backup de SQLite : coherent
+    /// meme en mode WAL et pendant des ecritures, contrairement a une copie de fichier.
+    pub fn backup_to(&self, dest: &str) -> Result<(), String> {
+        let conn = self.conn();
+        let mut dst = rusqlite::Connection::open(dest).map_err(|e| e.to_string())?;
+        let backup = rusqlite::backup::Backup::new(&conn, &mut dst).map_err(|e| e.to_string())?;
+        backup
+            .run_to_completion(64, std::time::Duration::from_millis(20), None)
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_backup_to() {
+        let db = Database::new(":memory:").unwrap();
+        db.create_todo("proj", "sauvegarde-moi").unwrap();
+
+        let dest = std::env::temp_dir().join(format!("cockpit_backup_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&dest);
+        db.backup_to(dest.to_str().unwrap()).unwrap();
+
+        let copy = Database::new(dest.to_str().unwrap()).unwrap();
+        let todos = copy.get_todos("proj").unwrap();
+        assert_eq!(todos.len(), 1);
+        assert_eq!(todos[0].text, "sauvegarde-moi");
+
+        let _ = std::fs::remove_file(&dest);
+    }
 
     #[test]
     fn test_database_init_and_migrate() {

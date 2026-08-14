@@ -57,6 +57,9 @@ export const writeProjectFile = (projectPath: string, relPath: string, content: 
 // Recherche globale : noms de dossiers/fichiers + contenu, gitignore-aware
 export const searchProject = (projectPath: string, query: string) =>
   invoke<SearchResults>("search_project", { projectPath, query });
+// Apercu d'images (data URL, 10 Mo max)
+export const readProjectImage = (projectPath: string, relPath: string) =>
+  invoke<string>("read_project_image", { projectPath, relPath });
 // Gestion de fichiers (racine verrouillee ; suppression = corbeille systeme)
 export const createProjectFile = (projectPath: string, relDir: string, name: string) =>
   invoke<string>("create_project_file", { projectPath, relDir, name });

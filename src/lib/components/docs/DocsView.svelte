@@ -161,6 +161,13 @@
         <p>Dans l'en-tête : total de lignes et taille, ⧉ copie le chemin, ⏎ active le retour à la ligne (logs, Markdown).</p>
       </div>
 
+      <div class="block">
+        <p><strong>Les images s'affichent</strong> (png, jpg, webp, gif…) sur un damier qui révèle la transparence.</p>
+        <div class="demo">
+          <div class="d-checker"><span class="d-imgbox">logo.png</span></div>
+        </div>
+      </div>
+
     {:else if section === "git"}
       <h3>⎇ Git</h3>
 
@@ -344,6 +351,13 @@
       </div>
 
       <div class="block">
+        <p><strong>Sauvegarde</strong> : Paramètres → Général → « Exporter la base… » écrit une copie de toutes tes données (projets, notes, tâches…) dans un fichier, où tu veux.</p>
+        <div class="demo">
+          <div class="d-tabs"><span class="d-btn small primary">Exporter la base…</span><span class="d-muted">→ cockpit-sauvegarde-2026-08-14.db</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p><strong>Alertes système</strong> : disque presque plein, mémoire ou CPU saturés plusieurs minutes → la cloche prévient, et l'alerte se retire seule quand ça redescend.</p>
         <div class="demo">
           <div class="d-notif">⚠ <strong>Disque presque plein — /home</strong><br /><span class="d-muted">93 % utilisés, 12,4 Go libres</span> <span class="d-btn small primary">Voir le monitoring</span></div>
@@ -492,6 +506,18 @@
   .d-recdot { width: 9px; height: 9px; border-radius: 50%; background: var(--error); animation: docpulse 1.2s infinite; }
   @keyframes docpulse { 50% { opacity: 0.25; } }
   .d-swatch { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border-color); }
+  .d-checker {
+    display: flex; align-items: center; justify-content: center; padding: 1rem;
+    background:
+      repeating-conic-gradient(color-mix(in srgb, var(--text-muted) 12%, transparent) 0% 25%, transparent 0% 50%)
+      50% / 18px 18px;
+    border-radius: 7px;
+  }
+  .d-imgbox {
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-secondary); padding: 1.2rem 2.2rem; font-size: 0.78rem;
+    color: var(--text-muted);
+  }
   .d-gauge {
     display: inline-flex; align-items: center; justify-content: center;
     border: 3px solid var(--accent); border-radius: 50%;

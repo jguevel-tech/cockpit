@@ -36,6 +36,9 @@ export const updateUrl = (id: number, label: string, url: string) => invoke<Url>
 export const deleteUrl = (id: number) => invoke("delete_url", { id });
 export const checkUrls = (urls: string[]) => invoke<UrlHealth[]>("check_urls", { urls });
 
+// Sauvegarde de la base (API backup SQLite : coherent meme pendant des ecritures)
+export const backupDatabase = (dest: string) => invoke("backup_database", { dest });
+
 // Commandes rapides par projet
 export const getProjectCommands = (project: string) =>
   invoke<ProjectCommand[]>("get_project_commands", { project });

@@ -2,6 +2,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getDbProjects, deleteDbProject } from "../../api/scanner";
+  import { backupDatabase } from "../../api/storage";
+  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import { getAppSettings, setAppSetting } from "../../api/recorder";
   import {
     claudeAuthStatus, startClaudeLogin, claudeLoginInput, cancelClaudeLogin, openUrl,
@@ -37,6 +39,29 @@
   let importResult = $state("");
   let importing = $state(false);
   let dbPath = $state("");
+  let backingUp = $state(false);
+  let backupResult = $state("");
+
+  async function doBackup() {
+    backingUp = true;
+    backupResult = "";
+    try {
+      const d = new Date();
+      const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const dest = await saveDialog({
+        title: "Exporter la base Cockpit",
+        defaultPath: `cockpit-sauvegarde-${stamp}.db`,
+        filters: [{ name: "Base SQLite", extensions: ["db"] }],
+      });
+      if (!dest) return; // annule par l'utilisateur : pas une erreur
+      await backupDatabase(dest);
+      backupResult = `Sauvegarde écrite dans ${dest}`;
+    } catch (e) {
+      backupResult = `Erreur : ${e}`;
+    } finally {
+      backingUp = false;
+    }
+  }
 
   let apiKey = $state("");
   let summaryModel = $state("");
@@ -208,6 +233,20 @@
             <p>Historique des versions, embarqué dans l'application.</p>
           </div>
           <div class="changelog">{@html changelogHtml}</div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>Sauvegarder la base</h3>
+            <p>Exporte une copie de toutes tes données (projets, notes, tâches, URLs…) dans un
+              fichier — cohérente même si l'application écrit au même moment.</p>
+          </div>
+          <button class="btn primary" onclick={doBackup} disabled={backingUp}>
+            {backingUp ? 'Sauvegarde…' : 'Exporter la base…'}
+          </button>
+          {#if backupResult}
+            <p class="feedback" class:error={backupResult.startsWith('Erreur')}>{backupResult}</p>
+          {/if}
         </section>
 
         <section class="card">

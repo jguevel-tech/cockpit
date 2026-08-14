@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Sauvegarde de la base en un clic** : Paramètres → Général → « Exporter la base… » écrit
+  une copie de toutes tes données (projets, notes, tâches, URLs, commandes…) dans le fichier
+  de ton choix — cohérente même si l'application écrit au même moment.
+- **Aperçu des images dans l'onglet Fichiers** : png, jpg, webp, gif… s'affichent
+  directement (sur un damier qui révèle la transparence) au lieu de « fichier binaire ».
+
 ## [0.22.0] — 2026-08-14
 
 ### Added

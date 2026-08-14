@@ -6,7 +6,7 @@
   import { projects } from "../../stores/projects";
   import { pendingFilePath } from "../../stores/ui";
   import { notify } from "../../stores/toast";
-  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard, createProjectFile, createProjectDir, renameProjectEntry, trashProjectEntry } from "../../api/workspace";
+  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard, createProjectFile, createProjectDir, renameProjectEntry, trashProjectEntry, readProjectImage } from "../../api/workspace";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import CodeEditor from "../ui/CodeEditor.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
@@ -31,7 +31,14 @@
   let fileNotice = $state("");
   let fileTruncated = $state(false);
   let fileSize = $state(0);
+  let fileImage = $state(""); // data URL si le fichier est une image
   let loadingFile = $state(false);
+
+  const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]);
+  function isImagePath(p: string): boolean {
+    const ext = p.split(".").pop()?.toLowerCase() ?? "";
+    return IMAGE_EXTS.has(ext);
+  }
   let wrapLines = $state(false);
   let codeWrapEl: HTMLDivElement | undefined = $state();
 
@@ -137,7 +144,13 @@
     fileNotice = "";
     fileTruncated = false;
     fileSize = 0;
+    fileImage = "";
     try {
+      // Les images ont leur apercu dedie, sans passer par la lecture texte
+      if (isImagePath(relPath)) {
+        fileImage = await readProjectImage(project.path, relPath);
+        return;
+      }
       const f = await readProjectFile(project.path, relPath);
       fileSize = f.size;
       if (f.binary) {
@@ -783,6 +796,10 @@
       {#if fileNotice}<p class="viewer-notice">{fileNotice}</p>{/if}
       {#if loadingFile}
         <p class="viewer-notice">Chargement…</p>
+      {:else if fileImage}
+        <div class="image-preview">
+          <img src={fileImage} alt={selectedPath} />
+        </div>
       {:else if editing}
         <div class="editor-host">
           <CodeEditor bind:value={draft} lang={langFor(selectedPath)} dark={$themeBase === "dark"} onSave={save} />
@@ -948,6 +965,19 @@
   .files-viewer.editing { display: flex; flex-direction: column; overflow: hidden; }
   .editor-host { flex: 1; min-height: 0; }
   .viewer-notice { padding: 0.6rem 0.8rem; color: var(--text-muted); font-size: 0.85rem; }
+  .image-preview {
+    display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+    /* Damier : les zones transparentes d'un PNG restent visibles sur tout theme */
+    background:
+      repeating-conic-gradient(color-mix(in srgb, var(--text-muted) 12%, transparent) 0% 25%, transparent 0% 50%)
+      50% / 22px 22px;
+    min-height: 60%;
+  }
+  .image-preview img {
+    max-width: 100%; max-height: 70vh;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-secondary);
+  }
   .viewer-empty {
     display: flex; align-items: center; justify-content: center; height: 100%;
     color: var(--text-muted); font-size: 0.85rem;
