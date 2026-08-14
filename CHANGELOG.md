@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-08-14
+
 ### Added
 
 - **Cockpit existe désormais pour macOS** (Apple Silicon, bêta) : un `.dmg` est publié avec
