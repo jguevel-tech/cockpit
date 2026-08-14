@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-08-14
+
 ### Added
 
 - **Créer, renommer et supprimer des fichiers et dossiers** dans l'onglet Fichiers : clic
