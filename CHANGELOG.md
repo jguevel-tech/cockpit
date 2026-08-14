@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Créer, renommer et supprimer des fichiers et dossiers** dans l'onglet Fichiers : clic
+  droit sur l'arbre (ou boutons + de l'en-tête pour la racine). La suppression envoie à la
+  **corbeille du système**, jamais de suppression définitive — une erreur de clic se
+  rattrape. Un nouveau fichier s'ouvre directement dans l'éditeur ; renommer un dossier
+  suit le fichier ouvert à l'intérieur.
+
 ## [0.16.0] — 2026-08-14
 
 ### Added

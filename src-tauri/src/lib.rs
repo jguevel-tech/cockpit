@@ -871,6 +871,26 @@ fn write_project_file(project_path: String, rel_path: String, content: String) -
     workspace::write_project_file(&project_path, &rel_path, &content)
 }
 
+#[tauri::command]
+fn create_project_file(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
+    workspace::create_project_file(&project_path, &rel_dir, &name)
+}
+
+#[tauri::command]
+fn create_project_dir(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
+    workspace::create_project_dir(&project_path, &rel_dir, &name)
+}
+
+#[tauri::command]
+fn rename_project_entry(project_path: String, rel_path: String, new_name: String) -> Result<String, String> {
+    workspace::rename_project_entry(&project_path, &rel_path, &new_name)
+}
+
+#[tauri::command]
+fn trash_project_entry(project_path: String, rel_path: String) -> Result<(), String> {
+    workspace::trash_project_entry(&project_path, &rel_path)
+}
+
 // async : la recherche parcourt tout le projet, elle ne doit pas bloquer le thread principal
 #[tauri::command]
 async fn search_project(project_path: String, query: String) -> Result<workspace::SearchResults, String> {
@@ -1331,6 +1351,10 @@ pub fn run() {
             list_project_dir,
             read_project_file,
             search_project,
+            create_project_file,
+            create_project_dir,
+            rename_project_entry,
+            trash_project_entry,
             write_project_file,
             goto_definition,
             // Git

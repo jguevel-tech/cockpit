@@ -54,6 +54,15 @@ export const writeProjectFile = (projectPath: string, relPath: string, content: 
 // Recherche globale : noms de dossiers/fichiers + contenu, gitignore-aware
 export const searchProject = (projectPath: string, query: string) =>
   invoke<SearchResults>("search_project", { projectPath, query });
+// Gestion de fichiers (racine verrouillee ; suppression = corbeille systeme)
+export const createProjectFile = (projectPath: string, relDir: string, name: string) =>
+  invoke<string>("create_project_file", { projectPath, relDir, name });
+export const createProjectDir = (projectPath: string, relDir: string, name: string) =>
+  invoke<string>("create_project_dir", { projectPath, relDir, name });
+export const renameProjectEntry = (projectPath: string, relPath: string, newName: string) =>
+  invoke<string>("rename_project_entry", { projectPath, relPath, newName });
+export const trashProjectEntry = (projectPath: string, relPath: string) =>
+  invoke("trash_project_entry", { projectPath, relPath });
 // Aller a la definition (LSP si serveur dispo, sinon recherche de declarations)
 export const gotoDefinition = (
   projectPath: string, lang: string, relPath: string, content: string,

@@ -5,9 +5,10 @@
   import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
   import { notify } from "../../stores/toast";
-  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard } from "../../api/workspace";
+  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard, createProjectFile, createProjectDir, renameProjectEntry, trashProjectEntry } from "../../api/workspace";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import CodeEditor from "../ui/CodeEditor.svelte";
+  import InlineEdit from "../ui/InlineEdit.svelte";
   import type { DefLocation, SearchResults, SearchNameHit, SearchContentHit } from "../../types";
 
   let { name }: { name: string } = $props();
@@ -40,11 +41,15 @@
     return fileRaw.endsWith("\n") ? n - 1 : n;
   });
 
-  async function copyPath() {
+  async function copyRelPath(rel: string) {
     try {
-      await setClipboard(selectedPath);
+      await setClipboard(rel);
       notify("Chemin copié", "success");
     } catch (e) { notify(String(e)); }
+  }
+
+  function copyPath() {
+    return copyRelPath(selectedPath);
   }
 
   // Edition
@@ -294,6 +299,95 @@
     if (!ctrlHeld) hoverLink = null;
   }
 
+  // --- Gestion de fichiers : clic droit sur l'arbre (creer, renommer, corbeille) ---
+  let treeMenu: { x: number; y: number; node: TreeNode | null } | null = $state(null); // null = racine
+  let renamingPath: string | null = $state(null);
+  let creating: { parentRel: string; kind: "file" | "dir" } | null = $state(null);
+
+  function openTreeMenu(e: MouseEvent, node: TreeNode | null) {
+    e.preventDefault();
+    e.stopPropagation();
+    treeMenu = { x: e.clientX, y: e.clientY, node };
+  }
+
+  function parentOf(rel: string): string {
+    const i = rel.lastIndexOf("/");
+    return i === -1 ? "" : rel.slice(0, i);
+  }
+
+  function findNode(nodes: TreeNode[], rel: string): TreeNode | null {
+    for (const n of nodes) {
+      if (n.rel_path === rel) return n;
+      if (n.is_dir && n.children && rel.startsWith(n.rel_path + "/")) {
+        const found = findNode(n.children, rel);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  async function reloadDir(parentRel: string) {
+    if (!project?.path) return;
+    if (parentRel === "") { await loadRoot(); return; }
+    const node = findNode(tree, parentRel);
+    if (!node) { await loadRoot(); return; }
+    try {
+      node.children = (await listProjectDir(project.path, parentRel)).map(toNode);
+      node.expanded = true;
+    } catch (e) { notify(String(e)); }
+  }
+
+  async function startCreate(parentRel: string, kind: "file" | "dir") {
+    if (parentRel !== "") {
+      const node = findNode(tree, parentRel);
+      if (node && !node.expanded) await toggleDir(node);
+    }
+    creating = { parentRel, kind };
+  }
+
+  async function commitCreate(name: string) {
+    const c = creating;
+    creating = null;
+    if (!c || !name.trim() || !project?.path) return;
+    try {
+      const rel = c.kind === "file"
+        ? await createProjectFile(project.path, c.parentRel, name.trim())
+        : await createProjectDir(project.path, c.parentRel, name.trim());
+      await reloadDir(c.parentRel);
+      if (c.kind === "file") await openFileByPath(rel);
+    } catch (e) { notify(String(e)); }
+  }
+
+  async function commitRenameEntry(node: TreeNode, name: string) {
+    renamingPath = null;
+    if (!project?.path || !name.trim() || name.trim() === node.name) return;
+    try {
+      const oldRel = node.rel_path;
+      const newRel = await renameProjectEntry(project.path, oldRel, name.trim());
+      const openInside = selectedPath.startsWith(oldRel + "/");
+      const wasOpen = selectedPath === oldRel;
+      await reloadDir(parentOf(oldRel));
+      // Le fichier affiche suit son propre renommage, ou celui d'un dossier parent
+      if (wasOpen) await openFileByPath(newRel);
+      else if (openInside) await openFileByPath(newRel + "/" + selectedPath.slice(oldRel.length + 1));
+    } catch (e) { notify(String(e)); }
+  }
+
+  async function deleteEntry(node: TreeNode) {
+    if (!project?.path) return;
+    if (!confirm(`Mettre « ${node.name} » à la corbeille ?`)) return;
+    try {
+      await trashProjectEntry(project.path, node.rel_path);
+      if (selectedPath === node.rel_path || selectedPath.startsWith(node.rel_path + "/")) {
+        selectedPath = "";
+        fileHtml = "";
+        fileRaw = "";
+        fileNotice = "";
+      }
+      await reloadDir(parentOf(node.rel_path));
+    } catch (e) { notify(String(e)); }
+  }
+
   // --- Recherche globale dans le projet (Ctrl+Maj+F) ---
   let globalQuery = $state("");
   let globalResults: SearchResults | null = $state(null);
@@ -511,6 +605,13 @@
   onblur={() => (ctrlHeld = false)}
 />
 
+{#snippet createRow(depth: number)}
+  <div class="tree-row create-row" style="padding-left: {depth * 0.9 + 0.4}rem">
+    <span class="tree-icon">{creating?.kind === "dir" ? "▸" : "·"}</span>
+    <InlineEdit value="" onCommit={commitCreate} onCancel={() => (creating = null)} />
+  </div>
+{/snippet}
+
 {#snippet nodeList(nodes: TreeNode[], depth: number)}
   {#each nodes as node (node.rel_path)}
     <div
@@ -521,12 +622,24 @@
       tabindex="0"
       onclick={() => (node.is_dir ? toggleDir(node) : openFile(node))}
       onkeydown={(e) => e.key === "Enter" && (node.is_dir ? toggleDir(node) : openFile(node))}
+      oncontextmenu={(e) => openTreeMenu(e, node)}
     >
       <span class="tree-icon">
         {#if node.is_dir}{node.loading ? "…" : node.expanded ? "▾" : "▸"}{:else}·{/if}
       </span>
-      <span class="tree-name" class:dir={node.is_dir}>{node.name}</span>
+      {#if renamingPath === node.rel_path}
+        <InlineEdit
+          value={node.name}
+          onCommit={(v) => commitRenameEntry(node, v)}
+          onCancel={() => (renamingPath = null)}
+        />
+      {:else}
+        <span class="tree-name" class:dir={node.is_dir}>{node.name}</span>
+      {/if}
     </div>
+    {#if node.is_dir && creating?.parentRel === node.rel_path}
+      {@render createRow(depth + 1)}
+    {/if}
     {#if node.is_dir && node.expanded && node.children}
       {@render nodeList(node.children, depth + 1)}
     {/if}
@@ -537,7 +650,11 @@
   <div class="files-tree">
     <div class="tree-header">
       <span>Fichiers</span>
-      <button class="tree-refresh" onclick={loadRoot} title="Rafraîchir">↻</button>
+      <span class="tree-header-actions">
+        <button class="tree-refresh" onclick={() => startCreate("", "file")} title="Nouveau fichier à la racine">+·</button>
+        <button class="tree-refresh" onclick={() => startCreate("", "dir")} title="Nouveau dossier à la racine">+▸</button>
+        <button class="tree-refresh" onclick={loadRoot} title="Rafraîchir">↻</button>
+      </span>
     </div>
     <div class="global-search">
       <input
@@ -601,6 +718,9 @@
     {:else if treeError}
       <p class="tree-error">{treeError}</p>
     {:else}
+      {#if creating?.parentRel === ""}
+        {@render createRow(0)}
+      {/if}
       {@render nodeList(tree, 0)}
     {/if}
   </div>
@@ -682,6 +802,30 @@
   </div>
 </div>
 
+{#if treeMenu}
+  {@const n = treeMenu.node}
+  <ContextMenu
+    x={treeMenu.x}
+    y={treeMenu.y}
+    items={[
+      ...(n === null || n.is_dir
+        ? [
+            { label: "Nouveau fichier", action: () => startCreate(n?.rel_path ?? "", "file") },
+            { label: "Nouveau dossier", action: () => startCreate(n?.rel_path ?? "", "dir") },
+          ]
+        : []),
+      ...(n !== null
+        ? [
+            { label: "Renommer", action: () => (renamingPath = n.rel_path) },
+            { label: "Copier le chemin", action: () => copyRelPath(n.rel_path) },
+            { label: "Mettre à la corbeille", danger: true, action: () => deleteEntry(n) },
+          ]
+        : []),
+    ]}
+    onClose={() => (treeMenu = null)}
+  />
+{/if}
+
 {#if defMenu}
   <ContextMenu
     x={defMenu.x}
@@ -707,11 +851,13 @@
     color: var(--text-muted); border-bottom: 1px solid var(--border-color);
     margin-bottom: 0.3rem;
   }
+  .tree-header-actions { display: flex; gap: 0.15rem; }
   .tree-refresh {
     background: none; border: none; cursor: pointer; color: var(--text-muted);
     font-size: 0.9rem; padding: 0 0.2rem;
   }
   .tree-refresh:hover { color: var(--accent); }
+  .create-row { background: var(--bg-tertiary); }
   .tree-row {
     display: flex; align-items: center; gap: 0.35rem;
     padding: 0.12rem 0.4rem; cursor: pointer; font-size: 0.82rem;

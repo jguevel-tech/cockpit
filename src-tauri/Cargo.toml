@@ -32,6 +32,9 @@ ignore = "0.4"
 futures = "0.3"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 regex = "1.13.1"
+# Suppression de fichiers de l'onglet Fichiers : corbeille SYSTEME, jamais un rm definitif.
+# Cross-platform (freedesktop/macOS/Windows) — coherent avec l'objectif de portabilite.
+trash = "5"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 

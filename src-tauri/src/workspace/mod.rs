@@ -175,6 +175,77 @@ pub fn find_symbol(project_path: &str, symbol: &str) -> Result<Vec<SymbolHit>, S
     Ok(hits)
 }
 
+// --- Gestion de fichiers (creation, renommage, suppression) ---
+
+/// Valide un nom de FEUILLE (fichier ou dossier) : pas de separateur, pas de traversee.
+/// C'est le complement de secure_join, qui ne peut pas canonicaliser un chemin inexistant.
+fn validate_leaf_name(name: &str) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("nom vide".into());
+    }
+    if name == "." || name == ".." || name.contains('/') || name.contains('\\') || name.contains('\0') {
+        return Err(format!("nom invalide: {}", name));
+    }
+    Ok(())
+}
+
+/// Cree un fichier VIDE dans un repertoire existant du projet. Refuse d'ecraser.
+pub fn create_project_file(project_path: &str, rel_dir: &str, name: &str) -> Result<String, String> {
+    validate_leaf_name(name)?;
+    let (root, dir) = secure_join(project_path, rel_dir)?;
+    if !dir.is_dir() {
+        return Err("pas un repertoire".into());
+    }
+    let target = dir.join(name.trim());
+    if target.exists() {
+        return Err(format!("{} existe déjà", name.trim()));
+    }
+    std::fs::write(&target, "").map_err(|e| e.to_string())?;
+    Ok(target.strip_prefix(&root).unwrap_or(&target).to_string_lossy().to_string())
+}
+
+/// Cree un sous-dossier dans un repertoire existant du projet. Refuse d'ecraser.
+pub fn create_project_dir(project_path: &str, rel_dir: &str, name: &str) -> Result<String, String> {
+    validate_leaf_name(name)?;
+    let (root, dir) = secure_join(project_path, rel_dir)?;
+    if !dir.is_dir() {
+        return Err("pas un repertoire".into());
+    }
+    let target = dir.join(name.trim());
+    if target.exists() {
+        return Err(format!("{} existe déjà", name.trim()));
+    }
+    std::fs::create_dir(&target).map_err(|e| e.to_string())?;
+    Ok(target.strip_prefix(&root).unwrap_or(&target).to_string_lossy().to_string())
+}
+
+/// Renomme un fichier ou dossier DANS son repertoire (pas un deplacement). Refuse d'ecraser.
+pub fn rename_project_entry(project_path: &str, rel_path: &str, new_name: &str) -> Result<String, String> {
+    validate_leaf_name(new_name)?;
+    let (root, path) = secure_join(project_path, rel_path)?;
+    if path == root {
+        return Err("impossible de renommer la racine du projet".into());
+    }
+    let parent = path.parent().ok_or("chemin sans parent")?;
+    let target = parent.join(new_name.trim());
+    if target.exists() {
+        return Err(format!("{} existe déjà", new_name.trim()));
+    }
+    std::fs::rename(&path, &target).map_err(|e| e.to_string())?;
+    Ok(target.strip_prefix(&root).unwrap_or(&target).to_string_lossy().to_string())
+}
+
+/// Envoie un fichier ou dossier a la CORBEILLE SYSTEME — jamais de suppression
+/// definitive depuis l'UI : une erreur de clic doit rester rattrapable.
+pub fn trash_project_entry(project_path: &str, rel_path: &str) -> Result<(), String> {
+    let (root, path) = secure_join(project_path, rel_path)?;
+    if path == root {
+        return Err("impossible de supprimer la racine du projet".into());
+    }
+    trash::delete(&path).map_err(|e| format!("mise à la corbeille impossible : {}", e))
+}
+
 // --- Recherche globale (style IDE : noms de dossiers/fichiers + contenu) ---
 
 #[derive(Serialize, Clone)]
@@ -320,6 +391,40 @@ mod tests {
         // Pas de creation de nouveaux fichiers ni d'evasion
         assert!(write_project_file(dir.to_str().unwrap(), "nouveau.txt", "x").is_err());
         assert!(write_project_file(dir.to_str().unwrap(), "../evil.txt", "x").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_gestion_fichiers_creation_renommage_gardes() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_mgmt_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let root = dir.to_str().unwrap();
+
+        // Creation de fichier et de dossier
+        let rel = create_project_file(root, "src", "notes.md").unwrap();
+        assert_eq!(rel, "src/notes.md");
+        assert!(dir.join("src/notes.md").is_file());
+        let rel = create_project_dir(root, "", "docs").unwrap();
+        assert_eq!(rel, "docs");
+
+        // Refus d'ecraser
+        assert!(create_project_file(root, "src", "notes.md").is_err());
+        // Noms invalides et traversee
+        assert!(create_project_file(root, "", "a/b").is_err());
+        assert!(create_project_file(root, "", "..").is_err());
+        assert!(create_project_file(root, "../..", "evil").is_err());
+
+        // Renommage dans le meme dossier, sans ecrasement
+        let rel = rename_project_entry(root, "src/notes.md", "idees.md").unwrap();
+        assert_eq!(rel, "src/idees.md");
+        assert!(dir.join("src/idees.md").is_file());
+        std::fs::write(dir.join("src/autre.md"), "x").unwrap();
+        assert!(rename_project_entry(root, "src/idees.md", "autre.md").is_err());
+        // La racine est intouchable
+        assert!(rename_project_entry(root, "", "autre_nom").is_err());
+        assert!(trash_project_entry(root, "").is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }
