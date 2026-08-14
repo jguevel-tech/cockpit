@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-08-14
+
 ### Fixed
 
 - **Modals et menus transparents avec une image de fond** : le contenu de la page
