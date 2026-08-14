@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-08-14
+
 ### Fixed
 
 - **Nom d'onglet incohérent à la création d'un terminal** : la sidebar affichait bien
