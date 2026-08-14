@@ -157,10 +157,10 @@
 </script>
 
 <div class="settings" class:wide={view === "agents"}>
-  <h2>Paramètres</h2>
 
   <div class="settings-layout">
     <nav class="settings-menu">
+      <h2 class="menu-title">Paramètres</h2>
       {#each MENU as item (item.id)}
         <button
           class="settings-menu-item"
@@ -365,6 +365,13 @@
   .settings-layout { display: flex; gap: 1.5rem; align-items: flex-start; }
 
   /* Menu lateral */
+  /* Titre de page integre au menu : il vivait au-dessus, pose a meme l image de fond,
+     quasi illisible. Le menu porte deja un panneau en mode wallpaper. */
+  .menu-title {
+    margin: 0; padding: 0.35rem 0.8rem 0.55rem;
+    font-size: 0.95rem; color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color); margin-bottom: 0.35rem;
+  }
   .settings-menu {
     display: flex; flex-direction: column; gap: 0.25rem;
     width: 180px; flex-shrink: 0; position: sticky; top: 0;

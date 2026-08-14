@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Titres de page illisibles sur une image de fond** : « Tableau de bord » et « Paramètres »
+  flottaient directement sur la photo. Ils sont désormais intégrés en tête du menu latéral de
+  leur vue, qui porte déjà un panneau lisible.
+
 ## [0.9.0] — 2026-08-14
 
 ### Changed
