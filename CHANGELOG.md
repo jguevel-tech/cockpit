@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-14
+
 ### Added
 
 - **Suppression des dossiers de projets** : une corbeille apparaît au survol d'un dossier
