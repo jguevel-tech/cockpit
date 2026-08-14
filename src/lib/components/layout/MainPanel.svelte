@@ -4,11 +4,14 @@
   import ProjectDetail from "../project/ProjectDetail.svelte";
   import GlobalSettings from "../settings/GlobalSettings.svelte";
   import SystemMonitor from "../system/SystemMonitor.svelte";
+  import DocsView from "../docs/DocsView.svelte";
 </script>
 
 <main>
   {#if $activeView === "settings"}
     <GlobalSettings />
+  {:else if $activeView === "docs"}
+    <DocsView />
   {:else if $activeView === "system"}
     <SystemMonitor />
   {:else if $activeView === "project" && $selectedProject}

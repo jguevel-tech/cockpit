@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goHome, openSettings, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
+  import { goHome, openSettings, openDocs, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
   import { toggleBase } from "../../stores/appearance";
   import { unreadCount } from "../../stores/notifications";
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
@@ -38,6 +38,7 @@
       <button class="zoom-value" onclick={zoomReset} title="Revenir à 100 %">{zoomPercent}&nbsp;%</button>
       <button class="header-btn zoom-btn" onclick={zoomIn} disabled={atMax} aria-label="Zoomer">&#43;</button>
     </div>
+    <button class="header-btn docs-btn" onclick={openDocs} title="Documentation — toutes les fonctionnalités en exemples">i</button>
     <button class="header-btn" onclick={openSettings} title="Parametres">&#9881;</button>
     <button class="header-btn" onclick={toggleBase} title="Changer le theme">&#9681;</button>
   </div>
@@ -72,6 +73,7 @@
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
   .header-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-strong); }
+  .docs-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; }
   /* Cloche permanente : discrete au repos, accentuee des qu'il y a du non-lu. */
   .bell-btn { position: relative; }
   .bell-btn.has-unread { border-color: var(--accent); color: var(--accent); }

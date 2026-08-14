@@ -12,6 +12,18 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Documentation intégrée** : le bouton « i » en haut à droite ouvre un guide illustré de
+  toutes les fonctionnalités — menu par thème à gauche, et surtout des exemples visuels
+  (maquettes, raccourcis clavier) plutôt que du texte.
+- **Historique Git** : un onglet « Historique » dans la vue Git liste les 100 derniers
+  commits (sujet, auteur, date relative, branches/tags) ; un clic montre le diff complet
+  du commit, fichier par fichier, avec les mêmes couleurs que les modifications en cours.
+- **Bouton Pull** à côté de Push, avec le nombre de commits en retard. Toujours en
+  avance rapide seule (`--ff-only`) : jamais de merge surprise depuis un bouton — en cas
+  de divergence, un message l'explique.
+
 ## [0.19.0] — 2026-08-14
 
 ### Added

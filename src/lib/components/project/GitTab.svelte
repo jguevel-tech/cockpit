@@ -3,9 +3,10 @@
   import { projects } from "../../stores/projects";
   import {
     gitStatus, gitDiffFile, gitStage, gitUnstage, gitStageAll, gitUnstageAll,
-    gitCommit, gitPush, gitBranches, gitCheckoutBranch, gitCreateBranch, gitDeleteBranch,
+    gitCommit, gitPush, gitPull, gitLog, gitCommitDiff,
+    gitBranches, gitCheckoutBranch, gitCreateBranch, gitDeleteBranch,
   } from "../../api/workspace";
-  import type { GitStatus, GitStatusEntry, FileDiff, BranchInfo } from "../../types";
+  import type { GitStatus, GitStatusEntry, FileDiff, BranchInfo, CommitInfo } from "../../types";
   import { notify } from "../../stores/toast";
 
   let { name }: { name: string } = $props();
@@ -22,6 +23,15 @@
   let loadingDiff = $state(false);
 
   let commitMsg = $state("");
+
+  // Historique
+  let view: "changes" | "history" = $state("changes");
+  let commits: CommitInfo[] = $state([]);
+  let commitsError = $state("");
+  let loadingCommits = $state(false);
+  let selectedCommit: CommitInfo | null = $state(null);
+  let commitFiles: FileDiff[] = $state([]);
+  let loadingCommitDiff = $state(false);
 
   // Menu branches
   let branchMenuOpen = $state(false);
@@ -122,6 +132,44 @@
     } finally { busy = ""; }
   }
 
+  function doPull() {
+    op("pull", async () => {
+      const out = await gitPull(project!.path);
+      notify(out.split("\n")[0] || "À jour", "success");
+      if (view === "history") await loadHistory();
+    });
+  }
+
+  async function showView(v: "changes" | "history") {
+    view = v;
+    if (v === "history" && commits.length === 0) await loadHistory();
+  }
+
+  async function loadHistory() {
+    if (!project?.path) return;
+    loadingCommits = true;
+    commitsError = "";
+    try { commits = await gitLog(project.path, 100); } catch (e) { commitsError = String(e); }
+    finally { loadingCommits = false; }
+  }
+
+  async function openCommit(c: CommitInfo) {
+    if (!project?.path) return;
+    selectedCommit = c;
+    loadingCommitDiff = true;
+    commitFiles = [];
+    try { commitFiles = await gitCommitDiff(project.path, c.full_hash); } catch (e) { notify(String(e)); }
+    finally { loadingCommitDiff = false; }
+  }
+
+  function relativeTime(epoch: number): string {
+    const diff = Math.floor(Date.now() / 1000) - epoch;
+    if (diff < 3600) return `il y a ${Math.max(1, Math.floor(diff / 60))} min`;
+    if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
+    if (diff < 86400 * 30) return `il y a ${Math.floor(diff / 86400)} j`;
+    return new Date(epoch * 1000).toLocaleDateString();
+  }
+
   async function toggleBranchMenu() {
     branchMenuOpen = !branchMenuOpen;
     if (branchMenuOpen && project?.path) {
@@ -202,6 +250,10 @@
           <span class="stat-add">+{status.total_additions}</span>
           <span class="stat-del">−{status.total_deletions}</span>
         </div>
+        <button class="pull-btn" onclick={doPull} disabled={!!busy} title="git pull --ff-only">
+          {busy === "pull" ? "Pull…" : "⬇ Pull"}
+          {#if status.behind}<span class="ahead">{status.behind}</span>{/if}
+        </button>
         <button class="push-btn" onclick={doPush} disabled={!!busy} title={status.has_upstream ? "git push" : "git push --set-upstream"}>
           {busy === "push" ? "Push…" : "⬆ Push"}
           {#if status.ahead}<span class="ahead">{status.ahead}</span>{/if}
@@ -215,6 +267,33 @@
     {:else if status && !status.is_repo}
       <p class="git-msg">Ce projet n'est pas un dépôt git.</p>
     {:else if status}
+      <div class="git-views">
+        <button class:active={view === "changes"} onclick={() => showView("changes")}>Modifications</button>
+        <button class:active={view === "history"} onclick={() => showView("history")}>Historique</button>
+      </div>
+
+      {#if view === "history"}
+        <div class="commit-list">
+          {#if loadingCommits}
+            <p class="git-msg">Chargement…</p>
+          {:else if commitsError}
+            <p class="git-msg error">{commitsError}</p>
+          {:else if commits.length === 0}
+            <p class="git-msg">Aucun commit.</p>
+          {:else}
+            {#each commits as c (c.full_hash)}
+              <button class="commit-row" class:selected={selectedCommit?.full_hash === c.full_hash} onclick={() => openCommit(c)}>
+                <span class="commit-subject" title={c.subject}>{c.subject}</span>
+                <span class="commit-meta">
+                  <code class="commit-hash">{c.hash}</code>
+                  {c.author} · {relativeTime(c.epoch)}
+                  {#if c.refs}<span class="commit-refs" title={c.refs}>{c.refs}</span>{/if}
+                </span>
+              </button>
+            {/each}
+          {/if}
+        </div>
+      {:else}
       {#if status.behind}
         <p class="git-behind">↓ {status.behind} commit(s) en retard sur l'upstream</p>
       {/if}
@@ -275,11 +354,55 @@
           </button>
         </div>
       {/if}
+      {/if}
     {/if}
   </div>
 
   <div class="git-diff">
-    {#if selectedPath}
+    {#if view === "history"}
+      {#if selectedCommit}
+        <div class="diff-header">
+          <code>{selectedCommit.hash}</code>
+          <span class="commit-header-subject" title={selectedCommit.subject}>{selectedCommit.subject}</span>
+          <span class="diff-stats">{selectedCommit.author} · {relativeTime(selectedCommit.epoch)}</span>
+        </div>
+        {#if loadingCommitDiff}
+          <p class="git-msg">Chargement…</p>
+        {:else if commitFiles.length === 0}
+          <p class="git-msg">Pas de différence de contenu dans ce commit.</p>
+        {:else}
+          {#each commitFiles as file (file.path)}
+            <div class="commit-file-head">
+              <code>{file.path}</code>
+              <span class="diff-stats">
+                <span class="stat-add">+{file.additions}</span>
+                <span class="stat-del">−{file.deletions}</span>
+              </span>
+            </div>
+            <table class="diff-table">
+              <tbody>
+                {#each file.hunks as hunk}
+                  <tr class="hunk-row">
+                    <td class="lineno"></td>
+                    <td class="lineno"></td>
+                    <td class="line-text">{hunk.header}</td>
+                  </tr>
+                  {#each hunk.lines as line}
+                    <tr class="line-{line.kind}">
+                      <td class="lineno">{line.old_line ?? ""}</td>
+                      <td class="lineno">{line.new_line ?? ""}</td>
+                      <td class="line-text"><span class="line-sign">{line.kind === "add" ? "+" : line.kind === "del" ? "−" : " "}</span>{line.text}</td>
+                    </tr>
+                  {/each}
+                {/each}
+              </tbody>
+            </table>
+          {/each}
+        {/if}
+      {:else}
+        <div class="diff-empty">Sélectionne un commit pour voir son contenu</div>
+      {/if}
+    {:else if selectedPath}
       <div class="diff-header">
         <code>{selectedPath}</code>
         {#if diff}
@@ -382,6 +505,57 @@
   .icon-btn:hover { color: var(--accent); }
 
   .git-behind { margin: 0; padding: 0.35rem 0.6rem; font-size: 0.75rem; color: var(--warning, #d29922); background: rgba(210,153,34,0.1); }
+  .pull-btn {
+    margin-left: auto; display: flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.6rem; font-size: 0.78rem; cursor: pointer;
+    background: var(--bg-tertiary); color: var(--text-primary);
+    border: 1px solid var(--border-color); border-radius: 4px;
+  }
+  .pull-btn:disabled { opacity: 0.5; }
+  .pull-btn .ahead { background: var(--accent-soft); border-radius: 8px; padding: 0 0.35rem; font-size: 0.7rem; }
+  /* Le Pull prend le margin-left:auto, le Push reste colle a lui */
+  .push-btn { margin-left: 0; }
+  .git-views {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border-color);
+  }
+  .git-views button {
+    flex: 1; padding: 0.4rem 0; background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 0.78rem; border-bottom: 2px solid transparent;
+  }
+  .git-views button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .commit-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .commit-row {
+    display: flex; flex-direction: column; gap: 0.15rem; width: 100%;
+    padding: 0.4rem 0.6rem; background: none; border: none; cursor: pointer;
+    text-align: left; border-bottom: 1px solid var(--border-color);
+  }
+  .commit-row:hover, .commit-row.selected { background: var(--bg-tertiary); }
+  .commit-subject {
+    font-size: 0.8rem; color: var(--text-primary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .commit-row.selected .commit-subject { color: var(--accent); }
+  .commit-meta {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.68rem; color: var(--text-muted);
+    overflow: hidden; white-space: nowrap;
+  }
+  .commit-hash { color: var(--accent); }
+  .commit-refs {
+    border: 1px solid var(--border-color); border-radius: 8px; padding: 0 0.35rem;
+    overflow: hidden; text-overflow: ellipsis; max-width: 12rem;
+  }
+  .commit-header-subject {
+    flex: 1; margin: 0 0.6rem; font-size: 0.8rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .commit-file-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.35rem 0.8rem; font-size: 0.78rem;
+    background: var(--bg-tertiary); border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky; top: 2.1rem;
+  }
   .git-msg { padding: 0.6rem; color: var(--text-muted); font-size: 0.85rem; }
   .git-msg.error { color: var(--error, #e5484d); }
 

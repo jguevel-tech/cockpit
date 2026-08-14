@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TerminalInfo, DirEntry, FileContent, GitStatus, FileDiff, BranchInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
+import type { TerminalInfo, DirEntry, FileContent, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
 
 // Terminaux integres
 export const createTerminal = (project: string, cwd: string, cols: number, rows: number, initCommand?: string) =>
@@ -83,6 +83,11 @@ export const gitUnstageAll = (projectPath: string) => invoke("git_unstage_all", 
 export const gitCommit = (projectPath: string, message: string) => invoke("git_commit", { projectPath, message });
 export const gitPush = (projectPath: string, setUpstream: boolean) =>
   invoke<string>("git_push", { projectPath, setUpstream });
+export const gitPull = (projectPath: string) => invoke<string>("git_pull", { projectPath });
+export const gitLog = (projectPath: string, limit = 100) =>
+  invoke<CommitInfo[]>("git_log", { projectPath, limit });
+export const gitCommitDiff = (projectPath: string, hash: string) =>
+  invoke<FileDiff[]>("git_commit_diff", { projectPath, hash });
 export const gitBranches = (projectPath: string) => invoke<BranchInfo[]>("git_branches", { projectPath });
 export const gitCheckoutBranch = (projectPath: string, name: string) =>
   invoke("git_checkout_branch", { projectPath, name });

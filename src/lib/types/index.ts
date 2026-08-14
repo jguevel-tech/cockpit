@@ -291,6 +291,17 @@ export interface BranchInfo {
   current: boolean;
 }
 
+export interface CommitInfo {
+  hash: string;
+  full_hash: string;
+  author: string;
+  /** Epoch (secondes) du commit */
+  epoch: number;
+  /** Décorations ("HEAD -> main, tag: v1.0"), vide sinon */
+  refs: string;
+  subject: string;
+}
+
 export interface DiffLine {
   kind: "add" | "del" | "context";
   old_line: number | null;

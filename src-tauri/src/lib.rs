@@ -994,6 +994,21 @@ async fn git_push(project_path: String, set_upstream: bool) -> Result<String, St
 }
 
 #[tauri::command]
+async fn git_pull(project_path: String) -> Result<String, String> {
+    gitdiff::git_pull(&project_path).await
+}
+
+#[tauri::command]
+async fn git_log(project_path: String, limit: u32) -> Result<Vec<gitdiff::CommitInfo>, String> {
+    gitdiff::git_log(&project_path, limit).await
+}
+
+#[tauri::command]
+async fn git_commit_diff(project_path: String, hash: String) -> Result<Vec<gitdiff::FileDiff>, String> {
+    gitdiff::git_commit_diff(&project_path, &hash).await
+}
+
+#[tauri::command]
 async fn git_branches(project_path: String) -> Result<Vec<gitdiff::BranchInfo>, String> {
     gitdiff::git_branches(&project_path).await
 }
@@ -1372,6 +1387,9 @@ pub fn run() {
             git_unstage_all,
             git_commit,
             git_push,
+            git_pull,
+            git_log,
+            git_commit_diff,
             git_branches,
             git_checkout_branch,
             git_create_branch,

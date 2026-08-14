@@ -298,6 +298,96 @@ pub async fn git_delete_branch(repo: &str, name: &str, force: bool) -> Result<()
     run_git_strict(repo, &["branch", flag, name]).await.map(|_| ())
 }
 
+#[derive(Serialize, Clone)]
+pub struct CommitInfo {
+    pub hash: String,
+    pub full_hash: String,
+    pub author: String,
+    /// Epoch (secondes) du commit : le frontend formate en relatif, sans souci de locale.
+    pub epoch: i64,
+    /// Decorations ("HEAD -> main, tag: v1.0", vide sinon).
+    pub refs: String,
+    pub subject: String,
+}
+
+/// Historique des commits de la branche courante (le plus recent d'abord).
+pub async fn git_log(repo: &str, limit: u32) -> Result<Vec<CommitInfo>, String> {
+    let n = format!("-{}", limit.clamp(1, 500));
+    // %x1f (unit separator) : aucun risque de collision avec un sujet de commit
+    let raw = match run_git_strict(repo, &["log", &n, "--pretty=format:%h%x1f%H%x1f%an%x1f%ct%x1f%D%x1f%s"]).await {
+        Ok(r) => r,
+        // Repo tout neuf sans aucun commit : un historique vide, pas une erreur
+        Err(e) if e.contains("does not have any commits") => return Ok(vec![]),
+        Err(e) => return Err(e),
+    };
+    Ok(parse_git_log(&raw))
+}
+
+fn parse_git_log(raw: &str) -> Vec<CommitInfo> {
+    raw.lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\u{1f}').collect();
+            if parts.len() != 6 {
+                return None;
+            }
+            Some(CommitInfo {
+                hash: parts[0].to_string(),
+                full_hash: parts[1].to_string(),
+                author: parts[2].to_string(),
+                epoch: parts[3].parse().unwrap_or(0),
+                refs: parts[4].to_string(),
+                subject: parts[5].to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Diff complet d'un commit (tous fichiers), parse avec le meme automate que les diffs
+/// de l'arbre de travail. `--format=` vide le message pour ne garder que le diff.
+pub async fn git_commit_diff(repo: &str, hash: &str) -> Result<Vec<FileDiff>, String> {
+    // Un hash est hexadecimal : tout autre contenu serait une option ou une ref arbitraire
+    if hash.is_empty() || hash.len() > 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("hash invalide".into());
+    }
+    let raw = run_git_strict(repo, &["show", "--no-color", "--no-ext-diff", "--format=", hash]).await?;
+    Ok(split_multi_file_diff(&raw))
+}
+
+/// Decoupe la sortie multi-fichiers de `git show`/`git diff` sur les en-tetes
+/// "diff --git a/x b/y", puis parse chaque bloc avec parse_unified_diff.
+fn split_multi_file_diff(raw: &str) -> Vec<FileDiff> {
+    fn flush(path: Option<String>, buf: &str, out: &mut Vec<FileDiff>) {
+        let Some(p) = path else { return };
+        let hunks = parse_unified_diff(buf);
+        let additions = hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == "add").count();
+        let deletions = hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == "del").count();
+        out.push(FileDiff { path: p, hunks, additions, deletions });
+    }
+
+    let mut out = Vec::new();
+    let mut cur_path: Option<String> = None;
+    let mut buf = String::new();
+    for line in raw.lines() {
+        if line.starts_with("diff --git ") {
+            flush(cur_path.take(), &buf, &mut out);
+            buf.clear();
+            cur_path = line.rfind(" b/").map(|i| line[i + 3..].to_string());
+        } else if cur_path.is_some() {
+            buf.push_str(line);
+            buf.push('\n');
+        }
+    }
+    flush(cur_path.take(), &buf, &mut out);
+    out
+}
+
+/// Pull en --ff-only : JAMAIS de merge ou rebase surprise depuis un bouton d'UI.
+/// En cas de divergence, git repond par un message clair plutot que de laisser
+/// un etat a moitie merge que l'utilisateur n'a pas demande.
+pub async fn git_pull(repo: &str) -> Result<String, String> {
+    run_git_strict(repo, &["pull", "--ff-only"]).await
+}
+
 pub async fn git_diff_file(repo: &str, path: &str, untracked: bool) -> Result<FileDiff, String> {
     let raw = if untracked {
         run_git(repo, &["diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", path]).await?
@@ -433,5 +523,44 @@ index 1234567..89abcde 100644
         assert_eq!(h2.lines.len(), 2);
         assert_eq!(h2.lines[1].kind, "add");
         assert_eq!(h2.lines[1].new_line, Some(11));
+    }
+
+    #[test]
+    fn test_parse_git_log() {
+        let raw = "abc123\u{1f}abc123def\u{1f}Jimmy\u{1f}1755000000\u{1f}HEAD -> main\u{1f}Corriger le bug\n\
+                   def456\u{1f}def456abc\u{1f}Alice\u{1f}1754000000\u{1f}\u{1f}Sujet avec des \u{1f} impossibles ? non";
+        let commits = parse_git_log(raw);
+        assert_eq!(commits.len(), 1, "la 2e ligne a 7 champs (separateur dans le sujet simule) et doit etre ignoree");
+        assert_eq!(commits[0].hash, "abc123");
+        assert_eq!(commits[0].author, "Jimmy");
+        assert_eq!(commits[0].epoch, 1755000000);
+        assert_eq!(commits[0].refs, "HEAD -> main");
+        assert_eq!(commits[0].subject, "Corriger le bug");
+    }
+
+    #[test]
+    fn test_split_multi_file_diff() {
+        let raw = "diff --git a/src/a.rs b/src/a.rs\n\
+                   index 111..222 100644\n\
+                   --- a/src/a.rs\n\
+                   +++ b/src/a.rs\n\
+                   @@ -1,2 +1,2 @@\n\
+                    contexte\n\
+                   -ancien\n\
+                   +nouveau\n\
+                   diff --git a/b.txt b/b.txt\n\
+                   new file mode 100644\n\
+                   --- /dev/null\n\
+                   +++ b/b.txt\n\
+                   @@ -0,0 +1 @@\n\
+                   +cree\n";
+        let files = split_multi_file_diff(raw);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].path, "src/a.rs");
+        assert_eq!(files[0].additions, 1);
+        assert_eq!(files[0].deletions, 1);
+        assert_eq!(files[1].path, "b.txt");
+        assert_eq!(files[1].additions, 1);
+        assert_eq!(files[1].deletions, 0);
     }
 }

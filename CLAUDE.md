@@ -163,6 +163,11 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   `actions/reorderable.ts`, `stores/toast.ts` AVANT d'ecrire du neuf
 - Nouvelle vue top-niveau -> etendre `activeView` (stores/ui.ts) + un case dans MainPanel ;
   nouvel onglet projet -> 1 entree dans la map `tabs` de ProjectDetail.svelte
+- **Nouvelle fonctionnalite visible -> l'illustrer dans la DOC INTEGREE**
+  (components/docs/DocsView.svelte, bouton « i » du Header). Regle de la doc : tres peu de
+  texte, des maquettes HTML/CSS (langage visuel .demo/.d-*/.kbd deja fourni) — Jimmy l'a
+  demandee ainsi (« les gens ne lisent pas »). Une fonctionnalite absente de la doc n'existe
+  pas pour l'utilisateur.
 - Nouvelle commande Tauri -> wrapper type dans `src/lib/api/`, types partages dans
   `src/lib/types/index.ts` en snake_case (aligne sur les structs Rust Serialize)
 - Svelte 5 runes uniquement : `$state`/`$derived`/`$props` + callback props
@@ -857,7 +862,7 @@ Un seul enregistrement a la fois. Cle API importee au premier lancement depuis `
 ## Navigation frontend
 
 Pas de routeur. Un seul enum dans le store `ui.ts` :
-- `activeView: "dashboard" | "project" | "settings" | "system"` — MainPanel switch dessus
+- `activeView: "dashboard" | "project" | "settings" | "system" | "docs"` — MainPanel switch dessus
 - `selectProject(name)` pose `activeView = "project"` (+ reset onglet), `openView(v)` pour le reste
 - Ajouter une vue top-niveau = etendre le type + un case dans MainPanel (rien d'autre)
 - Onglets projet : map `tabs` dans ProjectDetail.svelte (id, label, component) — ajouter un onglet
