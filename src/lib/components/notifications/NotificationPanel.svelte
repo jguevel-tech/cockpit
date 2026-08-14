@@ -124,7 +124,8 @@
     width: min(26rem, calc(100vw - 1.5rem));
     max-height: min(30rem, calc(100vh - var(--header-height) - 1.5rem));
     display: flex; flex-direction: column;
-    background: var(--bg-secondary);
+    /* Surface flottante : fond OPAQUE (--surface-*, jamais --bg-* translucides sous wallpaper) */
+    background: var(--surface-base);
     border: 1px solid var(--border-color);
     border-radius: var(--radius, 8px);
     box-shadow: var(--shadow-lg);

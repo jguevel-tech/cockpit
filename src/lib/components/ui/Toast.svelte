@@ -20,7 +20,8 @@
     padding: 0.6rem 0.9rem;
     border-radius: var(--radius, 8px);
     border: 1px solid var(--border-color);
-    background: var(--bg-secondary);
+    /* Surface flottante : fond OPAQUE (--surface-*, jamais --bg-* translucides sous wallpaper) */
+    background: var(--surface-base);
     color: var(--text-primary);
     font-size: 0.85rem;
     box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.25));

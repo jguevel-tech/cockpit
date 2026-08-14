@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Modals et menus transparents avec une image de fond** : le contenu de la page
+  transparaissait au travers du dialogue « Nouveau projet », des menus contextuels, du panneau
+  de notifications et des toasts. Toutes les surfaces flottantes sont désormais opaques, dans
+  toutes les palettes.
+
 ## [0.11.0] — 2026-08-14
 
 ### Added

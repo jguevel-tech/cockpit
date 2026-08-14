@@ -45,7 +45,8 @@
   }
   .modal {
     width: calc(100% - 2rem);
-    background: var(--bg-secondary);
+    /* Surface flottante : fond OPAQUE (--surface-*, jamais --bg-* translucides sous wallpaper) */
+    background: var(--surface-base);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg, 12px);
     box-shadow: var(--shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.3));

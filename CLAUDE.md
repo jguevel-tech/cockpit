@@ -134,6 +134,11 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   contexte d'empilement, et un overlay reste enfant d'un de ces conteneurs est peint SOUS les
   conteneurs suivants du DOM, quel que soit son z-index. Constate le 2026-08-14 : le modal de
   creation de projet, enfant de la sidebar, etait invisible des qu'un wallpaper etait actif.
+- **Le fond d'une surface flottante (modal, menu, panneau, toast) = token OPAQUE
+  `--surface-base`/`--surface-raised`, JAMAIS `--bg-*`** : sous wallpaper les `--bg-*`
+  deviennent translucides (color-mix), et une surface flottante n'est pas dans la liste des
+  conteneurs floutes — le contenu du dessous transparait au travers (constate sur le modal
+  de creation le 2026-08-14, juste apres le fix portal).
 - Nouvelle table referencant un projet -> l'ajouter a `PROJECT_SCOPED_TABLES` (storage/projects.rs),
   sinon delete/rename laisseront des donnees orphelines
 - Modal, rename inline, menu contextuel, toast, DnD de liste -> utiliser `components/ui/`,

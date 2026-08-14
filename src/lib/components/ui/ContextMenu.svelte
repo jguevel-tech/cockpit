@@ -53,7 +53,8 @@
   .overlay { position: fixed; inset: 0; z-index: 90; }
   .menu {
     position: fixed; z-index: 91; min-width: 160px;
-    background: var(--bg-secondary);
+    /* Surface flottante : fond OPAQUE (--surface-*, jamais --bg-* translucides sous wallpaper) */
+    background: var(--surface-base);
     border: 1px solid var(--border-color);
     border-radius: var(--radius, 8px);
     box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.25));

@@ -147,7 +147,9 @@
     display: flex; align-items: center; justify-content: center;
   }
   .modal {
-    background: var(--bg-primary); border: 1px solid var(--border-color);
+    /* Surface flottante : fond OPAQUE obligatoire (--surface-*, pas --bg-* qui
+       deviennent translucides sous wallpaper — le contenu transparaissait). */
+    background: var(--surface-base); border: 1px solid var(--border-color);
     border-radius: 10px; width: 420px; max-width: 90vw;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
