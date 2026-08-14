@@ -10,6 +10,7 @@ mod scanner;
 pub mod storage;
 mod system;
 mod terminal;
+mod urlhealth;
 mod workspace;
 
 use docker::orchestrator::Orchestrator;
@@ -277,6 +278,11 @@ fn move_note_file(id: i64, folder_id: Option<i64>, state: tauri::State<'_, AppSt
 #[tauri::command]
 fn get_urls(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Url>, String> {
     state.db.get_urls(&project)
+}
+
+#[tauri::command]
+async fn check_urls(urls: Vec<String>) -> Vec<urlhealth::UrlHealth> {
+    urlhealth::check_urls(&urls).await
 }
 
 #[tauri::command]
@@ -1290,6 +1296,7 @@ pub fn run() {
             // URLs
             get_urls,
             create_url,
+            check_urls,
             get_project_commands,
             create_project_command,
             update_project_command,

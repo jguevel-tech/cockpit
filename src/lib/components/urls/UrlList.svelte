@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { getUrls, createUrl, updateUrl, deleteUrl } from "../../api/storage";
-  import type { Url } from "../../types";
+  import { getUrls, createUrl, updateUrl, deleteUrl, checkUrls } from "../../api/storage";
+  import type { Url, UrlHealth } from "../../types";
   import { onMount } from "svelte";
   import { notify } from "../../stores/toast";
 
@@ -13,10 +13,38 @@
   let editLabel = $state("");
   let editUrl = $state("");
 
-  onMount(() => load());
+  // Statut up/down : verifie au montage puis toutes les 60 s tant que la liste est affichee
+  let health = $state(new Map<string, UrlHealth>());
+
+  onMount(() => {
+    load();
+    const timer = setInterval(checkAll, 60_000);
+    return () => clearInterval(timer);
+  });
 
   async function load() {
-    try { urls = await getUrls(project); } catch (e) { notify(String(e)); }
+    try {
+      urls = await getUrls(project);
+      await checkAll();
+    } catch (e) { notify(String(e)); }
+  }
+
+  async function checkAll() {
+    if (urls.length === 0) return;
+    try {
+      const res = await checkUrls(urls.map((u) => u.url));
+      const next = new Map<string, UrlHealth>();
+      urls.forEach((u, i) => { if (res[i]) next.set(u.url, res[i]); });
+      health = next;
+    } catch (e) {
+      console.error("checkUrls:", e); // verif de fond : pas de toast repete
+    }
+  }
+
+  function healthTitle(u: Url): string {
+    const h = health.get(u.url);
+    if (!h) return "Statut inconnu";
+    return h.ok ? `En ligne (HTTP ${h.status})` : `Injoignable — ${h.error || `HTTP ${h.status}`}`;
   }
 
   async function add() {
@@ -66,6 +94,12 @@
           <input class="edit-input" type="text" bind:value={editUrl} onkeydown={onEditKeydown} onblur={saveEdit} />
           <button class="save-btn" onclick={saveEdit}>✓</button>
         {:else}
+          <span
+            class="health-dot"
+            class:up={health.get(u.url)?.ok}
+            class:down={health.get(u.url) && !health.get(u.url)?.ok}
+            title={healthTitle(u)}
+          ></span>
           <a href={u.url} target="_blank" rel="noopener">{u.label}</a>
           <button class="edit" onclick={() => startEdit(u)} title="Modifier">✎</button>
           <button class="del" onclick={() => remove(u.id)}>×</button>
@@ -96,4 +130,10 @@
   .del { background: none; border: none; cursor: pointer; color: var(--error); font-size: 1.1rem; padding: 0; opacity: 0; }
   li:hover .del { opacity: 1; }
   .empty { color: var(--text-muted); }
+  .health-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: var(--text-muted); opacity: 0.5;
+  }
+  .health-dot.up { background: var(--success); opacity: 1; }
+  .health-dot.down { background: var(--error); opacity: 1; }
 </style>

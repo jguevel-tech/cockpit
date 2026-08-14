@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Statut des liens rapides** : chaque URL du projet porte une pastille — verte en ligne,
+  rouge injoignable (survoler donne le code HTTP ou l'erreur) — dans la barre du projet et
+  dans Paramètres → URLs, re-vérifiée chaque minute. D'un coup d'œil, tu sais que la
+  préprod est tombée.
+
 ## [0.21.0] — 2026-08-14
 
 ### Added

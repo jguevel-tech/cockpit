@@ -2,12 +2,12 @@
   import { activeTab, selectProject, pendingTerminalId } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
   import { recordingStatus, lastRecordingEvent } from "../../stores/recording";
-  import { getUrls, getProjectCommands } from "../../api/storage";
+  import { getUrls, getProjectCommands, checkUrls } from "../../api/storage";
   import { createTerminal } from "../../api/workspace";
   import { renameProject } from "../../api/scanner";
   import { startRecording, stopRecording, getFailedRecordings, retryRecording, deleteRecording } from "../../api/recorder";
   import ContextMenu from "../ui/ContextMenu.svelte";
-  import type { Url, Recording, ProjectCommand } from "../../types";
+  import type { Url, UrlHealth, Recording, ProjectCommand } from "../../types";
   import { onMount } from "svelte";
   import DockerTab from "./DockerTab.svelte";
   import WorkspaceTab from "./WorkspaceTab.svelte";
@@ -42,13 +42,28 @@
     return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   });
 
+  // Statut up/down des liens rapides (pastille verte/rouge), re-verifie toutes les 60 s
+  let urlHealth = $state(new Map<string, UrlHealth>());
+
+  async function checkQuickUrls() {
+    if (urls.length === 0) return;
+    try {
+      const res = await checkUrls(urls.map((u) => u.url));
+      const next = new Map<string, UrlHealth>();
+      urls.forEach((u, i) => { if (res[i]) next.set(u.url, res[i]); });
+      urlHealth = next;
+    } catch (e) { console.error("checkUrls:", e); }
+  }
+
   onMount(() => {
     (async () => {
       try { urls = await getUrls(name); } catch {}
+      await checkQuickUrls();
       await loadFailedRecordings();
     })();
     const timer = setInterval(() => { now = Date.now(); }, 1000);
-    return () => clearInterval(timer);
+    const healthTimer = setInterval(checkQuickUrls, 60_000);
+    return () => { clearInterval(timer); clearInterval(healthTimer); };
   });
 
   async function loadFailedRecordings() {
@@ -166,7 +181,16 @@
       <button class="cmd-btn" onclick={openCmdMenu} title="Lancer une commande du projet dans un terminal (à définir dans Paramètres)">▶ Cmd</button>
       {#if urls.length > 0}
         {#each urls as u}
-          <a class="quick-url" href={u.url} target="_blank" rel="noopener noreferrer">{u.label}</a>
+          {@const h = urlHealth.get(u.url)}
+          <a
+            class="quick-url"
+            href={u.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={h ? (h.ok ? `En ligne (HTTP ${h.status})` : `Injoignable — ${h.error || `HTTP ${h.status}`}`) : u.url}
+          >
+            <span class="url-dot" class:up={h?.ok} class:down={h && !h.ok}></span>{u.label}
+          </a>
         {/each}
       {/if}
       {#if failedRecordings.length > 0}
@@ -270,6 +294,12 @@
     transition: background 0.12s ease;
   }
   .quick-url:hover { background: var(--bg-tertiary); text-decoration: underline; }
+  .url-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    margin-right: 0.35rem; background: var(--text-muted); opacity: 0.5; vertical-align: middle;
+  }
+  .url-dot.up { background: var(--success); opacity: 1; }
+  .url-dot.down { background: var(--error); opacity: 1; }
   .tabs { display: flex; gap: 0; align-items: stretch; }
   .tab {
     display: flex; align-items: center;

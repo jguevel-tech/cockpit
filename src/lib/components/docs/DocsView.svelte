@@ -69,6 +69,17 @@
         </div>
       </div>
 
+      <div class="block">
+        <p><strong>Liens rapides surveillés</strong> : chaque URL du projet (Paramètres → URLs) porte une pastille — vert en ligne, rouge injoignable, re-vérifiée chaque minute.</p>
+        <div class="demo">
+          <div class="d-tabs">
+            <span class="d-btn small"><span class="d-dot ok"></span> Préprod</span>
+            <span class="d-btn small"><span class="d-dot err"></span> Staging</span>
+            <span class="d-note">👉 survole pour voir le code HTTP ou l'erreur</span>
+          </div>
+        </div>
+      </div>
+
     {:else if section === "terminaux"}
       <h3>&gt;_ Terminaux</h3>
 
@@ -432,6 +443,7 @@
   .d-hover { margin-left: auto; opacity: 0.6; font-size: 0.75rem; }
   .d-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
   .d-dot.ok { background: var(--success); }
+  .d-dot.err { background: var(--error); }
   .d-claude { color: #d97757; font-weight: 700; }
   .d-side-head { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); }
   .d-side-head .d-btn { margin-left: 0.2rem; }

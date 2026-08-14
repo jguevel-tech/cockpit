@@ -88,6 +88,14 @@ export interface Url {
   position: number;
 }
 
+/** Statut up/down d'un lien rapide (HEAD HTTP, 5 s de timeout) */
+export interface UrlHealth {
+  ok: boolean;
+  /** Code HTTP final (0 si la requête n'a pas abouti) */
+  status: number;
+  error: string;
+}
+
 /** Commande rapide d'un projet : un bouton qui lance `command` dans un terminal Cockpit */
 export interface ProjectCommand {
   id: number;

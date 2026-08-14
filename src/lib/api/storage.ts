@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Todo, Note, NoteTree, NoteFolder, NoteFile, Url, ProjectCommand } from "../types";
+import type { Todo, Note, NoteTree, NoteFolder, NoteFile, Url, UrlHealth, ProjectCommand } from "../types";
 
 // Todos
 export const getTodos = (project: string) => invoke<Todo[]>("get_todos", { project });
@@ -34,6 +34,7 @@ export const getUrls = (project: string) => invoke<Url[]>("get_urls", { project 
 export const createUrl = (project: string, label: string, url: string) => invoke<Url>("create_url", { project, label, url });
 export const updateUrl = (id: number, label: string, url: string) => invoke<Url>("update_url", { id, label, url });
 export const deleteUrl = (id: number) => invoke("delete_url", { id });
+export const checkUrls = (urls: string[]) => invoke<UrlHealth[]>("check_urls", { urls });
 
 // Commandes rapides par projet
 export const getProjectCommands = (project: string) =>
