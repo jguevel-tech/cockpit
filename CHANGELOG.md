@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-08-14
+
 ### Added
 
 - **Sauvegarde de la base en un clic** : Paramètres → Général → « Exporter la base… » écrit
