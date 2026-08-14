@@ -76,8 +76,107 @@ const APPIMAGE_LEAKED_VARS: &[&str] = &[
     "GIO_MODULE_DIR", "GSETTINGS_SCHEMA_DIR", "PERLLIB",
 ];
 
+/// Chemin du binaire tmux a utiliser, resolu UNE FOIS par setup_bundled_tmux().
+/// Vide tant que la resolution n'a pas eu lieu -> repli sur le tmux du PATH.
+static TMUX_PROGRAM: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+fn tmux_program() -> &'static str {
+    TMUX_PROGRAM.get().map(String::as_str).unwrap_or("tmux")
+}
+
+/// Choisit le tmux qui fera tourner les terminaux. Appele au demarrage, AVANT toute
+/// commande tmux (purge_dead, apply_server_options).
+///
+/// Cockpit embarque un tmux statique (ressource AppImage) : l'utilisateur n'a RIEN a
+/// installer — exiger `apt install tmux` etait le premier retour utilisateur (2026-08-14).
+///
+/// Ordre de priorite, pense pour la stabilite du couple client/serveur tmux (un client
+/// d'une version differente du serveur echoue en "protocol version mismatch") :
+/// 1. Le binaire DEJA DEPLOYE dans <app_data>/bin/tmux : les sessions vivantes tournent
+///    sur lui, on s'y tient meme si un tmux systeme apparait plus tard.
+/// 2. Le tmux systeme : les utilisateurs historiques ont leurs sessions dessus.
+/// 3. Le binaire embarque, COPIE hors du montage AppImage : le montage disparait a la
+///    fermeture de l'app alors que le serveur tmux doit survivre (persistance des
+///    terminaux). L'executer depuis le montage condamnerait les sessions.
+pub fn setup_bundled_tmux(app: &AppHandle) {
+    let deployed = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("bin").join("tmux"));
+
+    if let Some(dest) = &deployed {
+        if dest.exists() {
+            let _ = TMUX_PROGRAM.set(dest.to_string_lossy().into_owned());
+            refresh_deployed_tmux(app, dest);
+            return;
+        }
+    }
+
+    let system_ok = std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if system_ok {
+        return;
+    }
+
+    let (Some(dest), Some(resource)) = (deployed, bundled_tmux_resource(app)) else { return };
+    if copy_executable(&resource, &dest).is_ok() {
+        let _ = TMUX_PROGRAM.set(dest.to_string_lossy().into_owned());
+    }
+}
+
+fn bundled_tmux_resource(app: &AppHandle) -> Option<std::path::PathBuf> {
+    // Les ressources gardent normalement leur chemin relatif a src-tauri
+    // (resources/bin/tmux), mais on tolere aussi un aplatissement en bin/tmux.
+    for rel in ["resources/bin/tmux", "bin/tmux"] {
+        if let Ok(path) = app.path().resolve(rel, tauri::path::BaseDirectory::Resource) {
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+/// Met a jour le binaire deploye quand une nouvelle version de Cockpit embarque un tmux
+/// different — mais SEULEMENT si aucun serveur ne tourne : remplacer le client sous un
+/// serveur d'une autre version provoquerait un "protocol version mismatch" sur toutes
+/// les sessions vivantes.
+fn refresh_deployed_tmux(app: &AppHandle, dest: &std::path::Path) {
+    let Some(resource) = bundled_tmux_resource(app) else { return };
+    let same_size = match (std::fs::metadata(&resource), std::fs::metadata(dest)) {
+        (Ok(a), Ok(b)) => a.len() == b.len(),
+        _ => true, // dans le doute, ne rien toucher
+    };
+    if same_size {
+        return;
+    }
+    // Some(vide) = reponse definitive "aucune session" (le serveur tmux s'eteint de
+    // lui-meme sans session). None ou des sessions -> on ne touche a rien.
+    if !matches!(tmux_alive_sessions(), Some(s) if s.is_empty()) {
+        return;
+    }
+    let _ = copy_executable(&resource, dest);
+}
+
+/// Copie via fichier temporaire + rename : ecrire directement dans un binaire
+/// potentiellement en cours d'execution echoue (ETXTBSY) ou corrompt le processus.
+fn copy_executable(src: &std::path::Path, dest: &std::path::Path) -> Result<(), String> {
+    let dir = dest.parent().ok_or("chemin sans parent")?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join("tmux.new");
+    std::fs::copy(src, &tmp).map_err(|e| e.to_string())?;
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))
+        .map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, dest).map_err(|e| e.to_string())
+}
+
 fn tmux_cmd(args: &[&str]) -> std::process::Command {
-    let mut cmd = std::process::Command::new("tmux");
+    let mut cmd = std::process::Command::new(tmux_program());
     // -u : force le mode UTF-8 quelle que soit la locale detectee
     cmd.arg("-u").arg("-L").arg(TMUX_SOCKET).args(args);
     cmd.env("LANG", utf8_locale()).env("LC_ALL", utf8_locale());
@@ -368,9 +467,11 @@ pub fn apply_server_options() {
 }
 
 impl TerminalState {
-    /// Verifie que tmux est disponible (message clair sinon).
+    /// Verifie que tmux est disponible (message clair sinon). Avec le tmux embarque,
+    /// ce cas ne peut plus arriver dans l'AppImage — il reste possible en build de dev
+    /// (--no-bundle, pas de ressource) sur une machine sans tmux.
     fn ensure_tmux() -> Result<(), String> {
-        std::process::Command::new("tmux")
+        std::process::Command::new(tmux_program())
             .arg("-V")
             .output()
             .map_err(|_| "tmux introuvable — installe-le : sudo apt-get install tmux".to_string())?;
@@ -446,7 +547,7 @@ impl TerminalState {
         rows: u16,
         init_command: Option<String>,
     ) -> Result<(), String> {
-        let program = "tmux";
+        let program = tmux_program();
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })

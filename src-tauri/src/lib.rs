@@ -1088,6 +1088,10 @@ pub fn run() {
             // Enregistrements restes en plein pipeline a la fermeture -> erreur (retry possible)
             let _ = db.fail_stale_recordings();
 
+            // Resout le binaire tmux (systeme, deja deploye, ou embarque dans l'AppImage)
+            // AVANT toute commande tmux — purge_dead et apply_server_options en dependent.
+            terminal::setup_bundled_tmux(app.handle());
+
             // Terminaux dont la session tmux n'existe plus (reboot...) -> purge
             terminal::TerminalState::purge_dead(&db);
 

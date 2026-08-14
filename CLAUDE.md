@@ -162,7 +162,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 | Async runtime | tokio | 1 (via Tauri) |
 | HTTP client | reqwest 0.12 | rustls, json, multipart (APIs OpenAI) |
 | PTY | portable-pty 0.9 | terminaux integres + flow claude setup-token |
-| Persistance terminaux | tmux >= 3 | socket dedie `-L cockpit` |
+| Persistance terminaux | tmux >= 3 | socket dedie `-L cockpit` ; statique 3.5a EMBARQUE dans l'AppImage |
 | Scan fichiers | ignore 0.4 | walker gitignore-aware (celui de ripgrep) |
 | Dates | chrono 0.4 | titres de notes reunion |
 | Terminal frontend | @xterm/xterm | + addon-fit + addon-webgl + addon-web-links (Ctrl+clic) |
@@ -172,8 +172,14 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 | Markdown rendu | marked | (frontend) |
 | HTML -> Markdown | turndown | (frontend, pour editeur WYSIWYG) |
 
-Dependances systeme runtime : `tmux` (persistance terminaux), `pw-record`/PipeWire (enregistrement
-reunions), `git` (onglet Git), CLI `claude` (connexion abonnement + sessions).
+Dependances systeme runtime : `pw-record`/PipeWire (enregistrement reunions), `git` (onglet Git),
+CLI `claude` (connexion abonnement + sessions). `tmux` n'en est PLUS une : un tmux statique
+(musl, construit par `scripts/build-tmux-static.sh` dans un conteneur Alpine, checksum epingle)
+est embarque comme ressource de l'AppImage. Resolution au demarrage (terminal/setup_bundled_tmux) :
+1) binaire deja deploye dans `<app_data>/bin/tmux` (les sessions vivantes tournent dessus, on s'y
+tient), 2) tmux systeme, 3) deploiement du binaire embarque — COPIE hors du montage AppImage,
+car le montage disparait a la fermeture alors que le serveur tmux doit survivre. Le remplacement
+du binaire deploye n'a lieu que si AUCUN serveur ne tourne (protocol version mismatch sinon).
 
 ## Commandes
 

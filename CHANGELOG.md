@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **tmux est maintenant embarqué dans Cockpit** : ouvrir un terminal ne demande plus
+  d'installer quoi que ce soit. Si tmux est déjà présent sur la machine, il reste utilisé
+  (vos sessions existantes ne bougent pas) ; sinon Cockpit déploie le sien, autonome, qui
+  survit à la fermeture de l'application comme avant.
+
 ## [0.10.1] — 2026-08-14
 
 ### Fixed

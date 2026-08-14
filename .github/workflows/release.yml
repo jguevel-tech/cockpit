@@ -42,6 +42,21 @@ jobs:
           # ~12 min a ~7 min.
           shared-key: tauri
 
+      # tmux statique embarque dans l'AppImage : les terminaux marchent sans que
+      # l'utilisateur n'installe RIEN. La cle de cache derive du script de build
+      # (versions et checksums epingles dedans) : le binaire n'est reconstruit que
+      # quand la recette change (~2 min sinon 0).
+      - name: Cache du tmux statique
+        id: tmux-cache
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/bin/tmux
+          key: tmux-static-${{ hashFiles('scripts/build-tmux-static.sh') }}
+
+      - name: Construire tmux statique (musl)
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        run: scripts/build-tmux-static.sh src-tauri/resources/bin/tmux
+
       - run: npm ci
 
       # Les garde-fous du projet tournent aussi en CI : une release ne doit jamais
