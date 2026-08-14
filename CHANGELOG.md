@@ -12,6 +12,21 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Recherche dans le fichier ouvert (Ctrl+F)** : barre de recherche avec compteur
+  d'occurrences (3/17), navigation Entrée / Maj+Entrée ou flèches, respect de la casse en
+  option, toutes les occurrences surlignées et l'occurrence courante mise en évidence —
+  comme dans un IDE. Bouton 🔍 dans l'en-tête du fichier, Échap pour fermer.
+- **Recherche globale dans le projet (Ctrl+Maj+F)** : un champ au-dessus de l'arborescence
+  cherche partout — noms de dossiers, noms de fichiers et contenu des fichiers (en
+  respectant le .gitignore). Résultats groupés par fichier avec extrait de la ligne ;
+  un clic ouvre le fichier directement sur la bonne ligne.
+- **Numéros de ligne** dans le visualiseur de fichiers, et total de lignes + taille du
+  fichier dans le coin de l'en-tête.
+- **Copier le chemin du fichier** (bouton ⧉) et **retour à la ligne automatique**
+  (bouton ⏎, pratique pour le Markdown et les logs).
+
 ## [0.12.0] — 2026-08-14
 
 ### Added

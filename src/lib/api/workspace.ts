@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TerminalInfo, DirEntry, FileContent, GitStatus, FileDiff, BranchInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult } from "../types";
+import type { TerminalInfo, DirEntry, FileContent, GitStatus, FileDiff, BranchInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
 
 // Terminaux integres
 export const createTerminal = (project: string, cwd: string, cols: number, rows: number, initCommand?: string) =>
@@ -51,6 +51,9 @@ export const readProjectFile = (projectPath: string, relPath: string) =>
   invoke<FileContent>("read_project_file", { projectPath, relPath });
 export const writeProjectFile = (projectPath: string, relPath: string, content: string) =>
   invoke("write_project_file", { projectPath, relPath, content });
+// Recherche globale : noms de dossiers/fichiers + contenu, gitignore-aware
+export const searchProject = (projectPath: string, query: string) =>
+  invoke<SearchResults>("search_project", { projectPath, query });
 // Aller a la definition (LSP si serveur dispo, sinon recherche de declarations)
 export const gotoDefinition = (
   projectPath: string, lang: string, relPath: string, content: string,

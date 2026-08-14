@@ -236,6 +236,24 @@ export interface FileContent {
   binary: boolean;
 }
 
+export interface SearchNameHit {
+  rel_path: string;
+  is_dir: boolean;
+}
+
+export interface SearchContentHit {
+  rel_path: string;
+  /** 0-indexee (meme convention que DefLocation) */
+  line: number;
+  preview: string;
+}
+
+export interface SearchResults {
+  names: SearchNameHit[];
+  contents: SearchContentHit[];
+  truncated: boolean;
+}
+
 export interface GitStatusEntry {
   path: string;
   status: string;

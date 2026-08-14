@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { highlightCode } from "../../shiki";
   // themeBase : Shiki n a que deux jeux (github-dark / github-light), pas une palette par theme.
   import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
   import { notify } from "../../stores/toast";
-  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition } from "../../api/workspace";
+  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard } from "../../api/workspace";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import CodeEditor from "../ui/CodeEditor.svelte";
-  import type { DefLocation } from "../../types";
+  import type { DefLocation, SearchResults, SearchNameHit, SearchContentHit } from "../../types";
 
   let { name }: { name: string } = $props();
 
@@ -28,8 +28,24 @@
   let fileRaw = $state("");
   let fileNotice = $state("");
   let fileTruncated = $state(false);
+  let fileSize = $state(0);
   let loadingFile = $state(false);
+  let wrapLines = $state(false);
   let codeWrapEl: HTMLDivElement | undefined = $state();
+
+  // Nombre de lignes affiche dans l'en-tete : un \n final ne compte pas une ligne de plus
+  const lineCount = $derived.by(() => {
+    if (!fileRaw) return 0;
+    const n = fileRaw.split("\n").length;
+    return fileRaw.endsWith("\n") ? n - 1 : n;
+  });
+
+  async function copyPath() {
+    try {
+      await setClipboard(selectedPath);
+      notify("Chemin copié", "success");
+    } catch (e) { notify(String(e)); }
+  }
 
   // Edition
   let editing = $state(false);
@@ -104,8 +120,10 @@
     fileRaw = "";
     fileNotice = "";
     fileTruncated = false;
+    fileSize = 0;
     try {
       const f = await readProjectFile(project.path, relPath);
+      fileSize = f.size;
       if (f.binary) {
         fileNotice = `Fichier binaire (${formatSize(f.size)})`;
         return;
@@ -275,9 +293,223 @@
     ctrlHeld = e.ctrlKey || e.metaKey;
     if (!ctrlHeld) hoverLink = null;
   }
+
+  // --- Recherche globale dans le projet (Ctrl+Maj+F) ---
+  let globalQuery = $state("");
+  let globalResults: SearchResults | null = $state(null);
+  let globalSearching = $state(false);
+  let globalError = $state("");
+  let globalInputEl: HTMLInputElement | undefined = $state();
+  // Numero de requete : seule la DERNIERE reponse a le droit d'ecrire l'etat
+  // (deux recherches en vol peuvent revenir dans le desordre).
+  let searchSeq = 0;
+  let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  function onGlobalInput() {
+    clearTimeout(searchDebounce);
+    if (globalQuery.trim().length < 2) {
+      searchSeq++;
+      globalResults = null;
+      globalError = "";
+      globalSearching = false;
+      return;
+    }
+    searchDebounce = setTimeout(runGlobalSearch, 300);
+  }
+
+  async function runGlobalSearch() {
+    if (!project?.path) return;
+    const q = globalQuery.trim();
+    if (q.length < 2) return;
+    const seq = ++searchSeq;
+    globalSearching = true;
+    globalError = "";
+    try {
+      const res = await searchProject(project.path, q);
+      if (seq !== searchSeq) return;
+      globalResults = res;
+    } catch (e) {
+      if (seq !== searchSeq) return;
+      globalError = String(e);
+      globalResults = null;
+    } finally {
+      if (seq === searchSeq) globalSearching = false;
+    }
+  }
+
+  function clearGlobalSearch() {
+    clearTimeout(searchDebounce);
+    searchSeq++;
+    globalQuery = "";
+    globalResults = null;
+    globalError = "";
+    globalSearching = false;
+  }
+
+  // Occurrences de contenu groupees par fichier, comme dans un IDE
+  const contentGroups = $derived.by(() => {
+    const map = new Map<string, SearchContentHit[]>();
+    for (const c of globalResults?.contents ?? []) {
+      if (!map.has(c.rel_path)) map.set(c.rel_path, []);
+      map.get(c.rel_path)!.push(c);
+    }
+    return [...map.entries()];
+  });
+
+  async function openNameHit(hit: SearchNameHit) {
+    if (hit.is_dir) await revealDir(hit.rel_path);
+    else await openFileByPath(hit.rel_path);
+  }
+
+  /** Deplie l'arbre jusqu'au dossier clique dans les resultats, puis revient a l'arbre. */
+  async function revealDir(relPath: string) {
+    clearGlobalSearch();
+    let nodes = tree;
+    let acc = "";
+    for (const seg of relPath.split("/")) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      const node = nodes.find((n) => n.rel_path === acc);
+      if (!node || !node.is_dir) return;
+      if (!node.expanded) await toggleDir(node);
+      nodes = node.children ?? [];
+    }
+  }
+
+  // --- Recherche dans le fichier ouvert (Ctrl+F) ---
+  let findOpen = $state(false);
+  let findQuery = $state("");
+  let findCase = $state(false);
+  let findIdx = $state(0);
+  let findInputEl: HTMLInputElement | undefined = $state();
+
+  interface FindMatch { line: number; start: number; end: number }
+  const FIND_MAX = 2000;
+
+  const findMatches: FindMatch[] = $derived.by(() => {
+    if (!findOpen || !findQuery || !fileRaw || editing) return [];
+    const out: FindMatch[] = [];
+    const needle = findCase ? findQuery : findQuery.toLowerCase();
+    const lines = fileRaw.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const hay = findCase ? lines[i] : lines[i].toLowerCase();
+      let idx = 0;
+      while ((idx = hay.indexOf(needle, idx)) !== -1) {
+        out.push({ line: i, start: idx, end: idx + needle.length });
+        idx += needle.length;
+        if (out.length >= FIND_MAX) return out;
+      }
+    }
+    return out;
+  });
+
+  function openFind() {
+    if (editing || !fileRaw) return;
+    findOpen = true;
+    tick().then(() => {
+      findInputEl?.focus();
+      findInputEl?.select();
+    });
+  }
+
+  function closeFind() {
+    findOpen = false;
+  }
+
+  function findNext(dir: 1 | -1) {
+    const n = findMatches.length;
+    if (!n) return;
+    findIdx = ((findIdx + dir) % n + n) % n;
+  }
+
+  // Le rendu Shiki est du HTML statique : on surligne en enveloppant les segments
+  // de texte matches dans des <mark> (comme la recherche native d'un navigateur).
+  // Les <mark> ne changent ni le texte ni ses metriques (fond seul), donc le
+  // goto-definition (offsets cumules sur les noeuds texte) reste exact.
+  function clearFindMarks() {
+    if (!codeWrapEl) return;
+    const dirtyLines = new Set<Element>();
+    codeWrapEl.querySelectorAll("mark.find-match").forEach((m) => {
+      const parent = m.parentNode;
+      if (!parent) return;
+      const line = (m as HTMLElement).closest(".line");
+      if (line) dirtyLines.add(line);
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+    });
+    dirtyLines.forEach((l) => l.normalize());
+  }
+
+  function applyFindMarks() {
+    if (!codeWrapEl) return;
+    const lineEls = codeWrapEl.querySelectorAll("code .line");
+    findMatches.forEach((m, i) => {
+      const lineEl = lineEls[m.line];
+      if (lineEl) markRange(lineEl, m.start, m.end, i === findIdx);
+    });
+  }
+
+  function markRange(lineEl: Element, start: number, end: number, current: boolean) {
+    // Un match peut chevaucher plusieurs tokens Shiki : on decoupe par noeud texte.
+    const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT);
+    const targets: { node: Text; s: number; e: number }[] = [];
+    let offset = 0;
+    let n: Node | null;
+    while ((n = walker.nextNode())) {
+      const t = n as Text;
+      const s = Math.max(start - offset, 0);
+      const e = Math.min(end - offset, t.length);
+      if (s < e) targets.push({ node: t, s, e });
+      offset += t.length;
+      if (offset >= end) break;
+    }
+    for (const t of targets) {
+      const range = document.createRange();
+      range.setStart(t.node, t.s);
+      range.setEnd(t.node, t.e);
+      const mark = document.createElement("mark");
+      mark.className = current ? "find-match current" : "find-match";
+      try { range.surroundContents(mark); } catch { /* impossible : range dans un seul noeud */ }
+    }
+  }
+
+  // findIdx doit rester valide quand la liste retrecit (frappe, changement de fichier)
+  $effect(() => {
+    if (findIdx >= findMatches.length) findIdx = 0;
+  });
+
+  // (Re)pose les surlignages apres chaque rendu : le {@html} remplace le DOM du code.
+  $effect(() => {
+    void fileHtml; void findMatches; void findIdx; void findOpen;
+    tick().then(() => {
+      clearFindMarks();
+      if (!findOpen || findMatches.length === 0) return;
+      applyFindMarks();
+      codeWrapEl?.querySelector("mark.find-match.current")?.scrollIntoView({ block: "center" });
+    });
+  });
+
+  function onShortcuts(e: KeyboardEvent) {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
+      e.preventDefault();
+      globalInputEl?.focus();
+      globalInputEl?.select();
+    } else if (mod && !e.shiftKey && (e.key === "f" || e.key === "F")) {
+      if (!editing && fileRaw) {
+        e.preventDefault();
+        openFind();
+      }
+    } else if (e.key === "Escape" && findOpen) {
+      closeFind();
+    }
+  }
 </script>
 
-<svelte:window onkeydown={onKeyState} onkeyup={onKeyState} onblur={() => (ctrlHeld = false)} />
+<svelte:window
+  onkeydown={(e) => { onKeyState(e); onShortcuts(e); }}
+  onkeyup={onKeyState}
+  onblur={() => (ctrlHeld = false)}
+/>
 
 {#snippet nodeList(nodes: TreeNode[], depth: number)}
   {#each nodes as node (node.rel_path)}
@@ -307,7 +539,66 @@
       <span>Fichiers</span>
       <button class="tree-refresh" onclick={loadRoot} title="Rafraîchir">↻</button>
     </div>
-    {#if treeError}
+    <div class="global-search">
+      <input
+        bind:this={globalInputEl}
+        bind:value={globalQuery}
+        oninput={onGlobalInput}
+        placeholder="Rechercher dans le projet…"
+        title="Noms de dossiers, de fichiers et contenu (Ctrl+Maj+F)"
+        onkeydown={(e) => { if (e.key === "Escape") { clearGlobalSearch(); e.currentTarget.blur(); } }}
+      />
+      {#if globalQuery}
+        <button class="search-clear" onclick={clearGlobalSearch} title="Effacer la recherche">×</button>
+      {/if}
+    </div>
+    {#if globalQuery.trim().length >= 2}
+      <div class="search-results">
+        {#if globalSearching}<p class="search-note">Recherche…</p>{/if}
+        {#if globalError}<p class="tree-error">{globalError}</p>{/if}
+        {#if globalResults}
+          {#if globalResults.names.length === 0 && globalResults.contents.length === 0}
+            <p class="search-note">Aucun résultat</p>
+          {/if}
+          {#if globalResults.names.length > 0}
+            <div class="search-section">Noms · {globalResults.names.length}</div>
+            {#each globalResults.names as hit (hit.rel_path)}
+              <div
+                class="tree-row"
+                role="button"
+                tabindex="0"
+                onclick={() => openNameHit(hit)}
+                onkeydown={(e) => e.key === "Enter" && openNameHit(hit)}
+              >
+                <span class="tree-icon">{hit.is_dir ? "▸" : "·"}</span>
+                <span class="tree-name" class:dir={hit.is_dir} title={hit.rel_path}>{hit.rel_path}</span>
+              </div>
+            {/each}
+          {/if}
+          {#if globalResults.contents.length > 0}
+            <div class="search-section">Contenu · {globalResults.contents.length}{globalResults.truncated ? "+" : ""}</div>
+            {#each contentGroups as [path, hits] (path)}
+              <div class="search-file" title={path}>{path} <span class="search-count">{hits.length}</span></div>
+              {#each hits as h (h.line)}
+                <div
+                  class="tree-row search-hit"
+                  role="button"
+                  tabindex="0"
+                  onclick={() => openAt(h.rel_path, h.line)}
+                  onkeydown={(e) => e.key === "Enter" && openAt(h.rel_path, h.line)}
+                >
+                  <span class="hit-line">{h.line + 1}</span>
+                  <span class="hit-preview">{h.preview}</span>
+                </div>
+              {/each}
+            {/each}
+          {/if}
+          {#if globalResults.truncated}
+            <p class="search-note">Résultats limités — précise la recherche.</p>
+          {/if}
+        {/if}
+      </div>
+    {:else if treeError}
       <p class="tree-error">{treeError}</p>
     {:else}
       {@render nodeList(tree, 0)}
@@ -317,18 +608,46 @@
   <div class="files-viewer" class:editing>
     {#if selectedPath}
       <div class="viewer-header">
-        <code>{selectedPath}</code>{#if dirty}<span class="dirty-dot" title="Modifications non sauvegardées">●</span>{/if}
-        <span class="viewer-actions">
-          {#if defBusy}<span class="def-busy">définition…</span>{/if}
-          {#if editing}
-            <button class="btn small primary" onclick={save} disabled={saving || !dirty} title="Ctrl+S">
-              {saving ? "Sauvegarde…" : "Sauvegarder"}
-            </button>
-            <button class="btn small" onclick={cancelEdit}>Lecture</button>
-          {:else if fileRaw}
-            <button class="btn small" onclick={startEdit} title="Modifier le fichier">✎ Modifier</button>
-          {/if}
-        </span>
+        <div class="viewer-header-row">
+          <code>{selectedPath}</code>
+          <button class="icon-mini" onclick={copyPath} title="Copier le chemin">⧉</button>
+          {#if dirty}<span class="dirty-dot" title="Modifications non sauvegardées">●</span>{/if}
+          <span class="viewer-actions">
+            {#if defBusy}<span class="def-busy">définition…</span>{/if}
+            {#if fileRaw && !editing}
+              <span class="file-stats">{lineCount} lignes · {formatSize(fileSize)}</span>
+              <button class="icon-mini" class:active={wrapLines} onclick={() => (wrapLines = !wrapLines)} title="Retour à la ligne automatique">⏎</button>
+              <button class="icon-mini" onclick={openFind} title="Rechercher dans le fichier (Ctrl+F)">🔍</button>
+            {/if}
+            {#if editing}
+              <button class="btn small primary" onclick={save} disabled={saving || !dirty} title="Ctrl+S">
+                {saving ? "Sauvegarde…" : "Sauvegarder"}
+              </button>
+              <button class="btn small" onclick={cancelEdit}>Lecture</button>
+            {:else if fileRaw}
+              <button class="btn small" onclick={startEdit} title="Modifier le fichier">✎ Modifier</button>
+            {/if}
+          </span>
+        </div>
+        {#if findOpen && !editing}
+          <div class="find-bar">
+            <input
+              bind:this={findInputEl}
+              bind:value={findQuery}
+              placeholder="Rechercher dans le fichier…"
+              class:no-match={findQuery.length > 0 && findMatches.length === 0}
+              onkeydown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); findNext(e.shiftKey ? -1 : 1); }
+                else if (e.key === "Escape") closeFind();
+              }}
+            />
+            <button class="icon-mini" class:active={findCase} onclick={() => (findCase = !findCase)} title="Respecter la casse">Aa</button>
+            <span class="find-count">{findMatches.length ? `${findIdx + 1}/${findMatches.length}${findMatches.length >= 2000 ? "+" : ""}` : "0/0"}</span>
+            <button class="icon-mini" onclick={() => findNext(-1)} title="Occurrence précédente (Maj+Entrée)">↑</button>
+            <button class="icon-mini" onclick={() => findNext(1)} title="Occurrence suivante (Entrée)">↓</button>
+            <button class="icon-mini" onclick={closeFind} title="Fermer (Échap)">×</button>
+          </div>
+        {/if}
       </div>
       {#if fileNotice}<p class="viewer-notice">{fileNotice}</p>{/if}
       {#if loadingFile}
@@ -341,6 +660,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
         <div
           class="code-wrap"
+          class:wrap={wrapLines}
           class:linkable={!!hoverLink}
           bind:this={codeWrapEl}
           onclick={onCodeClick}
@@ -403,17 +723,68 @@
   .tree-name.dir { font-weight: 600; color: var(--text-primary); }
   .tree-error { padding: 0.6rem; color: var(--error, #e5484d); font-size: 0.85rem; }
 
+  /* Recherche globale (panneau de gauche) */
+  .global-search {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0 0.5rem 0.4rem; border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0.3rem;
+  }
+  .global-search input {
+    flex: 1; min-width: 0; font-size: 0.78rem; padding: 0.25rem 0.45rem;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-primary); color: var(--text-primary);
+  }
+  .search-clear {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-size: 0.95rem; padding: 0 0.2rem; line-height: 1;
+  }
+  .search-clear:hover { color: var(--text-primary); }
+  .search-section {
+    padding: 0.4rem 0.6rem 0.15rem; font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
+  }
+  .search-file {
+    padding: 0.3rem 0.6rem 0.05rem; font-size: 0.75rem; font-weight: 600;
+    color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .search-count { color: var(--text-muted); font-weight: 400; }
+  .search-hit { gap: 0.4rem; }
+  .hit-line { color: var(--text-muted); font-size: 0.7rem; min-width: 2.5ch; text-align: right; flex-shrink: 0; }
+  .hit-preview {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--font-mono, monospace); font-size: 0.74rem;
+  }
+  .search-note { padding: 0.4rem 0.6rem; font-size: 0.75rem; color: var(--text-muted); }
+
   .files-viewer {
     flex: 1; min-width: 0; overflow: auto;
     border: 1px solid var(--border-color); border-radius: 6px;
     background: var(--bg-secondary);
   }
   .viewer-header {
-    display: flex; align-items: center; gap: 0.5rem;
     padding: 0.4rem 0.8rem; border-bottom: 1px solid var(--border-color);
     font-size: 0.8rem; position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;
   }
+  .viewer-header-row { display: flex; align-items: center; gap: 0.5rem; }
   .viewer-actions { margin-left: auto; display: flex; gap: 0.4rem; align-items: center; }
+  .file-stats { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
+  .icon-mini {
+    background: none; border: 1px solid transparent; border-radius: 4px;
+    color: var(--text-muted); cursor: pointer; font-size: 0.8rem;
+    padding: 0.05rem 0.3rem; line-height: 1.3;
+  }
+  .icon-mini:hover { color: var(--text-primary); border-color: var(--border-color); }
+  .icon-mini.active { color: var(--accent); border-color: var(--accent); }
+
+  /* Barre de recherche dans le fichier (Ctrl+F) — deuxieme ligne de l'en-tete sticky */
+  .find-bar { display: flex; align-items: center; gap: 0.35rem; padding-top: 0.4rem; }
+  .find-bar input {
+    flex: 0 1 16rem; min-width: 6rem; font-size: 0.78rem; padding: 0.2rem 0.45rem;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-primary); color: var(--text-primary);
+  }
+  .find-bar input.no-match { border-color: var(--error); }
+  .find-count { color: var(--text-muted); font-size: 0.72rem; min-width: 3.5ch; text-align: center; }
   .dirty-dot { color: var(--warning); font-size: 0.7rem; }
   .def-busy { color: var(--text-muted); font-size: 0.75rem; font-style: italic; }
   /* En mode edition, le conteneur ne scrolle plus : c'est l'editeur qui scrolle */
@@ -426,10 +797,35 @@
   }
   .code-wrap { font-size: 0.82rem; }
   .code-wrap :global(pre) {
-    margin: 0; padding: 0.8rem 1rem; overflow-x: auto;
+    margin: 0; padding: 0.8rem 1rem 0.8rem 0.5rem; overflow-x: auto;
     background: transparent !important;
   }
-  .code-wrap :global(code) { font-family: var(--font-mono, monospace); line-height: 1.5; }
+  .code-wrap :global(code) { font-family: var(--font-mono, monospace); line-height: 1.5; counter-reset: line; }
+  /* Numeros de ligne : compteur CSS sur chaque .line de Shiki. Un ::before ne cree
+     PAS de noeud texte : le goto-definition et le surlignage de recherche (offsets
+     cumules sur les noeuds texte) restent exacts, et la copie ne l'embarque pas. */
+  .code-wrap :global(.line)::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 3.2em;
+    padding-right: 1em;
+    text-align: right;
+    color: var(--text-muted);
+    opacity: 0.55;
+    user-select: none;
+  }
+  /* Retour a la ligne automatique (bouton ⏎) : pour le Markdown, les logs... */
+  .code-wrap.wrap :global(pre) { white-space: pre-wrap; word-break: break-word; }
+  /* Surlignage des occurrences (Ctrl+F) : fond seul, aucune metrique modifiee */
+  .code-wrap :global(mark.find-match) {
+    background: color-mix(in srgb, var(--warning) 38%, transparent);
+    color: inherit; padding: 0; border-radius: 2px;
+  }
+  .code-wrap :global(mark.find-match.current) {
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    outline: 1px solid var(--accent);
+  }
   .code-wrap { position: relative; }
   .code-wrap.linkable { cursor: pointer; }
   /* Soulignement du SEUL symbole sous le curseur (Ctrl enfonce), style IDE */

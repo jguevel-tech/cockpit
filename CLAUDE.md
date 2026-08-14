@@ -437,8 +437,10 @@ En-tete : nom renommable (double-clic), description, bouton ⏺ Enregistrer (reu
 - **Workspace** : Notes a gauche (flex: 2, arborescence + editeur WYSIWYG) + Todos a droite (flex: 1)
 - **Docker** : start/stop/restart, dependances ("depend de" / "requis par"), tableau des conteneurs
 - **Terminal** : multi-terminaux persistants (voir section dediee plus bas)
-- **Fichiers** : arbre lazy gitignore-aware + viewer Shiki + Ctrl+clic "aller a la definition" (LSP)
-  + edition avec coloration (✎ / Ctrl+S)
+- **Fichiers** : arbre lazy gitignore-aware + viewer Shiki (numeros de ligne, stats, copie du
+  chemin, wrap) + Ctrl+clic "aller a la definition" (LSP) + edition avec coloration (✎ / Ctrl+S)
+  + recherche dans le fichier (Ctrl+F, occurrences surlignees par <mark> sur les noeuds texte)
+  + recherche globale projet (Ctrl+Maj+F, noms + contenu, commande search_project)
 - **Git** : gestion complete (stage/unstage, commit, push, branches) + diff colore
 - **Plugins** : marketplace d'agents par projet
 - **Parametres** : formulaire projet (chemin, compose, description, dependances), URLs, override du prompt de resume

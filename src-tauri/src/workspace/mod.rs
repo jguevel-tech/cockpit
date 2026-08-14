@@ -175,6 +175,96 @@ pub fn find_symbol(project_path: &str, symbol: &str) -> Result<Vec<SymbolHit>, S
     Ok(hits)
 }
 
+// --- Recherche globale (style IDE : noms de dossiers/fichiers + contenu) ---
+
+#[derive(Serialize, Clone)]
+pub struct NameHit {
+    pub rel_path: String,
+    pub is_dir: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ContentHit {
+    pub rel_path: String,
+    /// 0-indexee (meme convention que goto_definition / scrollToLine du frontend)
+    pub line: u32,
+    pub preview: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SearchResults {
+    pub names: Vec<NameHit>,
+    pub contents: Vec<ContentHit>,
+    /// Des resultats ont ete coupes : inviter a preciser la recherche.
+    pub truncated: bool,
+}
+
+const SEARCH_MAX_NAME_HITS: usize = 100;
+const SEARCH_MAX_CONTENT_HITS: usize = 400;
+
+/// Recherche insensible a la casse dans les NOMS (fichiers et dossiers) et le CONTENU
+/// des fichiers texte du projet. gitignore respecte, binaires et fichiers > 2 Mo ignores.
+/// Sous-chaine simple, pas de regex : c'est une recherche d'utilisateur, pas de machine.
+pub fn search_project(project_path: &str, query: &str) -> Result<SearchResults, String> {
+    let (root, _) = secure_join(project_path, "")?;
+    let q = query.trim().to_lowercase();
+    if q.chars().count() < 2 {
+        return Err("recherche trop courte (2 caractères minimum)".into());
+    }
+
+    let mut names = Vec::new();
+    let mut contents = Vec::new();
+    let mut truncated = false;
+
+    let walker = WalkBuilder::new(&root)
+        .hidden(false)
+        .filter_entry(|e| e.file_name() != ".git")
+        .build();
+    for entry in walker.filter_map(|e| e.ok()) {
+        if entry.depth() == 0 {
+            continue;
+        }
+        let path = entry.path();
+        let rel = path.strip_prefix(&root).unwrap_or(path).to_string_lossy().to_string();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
+        if entry.file_name().to_string_lossy().to_lowercase().contains(&q) {
+            if names.len() < SEARCH_MAX_NAME_HITS {
+                names.push(NameHit { rel_path: rel.clone(), is_dir });
+            } else {
+                truncated = true;
+            }
+        }
+
+        if is_dir || contents.len() >= SEARCH_MAX_CONTENT_HITS {
+            continue;
+        }
+        if entry.metadata().map(|m| m.len() > MAX_FILE_BYTES).unwrap_or(true) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(path) else { continue };
+        if bytes.iter().take(8192).any(|&b| b == 0) {
+            continue; // binaire
+        }
+        let text = String::from_utf8_lossy(&bytes);
+        for (i, line) in text.lines().enumerate() {
+            if line.to_lowercase().contains(&q) {
+                contents.push(ContentHit {
+                    rel_path: rel.clone(),
+                    line: i as u32,
+                    preview: line.trim().chars().take(200).collect(),
+                });
+                if contents.len() >= SEARCH_MAX_CONTENT_HITS {
+                    truncated = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(SearchResults { names, contents, truncated })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,6 +320,42 @@ mod tests {
         // Pas de creation de nouveaux fichiers ni d'evasion
         assert!(write_project_file(dir.to_str().unwrap(), "nouveau.txt", "x").is_err());
         assert!(write_project_file(dir.to_str().unwrap(), "../evil.txt", "x").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_search_project_noms_contenu_et_bornes() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_search_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("SousDossierAlpha")).unwrap();
+        std::fs::create_dir_all(dir.join("ignore_moi")).unwrap();
+        // Le crate `ignore` n'applique le .gitignore QUE dans un depot git
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::write(dir.join(".gitignore"), "ignore_moi/\n").unwrap();
+        std::fs::write(dir.join("alpha_notes.txt"), "premiere ligne\nvoici ALPHA en majuscules\n").unwrap();
+        std::fs::write(dir.join("autre.txt"), "rien ici\n").unwrap();
+        std::fs::write(dir.join("ignore_moi/alpha.txt"), "alpha ignore\n").unwrap();
+        std::fs::write(dir.join("binaire.bin"), b"alpha\x00binaire").unwrap();
+
+        let res = search_project(dir.to_str().unwrap(), "alpha").unwrap();
+
+        // Noms : le dossier ET le fichier matchent, insensible a la casse ;
+        // rien depuis ignore_moi (gitignore) ni depuis le binaire (nom sans "alpha"... le .bin matche pas)
+        let name_paths: Vec<&str> = res.names.iter().map(|n| n.rel_path.as_str()).collect();
+        assert!(name_paths.contains(&"SousDossierAlpha"), "{:?}", name_paths);
+        assert!(name_paths.contains(&"alpha_notes.txt"));
+        assert!(!name_paths.iter().any(|p| p.starts_with("ignore_moi")));
+
+        // Contenu : la ligne en MAJUSCULES matche, le binaire est saute
+        assert_eq!(res.contents.len(), 1, "{:?}", res.contents.iter().map(|c| &c.rel_path).collect::<Vec<_>>());
+        assert_eq!(res.contents[0].rel_path, "alpha_notes.txt");
+        assert_eq!(res.contents[0].line, 1);
+        assert!(res.contents[0].preview.contains("ALPHA"));
+        assert!(!res.truncated);
+
+        // Requete trop courte refusee
+        assert!(search_project(dir.to_str().unwrap(), "a").is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

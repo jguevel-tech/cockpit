@@ -834,6 +834,14 @@ fn write_project_file(project_path: String, rel_path: String, content: String) -
     workspace::write_project_file(&project_path, &rel_path, &content)
 }
 
+// async : la recherche parcourt tout le projet, elle ne doit pas bloquer le thread principal
+#[tauri::command]
+async fn search_project(project_path: String, query: String) -> Result<workspace::SearchResults, String> {
+    tokio::task::spawn_blocking(move || workspace::search_project(&project_path, &query))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[derive(serde::Serialize, Clone)]
 struct GotoDefinitionResult {
     /// "lsp" ou "search" (repli heuristique)
@@ -1278,6 +1286,7 @@ pub fn run() {
             // Explorateur de fichiers
             list_project_dir,
             read_project_file,
+            search_project,
             write_project_file,
             goto_definition,
             // Git
