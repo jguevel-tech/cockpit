@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-08-14
+
 ### Fixed
 
 - **Titres de page illisibles sur une image de fond** : « Tableau de bord » et « Paramètres »
