@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-08-14
+
 ### Added
 
 - **Échéances sur les tâches** : un 📅 apparaît au survol d'une tâche pour lui donner une
