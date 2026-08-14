@@ -294,6 +294,33 @@ fn delete_url(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> 
     state.db.delete_url(id)
 }
 
+// --- Tauri Commands: Commandes rapides par projet ---
+
+#[tauri::command]
+fn get_project_commands(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::ProjectCommand>, String> {
+    state.db.get_project_commands(&project)
+}
+
+#[tauri::command]
+fn create_project_command(project: String, label: String, command: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectCommand, String> {
+    state.db.create_project_command(&project, &label, &command)
+}
+
+#[tauri::command]
+fn update_project_command(id: i64, label: String, command: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectCommand, String> {
+    state.db.update_project_command(id, &label, &command)
+}
+
+#[tauri::command]
+fn delete_project_command(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.db.delete_project_command(id)
+}
+
+#[tauri::command]
+fn reorder_project_commands(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.db.reorder_project_commands(&ids)
+}
+
 // --- Tauri Commands: Project Folders ---
 
 #[tauri::command]
@@ -1223,6 +1250,11 @@ pub fn run() {
             // URLs
             get_urls,
             create_url,
+            get_project_commands,
+            create_project_command,
+            update_project_command,
+            delete_project_command,
+            reorder_project_commands,
             update_url,
             delete_url,
             // Project Folders

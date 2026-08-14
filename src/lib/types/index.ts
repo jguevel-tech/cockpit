@@ -88,6 +88,15 @@ export interface Url {
   position: number;
 }
 
+/** Commande rapide d'un projet : un bouton qui lance `command` dans un terminal Cockpit */
+export interface ProjectCommand {
+  id: number;
+  project: string;
+  label: string;
+  command: string;
+  position: number;
+}
+
 export interface ScanResult {
   path: string;
   name: string;

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// utilisee par delete_project (cascade) ET rename_project (mise a jour).
 pub const PROJECT_SCOPED_TABLES: &[&str] = &[
     "notes", "note_folders", "note_files", "todos", "urls",
-    "recordings", "terminals", "command_history",
+    "recordings", "terminals", "command_history", "project_commands",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

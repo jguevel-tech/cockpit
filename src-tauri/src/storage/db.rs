@@ -187,6 +187,19 @@ impl Database {
             [],
         );
 
+        // Migration: commandes rapides par projet (boutons qui lancent une commande
+        // dans un terminal Cockpit)
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS project_commands (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                project  TEXT NOT NULL,
+                label    TEXT NOT NULL,
+                command  TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_project_commands_project ON project_commands(project);",
+        )?;
+
         // Migration: terminaux persistants (sessions tmux)
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS terminals (

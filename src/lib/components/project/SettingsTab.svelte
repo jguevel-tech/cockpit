@@ -5,6 +5,7 @@
   import { notify } from "../../stores/toast";
   import { goHome } from "../../stores/ui";
   import UrlList from "../urls/UrlList.svelte";
+  import CommandList from "./CommandList.svelte";
   import type { DbProject } from "../../types";
   import { onMount } from "svelte";
 
@@ -100,6 +101,7 @@
 
     <div class="settings-urls">
       <UrlList project={name} />
+      <CommandList project={name} />
     </div>
   </div>
 </div>
@@ -113,7 +115,7 @@
      meme l'image de fond, illisibles. Le padding est local, .card ne le definit pas. */
   .settings-form { flex: 1; max-width: 500px; padding: 1.35rem 1.4rem; }
   /* Pas de .card ici : UrlList fournit deja son propre panneau, on aurait un double cadre. */
-  .settings-urls { flex: 1; }
+  .settings-urls { flex: 1; display: flex; flex-direction: column; gap: 1rem; }
   h3 { margin-bottom: 1rem; }
   label { display: block; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
   input, textarea {

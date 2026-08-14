@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { activeTab, selectProject } from "../../stores/ui";
+  import { activeTab, selectProject, pendingTerminalId } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
   import { recordingStatus, lastRecordingEvent } from "../../stores/recording";
-  import { getUrls } from "../../api/storage";
+  import { getUrls, getProjectCommands } from "../../api/storage";
+  import { createTerminal } from "../../api/workspace";
   import { renameProject } from "../../api/scanner";
   import { startRecording, stopRecording, getFailedRecordings, retryRecording, deleteRecording } from "../../api/recorder";
-  import type { Url, Recording } from "../../types";
+  import ContextMenu from "../ui/ContextMenu.svelte";
+  import type { Url, Recording, ProjectCommand } from "../../types";
   import { onMount } from "svelte";
   import DockerTab from "./DockerTab.svelte";
   import WorkspaceTab from "./WorkspaceTab.svelte";
@@ -83,6 +85,31 @@
     try { await deleteRecording(id); await loadFailedRecordings(); } catch (e) { notify(String(e)); }
   }
 
+  // --- Commandes rapides (bouton ▶) ---
+  // Rechargees a CHAQUE ouverture du menu : une commande ajoutee dans Parametres
+  // est disponible immediatement, sans dependre d'un remount.
+  let cmdMenu: { x: number; y: number; cmds: ProjectCommand[] } | null = $state(null);
+
+  async function openCmdMenu(e: MouseEvent) {
+    try {
+      const cmds = await getProjectCommands(name);
+      if (cmds.length === 0) {
+        notify("Aucune commande rapide : ajoute-en dans Paramètres → Commandes.", "info");
+        return;
+      }
+      cmdMenu = { x: e.clientX, y: e.clientY, cmds };
+    } catch (e2) { notify(String(e2)); }
+  }
+
+  async function runCommand(c: ProjectCommand) {
+    if (!project?.path) { notify("Ce projet n'a pas de chemin : renseigne-le dans Paramètres."); return; }
+    try {
+      const tid = await createTerminal(name, project.path, 80, 24, c.command);
+      pendingTerminalId.set(tid);
+      activeTab.set("terminal");
+    } catch (e) { notify(String(e)); }
+  }
+
   function startRename() {
     renaming = true;
   }
@@ -136,6 +163,7 @@
     </div>
 
     <div class="header-actions">
+      <button class="cmd-btn" onclick={openCmdMenu} title="Lancer une commande du projet dans un terminal (à définir dans Paramètres)">▶ Cmd</button>
       {#if urls.length > 0}
         {#each urls as u}
           <a class="quick-url" href={u.url} target="_blank" rel="noopener noreferrer">{u.label}</a>
@@ -172,6 +200,15 @@
     <CurrentTab {name} />
   </div>
 </div>
+
+{#if cmdMenu}
+  <ContextMenu
+    x={cmdMenu.x}
+    y={cmdMenu.y}
+    items={cmdMenu.cmds.map((c) => ({ label: c.label, action: () => runCommand(c) }))}
+    onClose={() => (cmdMenu = null)}
+  />
+{/if}
 
 <style>
   .detail { display: flex; flex-direction: column; height: 100%; }
@@ -220,6 +257,12 @@
     font-size: 0.8rem; padding: 0 0.15rem;
   }
   .rec-failed-action:hover { opacity: 0.7; }
+  .cmd-btn {
+    font-size: 0.8rem; padding: 0.15rem 0.6rem; border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm); background: var(--bg-secondary); color: var(--accent);
+    cursor: pointer; transition: background 0.12s ease;
+  }
+  .cmd-btn:hover { background: var(--bg-tertiary); }
   .quick-url {
     font-size: 0.8rem; color: var(--accent); text-decoration: none;
     padding: 0.15rem 0.5rem; border: 1px solid var(--border-color);

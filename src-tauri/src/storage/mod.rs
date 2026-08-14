@@ -1,5 +1,6 @@
 pub mod db;
 pub mod import;
+pub mod project_commands;
 pub mod project_folders;
 pub mod projects;
 pub mod notes;
@@ -10,6 +11,7 @@ pub mod todos;
 pub mod urls;
 
 pub use db::Database;
+pub use project_commands::*;
 pub use project_folders::*;
 pub use projects::*;
 pub use notes::*;

@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Commandes rapides par projet** : déclare tes commandes habituelles (`make up`,
+  `npm run dev`…) dans Paramètres du projet → Commandes rapides, et lance-les depuis le
+  bouton « ▶ Cmd » de la barre du projet — chaque commande s'exécute dans un nouveau
+  terminal Cockpit du projet.
+
 ## [0.15.0] — 2026-08-14
 
 ### Added
