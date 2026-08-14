@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-08-14
+
 ### Added
 
 - **Recherche dans l'historique du terminal** (bouton 🔍 ou Ctrl+Maj+F) : tape ton texte,
