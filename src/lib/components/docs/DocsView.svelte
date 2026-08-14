@@ -36,7 +36,9 @@
     {/each}
   </nav>
 
-  <div class="content">
+  <!-- .stack : panneau continu (fond + verre depoli sous wallpaper via components.css) —
+       sans lui, titres et legendes flottaient directement sur l'image de fond. -->
+  <div class="content stack">
     {#if section === "demarrer"}
       <h3>🚀 Démarrer</h3>
 
@@ -404,7 +406,7 @@
   nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   nav .icon { width: 1.4rem; text-align: center; font-size: 0.85rem; }
 
-  .content { flex: 1; min-width: 0; }
+  .content { flex: 1; min-width: 0; padding: 1.35rem 1.5rem; }
   .content h3 { margin: 0.2rem 0 1rem; font-size: 1.15rem; }
   .block { margin-bottom: 1.4rem; }
   .block > p { margin: 0 0 0.5rem; font-size: 0.88rem; color: var(--text-secondary); }

@@ -162,7 +162,7 @@ html.has-wallpaper .system::before {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  backdrop-filter: blur(16px) saturate(118%);
+  backdrop-filter: blur(16px) saturate(var(--glass-saturate, 100%));
   pointer-events: none;
 }
 
@@ -170,7 +170,7 @@ html.has-wallpaper .system::before {
    est sans risque et evite un pseudo-element inutile. */
 html.has-wallpaper .input,
 html.has-wallpaper .badge {
-  backdrop-filter: blur(16px) saturate(118%);
+  backdrop-filter: blur(16px) saturate(var(--glass-saturate, 100%));
 }
 
 /* Les menus lateraux (tableau de bord, parametres) sont des <nav> sans fond : leurs entrees

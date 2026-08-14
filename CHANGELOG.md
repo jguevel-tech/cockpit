@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Fini la « sur-brillance » du verre dépoli** : la saturation des couleurs derrière les
+  panneaux est désormais neutre par défaut, et devient une option — « Éclat du verre
+  dépoli » dans Paramètres → Apparence — pour qui aime l'effet.
+
+### Fixed
+
+- **Documentation illisible sur une image de fond** : le contenu flottait directement sur
+  la photo. Il repose maintenant sur le même panneau lisible que le reste de l'interface.
+
 ## [0.23.0] — 2026-08-14
 
 ### Added

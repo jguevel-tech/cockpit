@@ -42,6 +42,10 @@ const DEFAULTS = {
   wallpaperDim: 0.55,
   /** Flou de l'image, en px. */
   wallpaperBlur: 0,
+  /** Eclat du verre depoli : le saturate() du backdrop-filter dope les couleurs de l'image
+   *  derriere les panneaux. Sur une image tres coloree ca "sur-brille" — DESACTIVE par
+   *  defaut (demande de Jimmy, 2026-08-14). */
+  glassShine: false,
 };
 
 const KEY = "cockpit-appearance";
@@ -51,6 +55,7 @@ export const accent = writable<string | null>(DEFAULTS.accent);
 export const surfaceAlpha = writable<number>(DEFAULTS.surfaceAlpha);
 export const wallpaperDim = writable<number>(DEFAULTS.wallpaperDim);
 export const wallpaperBlur = writable<number>(DEFAULTS.wallpaperBlur);
+export const glassShine = writable<boolean>(DEFAULTS.glassShine);
 /** Data URL de l'image, ou null. Vit cote Rust (fichier), pas en localStorage. */
 export const wallpaper = writable<string | null>(null);
 
@@ -94,6 +99,7 @@ function loadSettings() {
     if (typeof s.surfaceAlpha === "number") surfaceAlpha.set(clamp(s.surfaceAlpha, 40, 100));
     if (typeof s.wallpaperDim === "number") wallpaperDim.set(clamp(s.wallpaperDim, 0, 0.95));
     if (typeof s.wallpaperBlur === "number") wallpaperBlur.set(clamp(s.wallpaperBlur, 0, 24));
+    if (typeof s.glassShine === "boolean") glassShine.set(s.glassShine);
   } catch {
     // Reglages corrompus : on repart des valeurs par defaut plutot que de casser le demarrage.
   }
@@ -110,6 +116,7 @@ function saveSettings() {
         surfaceAlpha: get(surfaceAlpha),
         wallpaperDim: get(wallpaperDim),
         wallpaperBlur: get(wallpaperBlur),
+        glassShine: get(glassShine),
       })
     );
   } catch (e) {
@@ -151,6 +158,8 @@ function applyWallpaperVars() {
   root.style.setProperty("--surface-alpha", `${get(surfaceAlpha)}%`);
   root.style.setProperty("--wallpaper-dim", String(get(wallpaperDim)));
   root.style.setProperty("--wallpaper-blur", `${get(wallpaperBlur)}px`);
+  // 100 % = saturation neutre ; l'eclat (118 %) est un choix explicite de l'utilisateur
+  root.style.setProperty("--glass-saturate", get(glassShine) ? "118%" : "100%");
   root.classList.toggle("has-wallpaper", get(wallpaper) !== null);
 }
 
@@ -165,6 +174,7 @@ accent.subscribe((hex) => { applyAccent(hex); saveSettings(); });
 surfaceAlpha.subscribe(() => { applyWallpaperVars(); saveSettings(); });
 wallpaperDim.subscribe(() => { applyWallpaperVars(); saveSettings(); });
 wallpaperBlur.subscribe(() => { applyWallpaperVars(); saveSettings(); });
+glassShine.subscribe(() => { applyWallpaperVars(); saveSettings(); });
 wallpaper.subscribe(() => applyWallpaperVars());
 
 // 3. N'autoriser les ecritures qu'apres tout ca.

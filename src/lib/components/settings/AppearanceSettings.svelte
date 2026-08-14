@@ -1,7 +1,7 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
   import {
-    THEMES, theme, accent, wallpaper, surfaceAlpha, wallpaperDim, wallpaperBlur,
+    THEMES, theme, accent, wallpaper, surfaceAlpha, wallpaperDim, wallpaperBlur, glassShine,
     applyWallpaper, removeWallpaper, resetAppearance,
   } from "../../stores/appearance";
   import { readImageAsDataUrl } from "../../api/appearance";
@@ -117,6 +117,11 @@
           oninput={(e) => surfaceAlpha.set(Number(e.currentTarget.value))} />
         <span class="hint">À 100 %, les panneaux redeviennent opaques et l'image n'apparaît qu'en fond.</span>
       </label>
+      <label class="check-row">
+        <input type="checkbox" checked={$glassShine}
+          onchange={(e) => glassShine.set(e.currentTarget.checked)} />
+        <span>Éclat du verre dépoli <span class="hint-inline">— sature les couleurs de l'image derrière les panneaux ; peut « sur-briller » sur une image très colorée</span></span>
+      </label>
     </div>
   {/if}
 </section>
@@ -171,4 +176,9 @@
   .slider-label em { color: var(--text-secondary); font-style: normal; font-variant-numeric: tabular-nums; }
   .sliders input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
   .hint { font-size: 0.76rem; color: var(--text-muted); line-height: 1.45; }
+  /* La check-row casse le flex-column des labels de sliders */
+  .sliders label.check-row { flex-direction: row; align-items: flex-start; gap: 0.6rem; }
+  .check-row input { margin-top: 0.2rem; accent-color: var(--accent); }
+  .check-row span { font-size: 0.83rem; color: var(--text-primary); }
+  .hint-inline { font-size: 0.76rem; color: var(--text-muted); font-weight: 400; }
 </style>
