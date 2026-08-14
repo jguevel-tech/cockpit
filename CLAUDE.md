@@ -695,9 +695,12 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 ### Docker
 - `list_projects`, `start_project`, `stop_project`, `restart_project`
+- `container_logs` (500 dernieres lignes : docker logs ecrit sur DEUX flux, fusion par
+  timestamps RFC3339 puis prefixe retire — ContainerLogsModal, suivi 2 s)
 
 ### Todos
 - `get_todos`, `create_todo`, `update_todo`, `delete_todo`, `reorder_todos`, `move_todo`, `get_pending_todos`
+- `set_todo_due` (echeance ISO nullable ; alertes via stores/todoAlerts.ts -> cloche)
 
 ### Notes
 - `get_note`, `save_note`, `get_note_tree`
@@ -707,6 +710,14 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 ### URLs
 - `get_urls`, `create_url`, `update_url`, `delete_url`
+- `check_urls` (statut up/down : HEAD avec repli GET, module urlhealth.rs — pastilles dans
+  ProjectDetail et UrlList, re-verif 60 s)
+
+### Commandes rapides par projet
+- `get_project_commands`, `create_project_command`, `update_project_command`,
+  `delete_project_command`, `reorder_project_commands` (table project_commands, DANS
+  PROJECT_SCOPED_TABLES avec test qui verrouille la regle ; bouton ▶ Cmd de ProjectDetail
+  + entrees de la palette Ctrl+K, execution = createTerminal avec init_command)
 
 
 ### Project Folders
@@ -742,6 +753,8 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
   `terminal_copy_selection` (copie la selection copy-mode tmux — clic droit > Copier)
 - `list_claude_sessions`, `rename_claude_session`
 - `record_command`, `search_command_history` (historique fusionne DB Cockpit + ~/.zsh_history + ~/.bash_history)
+- `terminal_search` (recherche NATIVE du copy-mode tmux : start/next/prev/cancel,
+  variante -text litterale — le scrollback vit dans tmux, pas dans xterm)
 - `debug_log` (diagnostic : append dans /tmp/cockpit-debug.log)
 
 ### Explorateur de fichiers / Git
@@ -753,11 +766,19 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 - `git_status` (staged/unstaged par fichier, +/- via --numstat, ahead/behind), `git_diff_file`
 - `git_stage`, `git_unstage`, `git_stage_all`, `git_unstage_all` (add / reset)
 - `git_commit`, `git_push` (set_upstream auto si pas d'upstream)
+- `git_pull` (--ff-only : JAMAIS de merge surprise depuis un bouton), `git_log` (format
+  %x1f + epoch), `git_commit_diff` (git show decoupe multi-fichiers, hash valide hexadecimal)
 - `git_branches`, `git_checkout_branch`, `git_create_branch`, `git_delete_branch` (force en fallback)
 - run_git_strict pour les operations (code != 0 = erreur remontee) vs run_git (tolere code 1 pour diff)
 
-### Migration
+### Fichiers (gestion et apercu)
+- `create_project_file`, `create_project_dir`, `rename_project_entry` (feuille validee,
+  refus d'ecraser), `trash_project_entry` (CORBEILLE systeme via crate trash, jamais rm)
+- `read_project_image` (data URL, 10 Mo max, apercu damier dans FilesTab)
+
+### Migration / sauvegarde
 - `import_database`, `get_db_path`
+- `backup_database` (API backup SQLite — coherente en WAL, bouton Parametres -> General)
 
 ## Events Tauri (backend -> frontend)
 
