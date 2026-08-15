@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mises à jour automatiques sur macOS** : la 0.25.0 publiait bien l'application mais pas
+  son artefact de mise à jour — la cloche restait muette sur Mac. C'est corrigé à partir de
+  cette version.
+
 ## [0.25.0] — 2026-08-14
 
 ### Added

@@ -581,6 +581,15 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
 `cache-on-failure` est actif pour qu'un echec ne reparte pas d'une compilation complete.
 
 **Pieges** :
+- **`Resource not accessible by integration` a la CREATION de la release** : incident
+  transitoire de l'API GitHub (constate sur la v0.24.0 ; la v0.25.0 a reussi avec le meme
+  token juste apres). REGLE : si une version PLUS RECENTE est deja publiee, NE JAMAIS rerun
+  le vieux tag — sa release deviendrait "latest" (GitHub classe par date de creation) et
+  servirait un latest.json plus vieux aux utilisateurs. Le contenu du tag rate part de toute
+  facon dans la version suivante (le code est cumulatif) ; on laisse le tag orphelin.
+- **macOS : les bundles du job mac doivent etre `app,dmg`, pas `dmg` seul** — l'artefact de
+  mise a jour (.app.tar.gz + .sig) est genere depuis le bundle `app` ; sans lui, latest.json
+  n'a pas d'entree darwin et l'updater mac est muet (constate sur la v0.25.0).
 - **`Error updating policy` en fin de release** : incident transitoire de l'API GitHub, pas une
   erreur du workflow. Il survient APRES le build et laisse une release incomplete (AppImage
   uploade, mais ni `.sig` ni `latest.json`) — donc `latest.json` en 404 et plus aucune mise a

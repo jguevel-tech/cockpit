@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "cockpit"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",

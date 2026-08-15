@@ -24,8 +24,11 @@ jobs:
         include:
           - os: ubuntu-22.04
             bundles: appimage
+          # `app` en plus du dmg : l'artefact de MISE A JOUR macOS (.app.tar.gz + .sig)
+          # est genere depuis le bundle app — sans lui, latest.json n'a pas d'entree
+          # darwin et l'updater integre ne fonctionne pas (constate sur la v0.25.0).
           - os: macos-latest # Apple Silicon (aarch64)
-            bundles: dmg
+            bundles: app,dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
