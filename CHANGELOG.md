@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-08-15
+
 ### Fixed
 
 - **La vraie cause de la « sur-brillance » est éliminée.** Le halo lumineux autour des
