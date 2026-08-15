@@ -36,7 +36,7 @@
     {/each}
   </nav>
 
-  <!-- .stack : panneau continu (fond + verre depoli sous wallpaper via components.css) —
+  <!-- .stack : panneau continu (fond translucide sous wallpaper via components.css) —
        sans lui, titres et legendes flottaient directement sur l'image de fond. -->
   <div class="content stack">
     {#if section === "demarrer"}
@@ -317,7 +317,7 @@
       <h3>🎨 Apparence & zoom</h3>
 
       <div class="block">
-        <p>Paramètres → Apparence : <strong>palettes de couleurs</strong>, accent, et <strong>image de fond</strong> (l'interface passe en verre dépoli, réglable).</p>
+        <p>Paramètres → Apparence : <strong>palettes de couleurs</strong>, accent, et <strong>image de fond</strong> — voile, flou de l'image et opacité des panneaux réglables.</p>
         <div class="demo">
           <div class="d-tabs">
             <span class="d-swatch" style="background:#161922"></span>

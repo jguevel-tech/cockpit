@@ -131,8 +131,9 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   une couleur porteuse de sens), `.logo-btn`, les `input` de type checkbox/radio/range/color, et
   tout le `.term-container`.
 - **Un nouveau CONTENEUR structurel** (barre d'onglets, panneau lateral, en-tete de section) doit
-  etre ajoute a la liste des conteneurs floutes de `components.css`. C'est l'oubli qui a rendu la
-  sidebar illisible en v0.5.0 : le flou n'etait pose que sur les cartes.
+  etre ajoute a la liste des conteneurs A FOND TRANSLUCIDE de `components.css` (plus de flou
+  depuis le 2026-08-15, voir Lisibilite). C'est l'oubli qui a rendu la sidebar illisible en
+  v0.5.0 : le fond n'etait pose que sur les cartes.
 - Reflexe de verification : activer une image de fond chargee et parcourir l'ecran ajoute. Un
   contraste correct en theme sombre uni ne prouve rien.
 
@@ -146,7 +147,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - **Le fond d'une surface flottante (modal, menu, panneau, toast) = token OPAQUE
   `--surface-base`/`--surface-raised`, JAMAIS `--bg-*`** : sous wallpaper les `--bg-*`
   deviennent translucides (color-mix), et une surface flottante n'est pas dans la liste des
-  conteneurs floutes — le contenu du dessous transparait au travers (constate sur le modal
+  conteneurs a fond — le contenu du dessous transparait au travers (constate sur le modal
   de creation le 2026-08-14, juste apres le fix portal).
 - **Un voile plein ecran PEINT (fond rgba d'un modal) doit porter son propre
   `backdrop-filter: blur(12px)`** : WebKitGTK desactive les backdrop-filter de toute la page
@@ -660,10 +661,15 @@ Lecture du fichier source par `read_image_as_data_url` cote Rust, PAS par `@taur
 (non installe cote JS, et il faudrait des permissions de lecture bien trop larges).
 
 **Lisibilite** : quand `html.has-wallpaper` est pose, les tokens `--bg-*` deviennent translucides
-via `color-mix` et les surfaces recoivent un `backdrop-filter: blur()` (components.css). Le
-**TERMINAL reste opaque et sans flou** : xterm dessine dans un canvas WebGL, le rendre translucide
-est un terrain a regressions (voir Pieges connus), et un terminal doit rester lisible avant d'etre
-joli. Ne pas "harmoniser" ce cas particulier.
+via `color-mix` (components.css). **AUCUN `backdrop-filter` sous du contenu** : le WebKitGTK de
+Tauri inclut le contenu de l'element dans le backdrop qu'il floute (violation de spec, prouvee au
+banc le 2026-08-15 sur 4 variantes) — chaque panneau affichait une copie floutee de son propre
+texte, un halo epousant chaque lettre. La lisibilite repose sur : opacite des surfaces
+(--surface-alpha), voile (--wallpaper-dim), et flou de L'IMAGE elle-meme (--wallpaper-blur,
+filter sur .wallpaper, sans halo). Seuls les VOILES de modals gardent un backdrop-filter (flou
+uniforme voulu + il empeche WebKitGTK de tuer les filtres, bug du 2026-08-14). Le **TERMINAL
+reste opaque** : xterm dessine dans un canvas WebGL, le rendre translucide est un terrain a
+regressions, et un terminal doit rester lisible avant d'etre joli.
 
 Le bouton ◑ du Header (`toggleBase`) bascule sombre <-> clair ; les palettes de couleur se
 choisissent dans Parametres -> Apparence. Reglages persistes en localStorage sous la cle

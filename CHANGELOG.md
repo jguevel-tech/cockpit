@@ -12,6 +12,20 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **La vraie cause de la « sur-brillance » est éliminée.** Le halo lumineux autour des
+  textes et boutons sur image de fond venait du moteur d'affichage : il incluait à tort le
+  contenu des panneaux dans le flou d'arrière-plan, affichant une copie floutée de chaque
+  lettre (prouvé en isolation sur quatre variantes). Le flou des panneaux est retiré —
+  l'interface est nette partout ; la lisibilité passe par l'opacité des surfaces, le voile
+  et le curseur « Flou de l'image », déjà présents dans Apparence.
+
+### Removed
+
+- L'option « Éclat du verre dépoli » ajoutée en 0.24.0, devenue sans objet avec le retrait
+  du flou des panneaux (c'était un correctif à côté de la vraie cause).
+
 ## [0.25.1] — 2026-08-15
 
 ### Fixed

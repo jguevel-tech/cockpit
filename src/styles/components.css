@@ -113,65 +113,32 @@ html.has-wallpaper {
   --border-strong: color-mix(in srgb, var(--text-muted) 58%, transparent);
 }
 
-/* 1. CONTENEURS STRUCTURELS — LE FLOU VA SUR UNE COUCHE DEDIEE, JAMAIS SUR LE CONTENEUR.
+/* 1. CONTENEURS STRUCTURELS — AUCUN `backdrop-filter` SOUS DU CONTENU. JAMAIS.
    ==========================================================================================
-   REGLE ARCHITECTURALE (NE PAS CONTOURNER) : ne jamais poser `backdrop-filter` sur un element
-   qui CONTIENT du contenu interactif.
+   REGLE ARCHITECTURALE (NE PAS CONTOURNER, prouvee au banc WebKitGTK le 2026-08-15) :
+   le WebKitGTK de Tauri INCLUT LE CONTENU DE L'ELEMENT dans le "backdrop" qu'il floute —
+   en violation de la spec. Resultat : chaque panneau affichait une copie floutee de son
+   propre texte et de ses boutons, un HALO lumineux epousant chaque lettre (la
+   « sur-brillance » signalee par Jimmy). Reproduit en isolation avec QUATRE variantes
+   (::before z-index -1 + isolation, filtre direct, contenu promu translateZ) : toutes
+   halotees ; seul le temoin SANS backdrop-filter est net.
 
-   Pourquoi : par la spec CSS, un filtre non nul fait de l'element le BLOC CONTENEUR de ses
-   descendants en `position: fixed`. Consequence constatee le 2026-08-13 : `backdrop-filter`
-   sur `.tab-content` a fait que le menu contextuel du terminal — en `fixed`, positionne aux
-   coordonnees du clic — se placait par rapport a `.tab-content` et non a la fenetre. Il
-   apparaissait donc a plusieurs centaines de pixels du clic. Modales, panneau de
-   notifications et menus etaient tous concernes.
+   La lisibilite sur image de fond repose donc sur trois leviers SAINS :
+   - l'opacite des surfaces (--surface-alpha, 92 % par defaut, curseur dans Apparence) ;
+   - le voile au-dessus de l'image (--wallpaper-dim) ;
+   - le flou de L'IMAGE ELLE-MEME (curseur « Flou de l'image » : filter sur .wallpaper,
+     aucun backdrop-filter, donc aucun halo).
 
-   Solution : le flou est porte par un `::before` en `position: absolute` qui remplit le
-   conteneur. Un pseudo-element n'est pas un ancetre du contenu, il ne peut donc pas alterer
-   son positionnement. Le conteneur, lui, ne recoit aucun filtre.
+   EXCEPTION VOULUE : les VOILES de modals (CreateProjectModal, ui/Modal, palette Ctrl+K)
+   gardent leur backdrop-filter — la, tout le dessous est floute uniformement et le halo se
+   fond dans le flou ; et sans lui WebKitGTK tue les filtres de la page (bug du 2026-08-14).
 
-   `isolation: isolate` garde le pseudo-element derriere le contenu sans avoir a manipuler
-   des z-index dans chaque composant.
-
-   COROLLAIRE (2026-08-14) : `isolation: isolate` fait de chaque conteneur un CONTEXTE
-   D'EMPILEMENT. Un overlay `position: fixed` reste enfant d'un de ces conteneurs est peint
-   sous les conteneurs suivants du DOM, quel que soit son z-index — le modal de creation de
-   projet (enfant de la sidebar) etait invisible sous wallpaper. D'ou la regle : tout overlay
-   fixed porte `use:portal` (actions/portal.ts) et vit dans <body>.
+   HISTORIQUE, TOUJOURS VRAI : un backdrop-filter fait aussi de l'element le bloc conteneur
+   des descendants `position: fixed` (menu contextuel decale, 2026-08-13), et un conteneur
+   `isolation: isolate` peint ses overlays fixed sous le reste du DOM (modal invisible,
+   2026-08-14). D'ou la regle qui reste : tout overlay fixed porte `use:portal` et vit
+   dans <body>.
    ========================================================================================== */
-html.has-wallpaper header,
-html.has-wallpaper aside,
-html.has-wallpaper nav,
-html.has-wallpaper .project-bar,
-html.has-wallpaper .card,
-html.has-wallpaper .stack,
-html.has-wallpaper .tab-content,
-html.has-wallpaper .system {
-  position: relative;
-  isolation: isolate;
-}
-html.has-wallpaper header::before,
-html.has-wallpaper aside::before,
-html.has-wallpaper nav::before,
-html.has-wallpaper .project-bar::before,
-html.has-wallpaper .card::before,
-html.has-wallpaper .stack::before,
-html.has-wallpaper .tab-content::before,
-html.has-wallpaper .system::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  backdrop-filter: blur(16px) saturate(var(--glass-saturate, 100%));
-  pointer-events: none;
-}
-
-/* Les champs et badges sont petits et ne contiennent rien de positionne : le filtre direct
-   est sans risque et evite un pseudo-element inutile. */
-html.has-wallpaper .input,
-html.has-wallpaper .badge {
-  backdrop-filter: blur(16px) saturate(var(--glass-saturate, 100%));
-}
 
 /* Les menus lateraux (tableau de bord, parametres) sont des <nav> sans fond : leurs entrees
    flotteraient sur l'image. On donne le fond au MENU, pas a chaque entree — c'est ce qui evite
