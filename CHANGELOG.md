@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.25.1] — 2026-08-15
+
 ### Fixed
 
 - **Mises à jour automatiques sur macOS** : la 0.25.0 publiait bien l'application mais pas
