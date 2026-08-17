@@ -109,6 +109,14 @@
       </div>
 
       <div class="block">
+        <p><strong>Glisser-déposer un fichier</strong> : lâche une image (ou n'importe quel fichier) sur le terminal, son chemin s'écrit à l'invite — de quoi donner une capture d'écran à Claude sans taper le chemin.</p>
+        <div class="demo">
+          <div class="d-term">&gt; regarde cette capture /home/moi/Images/bug.png ▌</div>
+          <div class="d-note">👉 le cadre du terminal s'allume pendant le survol</div>
+        </div>
+      </div>
+
+      <div class="block">
         <p><strong>Claude Code intégré</strong> : le bouton ✳ Claude liste tes conversations passées du projet — un clic les reprend dans un terminal. Le logo Claude s'affiche quand un agent IA tourne.</p>
         <div class="demo">
           <div class="d-row"><span class="d-claude">✳</span> <strong>COCKPIT - 1</strong> <span class="d-muted">agent IA actif</span></div>

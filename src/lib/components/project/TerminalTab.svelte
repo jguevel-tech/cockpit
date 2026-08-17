@@ -1,5 +1,8 @@
 <script lang="ts" module>
   import { listen as listenGlobal } from "@tauri-apps/api/event";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import { writeTerminal } from "../../api/workspace";
+  import { notify as notifyGlobal } from "../../stores/toast";
   import type { Terminal as XTerminal } from "@xterm/xterm";
   import type { FitAddon as XFitAddon } from "@xterm/addon-fit";
 
@@ -60,6 +63,95 @@
   listenGlobal<number>("terminal_exit", (e) => {
     pool.get(e.payload)?.term.write("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n");
   });
+
+  // File d'ecriture/resize PAR TERMINAL : chaque invoke part apres le retour du precedent.
+  // Sans ca, des invoke rapproches peuvent s'executer dans le desordre cote Tauri -> octets
+  // melanges dans le PTY. Au niveau MODULE comme le pool : un terminal survit au demontage,
+  // sa file doit vivre aussi longtemps que lui — et le depot de fichiers (plus bas) doit
+  // emprunter la MEME file que la frappe, sinon deux chemins d'ecriture s'entrelacent.
+  const ioQueues = new Map<number, Promise<unknown>>();
+
+  function enqueue(id: number, op: () => Promise<unknown>) {
+    const next = (ioQueues.get(id) ?? Promise.resolve()).then(op, op);
+    ioQueues.set(id, next.catch(() => {}));
+  }
+  function queueWrite(id: number, data: string) {
+    enqueue(id, () => writeTerminal(id, data));
+  }
+
+  /// GLISSER-DEPOSER DE FICHIERS -> chemin insere dans le terminal.
+  ///
+  /// Pourquoi ca ne marchait pas : Tauri intercepte le glisser-deposer natif du webview
+  /// (`dragDropEnabled`, actif par defaut) et l'expose comme un evenement applicatif. Les
+  /// handlers HTML5 `ondrop` ne voient donc rien passer, et personne n'ecoutait cet
+  /// evenement — le fichier lache sur le terminal disparaissait dans le vide.
+  ///
+  /// C'est aussi le SEUL canal qui porte le CHEMIN du fichier : `DataTransfer` ne l'expose
+  /// plus depuis Tauri v2. Or le chemin est precisement ce qu'on veut ecrire — un shell le
+  /// consomme tel quel, et Claude Code lit l'image qu'il designe.
+  ///
+  /// Une seule inscription pour la vie de l'app (le listener est global) ; le montage actif
+  /// de TerminalTab declare sa cible ci-dessous.
+  type DropTarget = {
+    el: HTMLElement;
+    /// Lu a chaque evenement, jamais capture : l'onglet actif change sans reinscription.
+    activeId: () => number | null;
+    over: (v: boolean) => void;
+  };
+  let dropTarget: DropTarget | null = null;
+  export function setDropTarget(t: DropTarget | null) {
+    dropTarget = t;
+  }
+
+  /// La position d'un evenement de depot est PHYSIQUE. Les coordonnees CSS s'en deduisent en
+  /// divisant par devicePixelRatio : mesure faite dans le WebKitGTK systeme, il suit
+  /// exactement le zoom de la page (zoom 1.15 -> dpr 1.15, zoom 2 -> dpr 2) en plus de la
+  /// densite de l'ecran. Sans cette division, un depot serait mal route des que le zoom
+  /// global de Cockpit n'est pas a 100 %.
+  function overTerminal(pos: { x: number; y: number }): boolean {
+    if (!dropTarget) return false;
+    const ratio = window.devicePixelRatio || 1;
+    const el = document.elementFromPoint(pos.x / ratio, pos.y / ratio);
+    return !!el && dropTarget.el.contains(el);
+  }
+
+  /// Le chemin part dans un PTY : il sera relu par un shell. On echappe a la maniere d'un
+  /// terminal natif (antislash devant les caracteres interpretes) plutot qu'en entourant de
+  /// guillemets, qui genent la detection du chemin par les agents type Claude Code. Un chemin
+  /// ordinaire, sans caractere special, ressort donc intact.
+  function escapeForShell(path: string): string {
+    return path.replace(/[ \t\n"'`$&|;<>()!*?[\]\\#]/g, (c) => "\\" + c);
+  }
+
+  getCurrentWebview()
+    .onDragDropEvent((event) => {
+      const p = event.payload;
+      if (p.type === "leave") {
+        dropTarget?.over(false);
+        return;
+      }
+      if (p.type === "enter" || p.type === "over") {
+        dropTarget?.over(overTerminal(p.position));
+        return;
+      }
+      // p.type === "drop"
+      dropTarget?.over(false);
+      if (p.paths.length === 0) return;
+      // Un depot est un geste delibere : s'il n'aboutit pas, on dit pourquoi plutot que de
+      // ne rien faire (un silence, c'est un bug).
+      if (!overTerminal(p.position)) {
+        notifyGlobal("Dépose le fichier sur le terminal pour insérer son chemin.");
+        return;
+      }
+      const id = dropTarget?.activeId() ?? null;
+      if (id === null) {
+        notifyGlobal("Aucun terminal ouvert : clique sur + pour en ouvrir un.");
+        return;
+      }
+      queueWrite(id, p.paths.map(escapeForShell).join(" ") + " ");
+      pool.get(id)?.term.focus();
+    })
+    .catch((e) => notifyGlobal(`Glisser-déposer indisponible : ${e}`));
 </script>
 
 <script lang="ts">
@@ -76,7 +168,7 @@
   import { projects } from "../../stores/projects";
   import { loadTerminals } from "../../stores/terminals";
   import {
-    createTerminal, writeTerminal, resizeTerminal, closeTerminal,
+    createTerminal, resizeTerminal, closeTerminal,
     attachTerminal, renameTerminal, listTerminals,
     listClaudeSessions, renameClaudeSession, setClipboard, getClipboard,
     terminalCopySelection, terminalSearch, openUrl,
@@ -94,6 +186,8 @@
   let ctxMenu: { x: number; y: number } | null = $state(null);
   let renamingId: number | null = $state(null);
   let renameValue = $state("");
+  // Un fichier survole le terminal : on l'annonce, sinon on ne sait pas que le geste est permis.
+  let dropOver = $state(false);
 
   // Sessions Claude Code
   let claudeOpen = $state(false);
@@ -111,19 +205,9 @@
   let resizeObserver: ResizeObserver | null = null;
   let fitTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // File d'ecriture/resize par terminal : chaque invoke part apres le retour du
-  // precedent. Sans ca, des invoke rapproches peuvent s'executer dans le desordre
-  // cote Tauri -> octets melanges dans le PTY.
-  const ioQueues = new Map<number, Promise<unknown>>();
+  // La file d'ecriture par terminal (enqueue/queueWrite) vit au niveau MODULE, avec le pool.
   const lastSentSize = new Map<number, string>();
 
-  function enqueue(id: number, op: () => Promise<unknown>) {
-    const next = (ioQueues.get(id) ?? Promise.resolve()).then(op, op);
-    ioQueues.set(id, next.catch(() => {}));
-  }
-  function queueWrite(id: number, data: string) {
-    enqueue(id, () => writeTerminal(id, data));
-  }
   function queueResize(id: number, cols: number, rows: number) {
     const key = `${cols}x${rows}`;
     if (lastSentSize.get(id) === key) return;
@@ -213,7 +297,18 @@
     });
     if (container) resizeObserver.observe(container);
 
+    // Cible du glisser-deposer de fichiers (listener global, voir script module).
+    if (container) {
+      setDropTarget({
+        el: container,
+        activeId: () => activeId,
+        over: (v) => (dropOver = v),
+      });
+    }
+
     return () => {
+      setDropTarget(null);
+      dropOver = false;
       resizeObserver?.disconnect();
       unlisteners.forEach((u) => u());
       // NI detach, NI dispose : clients tmux et xterm restent vivants dans le pool.
@@ -705,9 +800,18 @@
     </div>
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div class="term-container" bind:this={container} role="application" oncontextmenu={openCtxMenu}>
+  <div
+    class="term-container"
+    class:drop-over={dropOver}
+    bind:this={container}
+    role="application"
+    oncontextmenu={openCtxMenu}
+  >
     {#if sessions.length === 0}
       <div class="term-empty">Aucun terminal. Clique sur + pour en ouvrir un.</div>
+    {/if}
+    {#if dropOver}
+      <div class="drop-hint">Lâcher pour insérer le chemin du fichier</div>
     {/if}
   </div>
 </div>
@@ -823,6 +927,15 @@
   :global(html.has-wallpaper) .term-container { background: #111318; backdrop-filter: none; }
   :global(html.has-wallpaper:not(.dark)) .term-container { background: #ffffff; }
   .term-container :global(.term-host) { width: 100%; height: 100%; }
+  /* Depot de fichier en cours : la cible doit etre evidente pendant le survol. */
+  .term-container.drop-over { border-color: var(--accent); }
+  .drop-hint {
+    position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%);
+    padding: 0.35rem 0.7rem; font-size: 0.8rem; pointer-events: none;
+    border: 1px solid var(--accent); border-radius: 6px;
+    background: var(--surface-raised); color: var(--text-primary);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  }
   .term-empty {
     display: flex; align-items: center; justify-content: center; height: 100%;
     color: var(--text-muted); font-size: 0.85rem;

@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Glisser-déposer un fichier dans le terminal** : lâche une image, une capture ou n'importe
+  quel fichier sur le terminal, son chemin s'écrit directement à l'invite (plusieurs fichiers
+  d'un coup fonctionnent). Utile pour donner une capture d'écran à Claude Code sans taper le
+  chemin à la main. Le cadre du terminal s'allume pendant le survol ; déposer à côté explique
+  où viser.
+
 ## [0.26.1] — 2026-08-17
 
 ### Fixed
