@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-08-17
+
 ### Added
 
 - **Glisser-déposer un fichier dans le terminal** : lâche une image, une capture ou n'importe
