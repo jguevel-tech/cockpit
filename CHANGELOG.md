@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.26.1] — 2026-08-17
+
 ### Fixed
 
 - **Le bouton Start de l'onglet Docker ne renvoie plus une erreur incompréhensible quand le
