@@ -42,6 +42,28 @@ impl Compose {
         false
     }
 
+    /// Garde a passer AVANT toute commande compose qui AGIT (up/down). Sans elle, docker
+    /// repond "no configuration file provided: not found" — un message qui ne dit ni ou il a
+    /// cherche, ni quoi faire (constate chez un utilisateur externe le 2026-08-17 : bouton
+    /// Start d'un projet sans fichier compose). Le fichier compose est optionnel dans Cockpit,
+    /// donc ce cas est NORMAL et doit s'expliquer, pas remonter une erreur de docker.
+    pub fn require_compose_file(&self) -> Result<(), String> {
+        if self.has_compose_file() {
+            return Ok(());
+        }
+        if !self.compose_file.is_empty() {
+            return Err(format!(
+                "fichier compose introuvable : {} (renseigne dans les parametres du projet)",
+                self.project_dir.join(&self.compose_file).display()
+            ));
+        }
+        Err(format!(
+            "aucun fichier compose dans {} — placez un docker-compose.yml dans le dossier, \
+             ou indiquez son nom dans Parametres du projet",
+            self.project_dir.display()
+        ))
+    }
+
     fn base_args(&self) -> Vec<String> {
         let mut args = vec!["compose".to_string()];
         if !self.compose_file.is_empty() {
@@ -257,6 +279,33 @@ mod tests {
     fn test_has_compose_file() {
         let c = Compose::new("/nonexistent", "");
         assert!(!c.has_compose_file());
+    }
+
+    #[test]
+    fn require_compose_file_explique_l_absence() {
+        let c = Compose::new("/nonexistent", "");
+        let err = c.require_compose_file().unwrap_err();
+        // Le message doit nommer le dossier fouille et dire quoi faire : c'est ce qui
+        // manquait au "no configuration file provided: not found" de docker.
+        assert!(err.contains("/nonexistent"), "message sans le chemin : {}", err);
+        assert!(err.contains("docker-compose.yml"), "message sans remede : {}", err);
+    }
+
+    #[test]
+    fn require_compose_file_signale_un_nom_configure_absent() {
+        let c = Compose::new("/nonexistent", "stack.yml");
+        let err = c.require_compose_file().unwrap_err();
+        assert!(err.contains("stack.yml"), "message sans le nom configure : {}", err);
+    }
+
+    #[test]
+    fn require_compose_file_accepte_un_fichier_standard() {
+        let dir = std::env::temp_dir().join(format!("cockpit_compose_req_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        let c = Compose::new(dir.to_str().unwrap(), "");
+        assert!(c.require_compose_file().is_ok());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

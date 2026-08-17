@@ -35,6 +35,8 @@
     } catch (e) { notify(String(e)); }
   }
 
+  const composeHint = "Aucun fichier compose pour ce projet — voir le message ci-dessus.";
+
   const stateColors: Record<string, string> = {
     running: "var(--success)", starting: "var(--warning)",
     stopping: "var(--warning)", error: "var(--error)", stopped: "var(--text-muted)",
@@ -46,15 +48,31 @@
   {#if !project.path}
     <p class="no-docker">Ce projet n'a pas de repertoire configure. Les controles Docker ne sont pas disponibles.</p>
   {:else}
+  {#if !project.has_compose}
+    <!-- Le fichier compose est optionnel dans Cockpit : cet ecran doit expliquer l'absence,
+         pas laisser docker repondre "no configuration file provided: not found". -->
+    <div class="notice">
+      <p>
+        Aucun fichier compose trouve dans <code>{project.path}</code>.
+        Les commandes Start / Stop / Restart passent par <code>docker compose</code> : elles ne
+        peuvent pas aboutir sans lui.
+      </p>
+      <p class="notice-fix">
+        Placez un <code>docker-compose.yml</code> dans le dossier du projet, ou indiquez le nom
+        du fichier a utiliser dans les parametres.
+      </p>
+      <button class="btn" onclick={() => activeTab.set("settings")}>Ouvrir les parametres du projet</button>
+    </div>
+  {/if}
   <div class="controls">
     <span class="state-badge" style="color:{stateColors[project.state]}">{project.state}</span>
-    <button class="btn btn-success" onclick={doStart} disabled={!!loading || project.state === 'running'}>
+    <button class="btn btn-success" onclick={doStart} disabled={!!loading || !project.has_compose || project.state === 'running'} title={project.has_compose ? '' : composeHint}>
       {loading === 'starting' ? '...' : 'Start'}
     </button>
-    <button class="btn btn-danger" onclick={doStop} disabled={!!loading || project.state === 'stopped'}>
+    <button class="btn btn-danger" onclick={doStop} disabled={!!loading || !project.has_compose || project.state === 'stopped'} title={project.has_compose ? '' : composeHint}>
       {loading === 'stopping' ? '...' : 'Stop'}
     </button>
-    <button class="btn" onclick={doRestart} disabled={!!loading}>
+    <button class="btn" onclick={doRestart} disabled={!!loading || !project.has_compose} title={project.has_compose ? '' : composeHint}>
       {loading === 'restarting' ? '...' : 'Restart'}
     </button>
   </div>
@@ -140,4 +158,17 @@
   .ports { font-family: monospace; font-size: 0.8rem; }
   .no-containers { color: var(--text-muted); font-size: 0.9rem; }
   .no-docker { color: var(--text-muted); font-size: 0.9rem; font-style: italic; }
+  .notice {
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+    border: 1px solid var(--warning); border-radius: 6px;
+    padding: 0.7rem 0.8rem; margin-bottom: 1rem; font-size: 0.85rem;
+    color: var(--text-primary); display: flex; flex-direction: column;
+    align-items: flex-start; gap: 0.5rem;
+  }
+  .notice p { margin: 0; line-height: 1.45; }
+  .notice-fix { color: var(--text-secondary); }
+  .notice code {
+    font-family: monospace; font-size: 0.8rem;
+    background: var(--bg-tertiary); padding: 0.05rem 0.3rem; border-radius: 4px;
+  }
 </style>

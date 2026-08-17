@@ -17,6 +17,8 @@ export interface Project {
   state: ProjectState;
   containers: ContainerStatus[];
   error?: string;
+  /** Un fichier compose exploitable existe-t-il ? Sinon start/stop ne peuvent pas aboutir. */
+  has_compose: boolean;
   folder_id: number | null;
 }
 

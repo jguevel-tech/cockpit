@@ -26,6 +26,11 @@ pub struct Project {
     pub containers: Vec<ContainerStatus>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// Un fichier compose est-il utilisable pour ce projet ? Recalcule a chaque lecture
+    /// (get_project/get_projects), jamais stocke : le frontend s'en sert pour ne pas offrir
+    /// un Start qui ne peut pas aboutir, et l'info doit suivre l'ajout d'un docker-compose.yml
+    /// sans redemarrage.
+    pub has_compose: bool,
 }
 
 /// Prefixe des erreurs posees par le refresh de statuts — voir refresh_statuses.
@@ -132,6 +137,7 @@ impl Orchestrator {
                     state: ProjectState::Stopped,
                     containers: vec![],
                     error: String::new(),
+                    has_compose: false,
                 },
             );
             if !path.is_empty() {
@@ -149,15 +155,26 @@ impl Orchestrator {
 
     pub async fn get_projects(&self) -> Vec<Project> {
         let projects = self.projects.read().await;
-        projects.values().cloned().collect()
+        let composers = self.composers.read().await;
+        projects
+            .values()
+            .map(|p| {
+                let mut p = p.clone();
+                p.has_compose = composers.get(&p.name).is_some_and(|c| c.has_compose_file());
+                p
+            })
+            .collect()
     }
 
     pub async fn get_project(&self, name: &str) -> Result<Project, String> {
         let projects = self.projects.read().await;
-        projects
+        let composers = self.composers.read().await;
+        let mut proj = projects
             .get(name)
             .cloned()
-            .ok_or_else(|| format!("unknown project: {}", name))
+            .ok_or_else(|| format!("unknown project: {}", name))?;
+        proj.has_compose = composers.get(name).is_some_and(|c| c.has_compose_file());
+        Ok(proj)
     }
 
     pub async fn start_project(&self, name: &str) -> Result<(), String> {
@@ -180,6 +197,26 @@ impl Orchestrator {
                 }
             }
 
+            let composer = {
+                let composers = self.composers.read().await;
+                composers.get(proj_name).cloned()
+            };
+
+            // Refus AVANT de passer en "starting" : sans fichier compose, `docker compose up`
+            // ne peut que repondre "no configuration file provided: not found", message qui
+            // ne dit ni ou docker a cherche ni quoi faire. Le fichier compose etant optionnel
+            // dans Cockpit, ce cas est normal et doit s'expliquer.
+            if let Some(c) = &composer {
+                if let Err(e) = c.require_compose_file() {
+                    let msg = format!("Demarrage impossible pour {} : {}", proj_name, e);
+                    let mut projects = self.projects.write().await;
+                    if let Some(p) = projects.get_mut(proj_name) {
+                        p.error = msg.clone();
+                    }
+                    return Err(msg);
+                }
+            }
+
             // Set state to starting
             {
                 let mut projects = self.projects.write().await;
@@ -190,11 +227,6 @@ impl Orchestrator {
             }
 
             // Execute docker compose up (outside lock)
-            let composer = {
-                let composers = self.composers.read().await;
-                composers.get(proj_name).cloned()
-            };
-
             if let Some(c) = composer {
                 match c.up().await {
                     Ok(()) => {
@@ -243,6 +275,29 @@ impl Orchestrator {
             }
         }
 
+        let composer = {
+            let composers = self.composers.read().await;
+            composers.get(name).cloned()
+        };
+
+        // Meme garde qu'au demarrage : les conteneurs peuvent avoir ete adoptes par leur label
+        // (ps_by_working_dir) alors qu'aucun fichier compose n'est disponible ici — `down`
+        // echouerait alors sur le message opaque de docker.
+        if let Some(c) = &composer {
+            if let Err(e) = c.require_compose_file() {
+                let msg = format!(
+                    "Arret impossible pour {} : {}. Les conteneurs deja lances peuvent etre \
+                     arretes depuis la vue Conteneurs.",
+                    name, e
+                );
+                let mut projects = self.projects.write().await;
+                if let Some(p) = projects.get_mut(name) {
+                    p.error = msg.clone();
+                }
+                return Err(msg);
+            }
+        }
+
         // Set stopping
         {
             let mut projects = self.projects.write().await;
@@ -253,11 +308,6 @@ impl Orchestrator {
         }
 
         // Execute docker compose down (outside lock)
-        let composer = {
-            let composers = self.composers.read().await;
-            composers.get(name).cloned()
-        };
-
         if let Some(c) = composer {
             match c.down().await {
                 Ok(()) => {
@@ -384,6 +434,7 @@ impl Orchestrator {
                 state: ProjectState::Stopped,
                 containers: vec![],
                 error: String::new(),
+                has_compose: false,
             },
         );
 
@@ -665,6 +716,54 @@ mod tests {
         );
         // Partiellement up : on n'invente pas un etat
         assert_eq!(refreshed_state(&ProjectState::Stopped, true, false), None);
+    }
+
+    fn orch_with(path: &str) -> Orchestrator {
+        Orchestrator::new(&[(
+            "demo".to_string(),
+            path.to_string(),
+            String::new(),
+            String::new(),
+            vec![],
+        )])
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn start_refuse_sans_fichier_compose_avec_un_message_utile() {
+        let dir = std::env::temp_dir().join(format!("cockpit_orch_nocompose_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let orch = orch_with(dir.to_str().unwrap());
+
+        let err = orch.start_project("demo").await.unwrap_err();
+        assert!(
+            err.contains(dir.to_str().unwrap()) && err.contains("docker-compose.yml"),
+            "message opaque : {}",
+            err
+        );
+        // Aucune commande docker n'a tourne : l'etat ne reste pas coince en "starting",
+        // et l'erreur est visible dans l'onglet Docker.
+        let p = orch.get_project("demo").await.unwrap();
+        assert_eq!(p.state, ProjectState::Stopped);
+        assert!(!p.error.is_empty());
+        assert!(!p.has_compose);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn has_compose_suit_l_apparition_du_fichier() {
+        let dir = std::env::temp_dir().join(format!("cockpit_orch_compose_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let orch = orch_with(dir.to_str().unwrap());
+        assert!(!orch.get_project("demo").await.unwrap().has_compose);
+
+        // Le fichier ajoute apres coup doit etre vu sans redemarrer l'app.
+        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        assert!(orch.get_project("demo").await.unwrap().has_compose);
+        assert!(orch.get_projects().await[0].has_compose);
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

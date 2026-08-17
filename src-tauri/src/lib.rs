@@ -73,6 +73,8 @@ async fn list_projects(state: tauri::State<'_, AppState>) -> Result<Vec<ProjectW
                     state: docker::orchestrator::ProjectState::Stopped,
                     containers: Vec::new(),
                     error: String::new(),
+                    has_compose: docker::compose::Compose::new(&db_p.path, &db_p.compose_file)
+                        .has_compose_file(),
                 }
             }),
             folder_id: db_p.folder_id,

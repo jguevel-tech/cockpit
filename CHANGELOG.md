@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Le bouton Start de l'onglet Docker ne renvoie plus une erreur incompréhensible quand le
+  projet n'a pas de fichier compose.** Il affichait le message brut de Docker (« no
+  configuration file provided: not found ») sans dire où le fichier avait été cherché ni quoi
+  faire. Le fichier compose étant optionnel dans Cockpit, l'onglet explique maintenant
+  l'absence, indique le dossier concerné, propose d'ouvrir les paramètres du projet pour
+  nommer le fichier à utiliser, et grise Start / Stop / Restart tant qu'aucun n'est trouvé.
+
 ## [0.26.0] — 2026-08-15
 
 ### Fixed

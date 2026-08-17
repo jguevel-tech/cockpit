@@ -228,6 +228,14 @@
         <p>Pas de fichier compose au nom standard ? Cockpit retrouve quand même les conteneurs lancés depuis le dossier du projet. Et si Docker est en panne, l'onglet affiche la cause exacte.</p>
       </div>
 
+      <div class="block">
+        <p>Le fichier compose est <strong>optionnel</strong> : sans lui, Start / Stop restent grisés et l'onglet dit où en poser un, ou comment nommer le vôtre.</p>
+        <div class="demo">
+          <div class="d-row d-warn">Aucun fichier compose trouvé dans /srv/mon-projet</div>
+          <div class="d-tabs"><span class="d-btn small off">Start</span><span class="d-btn small off">Stop</span><span class="d-btn small off">Restart</span></div>
+        </div>
+      </div>
+
     {:else if section === "taches"}
       <h3>✓ Tâches & notes</h3>
 
@@ -440,6 +448,7 @@
   .d-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
   .d-btn.danger { color: var(--error); border-color: var(--error); background: none; }
   .d-btn.ok { color: var(--success); border-color: var(--success); background: none; }
+  .d-btn.off { opacity: 0.45; }
   .d-input {
     border: 1px solid var(--accent); border-radius: 6px; background: var(--bg-primary);
     padding: 0.25rem 0.5rem; font-size: 0.8rem; color: var(--text-primary); max-width: 18rem;
@@ -448,6 +457,11 @@
   .d-row.indent { padding-left: 1rem; }
   .d-row.indent2 { padding-left: 2rem; }
   .d-row.sel { background: var(--accent-soft); border-radius: 5px; padding: 0.15rem 0.4rem 0.15rem 1rem; }
+  .d-row.d-warn {
+    color: var(--warning); border: 1px solid var(--warning); border-radius: 5px;
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+    padding: 0.2rem 0.45rem;
+  }
   .d-section { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); }
   .d-muted { color: var(--text-muted); font-size: 0.75rem; }
   .d-count {
