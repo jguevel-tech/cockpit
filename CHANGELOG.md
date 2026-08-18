@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-08-18
+
 ### Fixed
 
 - **Cockpit ne plante plus au démarrage sur les distributions récentes (Ubuntu 26.04).** Le
