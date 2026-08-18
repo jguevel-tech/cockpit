@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.27.2] — 2026-08-18
+
 ### Fixed
 
 - **Le clic molette dans le terminal ne colle plus deux fois.** Un seul clic produisait
