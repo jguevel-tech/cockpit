@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.27.3] — 2026-08-18
+
 ### Fixed
 
 - **Le clic molette dans le terminal colle maintenant le presse-papier, comme « Coller » du
