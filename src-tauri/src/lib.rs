@@ -1150,6 +1150,42 @@ fn toggle_plugin_enabled(plugin_key: String, enabled: bool) -> Result<(), String
 // --- App Setup ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Precharge la libwayland-client DU SYSTEME pour les process enfants.
+///
+/// Le WebKitWebProcess, qui fait le rendu, est un process enfant : il herite de
+/// LD_PRELOAD et se lie ainsi a la meme version que le pilote graphique de l'hote,
+/// au lieu de celle qu'embarque l'AppImage. Sans cela il abort au demarrage sur les
+/// distributions a Mesa 25+ (voir l'appelant).
+///
+/// Ne fait rien hors AppImage (les bibliotheques sont alors deja celles du systeme),
+/// ni si l'hote ne fournit pas la bibliotheque : on preserve le comportement actuel
+/// plutot que de risquer un prechargement impossible.
+#[cfg(target_os = "linux")]
+fn preload_system_libwayland() {
+    if std::env::var_os("APPDIR").is_none() {
+        return;
+    }
+
+    const CANDIDATES: [&str; 3] = [
+        "/usr/lib/x86_64-linux-gnu/libwayland-client.so.0",
+        "/usr/lib64/libwayland-client.so.0",
+        "/usr/lib/libwayland-client.so.0",
+    ];
+
+    let Some(lib) = CANDIDATES
+        .iter()
+        .find(|path| std::path::Path::new(path).exists())
+    else {
+        return;
+    };
+
+    let value = match std::env::var("LD_PRELOAD") {
+        Ok(existing) if !existing.is_empty() => format!("{lib}:{existing}"),
+        _ => (*lib).to_string(),
+    };
+    std::env::set_var("LD_PRELOAD", value);
+}
+
 pub fn run() {
     // FIX RACINE bug accents terminaux (NE PAS RETIRER) : sous Linux, ibus route
     // les touches accentuees DIRECTES de l'AZERTY (é è ç à) par le pipeline de
@@ -1161,6 +1197,18 @@ pub fn run() {
     // Doit etre pose AVANT l'init GTK (donc avant le Builder).
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_IM_MODULE", "gtk-im-context-simple");
+
+    // L'AppImage embarque la libwayland-client de sa machine de construction (Ubuntu
+    // 22.04 -> 1.20). Sur une distro plus recente, le pilote graphique du systeme
+    // (Mesa 25+, lui jamais embarque) se retrouve lie a cette vieille version :
+    // eglGetPlatformDisplay rend EGL_BAD_PARAMETER, WebKit fait un abort volontaire
+    // ("Could not create default EGL display") et le WebKitWebProcess meurt — l'hote
+    // affiche son rapporteur de plantage et la fenetre ne s'ouvre jamais. Constate sur
+    // Ubuntu 26.04 ; reproduit en conteneur : 22.04 et 24.04 demarrent, 26.04 abort a
+    // chaque fois. Bug amont sans correctif ni option d'exclusion (tauri-apps/tauri#15665),
+    // d'ou ce contournement ici. Doit etre pose AVANT l'init GTK.
+    #[cfg(target_os = "linux")]
+    preload_system_libwayland();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

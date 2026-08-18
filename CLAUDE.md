@@ -79,6 +79,10 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   retirer**, sinon `npm ci` echoue en E401 sur le runner et un hostname interne fuite dans un repo
   public. Si le `package-lock.json` doit etre regenere : supprimer `node_modules` AVANT, sinon
   npm reutilise les metadonnees de l'arbre existant et conserve les anciennes URLs.
+- **`npx tauri` peut resoudre un AUTRE paquet** : sur cette machine il tombe sur un homonyme
+  du registre (version 10.9.2) qui transmet les arguments a `cargo build`, d'ou un
+  `unexpected argument 'appimage' found` incomprehensible. Utiliser `./node_modules/.bin/tauri`
+  quand la commande echoue sur un argument que la doc donne pour valide.
 - **Codes de sortie** : ne jamais lire `$?` derriere un pipe (`cmd | tail`) — c'est celui du dernier
   maillon. Rediriger vers un fichier puis tester, sinon on annonce des succes inexistants.
 - **Sorties de `grep`** : le proxy `rtk` les reformate et fausse les `grep -c`. Passer par
@@ -1028,6 +1032,19 @@ Le backend (`system/metrics.rs`) collecte :
   (aucune fenetre visible), UNE PAGE FRAICHE PAR SCENARIO (les styles injectes persistent).
   L'outil Read affiche les PNG : comparaison a l'oeil, preuve en images. C'est ce banc qui a
   identifie le bug n°3 ci-dessus et invalide deux fausses pistes en 10 minutes.
+- **L'AppImage embarque des bibliotheques de sa machine de construction, et ca casse chez
+  les autres** : linuxdeploy y met la `libwayland-client` du runner (22.04 -> 1.20). Sur une
+  distro plus recente, le pilote graphique du systeme (Mesa 25+, lui jamais embarque) se
+  retrouve lie a cette vieille version : l'init EGL de WebKit rend EGL_BAD_PARAMETER, WebKit
+  abort et l'hote affiche son rapporteur de plantage — fenetre jamais ouverte (constate chez
+  un testeur sur Ubuntu 26.04, v0.27.0). Contournement dans `lib.rs`
+  (`preload_system_libwayland`, LD_PRELOAD herite par le WebKitWebProcess) ; bug amont sans
+  correctif ni option d'exclusion : tauri-apps/tauri#15665. Deux fausses pistes ecartees au
+  banc : `WEBKIT_DISABLE_DMABUF_RENDERER` / `WEBKIT_DISABLE_COMPOSITING_MODE` n'y changent
+  rien, et **changer le runner pour 24.04 non plus** (1.22 melangee a 1.24 abort pareil).
+  **Banc de test** : `docker run` sur ubuntu:22.04/24.04/26.04 + `xvfb-run AppRun` sur
+  l'AppImage extraite — le temoin 24.04 prouve que l'echec vient de la distro et non de
+  l'absence de GPU dans le conteneur. A refaire avant de toucher au bundling.
 - **Le shell Claude tourne DANS un terminal Cockpit** : il herite des fuites AppImage
   (PYTHONHOME casse python3, LD_LIBRARY_PATH casse curl). Prefixer les outils sensibles par
   `env -u PYTHONHOME -u PYTHONPATH -u LD_LIBRARY_PATH ...`.

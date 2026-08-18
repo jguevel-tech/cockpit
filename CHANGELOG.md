@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cockpit ne plante plus au démarrage sur les distributions récentes (Ubuntu 26.04).** Le
+  système affichait « Plantage de l'application » en désignant le moteur d'affichage, et la
+  fenêtre ne s'ouvrait jamais. L'AppImage embarquait une bibliothèque graphique bas niveau
+  (`libwayland-client`) prise sur sa machine de construction : mélangée au pilote graphique
+  plus récent de la machine de l'utilisateur, l'initialisation du rendu de WebKit échouait et
+  le processus d'affichage s'arrêtait net. Cockpit utilise désormais la version installée sur
+  la machine. Les distributions plus anciennes ne changent pas de comportement (vérifié sur
+  Ubuntu 22.04, 24.04 et 26.04).
+
 ## [0.27.0] — 2026-08-17
 
 ### Added
