@@ -418,7 +418,8 @@ bind -T copy-mode C-c send -X copy-pipe-and-cancel 'tmux load-buffer -w -'\n\
 bind -T copy-mode-vi C-c send -X copy-pipe-and-cancel 'tmux load-buffer -w -'\n\
 bind -T copy-mode Escape send -X cancel\n\
 bind -T copy-mode-vi Escape send -X cancel\n\
-# Pas de menus contextuels tmux au clic droit (Cockpit affiche le sien)\n\
+# Clic molette et clic droit sont geres par Cockpit : pas de collage ni de menu tmux\n\
+unbind -n MouseDown2Pane\n\
 unbind -n MouseDown3Pane\n\
 unbind -n M-MouseDown3Pane\n\
 unbind -n MouseDrag3Pane\n";
@@ -451,6 +452,9 @@ pub fn apply_server_options() {
         ["bind", "-T", "copy-mode", "Escape", "send", "-X", "cancel"].as_slice(),
         ["bind", "-T", "copy-mode-vi", "Escape", "send", "-X", "cancel"].as_slice(),
         // Pas de menus contextuels tmux au clic droit
+        // Le collage du clic molette est fait par Cockpit (meme chemin que « Coller »
+        // du clic droit) : laisser tmux coller de son cote donnait deux collages.
+        ["unbind", "-n", "MouseDown2Pane"].as_slice(),
         ["unbind", "-n", "MouseDown3Pane"].as_slice(),
         ["unbind", "-n", "M-MouseDown3Pane"].as_slice(),
         ["unbind", "-n", "MouseDrag3Pane"].as_slice(),

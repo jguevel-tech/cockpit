@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Le clic molette dans le terminal colle maintenant le presse-papier, comme « Coller » du
+  clic droit.** Il collait deux textes différents à la fois, parce que trois mécanismes se
+  disputaient le clic. Un seul reste, et c'est exactement celui du menu : même source, même
+  résultat. La correction de la version précédente était incomplète — elle ne collait que la
+  sélection faite dans le terminal, et rien quand le texte venait d'une autre application.
+
 ## [0.27.2] — 2026-08-18
 
 ### Fixed

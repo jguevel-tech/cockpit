@@ -438,25 +438,28 @@
         setTimeout(() => { ta.value = ""; }, 0);
       });
 
-      // FIX ESSENTIEL (clic molette) : un seul clic produisait DEUX collages. Deux
-      // chemins se cumulaient, et un seul est a nous :
-      //  - tmux, souris activee, colle lui-meme sur MouseDown2Pane (`paste-buffer -p`,
-      //    binding par defaut de la table root, verifie avec `list-keys -T root`) ;
-      //  - le WebView, lui, colle la selection PRIMARY dans ce textarea cache, ce qui
-      //    repart ensuite dans le PTY par le chemin d'entree normal.
-      // On annule le collage natif — celui qui echappe a notre controle — et on garde
-      // celui de tmux, qui colle la selection faite dans le terminal. Etabli au banc
-      // WebKitGTK : preventDefault sur `mousedown` ne l'empeche PAS (le paste arrive
-      // quand meme) et le reglage GTK `gtk-enable-primary-paste` est ignore par
-      // WebKitGTK ; seule l'annulation de l'evenement `paste` fonctionne.
-      // La fenetre de 200 ms restreint l'annulation au clic molette : un Ctrl+V garde
-      // son collage (verifie au banc), et le menu contextuel passe de toute facon par
-      // term.paste(), pas par un evenement DOM. NE PAS RETIRER.
+      // FIX ESSENTIEL (clic molette) : le clic molette colle le presse-papier, exactement
+      // comme « Coller » du menu clic droit — meme fonction, meme source. Sans cela, trois
+      // comportements se disputaient le clic et l'utilisateur voyait deux collages :
+      //  - tmux colle de lui-meme sur MouseDown2Pane (`paste-buffer -p`, binding par
+      //    defaut de sa table root) : desactive dans notre conf (terminal/mod.rs) ;
+      //  - le WebView colle la selection PRIMARY dans ce textarea cache : annule ici ;
+      //  - notre propre collage, le seul qui reste.
+      // Etabli au banc WebKitGTK (clic milieu simule par XTEST) : preventDefault sur
+      // `mousedown` n'empeche PAS le collage natif, et le reglage GTK
+      // `gtk-enable-primary-paste` est ignore par WebKitGTK ; seule l'annulation de
+      // l'evenement `paste` fonctionne. Le meme banc montre que ce collage natif ne
+      // rejoignait meme pas le PTY : le texte restait dans le textarea, d'ou il pouvait
+      // ressortir a la frappe suivante.
+      // La fenetre de 200 ms restreint l'annulation au clic molette : un Ctrl+V garde son
+      // collage (verifie au banc). NE PAS RETIRER.
       let middleClickAt = 0;
       el.addEventListener(
         "mousedown",
         (e) => {
-          if ((e as MouseEvent).button === 1) middleClickAt = Date.now();
+          if ((e as MouseEvent).button !== 1) return;
+          middleClickAt = Date.now();
+          void pasteClipboard();
         },
         true,
       );
