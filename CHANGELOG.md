@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Le clic molette dans le terminal ne colle plus deux fois.** Un seul clic produisait
+  deux collages, car deux mécanismes se déclenchaient en même temps : tmux colle de
+  lui-même au clic molette, et le moteur d'affichage y ajoutait le collage de la
+  sélection en cours. Le doublon est supprimé ; le clic molette colle la sélection faite
+  dans le terminal, une seule fois. Le collage par le menu contextuel et au clavier n'est
+  pas affecté.
+
 ## [0.27.1] — 2026-08-18
 
 ### Fixed
