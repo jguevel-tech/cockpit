@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-08-19
+
 ### Added
 
 - **La transcription complète devient optionnelle dans les comptes rendus de réunion**
