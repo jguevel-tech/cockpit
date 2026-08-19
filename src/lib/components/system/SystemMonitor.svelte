@@ -1,6 +1,7 @@
 <script lang="ts">
   import { systemMetrics, metricsLive, refreshMetrics, startLiveMetrics, stopLiveMetrics } from "../../stores/system";
   import ProcessList from "./ProcessList.svelte";
+  import { trad } from "../../i18n";
 
   let isLive: boolean = $derived($metricsLive);
 
@@ -15,13 +16,13 @@
 
 <div class="system">
   <div class="sys-header">
-    <h2>Monitoring Systeme</h2>
+    <h2>{$trad("sys.title")}</h2>
     <div class="metrics-controls">
-      <button class="metrics-btn" onclick={refreshMetrics}>Snapshot</button>
+      <button class="metrics-btn" onclick={refreshMetrics}>{$trad("sys.snapshot")}</button>
       {#if isLive}
-        <button class="metrics-btn live-active" onclick={stopLiveMetrics}>Live ■</button>
+        <button class="metrics-btn live-active" onclick={stopLiveMetrics}>{$trad("sys.liveOn")}</button>
       {:else}
-        <button class="metrics-btn" onclick={startLiveMetrics}>Live ▶</button>
+        <button class="metrics-btn" onclick={startLiveMetrics}>{$trad("sys.liveOff")}</button>
       {/if}
     </div>
   </div>
@@ -54,7 +55,7 @@
 
       <!-- Memory -->
       <div class="metric-card">
-        <h3>Memoire</h3>
+        <h3>{$trad("sys.memory")}</h3>
         <div class="bar-container">
           <div class="bar" style="width:{m.memory.percent}%" class:warning={m.memory.percent > 80}></div>
         </div>
@@ -79,7 +80,7 @@
     <ProcessList topCpu={m.top_cpu} topMemory={m.top_memory} />
 
   {:else}
-    <p class="no-data">Cliquez sur Snapshot ou Live pour demarrer le monitoring</p>
+    <p class="no-data">{$trad("sys.startHint")}</p>
   {/if}
 </div>
 

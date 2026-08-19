@@ -3,6 +3,7 @@
   import type { ProjectCommand } from "../../types";
   import { onMount } from "svelte";
   import { notify } from "../../stores/toast";
+  import { trad } from "../../i18n";
 
   let { project }: { project: string } = $props();
 
@@ -54,11 +55,10 @@
 </script>
 
 <div class="cmd-list">
-  <h3>Commandes rapides</h3>
-  <p class="hint">Chaque commande devient une entrée du bouton « ▶ Cmd » de la barre du projet :
-    elle est lancée dans un nouveau terminal du projet.</p>
+  <h3>{$trad("cmd.title")}</h3>
+  <p class="hint">{$trad("cmd.hint")}</p>
   <div class="add-row">
-    <input type="text" bind:value={newLabel} placeholder="Label (ex : Dev)" onkeydown={onAddKeydown} />
+    <input type="text" bind:value={newLabel} placeholder={$trad("cmd.labelPlaceholder")} onkeydown={onAddKeydown} />
     <input type="text" class="mono" bind:value={newCommand} placeholder="npm run dev" onkeydown={onAddKeydown} />
     <button onclick={add}>+</button>
   </div>
@@ -72,13 +72,13 @@
         {:else}
           <span class="label">{c.label}</span>
           <code class="cmd" title={c.command}>{c.command}</code>
-          <button class="edit" onclick={() => startEdit(c)} title="Modifier">✎</button>
-          <button class="del" onclick={() => remove(c.id)} title="Supprimer">×</button>
+          <button class="edit" onclick={() => startEdit(c)} title={$trad("common.edit")}>✎</button>
+          <button class="del" onclick={() => remove(c.id)} title={$trad("common.delete")}>×</button>
         {/if}
       </li>
     {/each}
     {#if commands.length === 0}
-      <li class="empty">Aucune commande</li>
+      <li class="empty">{$trad("cmd.empty")}</li>
     {/if}
   </ul>
 </div>

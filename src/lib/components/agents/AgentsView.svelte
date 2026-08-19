@@ -14,6 +14,7 @@
   } from "../../api/agents";
   import type { MarketplaceLocation, PluginInfo, AgentInfo } from "../../types";
   import AgentsConfig from "./AgentsConfig.svelte";
+  import { trad } from "../../i18n";
 
   type Mode = "agents" | "config";
 
@@ -67,7 +68,7 @@
   }
 
   async function selectMarketplace(id: string) {
-    if (dirty && !confirm("Modifications non sauvegardees, continuer ?")) return;
+    if (dirty && !confirm($trad("agents.unsavedConfirm"))) return;
     selectedMarketplace = id;
     selectedPlugin = null;
     selectedAgent = null;
@@ -94,7 +95,7 @@
   }
 
   async function selectPlugin(name: string) {
-    if (dirty && !confirm("Modifications non sauvegardees, continuer ?")) return;
+    if (dirty && !confirm($trad("agents.unsavedConfirm"))) return;
     selectedPlugin = name;
     selectedAgent = null;
     agentContent = "";
@@ -124,7 +125,7 @@
 
   async function selectAgent(name: string) {
     if (!selectedMarketplace || !selectedPlugin) return;
-    if (dirty && !confirm("Modifications non sauvegardees, continuer ?")) return;
+    if (dirty && !confirm($trad("agents.unsavedConfirm"))) return;
     try {
       selectedAgent = name;
       const content = await readAgent(
@@ -188,7 +189,7 @@
 
   async function doDeleteAgent() {
     if (!selectedMarketplace || !selectedPlugin || !selectedAgent) return;
-    if (!confirm(`Supprimer "${selectedAgent}" du plugin "${selectedPlugin}" ?`))
+    if (!confirm($trad("agents.deleteAgentConfirm", { agent: selectedAgent, plugin: selectedPlugin })))
       return;
     try {
       await deleteAgent(selectedMarketplace, selectedPlugin, selectedAgent);
@@ -226,7 +227,7 @@
     if (!selectedMarketplace) return;
     if (
       !confirm(
-        `Supprimer DEFINITIVEMENT le plugin "${pluginName}" et tous ses agents ?`,
+        $trad("agents.deletePluginConfirm", { plugin: pluginName }),
       )
     )
       return;
@@ -323,24 +324,24 @@ You are the **${name}** agent.
 <div class="agents-view">
   <header class="view-header">
     <div class="title-row">
-      <h2>Agents</h2>
+      <h2>{$trad("agents.title")}</h2>
       <div class="mode-tabs">
         <button
           class="mode-tab"
           class:active={mode === "agents"}
-          onclick={() => (mode = "agents")}>Bibliotheque</button>
+          onclick={() => (mode = "agents")}>{$trad("agents.library")}</button>
         <button
           class="mode-tab"
           class:active={mode === "config"}
-          onclick={() => (mode = "config")}>Config orchestrateur</button>
+          onclick={() => (mode = "config")}>{$trad("agents.orchestratorConfig")}</button>
       </div>
-      <button class="btn-small refresh" onclick={reloadMarketplaces} title="Recharger"
+      <button class="btn-small refresh" onclick={reloadMarketplaces} title={$trad("agents.reload")}
         >↻</button>
     </div>
 
     {#if mode === "agents"}
       <div class="marketplace-row">
-        <label for="marketplace-select">Marketplace</label>
+        <label for="marketplace-select">{$trad("agents.marketplace")}</label>
         <select
           id="marketplace-select"
           bind:value={selectedMarketplace}
@@ -380,7 +381,7 @@ You are the **${name}** agent.
             <button
               class="btn-small"
               onclick={() => (newPluginOpen = !newPluginOpen)}
-              title="Nouveau plugin">+</button>
+              title={$trad("agents.newPlugin")}>+</button>
           {/if}
         </div>
         {#if newPluginOpen && isEditable}
@@ -392,14 +393,14 @@ You are the **${name}** agent.
                 if (e.key === "Enter") createNewPlugin();
               }} />
             <input
-              placeholder="description"
+              placeholder={$trad("newProject.description")}
               bind:value={newPluginDesc}
               onkeydown={(e) => {
                 if (e.key === "Enter") createNewPlugin();
               }} />
             <div class="form-actions">
-              <button class="btn-primary" onclick={createNewPlugin}>Creer</button>
-              <button onclick={() => (newPluginOpen = false)}>Annuler</button>
+              <button class="btn-primary" onclick={createNewPlugin}>{$trad("agents.create")}</button>
+              <button onclick={() => (newPluginOpen = false)}>{$trad("common.cancel")}</button>
             </div>
           </div>
         {/if}
@@ -437,14 +438,14 @@ You are the **${name}** agent.
                   <div class="item-actions">
                     <button
                       class="action-btn"
-                      title="Renommer"
+                      title={$trad("common.rename")}
                       onclick={() => {
                         renamePluginName = p.name;
                         renamePluginOpen = p.name;
                       }}>✎</button>
                     <button
                       class="action-btn danger"
-                      title="Supprimer"
+                      title={$trad("common.delete")}
                       onclick={() => doDeletePlugin(p.name)}>×</button>
                   </div>
                 {/if}
@@ -452,7 +453,7 @@ You are the **${name}** agent.
             </li>
           {/each}
           {#if plugins.length === 0}
-            <li class="empty">Aucun plugin dans ce marketplace.</li>
+            <li class="empty">{$trad("agents.noPlugin")}</li>
           {/if}
         </ul>
       </div>
@@ -467,25 +468,25 @@ You are the **${name}** agent.
             <button
               class="btn-small"
               onclick={() => (newAgentOpen = !newAgentOpen)}
-              title="Nouvel agent">+</button>
+              title={$trad("agents.newAgent")}>+</button>
           {/if}
         </div>
         {#if newAgentOpen && selectedPlugin && isEditable}
           <div class="form-block">
             <input
-              placeholder="nouvel-agent"
+              placeholder={$trad("agents.newAgent")}
               bind:value={newAgentName}
               onkeydown={(e) => {
                 if (e.key === "Enter") createNewAgent();
               }} />
             <div class="form-actions">
-              <button class="btn-primary" onclick={createNewAgent}>Creer</button>
-              <button onclick={() => (newAgentOpen = false)}>Annuler</button>
+              <button class="btn-primary" onclick={createNewAgent}>{$trad("agents.create")}</button>
+              <button onclick={() => (newAgentOpen = false)}>{$trad("common.cancel")}</button>
             </div>
           </div>
         {/if}
         {#if !selectedPlugin}
-          <p class="empty">Selectionne un plugin a gauche.</p>
+          <p class="empty">{$trad("agents.selectPlugin")}</p>
         {:else}
           <ul class="item-list">
             {#each agents as a}
@@ -499,7 +500,7 @@ You are the **${name}** agent.
               </li>
             {/each}
             {#if agents.length === 0}
-              <li class="empty">Aucun agent dans ce plugin.</li>
+              <li class="empty">{$trad("agents.noAgent")}</li>
             {/if}
           </ul>
         {/if}
@@ -525,14 +526,14 @@ You are the **${name}** agent.
                   ? " *"
                   : ""}
                 {#if !isEditable}
-                  <span class="readonly-badge">lecture seule</span>
+                  <span class="readonly-badge">{$trad("agents.readOnly")}</span>
                 {/if}
               </h3>
               <div class="editor-actions">
                 {#if isEditable}
                   <button
                     class="action-btn"
-                    title="Renommer"
+                    title={$trad("common.rename")}
                     onclick={() => {
                       renameAgentName = selectedAgent!;
                       renameAgentOpen = true;
@@ -542,7 +543,7 @@ You are the **${name}** agent.
                     onclick={save}
                     disabled={!dirty || saving}
                     >{saving ? "…" : "Sauvegarder"}</button>
-                  <button class="btn-danger" onclick={doDeleteAgent}>Supprimer</button>
+                  <button class="btn-danger" onclick={doDeleteAgent}>{$trad("common.delete")}</button>
                 {/if}
               </div>
             {/if}

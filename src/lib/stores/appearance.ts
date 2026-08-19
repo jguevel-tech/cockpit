@@ -1,6 +1,7 @@
 import { writable, derived, get } from "svelte/store";
 import { setWallpaper, getWallpaper, clearWallpaper } from "../api/appearance";
 import { notify } from "./toast";
+import type { translate } from "../i18n";
 
 /**
  * Apparence : palette, accent personnalise, image de fond.
@@ -9,12 +10,14 @@ import { notify } from "./toast";
  * - la classe `html.dark` porte la BASE (sombre ou claire) — c'est elle que lit xterm
  * - l'attribut `html[data-theme]` porte la PALETTE
  *
- * Ajouter une palette = un bloc dans theme.css + une entree dans THEMES ci-dessous.
+ * Ajouter une palette = un bloc dans theme.css + une entree dans THEMES ci-dessous
+ * + son libelle dans les deux catalogues de traduction.
  */
 
 export interface ThemeDef {
   id: string;
-  label: string;
+  /** Cle de traduction du libelle : le nom de la palette suit la langue choisie. */
+  labelKey: Parameters<typeof translate>[0];
   /** Determine `html.dark`, donc le theme du terminal. */
   base: "dark" | "light";
   /** Pastilles de l'apercu dans les reglages : fond, surface, accent. */
@@ -22,13 +25,13 @@ export interface ThemeDef {
 }
 
 export const THEMES: ThemeDef[] = [
-  { id: "dark", label: "Sombre", base: "dark", preview: ["#0e1015", "#161922", "#6d8dff"] },
-  { id: "midnight", label: "Bleu nuit", base: "dark", preview: ["#0a0f1e", "#111830", "#5b9dff"] },
-  { id: "plum", label: "Prune", base: "dark", preview: ["#14101c", "#1d182a", "#b57cff"] },
-  { id: "forest", label: "Forêt", base: "dark", preview: ["#0b1310", "#121d18", "#4fc98a"] },
-  { id: "ember", label: "Braise", base: "dark", preview: ["#14100d", "#1e1814", "#ff9d4d"] },
-  { id: "light", label: "Clair", base: "light", preview: ["#f6f7f9", "#ffffff", "#4f7cff"] },
-  { id: "paper", label: "Papier", base: "light", preview: ["#f7f4ee", "#fffdf8", "#b7791f"] },
+  { id: "dark", labelKey: "theme.dark", base: "dark", preview: ["#0e1015", "#161922", "#6d8dff"] },
+  { id: "midnight", labelKey: "theme.midnight", base: "dark", preview: ["#0a0f1e", "#111830", "#5b9dff"] },
+  { id: "plum", labelKey: "theme.plum", base: "dark", preview: ["#14101c", "#1d182a", "#b57cff"] },
+  { id: "forest", labelKey: "theme.forest", base: "dark", preview: ["#0b1310", "#121d18", "#4fc98a"] },
+  { id: "ember", labelKey: "theme.ember", base: "dark", preview: ["#14100d", "#1e1814", "#ff9d4d"] },
+  { id: "light", labelKey: "theme.light", base: "light", preview: ["#f6f7f9", "#ffffff", "#4f7cff"] },
+  { id: "paper", labelKey: "theme.paper", base: "light", preview: ["#f7f4ee", "#fffdf8", "#b7791f"] },
 ];
 
 const DEFAULTS = {

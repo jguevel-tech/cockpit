@@ -8,6 +8,7 @@
   import CommandList from "./CommandList.svelte";
   import type { DbProject } from "../../types";
   import { onMount } from "svelte";
+  import { trad } from "../../i18n";
 
   let { name }: { name: string } = $props();
 
@@ -26,7 +27,7 @@
       composeFile = settings.compose_file;
       description = settings.description;
       dependsOnStr = settings.depends_on.join(", ");
-    } catch (e) { notify(`Chargement des paramètres impossible : ${String(e)}`); }
+    } catch (e) { notify($trad("projectSettings.loadFailed", { error: String(e) })); }
     try { summaryPrompt = (await getProjectSummaryPrompt(name)) ?? ""; } catch (e) { notify(String(e)); }
   });
 
@@ -37,7 +38,7 @@
       await updateProjectSettings(name, path, composeFile, description, deps);
       await setProjectSummaryPrompt(name, summaryPrompt.trim() || null);
       await loadProjects();
-      notify("Paramètres sauvegardés", "success");
+      notify($trad("projectSettings.saved"), "success");
     } catch(e) { notify(String(e)); }
     finally { saving = false; }
   }
@@ -45,7 +46,7 @@
   let deleting = $state(false);
   async function deleteProject() {
     if (!settings) return;
-    if (!confirm(`Supprimer entièrement le projet « ${name} » et toutes ses données de Cockpit (notes, todos, URLs, terminaux, enregistrements) ?\n\nLes fichiers sur le disque ne sont pas touchés.`)) return;
+    if (!confirm($trad("projectSettings.deleteConfirmFull", { name }))) return;
     deleting = true;
     try {
       await deleteDbProject(settings.id);
@@ -59,42 +60,42 @@
 <div class="settings-tab">
   <div class="settings-layout">
     <div class="settings-form card">
-      <h3>Parametres de {name}</h3>
+      <h3>{$trad("projectSettings.title", { name })}</h3>
 
       <label>
-        Chemin
+        {$trad("projectSettings.path")}
         <input type="text" bind:value={path} />
       </label>
 
       <label>
-        Fichier Compose
+        {$trad("projectSettings.composeFile")}
         <input type="text" bind:value={composeFile} placeholder="docker-compose.yml" />
       </label>
 
       <label>
-        Description
+        {$trad("projectSettings.description")}
         <textarea bind:value={description} rows="3"></textarea>
       </label>
 
       <label>
-        Dependances (separees par des virgules)
-        <input type="text" bind:value={dependsOnStr} placeholder="projet1, projet2" />
+        {$trad("projectSettings.dependencies")}
+        <input type="text" bind:value={dependsOnStr} placeholder={$trad("projectSettings.dependenciesPlaceholder")} />
       </label>
 
       <label>
-        Prompt de résumé de réunion (laisser vide pour utiliser le prompt global)
-        <textarea bind:value={summaryPrompt} rows="6" placeholder="Prompt global utilisé si vide"></textarea>
+        {$trad("projectSettings.summaryPrompt")}
+        <textarea bind:value={summaryPrompt} rows="6" placeholder={$trad("projectSettings.summaryPromptPlaceholder")}></textarea>
       </label>
 
       <button class="btn-save" onclick={save} disabled={saving}>
-        {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+        {saving ? $trad("projectSettings.saving") : $trad("common.save")}
       </button>
 
       <div class="danger-zone">
-        <h4>Zone de danger</h4>
-        <p>Retire le projet et toutes ses données de Cockpit. Les fichiers sur le disque ne sont pas touchés.</p>
+        <h4>{$trad("projectSettings.dangerZone")}</h4>
+        <p>{$trad("projectSettings.dangerHelp")}</p>
         <button class="btn-delete" onclick={deleteProject} disabled={deleting}>
-          {deleting ? 'Suppression...' : 'Supprimer ce projet'}
+          {deleting ? $trad("projectSettings.deleting") : $trad("projectSettings.delete")}
         </button>
       </div>
     </div>

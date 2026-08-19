@@ -795,7 +795,7 @@
             {$trad("term.claudeNewSession")}
           </button>
           {#if claudeLoading}
-            <div class="claude-item muted">Chargement…</div>
+            <div class="claude-item muted">{$trad("common.loading")}</div>
           {:else if claudeSessions.length === 0}
             <div class="claude-item muted">{$trad("term.noPastConversation")}</div>
           {:else}

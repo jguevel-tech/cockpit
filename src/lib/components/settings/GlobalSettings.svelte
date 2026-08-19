@@ -182,7 +182,7 @@
   }
 
   async function doDelete(id: number) {
-    if (!confirm("Supprimer ce projet ?")) return;
+    if (!confirm($trad("settings.projects.deleteConfirm"))) return;
     try { await deleteDbProject(id); await loadDbProjects(); await loadProjects(); } catch(e) { alert(e); }
   }
 </script>
@@ -279,7 +279,7 @@
             <p>{$trad("settings.import.subtitle")}</p>
           </div>
           <div class="inline-row">
-            <input type="text" bind:value={importPath} placeholder="/chemin/vers/data.db" spellcheck="false" />
+            <input type="text" bind:value={importPath} placeholder={$trad("settings.import.pathPlaceholder")} spellcheck="false" />
             <button class="btn primary" onclick={doImport} disabled={importing}>
               {importing ? $trad("settings.import.running") : $trad("settings.import.button")}
             </button>
@@ -300,47 +300,45 @@
       {:else if view === "claude"}
         <section class="card">
           <div class="card-head">
-            <h3>Connexion à l'abonnement Claude</h3>
-            <p>Utilisée par les fonctionnalités IA (suggestions de commande…) via la CLI Claude Code — aucune clé API nécessaire.</p>
+            <h3>{$trad("settings.claude.title")}</h3>
+            <p>{$trad("settings.claude.subtitle")}</p>
           </div>
           {#if claudeStatus}
             <div class="claude-status-row">
               {#if !claudeStatus.cli_installed}
-                <span class="badge off">CLI claude introuvable</span>
+                <span class="badge off">{$trad("settings.claude.cliMissing")}</span>
               {:else if claudeStatus.logged_in}
-                <span class="badge on">✓ Connecté</span>
+                <span class="badge on">{$trad("settings.claude.connected")}</span>
                 {#if claudeStatus.subscription_type}
-                  <span class="detail">abonnement <strong>{claudeStatus.subscription_type}</strong></span>
+                  <span class="detail">{$trad("settings.claude.subscription")} <strong>{claudeStatus.subscription_type}</strong></span>
                 {/if}
                 {#if claudeStatus.rate_limit_tier}
-                  <span class="detail">tier {claudeStatus.rate_limit_tier}</span>
+                  <span class="detail">{$trad("settings.claude.tier", { tier: claudeStatus.rate_limit_tier })}</span>
                 {/if}
                 {#if claudeStatus.expires_at}
-                  <span class="detail">token valide jusqu'au {expiryLabel(claudeStatus.expires_at)}</span>
+                  <span class="detail">{$trad("settings.claude.tokenValidUntil", { date: expiryLabel(claudeStatus.expires_at) })}</span>
                 {/if}
               {:else}
-                <span class="badge off">Non connecté</span>
+                <span class="badge off">{$trad("settings.claude.notConnected")}</span>
               {/if}
               {#if claudeStatus.cli_version}
                 <span class="detail muted">{claudeStatus.cli_version}</span>
               {/if}
-              <button class="icon-btn" onclick={refreshClaudeStatus} title="Rafraîchir">↻</button>
+              <button class="icon-btn" onclick={refreshClaudeStatus} title={$trad("common.refresh")}>↻</button>
             </div>
 
             {#if !loginActive}
               <button class="btn primary" onclick={beginLogin} disabled={!claudeStatus.cli_installed}>
-                {claudeStatus.logged_in ? "Régénérer la connexion (setup-token)" : "Se connecter à l'abonnement Claude"}
+                {claudeStatus.logged_in ? $trad("settings.claude.regenerate") : $trad("settings.claude.connect")}
               </button>
             {:else}
               <div class="login-flow">
                 <div class="login-steps">
-                  1. Clique sur « Ouvrir le navigateur » et autorise l'accès —
-                  2. Copie le code affiché —
-                  3. Colle-le ci-dessous et valide
+                  {$trad("settings.claude.steps")}
                 </div>
                 {#if loginUrl}
                   <button class="btn primary" onclick={() => openUrl(loginUrl!)}>
-                    🌐 Ouvrir le navigateur
+                    {$trad("settings.claude.openBrowser")}
                   </button>
                 {/if}
                 <pre class="login-log">{loginLog || "Démarrage de claude setup-token…"}</pre>
@@ -349,12 +347,12 @@
                     type="text"
                     class="mono"
                     bind:value={loginCode}
-                    placeholder="Colle ici le code d'autorisation"
+                    placeholder={$trad("settings.claude.codePlaceholder")}
                     spellcheck="false"
                     onkeydown={(e) => e.key === "Enter" && sendLoginCode()}
                   />
-                  <button class="btn primary" onclick={sendLoginCode}>Valider</button>
-                  <button class="btn danger" onclick={abortLogin}>Annuler</button>
+                  <button class="btn primary" onclick={sendLoginCode}>{$trad("settings.claude.validate")}</button>
+                  <button class="btn danger" onclick={abortLogin}>{$trad("common.cancel")}</button>
                 </div>
               </div>
             {/if}
@@ -364,39 +362,39 @@
       {:else if view === "meetings"}
         <section class="card">
           <div class="card-head">
-            <h3>Transcription &amp; résumé de réunions</h3>
-            <p>Pipeline du bouton ⏺ : capture micro + son système, transcription Whisper, résumé par LLM déposé dans une note du projet.</p>
+            <h3>{$trad("settings.meetings.title")}</h3>
+            <p>{$trad("settings.meetings.subtitle")}</p>
           </div>
           <label class="field">
-            Clé API OpenAI
+            {$trad("settings.meetings.apiKey")}
             <input type="text" class="mono" bind:value={apiKey} placeholder="sk-..." autocomplete="off" spellcheck="false" />
-            <span class="field-hint">Utilisée pour la transcription (whisper-1) et le résumé.</span>
+            <span class="field-hint">{$trad("settings.meetings.apiKeyHint")}</span>
           </label>
           <label class="field">
-            Modèle de résumé
+            {$trad("settings.meetings.model")}
             <input type="text" class="short" bind:value={summaryModel} placeholder="gpt-4o" spellcheck="false" />
           </label>
           <label class="field">
-            Prompt système du résumé
+            {$trad("settings.meetings.prompt")}
             <textarea bind:value={summaryPrompt} rows="12"></textarea>
-            <span class="field-hint">Pilote le niveau de détail du compte rendu. Surchargeable par projet dans ses paramètres.</span>
+            <span class="field-hint">{$trad("settings.meetings.promptHint")}</span>
           </label>
           <div class="actions-row">
             <button class="btn primary" onclick={saveMeetingSettings} disabled={meetingSaving}>
-              {meetingSaving ? 'Sauvegarde…' : 'Sauvegarder'}
+              {meetingSaving ? $trad("projectSettings.saving") : $trad("common.save")}
             </button>
-            {#if meetingSaved}<span class="feedback">✓ Enregistré</span>{/if}
+            {#if meetingSaved}<span class="feedback">{$trad("settings.meetings.saved")}</span>{/if}
           </div>
         </section>
 
       {:else}
         <section class="card">
           <div class="card-head">
-            <h3>Projets enregistrés <span class="count">{dbProjects.length}</span></h3>
-            <p>Les projets suivis par Cockpit. La suppression retire le projet de Cockpit sans toucher aux fichiers sur le disque.</p>
+            <h3>{$trad("settings.projects.title")} <span class="count">{dbProjects.length}</span></h3>
+            <p>{$trad("settings.projects.subtitle")}</p>
           </div>
           <table>
-            <thead><tr><th>Nom</th><th>Chemin</th><th>Compose</th><th></th></tr></thead>
+            <thead><tr><th>{$trad("settings.projects.colName")}</th><th>{$trad("settings.projects.colPath")}</th><th>{$trad("settings.projects.colCompose")}</th><th></th></tr></thead>
             <tbody>
               {#each dbProjects as p (p.id)}
                 <tr>
@@ -404,7 +402,7 @@
                   <td class="path-cell">{p.path}</td>
                   <td>{p.compose_file || '—'}</td>
                   <td class="actions-cell">
-                    <button class="btn danger small" onclick={() => doDelete(p.id)}>Supprimer</button>
+                    <button class="btn danger small" onclick={() => doDelete(p.id)}>{$trad("common.delete")}</button>
                   </td>
                 </tr>
               {/each}

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Modal from "../ui/Modal.svelte";
   import { containerLogs } from "../../api/docker";
+  import { trad } from "../../i18n";
 
   let { id, name, onClose }: { id: string; name: string; onClose: () => void } = $props();
 
@@ -51,14 +52,14 @@
     <button class="btn small" class:primary={follow} onclick={() => setFollow(!follow)}>
       {follow ? "⏸ Suivi actif" : "▶ Suivre"}
     </button>
-    <button class="btn small" onclick={refresh}>↻ Rafraîchir</button>
+    <button class="btn small" onclick={refresh}>{$trad("logs.refresh")}</button>
   </div>
   {#if error}
     <p class="logs-error">{error}</p>
   {:else if loading}
-    <p class="logs-empty">Chargement…</p>
+    <p class="logs-empty">{$trad("common.loading")}</p>
   {:else if !text}
-    <p class="logs-empty">Aucun log pour ce conteneur.</p>
+    <p class="logs-empty">{$trad("logs.empty")}</p>
   {:else}
     <pre bind:this={preEl}>{text}</pre>
   {/if}

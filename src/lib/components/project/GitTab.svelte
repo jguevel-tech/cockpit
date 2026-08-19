@@ -8,6 +8,7 @@
   } from "../../api/workspace";
   import type { GitStatus, GitStatusEntry, FileDiff, BranchInfo, CommitInfo } from "../../types";
   import { notify } from "../../stores/toast";
+  import { trad } from "../../i18n";
 
   let { name }: { name: string } = $props();
 
@@ -124,7 +125,7 @@
     } catch (e) {
       // Branche sans upstream : proposer --set-upstream
       const msg = String(e);
-      if (/upstream/i.test(msg) && confirm("Aucun upstream. Pousser avec --set-upstream origin ?")) {
+      if (/upstream/i.test(msg) && confirm($trad("git.noUpstreamConfirm"))) {
         try { await gitPush(project.path, true); await refresh(); } catch (e2) { notify(String(e2)); }
       } else {
         notify(String(e));
@@ -195,12 +196,12 @@
   async function deleteBranch(b: BranchInfo, e: MouseEvent) {
     e.stopPropagation();
     if (!project?.path || b.current) return;
-    if (!confirm(`Supprimer la branche « ${b.name} » ?`)) return;
+    if (!confirm($trad("git.deleteBranchConfirm", { name: b.name }))) return;
     try {
       await gitDeleteBranch(project.path, b.name, false);
     } catch (err) {
       // Non mergee : proposer le force delete
-      if (confirm(`« ${b.name} » n'est pas totalement mergée. Forcer la suppression (-D) ?`)) {
+      if (confirm($trad("git.forceDeleteConfirm", { name: b.name }))) {
         try { await gitDeleteBranch(project.path, b.name, true); } catch (e2) { notify(String(e2)); return; }
       } else return;
     }
@@ -224,7 +225,7 @@
                   {b.current ? "● " : ""}{b.name}
                 </button>
                 {#if !b.current}
-                  <button class="branch-del" title="Supprimer la branche" onclick={(e) => deleteBranch(b, e)}>🗑</button>
+                  <button class="branch-del" title={$trad("git.deleteBranch")} onclick={(e) => deleteBranch(b, e)}>🗑</button>
                 {/if}
               </div>
             {/each}
@@ -233,13 +234,13 @@
               <input
                 class="branch-new-input"
                 bind:value={newBranchName}
-                placeholder="nom/nouvelle-branche"
+                placeholder={$trad("git.newBranchPlaceholder")}
                 spellcheck="false"
                 autofocus
                 onkeydown={(e) => { if (e.key === "Enter") createBranch(); if (e.key === "Escape") creatingBranch = false; }}
               />
             {:else}
-              <button class="branch-new" onclick={() => (creatingBranch = true)}>+ Nouvelle branche</button>
+              <button class="branch-new" onclick={() => (creatingBranch = true)}>{$trad("git.newBranch")}</button>
             {/if}
           </div>
         {/if}
@@ -250,7 +251,7 @@
           <span class="stat-add">+{status.total_additions}</span>
           <span class="stat-del">−{status.total_deletions}</span>
         </div>
-        <button class="pull-btn" onclick={doPull} disabled={!!busy} title="git pull --ff-only">
+        <button class="pull-btn" onclick={doPull} disabled={!!busy} title={$trad("git.pullHint")}>
           {busy === "pull" ? "Pull…" : "⬇ Pull"}
           {#if status.behind}<span class="ahead">{status.behind}</span>{/if}
         </button>
@@ -258,28 +259,28 @@
           {busy === "push" ? "Push…" : "⬆ Push"}
           {#if status.ahead}<span class="ahead">{status.ahead}</span>{/if}
         </button>
-        <button class="icon-btn" onclick={refresh} disabled={loadingStatus} title="Rafraîchir">↻</button>
+        <button class="icon-btn" onclick={refresh} disabled={loadingStatus} title={$trad("common.refresh")}>↻</button>
       {/if}
     </div>
 
     {#if statusError}
       <p class="git-msg error">{statusError}</p>
     {:else if status && !status.is_repo}
-      <p class="git-msg">Ce projet n'est pas un dépôt git.</p>
+      <p class="git-msg">{$trad("git.notARepo")}</p>
     {:else if status}
       <div class="git-views">
-        <button class:active={view === "changes"} onclick={() => showView("changes")}>Modifications</button>
-        <button class:active={view === "history"} onclick={() => showView("history")}>Historique</button>
+        <button class:active={view === "changes"} onclick={() => showView("changes")}>{$trad("git.changes")}</button>
+        <button class:active={view === "history"} onclick={() => showView("history")}>{$trad("git.history")}</button>
       </div>
 
       {#if view === "history"}
         <div class="commit-list">
           {#if loadingCommits}
-            <p class="git-msg">Chargement…</p>
+            <p class="git-msg">{$trad("common.loading")}</p>
           {:else if commitsError}
             <p class="git-msg error">{commitsError}</p>
           {:else if commits.length === 0}
-            <p class="git-msg">Aucun commit.</p>
+            <p class="git-msg">{$trad("git.noCommit")}</p>
           {:else}
             {#each commits as c (c.full_hash)}
               <button class="commit-row" class:selected={selectedCommit?.full_hash === c.full_hash} onclick={() => openCommit(c)}>
@@ -302,8 +303,8 @@
         <!-- Staged -->
         {#if stagedFiles.length > 0}
           <div class="group-head">
-            <span>Indexé ({stagedFiles.length})</span>
-            <button class="link-btn" onclick={unstageAll} disabled={!!busy}>Tout désindexer</button>
+            <span>{$trad("git.staged")} ({stagedFiles.length})</span>
+            <button class="link-btn" onclick={unstageAll} disabled={!!busy}>{$trad("git.unstageAll")}</button>
           </div>
           {#each stagedFiles as f (f.path)}
             <div class="git-file staged" class:selected={selectedPath === f.path}>
@@ -312,7 +313,7 @@
                 <span class="git-path" title={f.path}>{f.path}</span>
                 <span class="file-stat"><span class="stat-add">+{f.additions}</span> <span class="stat-del">−{f.deletions}</span></span>
               </button>
-              <button class="stage-btn" title="Désindexer" onclick={() => unstage(f)} disabled={!!busy}>−</button>
+              <button class="stage-btn" title={$trad("git.unstage")} onclick={() => unstage(f)} disabled={!!busy}>−</button>
             </div>
           {/each}
         {/if}
@@ -320,8 +321,8 @@
         <!-- Unstaged -->
         {#if unstagedFiles.length > 0}
           <div class="group-head">
-            <span>Modifications ({unstagedFiles.length})</span>
-            <button class="link-btn" onclick={stageAll} disabled={!!busy}>Tout indexer</button>
+            <span>{$trad("git.changes")} ({unstagedFiles.length})</span>
+            <button class="link-btn" onclick={stageAll} disabled={!!busy}>{$trad("git.stageAll")}</button>
           </div>
           {#each unstagedFiles as f (f.path)}
             <div class="git-file" class:selected={selectedPath === f.path}>
@@ -330,13 +331,13 @@
                 <span class="git-path" title={f.path}>{f.path}</span>
                 <span class="file-stat"><span class="stat-add">+{f.additions}</span> <span class="stat-del">−{f.deletions}</span></span>
               </button>
-              <button class="stage-btn add" title="Indexer" onclick={() => stage(f)} disabled={!!busy}>+</button>
+              <button class="stage-btn add" title={$trad("git.stage")} onclick={() => stage(f)} disabled={!!busy}>+</button>
             </div>
           {/each}
         {/if}
 
         {#if status.files.length === 0}
-          <p class="git-msg">✓ Aucun changement</p>
+          <p class="git-msg">{$trad("git.noChange")}</p>
         {/if}
       </div>
 
@@ -345,7 +346,7 @@
         <div class="commit-box">
           <textarea
             bind:value={commitMsg}
-            placeholder="Message de commit…"
+            placeholder={$trad("git.commitPlaceholder")}
             rows="2"
             onkeydown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doCommit(); }}
           ></textarea>
@@ -367,9 +368,9 @@
           <span class="diff-stats">{selectedCommit.author} · {relativeTime(selectedCommit.epoch)}</span>
         </div>
         {#if loadingCommitDiff}
-          <p class="git-msg">Chargement…</p>
+          <p class="git-msg">{$trad("common.loading")}</p>
         {:else if commitFiles.length === 0}
-          <p class="git-msg">Pas de différence de contenu dans ce commit.</p>
+          <p class="git-msg">{$trad("git.noDiffInCommit")}</p>
         {:else}
           {#each commitFiles as file (file.path)}
             <div class="commit-file-head">
@@ -400,7 +401,7 @@
           {/each}
         {/if}
       {:else}
-        <div class="diff-empty">Sélectionne un commit pour voir son contenu</div>
+        <div class="diff-empty">{$trad("git.selectCommit")}</div>
       {/if}
     {:else if selectedPath}
       <div class="diff-header">
@@ -413,11 +414,11 @@
         {/if}
       </div>
       {#if loadingDiff}
-        <p class="git-msg">Chargement…</p>
+        <p class="git-msg">{$trad("common.loading")}</p>
       {:else if diffError}
         <p class="git-msg error">{diffError}</p>
       {:else if diff && diff.hunks.length === 0}
-        <p class="git-msg">Pas de différence de contenu (déjà indexé, mode/permissions ou fichier vide).</p>
+        <p class="git-msg">{$trad("git.noDiffContent")}</p>
       {:else if diff}
         <table class="diff-table">
           <tbody>
@@ -439,7 +440,7 @@
         </table>
       {/if}
     {:else}
-      <div class="diff-empty">Sélectionne un fichier modifié pour voir le diff</div>
+      <div class="diff-empty">{$trad("git.selectFile")}</div>
     {/if}
   </div>
 </div>

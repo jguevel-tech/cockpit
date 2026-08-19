@@ -9,6 +9,7 @@
   import { notify } from "../../stores/toast";
   import ContainerLogsModal from "../docker/ContainerLogsModal.svelte";
   import type { DockerContainer, DiskUsage, DockerVolume, DockerImage } from "../../types";
+  import { trad } from "../../i18n";
 
   let containers: DockerContainer[] = $state([]);
   let logsFor: DockerContainer | null = $state(null);
@@ -59,7 +60,7 @@
 
   async function doContainerAction(c: DockerContainer, action: "start" | "stop" | "restart" | "remove") {
     if (containerBusy) return;
-    if (action === "remove" && !confirm(`Supprimer le conteneur « ${c.name} » ?`)) return;
+    if (action === "remove" && !confirm($trad("cont.deleteContainerConfirm", { name: c.name }))) return;
     containerBusy = c.id + action;
     try { await containerAction(c.id, action); await loadContainers(); }
     catch (e) { notify(String(e)); }
@@ -80,22 +81,22 @@
   }
 
   async function doRemoveVolume(v: DockerVolume) {
-    if (!confirm(`Supprimer le volume « ${v.name} » ? Les données qu'il contient seront perdues.`)) return;
+    if (!confirm($trad("cont.deleteVolumeConfirm", { name: v.name }))) return;
     try { await removeDockerVolume(v.name); await loadVolumes(); await loadContainers(); } catch (e) { notify(String(e)); }
   }
   async function doRemoveImage(img: DockerImage) {
-    if (!confirm(`Supprimer l'image « ${img.repository}:${img.tag} » ?`)) return;
+    if (!confirm($trad("cont.deleteImageConfirm", { name: `${img.repository}:${img.tag}` }))) return;
     try { await removeDockerImage(img.id); await loadImages(); await loadContainers(); } catch (e) { notify(String(e)); }
   }
 
   async function doPrune(target: "containers" | "images" | "images_all" | "volumes" | "builder", label: string) {
     if (pruning) return;
-    if (!confirm(`Nettoyer : ${label} ?`)) return;
+    if (!confirm($trad("cont.pruneConfirm", { label }))) return;
     pruning = target;
     try {
       const msg = await dockerPrune(target);
       const reclaimed = msg.match(/Total reclaimed space:\s*(.+)/i)?.[1] ?? "terminé";
-      notify(`Nettoyage effectué. Espace récupéré : ${reclaimed}`, "success");
+      notify($trad("cont.pruneDone", { reclaimed }), "success");
       await loadContainers();
       if (target === "volumes") await loadVolumes();
       if (target.startsWith("images")) await loadImages();
@@ -107,11 +108,11 @@
 <div class="containers-panel">
   <div class="panel-header">
     <div class="docker-tabs">
-      <button class:active={dockerTab === "containers"} onclick={() => (dockerTab = "containers")}>Conteneurs</button>
-      <button class:active={dockerTab === "volumes"} onclick={() => (dockerTab = "volumes")}>Volumes</button>
-      <button class:active={dockerTab === "images"} onclick={() => (dockerTab = "images")}>Images</button>
+      <button class:active={dockerTab === "containers"} onclick={() => (dockerTab = "containers")}>{$trad("cont.containers")}</button>
+      <button class:active={dockerTab === "volumes"} onclick={() => (dockerTab = "volumes")}>{$trad("cont.volumes")}</button>
+      <button class:active={dockerTab === "images"} onclick={() => (dockerTab = "images")}>{$trad("cont.images")}</button>
     </div>
-    <button class="metrics-btn" onclick={() => { loadContainers(); loadVolumes(); loadImages(); }} title="Rafraîchir">↻</button>
+    <button class="metrics-btn" onclick={() => { loadContainers(); loadVolumes(); loadImages(); }} title={$trad("common.refresh")}>↻</button>
   </div>
 
   <!-- Bandeau espace disque + prune -->
@@ -127,11 +128,11 @@
         </div>
       {/each}
       <div class="prune-actions">
-        <button disabled={!!pruning} onclick={() => doPrune("containers", "conteneurs arrêtés")}>Prune conteneurs</button>
-        <button disabled={!!pruning} onclick={() => doPrune("images", "images sans tag")}>Prune images</button>
-        <button disabled={!!pruning} onclick={() => doPrune("images_all", "toutes les images inutilisées")}>Prune images (tout)</button>
-        <button disabled={!!pruning} onclick={() => doPrune("volumes", "volumes non utilisés")}>Prune volumes</button>
-        <button disabled={!!pruning} onclick={() => doPrune("builder", "cache de build")}>Prune cache build</button>
+        <button disabled={!!pruning} onclick={() => doPrune("containers", "conteneurs arrêtés")}>{$trad("cont.pruneContainers")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("images", "images sans tag")}>{$trad("cont.pruneImages")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("images_all", "toutes les images inutilisées")}>{$trad("cont.pruneImagesAll")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("volumes", "volumes non utilisés")}>{$trad("cont.pruneVolumes")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("builder", "cache de build")}>{$trad("cont.pruneBuildCache")}</button>
       </div>
     </div>
   {/if}
@@ -140,9 +141,9 @@
     {#if containersError}
       <p class="empty error">{containersError}</p>
     {:else if !containersLoaded}
-      <p class="empty">Chargement…</p>
+      <p class="empty">{$trad("common.loading")}</p>
     {:else if containers.length === 0}
-      <p class="empty">Aucun conteneur Docker.</p>
+      <p class="empty">{$trad("cont.noContainer")}</p>
     {:else}
       {#each groupedContainers as group (group.project)}
         {@const running = group.list.filter((c) => c.state === "running").length}
@@ -150,9 +151,9 @@
           <div class="ctn-group-head">
             <span>{group.project} <span class="grp-count">{running}/{group.list.length}</span></span>
             <div class="grp-actions">
-              <button disabled={!!containerBusy} onclick={() => doGroupAction(group.list, "start")} title="Tout démarrer">▶ Tout</button>
-              <button disabled={!!containerBusy} onclick={() => doGroupAction(group.list, "stop")} title="Tout arrêter">⏹ Tout</button>
-              <button disabled={!!containerBusy} onclick={() => doGroupAction(group.list, "restart")} title="Tout redémarrer">⟳</button>
+              <button disabled={!!containerBusy} onclick={() => doGroupAction(group.list, "start")} title={$trad("cont.startAll")}>{$trad("cont.allStart")}</button>
+              <button disabled={!!containerBusy} onclick={() => doGroupAction(group.list, "stop")} title={$trad("cont.stopAll")}>{$trad("cont.allStop")}</button>
+              <button disabled={!!containerBusy} onclick={() => doGroupAction(group.list, "restart")} title={$trad("cont.restartAll")}>⟳</button>
             </div>
           </div>
           {#each group.list as c (c.id)}
@@ -164,13 +165,13 @@
               </div>
               <span class="ctn-status">{c.status}</span>
               <div class="ctn-actions">
-                <button title="Voir les logs" onclick={() => (logsFor = c)}>≡</button>
+                <button title={$trad("docker.logsHint")} onclick={() => (logsFor = c)}>≡</button>
                 {#if c.state === "running"}
-                  <button title="Redémarrer" disabled={!!containerBusy} onclick={() => doContainerAction(c, "restart")}>⟳</button>
-                  <button title="Arrêter" disabled={!!containerBusy} onclick={() => doContainerAction(c, "stop")}>⏹</button>
+                  <button title={$trad("cont.restart")} disabled={!!containerBusy} onclick={() => doContainerAction(c, "restart")}>⟳</button>
+                  <button title={$trad("cont.stop")} disabled={!!containerBusy} onclick={() => doContainerAction(c, "stop")}>⏹</button>
                 {:else}
-                  <button title="Démarrer" disabled={!!containerBusy} onclick={() => doContainerAction(c, "start")}>▶</button>
-                  <button title="Supprimer" class="danger" disabled={!!containerBusy} onclick={() => doContainerAction(c, "remove")}>🗑</button>
+                  <button title={$trad("cont.start")} disabled={!!containerBusy} onclick={() => doContainerAction(c, "start")}>▶</button>
+                  <button title={$trad("common.delete")} class="danger" disabled={!!containerBusy} onclick={() => doContainerAction(c, "remove")}>🗑</button>
                 {/if}
               </div>
             </div>
@@ -181,9 +182,9 @@
 
   {:else if dockerTab === "volumes"}
     {#if !volumesLoaded}
-      <p class="empty">Chargement…</p>
+      <p class="empty">{$trad("common.loading")}</p>
     {:else if volumes.length === 0}
-      <p class="empty">Aucun volume.</p>
+      <p class="empty">{$trad("cont.noVolume")}</p>
     {:else}
       {#each volumes as v (v.name)}
         <div class="ctn-row">
@@ -193,7 +194,7 @@
             <span class="ctn-meta">{v.driver}{#if v.dangling} · non utilisé{/if}</span>
           </div>
           <div class="ctn-actions">
-            <button title="Supprimer" class="danger" onclick={() => doRemoveVolume(v)}>🗑</button>
+            <button title={$trad("common.delete")} class="danger" onclick={() => doRemoveVolume(v)}>🗑</button>
           </div>
         </div>
       {/each}
@@ -201,9 +202,9 @@
 
   {:else}
     {#if !imagesLoaded}
-      <p class="empty">Chargement…</p>
+      <p class="empty">{$trad("common.loading")}</p>
     {:else if images.length === 0}
-      <p class="empty">Aucune image.</p>
+      <p class="empty">{$trad("cont.noImage")}</p>
     {:else}
       {#each images as img (img.id)}
         <div class="ctn-row">
@@ -214,7 +215,7 @@
           </div>
           <span class="ctn-status">{img.size}</span>
           <div class="ctn-actions">
-            <button title="Supprimer" class="danger" onclick={() => doRemoveImage(img)}>🗑</button>
+            <button title={$trad("common.delete")} class="danger" onclick={() => doRemoveImage(img)}>🗑</button>
           </div>
         </div>
       {/each}

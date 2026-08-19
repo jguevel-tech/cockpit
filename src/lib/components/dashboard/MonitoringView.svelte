@@ -2,6 +2,7 @@
   import { systemMetrics, cpuHistory, memoryHistory, metricsLive, refreshMetrics, startLiveMetrics, stopLiveMetrics } from "../../stores/system";
   import { formatBytes } from "../../utils/format";
   import type { SystemMetrics } from "../../types";
+  import { trad, translate } from "../../i18n";
 
   // Metrics shortcuts
   let metrics: SystemMetrics | null = $derived($systemMetrics);
@@ -16,15 +17,20 @@
   }
 
   function memoryBreakdown(m: SystemMetrics["memory"]) {
-    const items: { label: string; bytes: number; percent: number; color: string }[] = [];
+    const items: {
+      labelKey: Parameters<typeof translate>[0];
+      bytes: number;
+      percent: number;
+      color: string;
+    }[] = [];
     const processBytes = Math.max(0, m.used - m.cached - m.buffers - m.s_reclaimable - m.zfs_arc);
-    items.push({ label: "Processus", bytes: processBytes, percent: pct(processBytes, m.total), color: "var(--success)" });
+    items.push({ labelKey: "mon.processes", bytes: processBytes, percent: pct(processBytes, m.total), color: "var(--success)" });
     if (m.zfs_arc > 0) {
-      items.push({ label: "ZFS ARC", bytes: m.zfs_arc, percent: pct(m.zfs_arc, m.total), color: "#a855f7" });
+      items.push({ labelKey: "mon.zfsArc", bytes: m.zfs_arc, percent: pct(m.zfs_arc, m.total), color: "#a855f7" });
     }
-    items.push({ label: "Cache", bytes: m.cached, percent: pct(m.cached, m.total), color: "var(--accent)" });
-    items.push({ label: "Partage", bytes: m.shmem, percent: pct(m.shmem, m.total), color: "var(--error)" });
-    items.push({ label: "Buffers", bytes: m.buffers, percent: pct(m.buffers, m.total), color: "var(--warning)" });
+    items.push({ labelKey: "mon.cache", bytes: m.cached, percent: pct(m.cached, m.total), color: "var(--accent)" });
+    items.push({ labelKey: "mon.shared", bytes: m.shmem, percent: pct(m.shmem, m.total), color: "var(--error)" });
+    items.push({ labelKey: "mon.buffers", bytes: m.buffers, percent: pct(m.buffers, m.total), color: "var(--warning)" });
     return items;
   }
 
@@ -54,13 +60,13 @@
 
 <div class="monitoring-panel">
   <div class="monitoring-header">
-    <h3>Monitoring systeme</h3>
+    <h3>{$trad("mon.title")}</h3>
     <div class="metrics-controls">
-      <button class="metrics-btn" onclick={refreshMetrics} title="Snapshot unique">Snapshot</button>
+      <button class="metrics-btn" onclick={refreshMetrics} title={$trad("mon.snapshotHint")}>{$trad("sys.snapshot")}</button>
       {#if isLive}
-        <button class="metrics-btn live-active" onclick={stopLiveMetrics} title="Arreter le mode live">Live ■</button>
+        <button class="metrics-btn live-active" onclick={stopLiveMetrics} title={$trad("mon.liveStopHint")}>{$trad("sys.liveOn")}</button>
       {:else}
-        <button class="metrics-btn" onclick={startLiveMetrics} title="Rafraichir toutes les 3s">Live ▶</button>
+        <button class="metrics-btn" onclick={startLiveMetrics} title={$trad("mon.liveStartHint")}>{$trad("sys.liveOff")}</button>
       {/if}
     </div>
   </div>
@@ -93,7 +99,7 @@
 
       <div class="gauge-card">
         <div class="gauge-icon">▪</div>
-        <div class="gauge-title">MÉMOIRE</div>
+        <div class="gauge-title">{$trad("mon.memoryCaps")}</div>
         <svg viewBox="0 0 120 120" class="donut">
           <circle cx="60" cy="60" r="45" fill="none" stroke="var(--border-color)" stroke-width="10"/>
           <circle cx="60" cy="60" r="45" fill="none"
@@ -116,7 +122,7 @@
       {#each memoryBreakdown(metrics.memory) as item}
         <div class="mem-item">
           <span class="mem-dot" style="background:{item.color}"></span>
-          <span class="mem-label">{item.label}</span>
+          <span class="mem-label">{$trad(item.labelKey)}</span>
           <span class="mem-value">{formatBytes(item.bytes)}</span>
           <span class="mem-pct">{item.percent}%</span>
         </div>
@@ -136,7 +142,7 @@
     </div>
 
     <div class="chart-section">
-      <div class="chart-label">MÉMOIRE</div>
+      <div class="chart-label">{$trad("mon.memoryCaps")}</div>
       <svg viewBox="0 0 400 80" class="chart" preserveAspectRatio="none">
         {#each [25, 50, 75] as y}
           <line x1="0" y1={80 - (y / 100) * 80} x2="400" y2={80 - (y / 100) * 80}
@@ -149,19 +155,19 @@
 
     <div class="top-processes">
       <div class="top-tabs">
-        <button class="top-tab" class:active={showTopCpu} onclick={() => showTopCpu = true}>Top CPU</button>
-        <button class="top-tab" class:active={!showTopCpu} onclick={() => showTopCpu = false}>Top Mémoire</button>
+        <button class="top-tab" class:active={showTopCpu} onclick={() => showTopCpu = true}>{$trad("proc.topCpu")}</button>
+        <button class="top-tab" class:active={!showTopCpu} onclick={() => showTopCpu = false}>{$trad("proc.topMemory")}</button>
       </div>
       <table>
         <thead>
           <tr>
-            <th>PID</th>
-            <th>Nom</th>
-            <th>User</th>
-            <th>CPU%</th>
-            <th>Mem%</th>
-            <th>RSS</th>
-            {#if !showTopCpu}<th>Inst.</th>{/if}
+            <th>{$trad("proc.pid")}</th>
+            <th>{$trad("proc.name")}</th>
+            <th>{$trad("proc.user")}</th>
+            <th>{$trad("mon.cpuPct")}</th>
+            <th>{$trad("mon.memPct")}</th>
+            <th>{$trad("proc.rss")}</th>
+            {#if !showTopCpu}<th>{$trad("mon.inst")}</th>{/if}
           </tr>
         </thead>
         <tbody>
@@ -180,7 +186,7 @@
       </table>
     </div>
   {:else}
-    <div class="monitoring-loading">Cliquez sur Snapshot ou Live pour demarrer le monitoring</div>
+    <div class="monitoring-loading">{$trad("sys.startHint")}</div>
   {/if}
 </div>
 

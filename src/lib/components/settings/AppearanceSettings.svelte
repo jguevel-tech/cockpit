@@ -6,6 +6,7 @@
   } from "../../stores/appearance";
   import { readImageAsDataUrl } from "../../api/appearance";
   import { notify } from "../../stores/toast";
+  import { trad } from "../../i18n";
 
   let busy = $state(false);
   let deriveAccent = $state(true);
@@ -24,7 +25,7 @@
       // Rust lit et valide le fichier ; le frontend redimensionne et echantillonne la
       // couleur dominante (c'est lui qui a un canvas).
       await applyWallpaper(await readImageAsDataUrl(path), deriveAccent);
-      notify("Image de fond appliquée", "success");
+      notify($trad("appearance.wallpaperApplied"), "success");
     } catch (e) {
       notify(String(e));
     } finally {
@@ -35,16 +36,16 @@
 
 <section class="card">
   <div class="card-head">
-    <h3>Thème</h3>
-    <p>La palette s'applique à toute l'interface. Le terminal suit la base claire ou sombre.</p>
+    <h3>{$trad("appearance.theme")}</h3>
+    <p>{$trad("appearance.themeHelp")}</p>
   </div>
   <div class="themes">
     {#each THEMES as t}
-      <button class="swatch" class:active={$theme === t.id} onclick={() => theme.set(t.id)} title={t.label}>
+      <button class="swatch" class:active={$theme === t.id} onclick={() => theme.set(t.id)} title={$trad(t.labelKey)}>
         <span class="chips">
           {#each t.preview as c}<span class="chip" style:background={c}></span>{/each}
         </span>
-        <span class="swatch-label">{t.label}</span>
+        <span class="swatch-label">{$trad(t.labelKey)}</span>
       </button>
     {/each}
   </div>
@@ -52,8 +53,8 @@
 
 <section class="card">
   <div class="card-head">
-    <h3>Couleur d'accent</h3>
-    <p>Remplace l'accent de la palette. Utilisée pour les boutons, les liens et les états actifs.</p>
+    <h3>{$trad("appearance.accent")}</h3>
+    <p>{$trad("appearance.accentHelp")}</p>
   </div>
   <div class="inline-row">
     <input
@@ -61,22 +62,20 @@
       class="color-input"
       value={$accent ?? THEMES.find((t) => t.id === $theme)?.preview[2] ?? "#6d8dff"}
       oninput={(e) => accent.set(e.currentTarget.value)}
-      aria-label="Couleur d'accent"
+      aria-label={$trad("appearance.accent")}
     />
     <code class="mono-value">{$accent ?? "accent de la palette"}</code>
     {#if $accent}
-      <button class="btn small" onclick={() => accent.set(null)}>Réinitialiser</button>
+      <button class="btn small" onclick={() => accent.set(null)}>{$trad("common.reset")}</button>
     {/if}
   </div>
 </section>
 
 <section class="card">
   <div class="card-head">
-    <h3>Image de fond</h3>
+    <h3>{$trad("appearance.wallpaper")}</h3>
     <p>
-      L'image est redimensionnée et recompressée à l'import. Les surfaces deviennent translucides
-      pour laisser voir l'image — ajuste le voile, le flou de l'image et l'opacité ci-dessous
-      pour la lisibilité. Le terminal, lui, reste opaque.
+      {$trad("appearance.wallpaperHelpFull")}
     </p>
   </div>
 
@@ -89,34 +88,34 @@
       {busy ? "Traitement…" : $wallpaper ? "Changer l'image" : "Choisir une image"}
     </button>
     {#if $wallpaper}
-      <button class="btn danger" onclick={removeWallpaper}>Retirer</button>
+      <button class="btn danger" onclick={removeWallpaper}>{$trad("common.remove")}</button>
     {/if}
   </div>
 
   <label class="check">
     <input type="checkbox" bind:checked={deriveAccent} />
-    <span>Reprendre la couleur dominante de l'image comme accent</span>
+    <span>{$trad("appearance.useDominant")}</span>
   </label>
 
   {#if $wallpaper}
     <div class="sliders">
       <label>
-        <span class="slider-label">Voile <em>{Math.round($wallpaperDim * 100)} %</em></span>
+        <span class="slider-label">{$trad("appearance.dim")} <em>{Math.round($wallpaperDim * 100)} %</em></span>
         <input type="range" min="0" max="95" value={$wallpaperDim * 100}
           oninput={(e) => wallpaperDim.set(Number(e.currentTarget.value) / 100)} />
-        <span class="hint">Plus le voile est fort, plus le texte est lisible et l'image discrète.</span>
+        <span class="hint">{$trad("appearance.dimHelp")}</span>
       </label>
       <label>
-        <span class="slider-label">Flou de l'image <em>{$wallpaperBlur} px</em></span>
+        <span class="slider-label">{$trad("appearance.blur")} <em>{$wallpaperBlur} px</em></span>
         <input type="range" min="0" max="24" value={$wallpaperBlur}
           oninput={(e) => wallpaperBlur.set(Number(e.currentTarget.value))} />
-        <span class="hint">Un léger flou calme les images très détaillées.</span>
+        <span class="hint">{$trad("appearance.blurHelp")}</span>
       </label>
       <label>
-        <span class="slider-label">Opacité des surfaces <em>{$surfaceAlpha} %</em></span>
+        <span class="slider-label">{$trad("appearance.surfaceAlpha")} <em>{$surfaceAlpha} %</em></span>
         <input type="range" min="40" max="100" value={$surfaceAlpha}
           oninput={(e) => surfaceAlpha.set(Number(e.currentTarget.value))} />
-        <span class="hint">À 100 %, les panneaux redeviennent opaques et l'image n'apparaît qu'en fond.</span>
+        <span class="hint">{$trad("appearance.surfaceAlphaHelp")}</span>
       </label>
     </div>
   {/if}
@@ -124,10 +123,10 @@
 
 <section class="card">
   <div class="card-head">
-    <h3>Réinitialiser</h3>
-    <p>Revient au thème sombre par défaut, sans accent personnalisé. L'image n'est pas supprimée.</p>
+    <h3>{$trad("common.reset")}</h3>
+    <p>{$trad("appearance.resetHelp")}</p>
   </div>
-  <button class="btn" onclick={resetAppearance}>Réinitialiser l'apparence</button>
+  <button class="btn" onclick={resetAppearance}>{$trad("appearance.resetButton")}</button>
 </section>
 
 <style>

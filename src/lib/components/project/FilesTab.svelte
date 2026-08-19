@@ -11,6 +11,7 @@
   import CodeEditor from "../ui/CodeEditor.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { DefLocation, SearchResults, SearchNameHit, SearchContentHit } from "../../types";
+  import { trad } from "../../i18n";
 
   let { name }: { name: string } = $props();
 
@@ -52,7 +53,7 @@
   async function copyRelPath(rel: string) {
     try {
       await setClipboard(rel);
-      notify("Chemin copié", "success");
+      notify($trad("files.pathCopied"), "success");
     } catch (e) { notify(String(e)); }
   }
 
@@ -135,7 +136,7 @@
 
   async function openFileByPath(relPath: string) {
     if (!project?.path) return;
-    if (dirty && !confirm("Modifications non sauvegardées — les abandonner ?")) return;
+    if (dirty && !confirm($trad("files.discardConfirm"))) return;
     editing = false;
     selectedPath = relPath;
     loadingFile = true;
@@ -158,7 +159,7 @@
         return;
       }
       fileTruncated = f.truncated;
-      if (f.truncated) fileNotice = `Fichier tronqué à 2 Mo (taille réelle : ${formatSize(f.size)})`;
+      if (f.truncated) fileNotice = $trad("files.truncatedNotice", { size: formatSize(f.size) });
       fileRaw = f.content;
       fileHtml = await highlightCode(f.content, langFor(relPath), $themeBase === "dark");
     } catch (e) { fileNotice = String(e); }
@@ -173,14 +174,14 @@
 
   // --- Edition ---
   function startEdit() {
-    if (fileTruncated) { notify("Fichier tronqué à 2 Mo : édition désactivée"); return; }
+    if (fileTruncated) { notify($trad("files.truncated")); return; }
     if (!fileRaw && fileNotice) return;
     draft = fileRaw;
     editing = true;
   }
 
   function cancelEdit() {
-    if (dirty && !confirm("Modifications non sauvegardées — les abandonner ?")) return;
+    if (dirty && !confirm($trad("files.discardConfirm"))) return;
     editing = false;
   }
 
@@ -191,7 +192,7 @@
       await writeProjectFile(project.path, selectedPath, draft);
       fileRaw = draft;
       fileHtml = await highlightCode(draft, langFor(selectedPath), $themeBase === "dark");
-      notify("Fichier sauvegardé", "success");
+      notify($trad("files.saved"), "success");
     } catch (e) { notify(String(e)); }
     finally { saving = false; }
   }
@@ -294,7 +295,7 @@
         pos.line, pos.character, pos.symbol,
       );
       if (res.hits.length === 0) {
-        notify(`Définition introuvable pour « ${pos.symbol} »`, "info");
+        notify($trad("files.definitionNotFound", { symbol: pos.symbol }), "info");
       } else if (res.hits.length === 1) {
         await openAt(res.hits[0].rel_path, res.hits[0].line);
       } else {
@@ -399,7 +400,7 @@
 
   async function deleteEntry(node: TreeNode) {
     if (!project?.path) return;
-    if (!confirm(`Mettre « ${node.name} » à la corbeille ?`)) return;
+    if (!confirm($trad("files.trashConfirm", { name: node.name }))) return;
     try {
       await trashProjectEntry(project.path, node.rel_path);
       if (selectedPath === node.rel_path || selectedPath.startsWith(node.rel_path + "/")) {
@@ -673,11 +674,11 @@
 <div class="files-tab">
   <div class="files-tree">
     <div class="tree-header">
-      <span>Fichiers</span>
+      <span>{$trad("files.title")}</span>
       <span class="tree-header-actions">
-        <button class="tree-refresh" onclick={() => startCreate("", "file")} title="Nouveau fichier à la racine">+·</button>
-        <button class="tree-refresh" onclick={() => startCreate("", "dir")} title="Nouveau dossier à la racine">+▸</button>
-        <button class="tree-refresh" onclick={loadRoot} title="Rafraîchir">↻</button>
+        <button class="tree-refresh" onclick={() => startCreate("", "file")} title={$trad("files.newFileRoot")}>+·</button>
+        <button class="tree-refresh" onclick={() => startCreate("", "dir")} title={$trad("files.newFolderRoot")}>+▸</button>
+        <button class="tree-refresh" onclick={loadRoot} title={$trad("common.refresh")}>↻</button>
       </span>
     </div>
     <div class="global-search">
@@ -685,21 +686,21 @@
         bind:this={globalInputEl}
         bind:value={globalQuery}
         oninput={onGlobalInput}
-        placeholder="Rechercher dans le projet…"
-        title="Noms de dossiers, de fichiers et contenu (Ctrl+Maj+F)"
+        placeholder={$trad("files.searchPlaceholder")}
+        title={$trad("files.searchHint")}
         onkeydown={(e) => { if (e.key === "Escape") { clearGlobalSearch(); e.currentTarget.blur(); } }}
       />
       {#if globalQuery}
-        <button class="search-clear" onclick={clearGlobalSearch} title="Effacer la recherche">×</button>
+        <button class="search-clear" onclick={clearGlobalSearch} title={$trad("files.searchClear")}>×</button>
       {/if}
     </div>
     {#if globalQuery.trim().length >= 2}
       <div class="search-results">
-        {#if globalSearching}<p class="search-note">Recherche…</p>{/if}
+        {#if globalSearching}<p class="search-note">{$trad("files.searching")}</p>{/if}
         {#if globalError}<p class="tree-error">{globalError}</p>{/if}
         {#if globalResults}
           {#if globalResults.names.length === 0 && globalResults.contents.length === 0}
-            <p class="search-note">Aucun résultat</p>
+            <p class="search-note">{$trad("files.noResult")}</p>
           {/if}
           {#if globalResults.names.length > 0}
             <div class="search-section">Noms · {globalResults.names.length}</div>
@@ -735,7 +736,7 @@
             {/each}
           {/if}
           {#if globalResults.truncated}
-            <p class="search-note">Résultats limités — précise la recherche.</p>
+            <p class="search-note">{$trad("files.resultsTruncated")}</p>
           {/if}
         {/if}
       </div>
@@ -754,22 +755,22 @@
       <div class="viewer-header">
         <div class="viewer-header-row">
           <code>{selectedPath}</code>
-          <button class="icon-mini" onclick={copyPath} title="Copier le chemin">⧉</button>
-          {#if dirty}<span class="dirty-dot" title="Modifications non sauvegardées">●</span>{/if}
+          <button class="icon-mini" onclick={copyPath} title={$trad("files.copyPath")}>⧉</button>
+          {#if dirty}<span class="dirty-dot" title={$trad("files.unsaved")}>●</span>{/if}
           <span class="viewer-actions">
-            {#if defBusy}<span class="def-busy">définition…</span>{/if}
+            {#if defBusy}<span class="def-busy">{$trad("files.definitionBusy")}</span>{/if}
             {#if fileRaw && !editing}
-              <span class="file-stats">{lineCount} lignes · {formatSize(fileSize)}</span>
-              <button class="icon-mini" class:active={wrapLines} onclick={() => (wrapLines = !wrapLines)} title="Retour à la ligne automatique">⏎</button>
-              <button class="icon-mini" onclick={openFind} title="Rechercher dans le fichier (Ctrl+F)">🔍</button>
+              <span class="file-stats">{$trad("files.lines", { count: lineCount })} · {formatSize(fileSize)}</span>
+              <button class="icon-mini" class:active={wrapLines} onclick={() => (wrapLines = !wrapLines)} title={$trad("files.wrap")}>⏎</button>
+              <button class="icon-mini" onclick={openFind} title={$trad("files.findInFile")}>🔍</button>
             {/if}
             {#if editing}
               <button class="btn small primary" onclick={save} disabled={saving || !dirty} title="Ctrl+S">
-                {saving ? "Sauvegarde…" : "Sauvegarder"}
+                {saving ? $trad("files.saving") : $trad("files.save")}
               </button>
-              <button class="btn small" onclick={cancelEdit}>Lecture</button>
+              <button class="btn small" onclick={cancelEdit}>{$trad("files.read")}</button>
             {:else if fileRaw}
-              <button class="btn small" onclick={startEdit} title="Modifier le fichier">✎ Modifier</button>
+              <button class="btn small" onclick={startEdit} title={$trad("files.editHint")}>{$trad("files.edit")}</button>
             {/if}
           </span>
         </div>
@@ -778,24 +779,24 @@
             <input
               bind:this={findInputEl}
               bind:value={findQuery}
-              placeholder="Rechercher dans le fichier…"
+              placeholder={$trad("files.findPlaceholder")}
               class:no-match={findQuery.length > 0 && findMatches.length === 0}
               onkeydown={(e) => {
                 if (e.key === "Enter") { e.preventDefault(); findNext(e.shiftKey ? -1 : 1); }
                 else if (e.key === "Escape") closeFind();
               }}
             />
-            <button class="icon-mini" class:active={findCase} onclick={() => (findCase = !findCase)} title="Respecter la casse">Aa</button>
+            <button class="icon-mini" class:active={findCase} onclick={() => (findCase = !findCase)} title={$trad("files.matchCase")}>Aa</button>
             <span class="find-count">{findMatches.length ? `${findIdx + 1}/${findMatches.length}${findMatches.length >= 2000 ? "+" : ""}` : "0/0"}</span>
-            <button class="icon-mini" onclick={() => findNext(-1)} title="Occurrence précédente (Maj+Entrée)">↑</button>
-            <button class="icon-mini" onclick={() => findNext(1)} title="Occurrence suivante (Entrée)">↓</button>
-            <button class="icon-mini" onclick={closeFind} title="Fermer (Échap)">×</button>
+            <button class="icon-mini" onclick={() => findNext(-1)} title={$trad("files.prevMatch")}>↑</button>
+            <button class="icon-mini" onclick={() => findNext(1)} title={$trad("files.nextMatch")}>↓</button>
+            <button class="icon-mini" onclick={closeFind} title={$trad("files.closeFind")}>×</button>
           </div>
         {/if}
       </div>
       {#if fileNotice}<p class="viewer-notice">{fileNotice}</p>{/if}
       {#if loadingFile}
-        <p class="viewer-notice">Chargement…</p>
+        <p class="viewer-notice">{$trad("common.loading")}</p>
       {:else if fileImage}
         <div class="image-preview">
           <img src={fileImage} alt={selectedPath} />
@@ -825,7 +826,7 @@
         </div>
       {/if}
     {:else}
-      <div class="viewer-empty">Sélectionne un fichier pour voir son contenu</div>
+      <div class="viewer-empty">{$trad("files.selectFile")}</div>
     {/if}
   </div>
 </div>
@@ -838,15 +839,15 @@
     items={[
       ...(n === null || n.is_dir
         ? [
-            { label: "Nouveau fichier", action: () => startCreate(n?.rel_path ?? "", "file") },
-            { label: "Nouveau dossier", action: () => startCreate(n?.rel_path ?? "", "dir") },
+            { label: $trad("files.newFile"), action: () => startCreate(n?.rel_path ?? "", "file") },
+            { label: $trad("files.newFolder"), action: () => startCreate(n?.rel_path ?? "", "dir") },
           ]
         : []),
       ...(n !== null
         ? [
-            { label: "Renommer", action: () => (renamingPath = n.rel_path) },
-            { label: "Copier le chemin", action: () => copyRelPath(n.rel_path) },
-            { label: "Mettre à la corbeille", danger: true, action: () => deleteEntry(n) },
+            { label: $trad("common.rename"), action: () => (renamingPath = n.rel_path) },
+            { label: $trad("files.copyPath"), action: () => copyRelPath(n.rel_path) },
+            { label: $trad("files.trash"), danger: true, action: () => deleteEntry(n) },
           ]
         : []),
     ]}

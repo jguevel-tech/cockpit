@@ -8,6 +8,7 @@
   } from "../../api/agents";
   import { getProjectSettings } from "../../api/scanner";
   import type { PluginInfo } from "../../types";
+  import { trad } from "../../i18n";
 
   let { name }: { name: string } = $props();
 
@@ -66,24 +67,24 @@
 
 <div class="plugins-tab">
   {#if loading}
-    <p>Chargement…</p>
+    <p>{$trad("common.loading")}</p>
   {:else if errorMsg}
     <div class="error">{errorMsg}</div>
   {:else}
     <div class="info">
       <p>
-        Plugins du marketplace CCM activés pour <strong>{name}</strong>.
-        Active uniquement ce qui est utile à ce projet : moins de plugins → routage plus net.
+        {$trad("plugins.enabledFor")} <strong>{name}</strong>.
+        {$trad("plugins.advice")}
       </p>
       <p class="path">
-        Stocké dans <code>{projectPath}/.claude/settings.json</code>
+        {$trad("plugins.storedIn")} <code>{projectPath}/.claude/settings.json</code>
       </p>
     </div>
 
     {#if allPlugins.length === 0}
       <p class="empty">
-        Aucun plugin dans le marketplace.
-        Ouvre l'onglet <strong>Agents</strong> en haut pour en créer un.
+        {$trad("plugins.emptyMarketplace")}
+        {$trad("plugins.openTab")} <strong>{$trad("settings.menu.agents")}</strong> {$trad("plugins.emptyOpenAgents")}
       </p>
     {:else}
       <ul class="plugin-list">

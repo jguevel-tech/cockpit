@@ -1,6 +1,7 @@
 <script lang="ts">
   import { killProcess } from "../../api/system";
   import type { ProcessMetrics } from "../../types";
+  import { trad } from "../../i18n";
 
   let { topCpu, topMemory }: { topCpu: ProcessMetrics[]; topMemory: ProcessMetrics[] } = $props();
   let tab: "cpu" | "memory" = $state("cpu");
@@ -14,22 +15,22 @@
   }
 
   async function kill(pid: number) {
-    if (!confirm(`Tuer le processus ${pid} ?`)) return;
+    if (!confirm($trad("proc.killConfirm", { pid }))) return;
     try { await killProcess(pid); } catch(e) { alert(e); }
   }
 </script>
 
 <div class="processes">
   <div class="proc-tabs">
-    <button class:active={tab === 'cpu'} onclick={() => tab = 'cpu'}>Top CPU</button>
-    <button class:active={tab === 'memory'} onclick={() => tab = 'memory'}>Top Memoire</button>
+    <button class:active={tab === 'cpu'} onclick={() => tab = 'cpu'}>{$trad("proc.topCpu")}</button>
+    <button class:active={tab === 'memory'} onclick={() => tab = 'memory'}>{$trad("proc.topMemory")}</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>PID</th><th>Nom</th><th>User</th><th>CPU %</th><th>Mem %</th><th>RSS</th>
-        {#if tab === 'memory'}<th>Instances</th>{/if}
+        <th>{$trad("proc.pid")}</th><th>{$trad("proc.name")}</th><th>{$trad("proc.user")}</th><th>{$trad("proc.cpu")}</th><th>{$trad("proc.mem")}</th><th>{$trad("proc.rss")}</th>
+        {#if tab === 'memory'}<th>{$trad("proc.instances")}</th>{/if}
         <th></th>
       </tr>
     </thead>

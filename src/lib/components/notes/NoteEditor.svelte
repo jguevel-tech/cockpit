@@ -6,6 +6,7 @@
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { NoteFile } from "../../types";
+  import { trad } from "../../i18n";
 
   let {
     file,
@@ -89,20 +90,20 @@
       <span class="file-title" ondblclick={() => (renaming = true)}>{file.name}</span>
     {/if}
     <div class="toolbar">
-      <button class="tb" onclick={() => format("bold")} title="Gras"><b>G</b></button>
-      <button class="tb" onclick={() => format("italic")} title="Italique"><i>I</i></button>
-      <button class="tb" onclick={() => format("strikeThrough")} title="Barre"><s>S</s></button>
+      <button class="tb" onclick={() => format("bold")} title={$trad("note.bold")}><b>G</b></button>
+      <button class="tb" onclick={() => format("italic")} title={$trad("note.italic")}><i>I</i></button>
+      <button class="tb" onclick={() => format("strikeThrough")} title={$trad("note.strike")}><s>S</s></button>
       <span class="tb-sep"></span>
-      <button class="tb" onclick={() => insertHeading(1)} title="Titre 1">H1</button>
-      <button class="tb" onclick={() => insertHeading(2)} title="Titre 2">H2</button>
-      <button class="tb" onclick={() => insertHeading(3)} title="Titre 3">H3</button>
+      <button class="tb" onclick={() => insertHeading(1)} title={$trad("note.h1")}>H1</button>
+      <button class="tb" onclick={() => insertHeading(2)} title={$trad("note.h2")}>H2</button>
+      <button class="tb" onclick={() => insertHeading(3)} title={$trad("note.h3")}>H3</button>
       <span class="tb-sep"></span>
-      <button class="tb" onclick={() => format("insertUnorderedList")} title="Liste">•</button>
-      <button class="tb" onclick={() => format("insertOrderedList")} title="Liste numerotee">1.</button>
-      <button class="tb" onclick={() => format("formatBlock", "blockquote")} title="Citation">❝</button>
+      <button class="tb" onclick={() => format("insertUnorderedList")} title={$trad("note.list")}>•</button>
+      <button class="tb" onclick={() => format("insertOrderedList")} title={$trad("note.orderedList")}>1.</button>
+      <button class="tb" onclick={() => format("formatBlock", "blockquote")} title={$trad("note.quote")}>❝</button>
       <span class="tb-sep"></span>
-      <button class="tb" onclick={() => format("formatBlock", "pre")} title="Bloc de code">&lt;/&gt;</button>
-      <button class="tb" onclick={() => { const url = prompt("URL :"); if (url) format("createLink", url); }} title="Lien">🔗</button>
+      <button class="tb" onclick={() => format("formatBlock", "pre")} title={$trad("note.codeBlock")}>&lt;/&gt;</button>
+      <button class="tb" onclick={() => { const url = prompt("URL :"); if (url) format("createLink", url); }} title={$trad("note.link")}>🔗</button>
     </div>
   </div>
 

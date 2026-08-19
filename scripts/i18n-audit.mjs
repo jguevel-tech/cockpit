@@ -20,8 +20,15 @@ const SRC = join(ROOT, "src");
 const SKIP_FILES = [/src\/lib\/i18n\//, /src\/main\.ts$/];
 
 // Chaines de markup qui ne sont pas du texte d'interface : unites, symboles, techniques.
+// `Ctrl+S` et `Aa` s'ecrivent pareil dans les deux langues ; un raccourci qui contient un
+// mot traduisible (Maj / Shift) doit en revanche passer par le catalogue.
 const ALLOW = new Set(["px", "ms", "fr", "en", "id", "px)", "%", "OK",
-  "docker-compose.yml", "docker compose"]);
+  "docker-compose.yml", "docker compose", "Ctrl+S", "Aa",
+  // Sigles et valeurs de configuration, identiques dans les deux langues.
+  "CPU", "RSS", "PID", "auto", "in-process", "tmux", "sk-...", "gpt-4o", "ccm-xxx",
+  // Noms propres, entites HTML, exemples de commande et noms de signaux : identiques
+  // dans les deux langues, ils n'ont rien a faire dans un catalogue.
+  "Claude", "&times;", "npm run dev", "SIGTERM"]);
 
 // Attributs dont la valeur est lue par l'utilisateur.
 const TEXT_ATTRS = ["title", "placeholder", "aria-label", "alt"];
@@ -35,7 +42,22 @@ const files = [];
   }
 })(SRC);
 
-const hasWords = (s) => /\p{L}{2,}/u.test(s);
+// Un identifiant technique n'est pas du texte d'interface : nom de variable
+// d'environnement, cle de configuration, chemin, entite HTML, valeur enumeree. Le
+// critere est l'absence d'espace jointe a une forme de code — un mot seul comme
+// « Chargement… » reste donc signale.
+const TECHNIQUE = [
+  /^[A-Z0-9_]{3,}$/,           // VARIABLE_ENVIRONNEMENT
+  /^[a-z]+([A-Z][a-z0-9]*)+$/, // cleDeConfiguration
+  /[/@~]/,                     // chemins, plugin@marketplace
+  /^&[a-z]+;$/,                // entites HTML
+];
+const estTechnique = (s) => !s.includes(" ") && TECHNIQUE.some((re) => re.test(s));
+
+// Les `${...}` sont du code, pas du texte : un libelle qui n'est QUE de l'interpolation
+// (un chemin, un nom de fichier) n'a rien a traduire.
+const hasWords = (s) =>
+  /\p{L}{2,}/u.test(s.replace(/\$\{[^}]*\}/g, "")) && !estTechnique(s);
 const findings = [];
 
 function lineOf(text, index) {

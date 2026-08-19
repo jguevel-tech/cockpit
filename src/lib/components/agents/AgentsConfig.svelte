@@ -7,6 +7,7 @@
     togglePluginEnabled,
   } from "../../api/agents";
   import type { OrchestratorConfig } from "../../types";
+  import { trad } from "../../i18n";
 
   let config: OrchestratorConfig | null = $state(null);
   let loading = $state(true);
@@ -111,10 +112,10 @@
   {/if}
 
   {#if loading}
-    <p class="loading">Chargement…</p>
+    <p class="loading">{$trad("common.loading")}</p>
   {:else if config}
     <section class="card">
-      <h3>Agent teams</h3>
+      <h3>{$trad("agents.teamsTitle")}</h3>
       <div class="row">
         <label class="check">
           <input
@@ -125,9 +126,7 @@
           <span>
             <strong>CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS</strong>
             <small>
-              Active la fonctionnalite Agent Teams (TeamCreate / SendMessage /
-              shared TaskList). Necessaire pour le mode multi-agents communiquant
-              entre eux.
+              {$trad("agents.teamsHelp")}
             </small>
           </span>
         </label>
@@ -137,9 +136,7 @@
           <span>
             <strong>teammateMode</strong>
             <small>
-              Mode d'affichage des coequipiers. "auto" = tmux si dispo sinon
-              in-process. "in-process" force le mode terminal unique. "tmux"
-              force les volets divises (necessite tmux installe).
+              {$trad("agents.teammateModeHelp")}
             </small>
           </span>
           <select
@@ -158,7 +155,7 @@
             <span>
               <strong>defaultTeammateModel</strong>
               <small
-                >Modele Claude utilise par defaut pour les coequipiers.</small>
+                >{$trad("agents.defaultModelHelp")}</small>
             </span>
             <code>{config.default_teammate_model}</code>
           </div>
@@ -186,11 +183,11 @@
     </section>
 
     <section class="card">
-      <h3>Plugins actifs globalement ({config.enabled_plugins.length})</h3>
+      <h3>{$trad("agents.globalPlugins", { count: config.enabled_plugins.length })}</h3>
       <p class="hint">
-        Issus de <code>~/.claude/settings.json</code> → <code>enabledPlugins</code>.
-        Toggle pour activer / desactiver. Format de la clef : <code
-          >plugin@marketplace</code>.
+        {$trad("agents.globalPluginsFrom")} <code>~/.claude/settings.json</code> →
+        <code>enabledPlugins</code>. {$trad("agents.globalPluginsToggle")}
+        <code>plugin@marketplace</code>.
       </p>
       <ul class="plugin-list">
         {#each pluginEntries as row}
@@ -205,7 +202,7 @@
                 <strong>{row.plugin}</strong>
                 <span class="badge">{row.marketplace}</span>
                 {#if row.editable}
-                  <span class="badge badge-ok">editable</span>
+                  <span class="badge badge-ok">{$trad("agents.editable")}</span>
                 {/if}
               </span>
             </label>
