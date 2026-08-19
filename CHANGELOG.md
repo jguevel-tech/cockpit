@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.29.4] — 2026-08-19
+
 ### Fixed
 
 - **Ce qui est tapé ou collé dans un terminal n'est plus envoyé plusieurs fois.** Chaque
