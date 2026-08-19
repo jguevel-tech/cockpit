@@ -4,6 +4,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
 import { notify } from "./toast";
 import { pushNotice, removeNoticesByPrefix } from "./notifications";
+import { translate } from "../i18n";
 
 /// Etat du telechargement, pour la barre de progression du modal.
 export type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "installing" | "error";
@@ -75,13 +76,13 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
         body: update.body ?? undefined,
         createdAt: update.date ?? new Date().toISOString(),
         dismissible: true,
-        action: { label: "Mettre à jour", run: installUpdate },
+        action: { label: translate("update.install"), run: installUpdate },
       });
     } else {
       updateState.update((s) => ({ ...s, phase: "idle", newVersion: null, notes: null }));
       // Plus rien a annoncer : on retire d'eventuelles notices d'une version deja installee.
       removeNoticesByPrefix("update:");
-      if (!opts.silent) notify("Cockpit est à jour", "success");
+      if (!opts.silent) notify(translate("update.upToDate"), "success");
     }
   } catch (e) {
     updateState.update((s) => ({ ...s, phase: "idle", error: String(e) }));
@@ -94,7 +95,7 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
 /// remplacable, l'erreur est alors remontee telle quelle.
 export async function installUpdate() {
   if (!pending) {
-    notify("Aucune mise à jour en attente — relance la vérification.");
+    notify(translate("update.nonePending"));
     return;
   }
   let downloaded = 0;

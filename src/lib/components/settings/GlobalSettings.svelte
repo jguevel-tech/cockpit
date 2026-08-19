@@ -11,6 +11,7 @@
   } from "../../api/workspace";
   import { loadProjects } from "../../stores/projects";
   import { updateState, checkForUpdate } from "../../stores/update";
+  import { trad, locale, setLocale, LOCALES, type Locale } from "../../i18n";
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
   import AppearanceSettings from "./AppearanceSettings.svelte";
@@ -25,39 +26,43 @@
   type SettingsView = "general" | "appearance" | "agents" | "claude" | "meetings" | "projects";
   let view: SettingsView = $state("general");
 
-  const MENU: { id: SettingsView; icon: string; label: string }[] = [
-    { id: "general", icon: "⚙", label: "Général" },
-    { id: "appearance", icon: "◐", label: "Apparence" },
-    { id: "agents", icon: "⬡", label: "Agents" },
-    { id: "claude", icon: "✳", label: "Claude & IA" },
-    { id: "meetings", icon: "⏺", label: "Réunions" },
-    { id: "projects", icon: "▤", label: "Projets" },
+  const MENU: { id: SettingsView; icon: string; labelKey: `settings.menu.${SettingsView}` }[] = [
+    { id: "general", icon: "⚙", labelKey: "settings.menu.general" },
+    { id: "appearance", icon: "◐", labelKey: "settings.menu.appearance" },
+    { id: "agents", icon: "⬡", labelKey: "settings.menu.agents" },
+    { id: "claude", icon: "✳", labelKey: "settings.menu.claude" },
+    { id: "meetings", icon: "⏺", labelKey: "settings.menu.meetings" },
+    { id: "projects", icon: "▤", labelKey: "settings.menu.projects" },
   ];
 
   let dbProjects: DbProject[] = $state([]);
   let importPath = $state("");
   let importResult = $state("");
+  let importFailed = $state(false);
   let importing = $state(false);
   let dbPath = $state("");
   let backingUp = $state(false);
   let backupResult = $state("");
+  let backupFailed = $state(false);
 
   async function doBackup() {
     backingUp = true;
     backupResult = "";
+    backupFailed = false;
     try {
       const d = new Date();
       const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const dest = await saveDialog({
-        title: "Exporter la base Cockpit",
+        title: $trad("settings.backup.dialogTitle"),
         defaultPath: `cockpit-sauvegarde-${stamp}.db`,
-        filters: [{ name: "Base SQLite", extensions: ["db"] }],
+        filters: [{ name: $trad("settings.backup.fileKind"), extensions: ["db"] }],
       });
       if (!dest) return; // annule par l'utilisateur : pas une erreur
       await backupDatabase(dest);
-      backupResult = `Sauvegarde écrite dans ${dest}`;
+      backupResult = $trad("settings.backup.written", { path: dest });
     } catch (e) {
-      backupResult = `Erreur : ${e}`;
+      backupFailed = true;
+      backupResult = `${$trad("common.error")} : ${e}`;
     } finally {
       backingUp = false;
     }
@@ -167,7 +172,8 @@
       await loadDbProjects();
       await loadProjects();
     } catch(e) {
-      importResult = "Erreur: " + e;
+      importFailed = true;
+      importResult = `${$trad("common.error")} : ${e}`;
     } finally { importing = false; }
   }
 
@@ -185,7 +191,7 @@
 
   <div class="settings-layout">
     <nav class="settings-menu">
-      <h2 class="menu-title">Paramètres</h2>
+      <h2 class="menu-title">{$trad("settings.title")}</h2>
       {#each MENU as item (item.id)}
         <button
           class="settings-menu-item"
@@ -193,7 +199,7 @@
           onclick={() => (view = item.id)}
         >
           <span class="menu-icon">{item.icon}</span>
-          {item.label}
+          {$trad(item.labelKey)}
         </button>
       {/each}
     </nav>
@@ -202,66 +208,84 @@
       {#if view === "general"}
         <section class="card">
           <div class="card-head">
-            <h3>Application</h3>
-            <p>Informations sur l'installation en cours.</p>
+            <h3>{$trad("settings.app.title")}</h3>
+            <p>{$trad("settings.app.subtitle")}</p>
           </div>
           <div class="field-row">
-            <span class="field-label">Base de données</span>
+            <span class="field-label">{$trad("settings.app.database")}</span>
             <code class="mono-value">{dbPath}</code>
           </div>
           <div class="field-row">
-            <span class="field-label">Version</span>
+            <span class="field-label">{$trad("settings.app.version")}</span>
             <span class="field-value">{$updateState.currentVersion || '…'}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Build</span>
+            <span class="field-label">{$trad("settings.app.build")}</span>
             <span class="field-value">{__BUILD_TIME__}</span>
           </div>
           <div class="inline-row">
             <button class="btn" onclick={() => checkForUpdate()} disabled={$updateState.phase === 'checking'}>
-              {$updateState.phase === 'checking' ? 'Vérification…' : 'Vérifier les mises à jour'}
+              {$updateState.phase === 'checking' ? $trad("settings.app.checking") : $trad("settings.app.checkUpdates")}
             </button>
             {#if $updateState.newVersion}
-              <span class="feedback">Version {$updateState.newVersion} disponible — voir la cloche.</span>
+              <span class="feedback">{$trad("settings.app.updateAvailable", { version: $updateState.newVersion })}</span>
             {/if}
           </div>
         </section>
 
         <section class="card">
           <div class="card-head">
-            <h3>Journal des modifications</h3>
-            <p>Historique des versions, embarqué dans l'application.</p>
+            <h3>{$trad("settings.language")}</h3>
+            <p>{$trad("settings.languageHelp")}</p>
+          </div>
+          <div class="field-row">
+            <span class="field-label">{$trad("settings.language")}</span>
+            <select
+              class="input"
+              value={$locale}
+              onchange={(e) => setLocale((e.currentTarget as HTMLSelectElement).value as Locale)}
+            >
+              {#each LOCALES as l (l.id)}
+                <option value={l.id}>{l.label}</option>
+              {/each}
+            </select>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>{$trad("settings.changelog.title")}</h3>
+            <p>{$trad("settings.changelog.subtitle")}</p>
           </div>
           <div class="changelog">{@html changelogHtml}</div>
         </section>
 
         <section class="card">
           <div class="card-head">
-            <h3>Sauvegarder la base</h3>
-            <p>Exporte une copie de toutes tes données (projets, notes, tâches, URLs…) dans un
-              fichier — cohérente même si l'application écrit au même moment.</p>
+            <h3>{$trad("settings.backup.title")}</h3>
+            <p>{$trad("settings.backup.subtitle")}</p>
           </div>
           <button class="btn primary" onclick={doBackup} disabled={backingUp}>
-            {backingUp ? 'Sauvegarde…' : 'Exporter la base…'}
+            {backingUp ? $trad("settings.backup.running") : $trad("settings.backup.button")}
           </button>
           {#if backupResult}
-            <p class="feedback" class:error={backupResult.startsWith('Erreur')}>{backupResult}</p>
+            <p class="feedback" class:error={backupFailed}>{backupResult}</p>
           {/if}
         </section>
 
         <section class="card">
           <div class="card-head">
-            <h3>Importer depuis l'ancienne base</h3>
-            <p>Récupère projets, notes, todos et URLs d'une base de l'ancienne version (Go). Uniquement si la base actuelle est vide.</p>
+            <h3>{$trad("settings.import.title")}</h3>
+            <p>{$trad("settings.import.subtitle")}</p>
           </div>
           <div class="inline-row">
             <input type="text" bind:value={importPath} placeholder="/chemin/vers/data.db" spellcheck="false" />
             <button class="btn primary" onclick={doImport} disabled={importing}>
-              {importing ? 'Import…' : 'Importer'}
+              {importing ? $trad("settings.import.running") : $trad("settings.import.button")}
             </button>
           </div>
           {#if importResult}
-            <p class="feedback" class:error={importResult.startsWith('Erreur')}>{importResult}</p>
+            <p class="feedback" class:error={importFailed}>{importResult}</p>
           {/if}
         </section>
 

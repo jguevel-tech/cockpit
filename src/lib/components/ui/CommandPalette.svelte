@@ -18,6 +18,7 @@
   import { searchProject, createTerminal } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import type { ProjectCommand, SearchNameHit } from "../../types";
+  import { trad, translate } from "../../i18n";
 
   let open = $state(false);
   let query = $state("");
@@ -45,11 +46,14 @@
     return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   }
 
-  const PROJECT_TABS: { id: "workspace" | "docker" | "terminal" | "files" | "git" | "plugins" | "settings"; label: string }[] = [
-    { id: "workspace", label: "Workspace" }, { id: "docker", label: "Docker" },
-    { id: "terminal", label: "Terminal" }, { id: "files", label: "Fichiers" },
-    { id: "git", label: "Git" }, { id: "plugins", label: "Plugins" },
-    { id: "settings", label: "Paramètres du projet" },
+  const PROJECT_TABS: {
+    id: "workspace" | "docker" | "terminal" | "files" | "git" | "plugins" | "settings";
+    labelKey: Parameters<typeof translate>[0];
+  }[] = [
+    { id: "workspace", labelKey: "tab.workspace" }, { id: "docker", labelKey: "tab.docker" },
+    { id: "terminal", labelKey: "tab.terminal" }, { id: "files", labelKey: "tab.files" },
+    { id: "git", labelKey: "tab.git" }, { id: "plugins", labelKey: "tab.plugins" },
+    { id: "settings", labelKey: "tab.projectSettings" },
   ];
 
   const entries: Entry[] = $derived.by(() => {
@@ -60,26 +64,27 @@
 
     if (currentProject) {
       for (const t of PROJECT_TABS) {
-        if (match(t.label)) out.push({
-          section: "Onglets", label: t.label, hint: currentProject.name,
+        const tabLabel = $trad(t.labelKey);
+        if (match(tabLabel)) out.push({
+          section: $trad("palette.sectionTabs"), label: tabLabel, hint: currentProject.name,
           run: () => activeTab.set(t.id),
         });
       }
       for (const c of quickCommands) {
         if (match(c.label, c.command)) out.push({
-          section: "Commandes rapides", label: `▶ ${c.label}`, hint: c.command,
+          section: $trad("palette.sectionQuickCommands"), label: `▶ ${c.label}`, hint: c.command,
           run: () => runQuickCommand(c),
         });
       }
     }
 
     out.push(...cap($projects.filter((p) => match(p.name, p.description)).map((p) => ({
-      section: "Projets", label: p.name, hint: p.description,
+      section: $trad("palette.sectionProjects"), label: p.name, hint: p.description,
       run: () => selectProject(p.name),
     }))));
 
     out.push(...cap($terminals.filter((t) => match(t.name, t.project)).map((t) => ({
-      section: "Terminaux", label: t.name || `Terminal ${t.id}`, hint: t.project,
+      section: $trad("palette.sectionTerminals"), label: t.name || `Terminal ${t.id}`, hint: t.project,
       run: () => {
         selectProject(t.project);
         activeTab.set("terminal");
@@ -88,17 +93,17 @@
     }))));
 
     const views: Entry[] = [
-      { section: "Vues", label: "Tableau de bord — Tâches", run: () => { openView("dashboard"); dashboardView.set("tasks"); } },
-      { section: "Vues", label: "Tableau de bord — Monitoring", run: () => { openView("dashboard"); dashboardView.set("monitoring"); } },
-      { section: "Vues", label: "Tableau de bord — Terminaux", run: () => { openView("dashboard"); dashboardView.set("terminals"); } },
-      { section: "Vues", label: "Tableau de bord — Conteneurs", run: () => { openView("dashboard"); dashboardView.set("containers"); } },
-      { section: "Vues", label: "Paramètres", run: () => openView("settings") },
+      { section: $trad("palette.sectionViews"), label: $trad("palette.dashTasks"), run: () => { openView("dashboard"); dashboardView.set("tasks"); } },
+      { section: $trad("palette.sectionViews"), label: $trad("palette.dashMonitoring"), run: () => { openView("dashboard"); dashboardView.set("monitoring"); } },
+      { section: $trad("palette.sectionViews"), label: $trad("palette.dashTerminals"), run: () => { openView("dashboard"); dashboardView.set("terminals"); } },
+      { section: $trad("palette.sectionViews"), label: $trad("palette.dashContainers"), run: () => { openView("dashboard"); dashboardView.set("containers"); } },
+      { section: $trad("palette.sectionViews"), label: $trad("settings.title"), run: () => openView("settings") },
     ];
     out.push(...views.filter((v) => match(v.label)));
 
     for (const f of fileHits) {
       out.push({
-        section: "Fichiers", label: f.rel_path, hint: currentProject?.name,
+        section: $trad("palette.sectionFiles"), label: f.rel_path, hint: currentProject?.name,
         run: () => {
           activeTab.set("files");
           pendingFilePath.set(f.rel_path);
@@ -111,7 +116,7 @@
 
   async function runQuickCommand(c: ProjectCommand) {
     const p = currentProject;
-    if (!p?.path) { notify("Ce projet n'a pas de chemin configuré."); return; }
+    if (!p?.path) { notify($trad("palette.noPathConfigured")); return; }
     try {
       const tid = await createTerminal(p.name, p.path, 80, 24, c.command);
       pendingTerminalId.set(tid);
@@ -200,7 +205,7 @@
       <input
         bind:this={inputEl}
         bind:value={query}
-        placeholder="Aller à… (projet, terminal, onglet, fichier, commande)"
+        placeholder={$trad("palette.placeholder")}
       />
       <div class="results">
         {#each entries as entry, i (entry.section + entry.label)}
@@ -218,10 +223,10 @@
           </button>
         {/each}
         {#if entries.length === 0}
-          <div class="section">Aucun résultat</div>
+          <div class="section">{$trad("palette.noResult")}</div>
         {/if}
       </div>
-      <div class="footer">↑↓ naviguer · Entrée ouvrir · Échap fermer</div>
+      <div class="footer">{$trad("palette.hints")}</div>
     </div>
   </div>
 {/if}

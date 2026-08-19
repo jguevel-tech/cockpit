@@ -19,7 +19,7 @@ rappeler aucune de ces etapes.
 ### A chaque fonctionnalite
 
 1. **Coder**, en respectant les regles non negociables ci-dessous.
-2. **Verifier** — les 4 points de la definition de "fini". Aucun n'est optionnel.
+2. **Verifier** — les 5 points de la definition de "fini". Aucun n'est optionnel.
 3. **Consigner** dans `CHANGELOG.md` sous `## [Unreleased]`, section Added / Changed / Fixed /
    Removed. Uniquement si l'utilisateur peut le constater ; une refonte interne n'y a pas sa place.
 4. **Commiter et pousser sur `main`** — libre, aucune confirmation a demander. Un push de branche
@@ -90,15 +90,36 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 
 ## Regles non negociables (a lire AVANT de coder)
 
-**Definition de "fini"** — une modification n'est livrable que si ces 4 points passent :
+**Definition de "fini"** — une modification n'est livrable que si ces 5 points passent :
 1. `npm run check` -> 0 erreur, 0 warning (c'est l'etat actuel, le maintenir)
 2. `cd src-tauri && cargo test` -> tous verts
 3. `npx tauri build --no-bundle` si on livre un binaire (JAMAIS `cargo build --release` seul :
    sans les env vars Tauri le binaire sort en mode dev et cherche Vite sur localhost:5173)
-4. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
+4. `npm run i18n:audit` -> 0 chaine en dur (tout texte visible passe par le catalogue,
+   en francais ET en anglais)
+5. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
    `## [Unreleased]`**, dans la bonne section (Added / Changed / Fixed / Removed). Ce texte
    n'est pas de la doc interne : il est affiche dans le logiciel ET sert de notes de version
    dans le modal de mise a jour. Une refonte interne sans effet visible n'a rien a y faire.
+
+**Traduction — francais et anglais, sans exception** :
+- L'interface existe en deux langues, francais par defaut, anglais au choix
+  (Parametres -> General). Le francais est la REFERENCE : `src/lib/i18n/fr.ts`.
+- **Aucun texte affiche ne s'ecrit en dur.** Dans un composant : `{$trad("cle")}`, pluriel
+  `{$tradN("cle", n)}` (cles `.one` / `.other`). Hors composant (magasins, utilitaires) :
+  `translate("cle")`. Le magasin s'appelle `trad` et non `t` ni `tr` : `t` sert trop souvent
+  de variable de boucle (elle masquerait le magasin) et `tr` est une balise HTML que Svelte
+  prend pour un composant. Les deux ont ete essayes, les deux cassent.
+- Une cle ajoutee dans `fr.ts` **doit** l'etre dans `en.ts` : le type de `en.ts` derive de
+  `fr.ts`, donc l'oubli est une erreur de `npm run check`. Rien a surveiller a la main.
+- **Ne jamais brancher une decision sur un texte affiche** (`if (msg.startsWith("Erreur"))`)
+  : le test devient faux des que la langue change. Utiliser un booleen d'etat. Un cas de ce
+  genre existait dans les parametres, il a ete corrige a la migration.
+- Les libelles portes par des donnees (onglets, menus, palettes) stockent une **cle**
+  (`labelKey`), pas un texte : c'est ce qui les rend reactifs au changement de langue.
+- `npm run i18n:audit` liste le texte reste en dur et **echoue tant qu'il en reste**. Il
+  ignore le CSS et les commentaires ; les noms de fichiers et unites sont dans son
+  allowlist.
 
 **Interdits absolus** :
 - Retirer ou "simplifier" du code marque `NE PAS RETIRER` (fixes accents/IME de TerminalTab.svelte

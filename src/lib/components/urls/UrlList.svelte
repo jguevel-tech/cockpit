@@ -3,6 +3,7 @@
   import type { Url, UrlHealth } from "../../types";
   import { onMount } from "svelte";
   import { notify } from "../../stores/toast";
+  import { trad } from "../../i18n";
 
   let { project }: { project: string } = $props();
 
@@ -80,10 +81,10 @@
 </script>
 
 <div class="url-list">
-  <h3>URLs</h3>
+  <h3>{$trad("urls.title")}</h3>
   <div class="add-row">
-    <input type="text" bind:value={newLabel} placeholder="Label" />
-    <input type="text" bind:value={newUrl} placeholder="https://..." />
+    <input type="text" bind:value={newLabel} placeholder={$trad("urls.labelPlaceholder")} />
+    <input type="text" bind:value={newUrl} placeholder={$trad("urls.urlPlaceholder")} />
     <button onclick={add}>+</button>
   </div>
   <ul>
@@ -101,13 +102,13 @@
             title={healthTitle(u)}
           ></span>
           <a href={u.url} target="_blank" rel="noopener">{u.label}</a>
-          <button class="edit" onclick={() => startEdit(u)} title="Modifier">✎</button>
+          <button class="edit" onclick={() => startEdit(u)} title={$trad("common.edit")}>✎</button>
           <button class="del" onclick={() => remove(u.id)}>×</button>
         {/if}
       </li>
     {/each}
     {#if urls.length === 0}
-      <li class="empty">Aucune URL</li>
+      <li class="empty">{$trad("urls.empty")}</li>
     {/if}
   </ul>
 </div>

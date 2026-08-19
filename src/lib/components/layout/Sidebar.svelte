@@ -15,6 +15,7 @@
   import claudeLogo from "../../assets/claude-logo.svg";
   import { notify } from "../../stores/toast";
   import { onMount } from "svelte";
+  import { trad } from "../../i18n";
 
   let showCreateModal = $state(false);
   let folders: ProjectFolder[] = $state([]);
@@ -244,10 +245,10 @@
           <li>
             {#if renamingTermId === t.id}
               <div class="terminal-item">
-                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title="Claude en cours dans ce terminal" />{:else}<span class="term-dot" title="Terminal"></span>{/if}
+                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
                 <InlineEdit
                   value={t.name}
-                  placeholder="Nom du terminal"
+                  placeholder={$trad("sidebar.terminalNamePlaceholder")}
                   onCommit={(next) => commitRenameTerminal(t.id, next)}
                   onCancel={() => (renamingTermId = null)}
                 />
@@ -259,7 +260,7 @@
                 oncontextmenu={(e) => openTermContextMenu(e, t)}
                 title="Aller à ce terminal ({t.project}) — clic droit pour renommer"
               >
-                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title="Claude en cours dans ce terminal" />{:else}<span class="term-dot" title="Terminal"></span>{/if}
+                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
                 <span class="terminal-name">{terminalLabel(t)}</span>
                 <span class="terminal-project">{t.project}</span>
               </button>
@@ -271,16 +272,16 @@
   {/if}
 
   <div class="sidebar-header">
-    <span>Projets</span>
+    <span>{$trad("sidebar.projects")}</span>
     <div class="header-actions">
-      <button class="add-btn labeled" onclick={() => showCreateModal = true} title="Créer un nouveau projet">+ Projet</button>
-      <button class="add-btn labeled" onclick={() => creatingFolder = true} title="Créer un dossier pour ranger des projets">+ Dossier</button>
+      <button class="add-btn labeled" onclick={() => showCreateModal = true} title={$trad("sidebar.newProjectHint")}>{$trad("sidebar.newProject")}</button>
+      <button class="add-btn labeled" onclick={() => creatingFolder = true} title={$trad("sidebar.newFolderHint")}>{$trad("sidebar.newFolder")}</button>
     </div>
   </div>
 
   {#if creatingFolder}
     <div class="folder-create">
-      <input type="text" bind:value={newFolderName} placeholder="Nom du dossier..." onkeydown={onNewFolderKeydown} use:focusOnMount />
+      <input type="text" bind:value={newFolderName} placeholder={$trad("sidebar.folderNamePlaceholder")} onkeydown={onNewFolderKeydown} use:focusOnMount />
       <button onclick={addFolder}>OK</button>
       <button class="cancel" onclick={() => creatingFolder = false}>×</button>
     </div>
@@ -401,7 +402,7 @@
     </div>
 
     {#if $projects.length === 0}
-      <li class="empty">Aucun projet</li>
+      <li class="empty">{$trad("sidebar.noProject")}</li>
     {/if}
   </ul>
   <CreateProjectModal bind:open={showCreateModal} />
@@ -414,8 +415,8 @@
     y={termContextMenu.y}
     onClose={() => (termContextMenu = null)}
     items={[
-      { label: "Renommer", action: () => (renamingTermId = tid) },
-      { label: "Fermer le terminal", danger: true, action: () => closeTerminalById(tid) },
+      { label: $trad("common.rename"), action: () => (renamingTermId = tid) },
+      { label: $trad("sidebar.closeTerminal"), danger: true, action: () => closeTerminalById(tid) },
     ]}
   />
 {/if}
@@ -427,8 +428,8 @@
     y={contextMenu.y}
     onClose={() => (contextMenu = null)}
     items={[
-      { label: "Renommer", action: () => (renamingFolderId = fid) },
-      { label: "Supprimer", danger: true, action: () => deleteFolder(fid) },
+      { label: $trad("common.rename"), action: () => (renamingFolderId = fid) },
+      { label: $trad("sidebar.deleteFolder"), danger: true, action: () => deleteFolder(fid) },
     ]}
   />
 {/if}

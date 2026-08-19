@@ -1,5 +1,6 @@
 <script lang="ts">
   import { dashboardView } from "../../stores/ui";
+  import { trad } from "../../i18n";
   import TasksView from "./TasksView.svelte";
   import MonitoringView from "./MonitoringView.svelte";
   import TerminalsView from "./TerminalsView.svelte";
@@ -10,18 +11,18 @@
 
   <div class="dashboard-layout">
     <nav class="dash-menu">
-      <h2 class="menu-title">Tableau de bord</h2>
+      <h2 class="menu-title">{$trad("dashboard.title")}</h2>
       <button class="dash-menu-item" class:active={$dashboardView === "tasks"} onclick={() => dashboardView.set("tasks")}>
-        ☑ Tâches
+        {$trad("dashboard.tasksTab")}
       </button>
       <button class="dash-menu-item" class:active={$dashboardView === "monitoring"} onclick={() => dashboardView.set("monitoring")}>
-        📈 Monitoring
+        {$trad("dashboard.monitoringTab")}
       </button>
       <button class="dash-menu-item" class:active={$dashboardView === "terminals"} onclick={() => dashboardView.set("terminals")}>
-        &gt;_ Terminaux
+        {$trad("dashboard.terminalsTab")}
       </button>
       <button class="dash-menu-item" class:active={$dashboardView === "containers"} onclick={() => dashboardView.set("containers")}>
-        🐳 Conteneurs
+        {$trad("dashboard.containersTab")}
       </button>
     </nav>
 

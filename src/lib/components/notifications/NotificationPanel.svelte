@@ -4,6 +4,7 @@
   import { checkForUpdate, updateState } from "../../stores/update";
   import { notify } from "../../stores/toast";
   import { portal } from "../../actions/portal";
+  import { trad } from "../../i18n";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -55,22 +56,22 @@
 
 <!-- Pas de stopPropagation : l'overlay est un FRERE, pas un parent — un clic dans le panneau
      ne traverse pas son onclick. tabindex requis par le role dialog. -->
-<div class="panel" role="dialog" aria-label="Notifications" tabindex="-1" use:portal>
+<div class="panel" role="dialog" aria-label={$trad("header.notifications")} tabindex="-1" use:portal>
   <header>
-    <h3>Notifications</h3>
+    <h3>{$trad("header.notifications")}</h3>
     <button
       class="btn ghost small"
       onclick={() => checkForUpdate()}
       disabled={$updateState.phase === "checking"}
     >
-      {$updateState.phase === "checking" ? "Vérification…" : "Vérifier"}
+      {$updateState.phase === "checking" ? $trad("settings.app.checking") : $trad("notif.check")}
     </button>
   </header>
 
   {#if $notices.length === 0}
     <p class="empty-state">
-      Rien de neuf.<br />
-      <span class="muted">Cockpit {$updateState.currentVersion || ""} est à jour.</span>
+      {$trad("notif.empty")}<br />
+      <span class="muted">{$trad("notif.upToDateLine", { version: $updateState.currentVersion || "" })}</span>
     </p>
   {:else}
     <ul>
@@ -96,14 +97,14 @@
                 </button>
               {/if}
               {#if n.dismissible}
-                <button class="btn ghost small" onclick={() => dismiss(n.id)}>Ignorer</button>
+                <button class="btn ghost small" onclick={() => dismiss(n.id)}>{$trad("notif.dismiss")}</button>
               {/if}
             </div>
             {#if n.kind === "update" && $updateState.phase === "downloading"}
               <div class="progress"><div class="bar" style:width="{$updateState.progress ?? 0}%"></div></div>
-              <p class="status">Téléchargement… {$updateState.progress !== null ? `${$updateState.progress} %` : ""}</p>
+              <p class="status">{$trad("notif.downloading")} {$updateState.progress !== null ? `${$updateState.progress} %` : ""}</p>
             {:else if n.kind === "update" && $updateState.phase === "installing"}
-              <p class="status">Installation, l'application va redémarrer…</p>
+              <p class="status">{$trad("notif.installing")}</p>
             {:else if n.kind === "update" && $updateState.error}
               <p class="status error">{$updateState.error}</p>
             {/if}
