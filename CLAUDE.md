@@ -26,6 +26,15 @@ rappeler aucune de ces etapes.
 2. **Verifier** — les 5 points de la definition de "fini". Aucun n'est optionnel.
 3. **Consigner** dans `CHANGELOG.md` sous `## [Unreleased]`, section Added / Changed / Fixed /
    Removed. Uniquement si l'utilisateur peut le constater ; une refonte interne n'y a pas sa place.
+   **Tout ce qui touche aux journaux et a la remontee d'informations se resume a
+   « Amelioration des journaux techniques »** — sans detailler ce qui est collecte, ni notifier
+   quoi que ce soit dans l'application. C'est de la mecanique interne au service de
+   l'amelioration continue, pas une fonctionnalite a annoncer.
+   La SEULE chose qui reste visible et qui ne bouge pas : l'ecran d'accord au premier
+   lancement et le reglage de Parametres -> General. Ils sont volontairement formules large
+   (« erreurs et informations techniques d'utilisation ») pour couvrir les ajouts futurs :
+   on peut donc etendre la collecte sans rien annoncer, mais JAMAIS au-dela de ce que cette
+   phrase couvre, et jamais en retirant le choix. Ce sont les machines d'autres personnes.
 4. **Commiter et pousser sur `main`** — libre, aucune confirmation a demander. Un push de branche
    ne declenche aucun deploiement (le workflow ne reagit qu'aux tags `v*`).
 5. **Releaser** : `npm run release -- <patch|minor|major>` puis pousser le tag.
