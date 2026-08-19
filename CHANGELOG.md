@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-08-19
+
 ### Added
 
 - **Les liens des notes s'ouvrent maintenant, au Ctrl+clic**, dans ton navigateur. Le clic
