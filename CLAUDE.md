@@ -138,6 +138,12 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - Retirer ou "simplifier" du code marque `NE PAS RETIRER` (fixes accents/IME de TerminalTab.svelte
   et `GTK_IM_MODULE` dans lib.rs — bug diagnostique en 8 iterations douloureuses, voir Pieges connus)
 - Ajouter une surcouche sur le chemin de frappe xterm (`onData` -> PTY doit rester direct)
+- **Appeler `term.onData(...)` directement** : passer par `brancherEntree()`, qui LIBERE
+  l'abonnement precedent. Les xterm vivent dans un pool au niveau module et survivent aux
+  demontages du composant : chaque retour sur un terminal ajoutait sinon un abonnement, et
+  tout ce qui etait tape ou colle partait autant de fois vers le PTY. C'est l'origine du
+  « collage en double » signale par Jimmy — un clic molette, un seul appel de collage
+  (mesure au banc), et plusieurs insertions.
 - Couleur/taille en dur dans un composant : uniquement les tokens de `styles/theme.css`
 - `catch {}` muet ou `catch (e: any)` : toujours `catch (e) { notify(String(e)); }`
 - **Un `catch` qui n'appelle ni `notify()` ni `signalerErreur()`** : le message reste dans la

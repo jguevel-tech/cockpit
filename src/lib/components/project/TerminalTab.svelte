@@ -27,7 +27,20 @@
   /// molette, redraw) reste vraie pour un xterm NEUF — et c'est exactement pourquoi le pool
   /// conserve le xterm d'origine : il a deja recu l'init de son client, les deux vieillissent
   /// ensemble.
-  export type PoolEntry = { term: XTerminal; fit: XFitAddon; el: HTMLDivElement };
+  /// `dataSub` : abonnement au flux de frappe (onData).
+  ///
+  /// Il DOIT etre retenu et libere avant tout nouvel abonnement. Les xterm vivent dans ce
+  /// pool au niveau module et survivent aux demontages du composant : sans cela, chaque
+  /// retour sur un terminal ajoutait un abonnement de plus, et tout ce qui etait tape ou
+  /// colle partait autant de fois vers le PTY. C'est la cause du « collage en double »
+  /// signale par un utilisateur — mesure au banc : 1 clic molette, 1 appel de collage,
+  /// 3 insertions dans le terminal.
+  export type PoolEntry = {
+    term: XTerminal;
+    fit: XFitAddon;
+    el: HTMLDivElement;
+    dataSub?: { dispose(): void };
+  };
   const pool = new Map<number, PoolEntry>();
 
   let parkingEl: HTMLDivElement | null = null;
@@ -47,9 +60,18 @@
   function disposePoolEntry(id: number) {
     const e = pool.get(id);
     if (!e) return;
+    e.dataSub?.dispose();
     e.term.dispose();
     e.el.remove();
     pool.delete(id);
+  }
+
+  /// Branche la frappe de ce terminal vers son PTY, en REMPLACANT l'abonnement precedent.
+  /// Passer par ici est obligatoire : appeler `term.onData` directement empile les
+  /// abonnements et multiplie chaque caractere envoye.
+  function brancherEntree(entry: PoolEntry, envoyer: (data: string) => void) {
+    entry.dataSub?.dispose();
+    entry.dataSub = entry.term.onData(envoyer);
   }
 
   function b64ToBytes(data: string): Uint8Array {
@@ -516,7 +538,7 @@
       sessions.push({ id, alive: true, name: created?.name ?? "" });
       try { await attachTerminal(id, cols, rows); }
       catch (e) { signalerErreur("terminal.attache", String(e)); }
-      entry.term.onData((data) => sendInput(id, data));
+      brancherEntree(entry, (data) => sendInput(id, data));
       activeId = id;
       entry.term.focus();
       loadTerminals();
@@ -643,7 +665,7 @@
       return;
     }
 
-    entry.term.onData((data) => sendInput(id, data));
+    brancherEntree(entry, (data) => sendInput(id, data));
   }
 
   function fitActive() {

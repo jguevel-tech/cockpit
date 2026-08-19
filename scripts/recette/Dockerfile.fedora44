@@ -1,0 +1,18 @@
+# Recette : Fedora, ou le WebKit embarque dans l'AppImage rencontre des polices plus
+# recentes que lui.
+#
+# Un utilisateur sur Fedora 44 voit une assertion de Skia dans `colrv1_configure_skpaint`
+# (dessin des polices emoji en couleur, format COLRv1) au clic sur l'onglet Terminal, suivie
+# d'un gel de l'application. L'image sert a reproduire ce cas : distribution recente + police
+# emoji COLRv1, avec le Skia de notre WebKit compile sur Ubuntu 22.04.
+FROM fedora:44
+RUN dnf -y install --setopt=install_weak_deps=False \
+      xorg-x11-server-Xvfb dbus-x11 \
+      gtk3 webkit2gtk4.1 mesa-libGL mesa-libEGL \
+      tmux python3 python3-gobject \
+      google-noto-color-emoji-fonts google-noto-sans-fonts dejavu-sans-mono-fonts \
+      fontconfig procps-ng findutils libXtst xdotool ImageMagick sqlite \
+  && dnf clean all
+RUN useradd -m -u 1000 recette
+USER recette
+WORKDIR /home/recette

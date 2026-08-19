@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ce qui est tapé ou collé dans un terminal n'est plus envoyé plusieurs fois.** Chaque
+  retour sur un terminal (changement d'onglet, de projet) rebranchait son entrée sans
+  débrancher la précédente : après deux passages le texte partait deux fois, après trois,
+  trois fois. C'est l'origine du collage en double au clic molette, et cela touchait aussi la
+  frappe.
+
 ## [0.29.3] — 2026-08-19
 
 ### Fixed
