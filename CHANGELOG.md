@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.29.1] — 2026-08-19
+
 ### Fixed
 
 - **La remontée des erreurs fonctionne maintenant vers un serveur sans certificat.** Elle
