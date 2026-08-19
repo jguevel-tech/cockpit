@@ -138,7 +138,7 @@
         const res = await searchProject(path, q);
         if (seq === fileSeq) fileHits = res.names.filter((n) => !n.is_dir).slice(0, 8);
       } catch (e) {
-      signalerErreur("commandPalette.res", String(e));
+      signalerErreur("commandPalette.runQuickCommand", String(e));
         if (seq === fileSeq) fileHits = [];
       }
     }, 250);

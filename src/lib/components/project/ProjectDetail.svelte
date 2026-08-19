@@ -60,7 +60,7 @@
   onMount(() => {
     (async () => {
       try { urls = await getUrls(name); } catch (e) {
-      signalerErreur("projectDetail.next", String(e));}
+      signalerErreur("projectDetail.checkQuickUrls", String(e));}
       await checkQuickUrls();
       await loadFailedRecordings();
     })();

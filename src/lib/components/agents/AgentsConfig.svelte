@@ -40,7 +40,7 @@
       await setTeamsEnabled(enabled);
       config.experimental_teams_enabled = enabled;
     } catch (e) {
-      signalerErreur("agentsConfig.enabled", String(e));
+      signalerErreur("agentsConfig.onToggleTeams", String(e));
       errorMsg = String(e);
     } finally {
       busy = false;
@@ -55,7 +55,7 @@
       await setTeammateMode(mode);
       config.teammate_mode = mode;
     } catch (e) {
-      signalerErreur("agentsConfig.mode", String(e));
+      signalerErreur("agentsConfig.onChangeMode", String(e));
       errorMsg = String(e);
     } finally {
       busy = false;

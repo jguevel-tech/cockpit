@@ -67,7 +67,7 @@ export async function highlightCode(code: string, lang: string, dark: boolean): 
     // langage inconnu -> throw -> fallback <pre> brut.
     return h.codeToHtml(code, { lang, theme });
   } catch (e) {
-      signalerErreur("shiki.h", String(e));
+      signalerErreur("shiki.highlightCode", String(e));
     return `<pre class="shiki"><code>${escapeHtml(code)}</code></pre>`;
   }
 }

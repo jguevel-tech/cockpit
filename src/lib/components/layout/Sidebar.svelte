@@ -37,7 +37,7 @@
       if (saved) collapsedIds = new Set(JSON.parse(saved));
       terminalsCollapsed = localStorage.getItem("cockpit-terminals-collapsed") === "1";
     } catch (e) {
-      signalerErreur("sidebar.saved", String(e));}
+      signalerErreur("sidebar.onMount", String(e));}
   });
 
   function toggleTerminals() {

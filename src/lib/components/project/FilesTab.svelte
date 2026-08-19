@@ -166,7 +166,7 @@
       fileRaw = f.content;
       fileHtml = await highlightCode(f.content, langFor(relPath), $themeBase === "dark");
     } catch (e) {
-      signalerErreur("files.f", String(e)); fileNotice = String(e); }
+      signalerErreur("files.openFileByPath", String(e)); fileNotice = String(e); }
     finally { loadingFile = false; }
   }
 
@@ -452,7 +452,7 @@
       if (seq !== searchSeq) return;
       globalResults = res;
     } catch (e) {
-      signalerErreur("files.res", String(e));
+      signalerErreur("files.runGlobalSearch", String(e));
       if (seq !== searchSeq) return;
       globalError = String(e);
       globalResults = null;
@@ -593,7 +593,7 @@
       const mark = document.createElement("mark");
       mark.className = current ? "find-match current" : "find-match";
       try { range.surroundContents(mark); } catch (e) {
-      signalerErreur("files.mark", String(e)); /* impossible : range dans un seul noeud */ }
+      signalerErreur("files.markRange", String(e)); /* impossible : range dans un seul noeud */ }
     }
   }
 

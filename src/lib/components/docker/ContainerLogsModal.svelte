@@ -28,7 +28,7 @@
       text = next;
       if (atBottom) requestAnimationFrame(() => preEl?.scrollTo({ top: preEl.scrollHeight }));
     } catch (e) {
-      signalerErreur("containerLogs.atBottom", String(e));
+      signalerErreur("containerLogs.refresh", String(e));
       error = String(e);
     } finally {
       loading = false;

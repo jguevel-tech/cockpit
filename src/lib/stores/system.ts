@@ -27,7 +27,7 @@ export async function refreshMetrics() {
       return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
     });
   } catch (e) {
-      signalerErreur("system.next", String(e));
+      signalerErreur("system.refreshMetrics", String(e));
     console.error("Failed to load system metrics:", e);
   }
 }

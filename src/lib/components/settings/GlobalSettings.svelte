@@ -65,7 +65,7 @@
       await backupDatabase(dest);
       backupResult = $trad("settings.backup.written", { path: dest });
     } catch (e) {
-      signalerErreur("global.dest", String(e));
+      signalerErreur("global.doBackup", String(e));
       backupFailed = true;
       backupResult = `${$trad("common.error")} : ${e}`;
     } finally {
@@ -156,7 +156,7 @@
       summaryModel = s.summary_model ?? "";
       summaryPrompt = s.summary_prompt ?? "";
     } catch (e) {
-      signalerErreur("global.s", String(e));}
+      signalerErreur("global.expiryLabel", String(e));}
     await refreshClaudeStatus();
   });
 
@@ -184,7 +184,7 @@
       await loadDbProjects();
       await loadProjects();
     } catch (e) {
-      signalerErreur("global.result", String(e));
+      signalerErreur("global.doImport", String(e));
       importFailed = true;
       importResult = `${$trad("common.error")} : ${e}`;
     } finally { importing = false; }

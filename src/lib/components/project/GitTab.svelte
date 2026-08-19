@@ -89,7 +89,7 @@
       const untracked = status?.files.find((f) => f.path === path)?.untracked ?? false;
       diff = await gitDiffFile(project.path, path, untracked);
     } catch (e) {
-      signalerErreur("git.untracked", String(e)); diffError = String(e); }
+      signalerErreur("git.openDiff", String(e)); diffError = String(e); }
     finally { loadingDiff = false; }
   }
 

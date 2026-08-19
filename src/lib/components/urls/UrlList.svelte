@@ -39,7 +39,7 @@
       urls.forEach((u, i) => { if (res[i]) next.set(u.url, res[i]); });
       health = next;
     } catch (e) {
-      signalerErreur("url.next", String(e));
+      signalerErreur("url.checkAll", String(e));
       console.error("checkUrls:", e); // verif de fond : pas de toast repete
     }
   }

@@ -11,7 +11,7 @@ export async function loadProjects() {
     const data = await listProjects();
     projects.set(data);
   } catch (e) {
-      signalerErreur("projects.data", String(e));
+      signalerErreur("projects.loadProjects", String(e));
     console.error("Failed to load projects:", e);
   }
 }

@@ -140,7 +140,7 @@
       agentContent = content;
       agentContentInitial = content;
     } catch (e) {
-      signalerErreur("agents.content", String(e));
+      signalerErreur("agents.selectAgent", String(e));
       errorMsg = String(e);
     }
   }
@@ -189,7 +189,7 @@
       await reloadAgents();
       await selectAgent(newName);
     } catch (e) {
-      signalerErreur("agents.newName", String(e));
+      signalerErreur("agents.doRenameAgent", String(e));
       errorMsg = String(e);
     }
   }
@@ -227,7 +227,7 @@
       if (selectedPlugin === pluginName) selectedPlugin = newName;
       await reloadPlugins();
     } catch (e) {
-      signalerErreur("agents.newName", String(e));
+      signalerErreur("agents.doRenamePlugin", String(e));
       errorMsg = String(e);
     }
   }
@@ -271,7 +271,7 @@
       await reloadPlugins();
       await selectPlugin(name);
     } catch (e) {
-      signalerErreur("agents.name", String(e));
+      signalerErreur("agents.createNewPlugin", String(e));
       errorMsg = String(e);
     }
   }
@@ -327,7 +327,7 @@ You are the **${name}** agent.
       await reloadAgents();
       await selectAgent(name);
     } catch (e) {
-      signalerErreur("agents.name", String(e));
+      signalerErreur("agents.createNewAgent", String(e));
       errorMsg = String(e);
     }
   }

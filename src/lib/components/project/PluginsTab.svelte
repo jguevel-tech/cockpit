@@ -32,7 +32,7 @@
           const plugins = await listPlugins(m.id);
           all.push(...plugins);
         } catch (e) {
-      signalerErreur("plugins.plugins", String(e));}
+      signalerErreur("plugins.onMount", String(e));}
       }
       allPlugins = all;
       const enabledList = await getProjectPlugins(projectPath);
@@ -40,7 +40,7 @@
       // On stocke la forme courte (avant le @).
       enabled = new Set(enabledList.map(p => p.split('@')[0]));
     } catch (e) {
-      signalerErreur("plugins.enabledList", String(e));
+      signalerErreur("plugins.onMount", String(e));
       errorMsg = String(e);
     } finally {
       loading = false;

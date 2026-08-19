@@ -45,7 +45,7 @@ function loadIds(key: string): Set<string> {
     const parsed = raw ? JSON.parse(raw) : [];
     return new Set(Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : []);
   } catch (e) {
-      signalerErreur("notifications.parsed", String(e));
+      signalerErreur("notifications.loadIds", String(e));
     // localStorage corrompu ou illisible : on repart d'un etat vide plutot que de casser l'UI.
     return new Set();
   }

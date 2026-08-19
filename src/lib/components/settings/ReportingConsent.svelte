@@ -20,7 +20,7 @@
     try {
       fiche = await machineReport();
     } catch (e) {
-      signalerErreur("reportingConsent.divers", String(e));
+      signalerErreur("reportingConsent.onMount", String(e));
       // La fiche n'est qu'illustrative ici : son absence ne doit pas bloquer l'ecran.
       console.warn(String(e));
     }

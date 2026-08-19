@@ -68,13 +68,34 @@ fn endpoint() -> Option<(String, String)> {
 
 /// Le transport est-il acceptable pour des donnees personnelles ?
 ///
-/// `https` exige, sauf serveur local : une adresse en clair sur Internet exposerait les
-/// erreurs et le nom de l'utilisateur a qui passe sur le reseau.
+/// `https` par defaut, parce que les messages d'erreur contiennent des chemins de fichiers —
+/// donc des noms de projets, parfois de clients — et le nom de l'utilisateur.
+///
+/// Deux exceptions : le serveur LOCAL (mise au point, rien ne quitte la machine) et un
+/// `http` assume explicitement par `COCKPIT_REPORT_ALLOW_HTTP=1` au build. Cette porte
+/// existe pour ne pas bloquer un serveur maison sans certificat ; elle demande un geste
+/// deliberé, ce qui est la difference entre un choix et un oubli.
 pub fn transport_acceptable(url: &str) -> bool {
+    transport_acceptable_avec(url, http_autorise())
+}
+
+fn http_autorise() -> bool {
+    let brut = std::env::var("COCKPIT_REPORT_ALLOW_HTTP")
+        .ok()
+        .or_else(|| option_env!("COCKPIT_REPORT_ALLOW_HTTP").map(str::to_string))
+        .unwrap_or_default();
+    matches!(brut.trim(), "1" | "true" | "oui")
+}
+
+/// Separee pour etre testable sans toucher a l'environnement du processus.
+pub fn transport_acceptable_avec(url: &str, http_autorise: bool) -> bool {
     if url.starts_with("https://") {
         return true;
     }
     if let Some(reste) = url.strip_prefix("http://") {
+        if http_autorise {
+            return true;
+        }
         let hote = reste.split(['/', ':']).next().unwrap_or("");
         return hote == "localhost" || hote == "127.0.0.1" || hote == "::1";
     }
@@ -286,20 +307,26 @@ mod tests {
     }
 
     #[test]
-    fn http_public_est_refuse() {
-        // Ce sont les erreurs et le nom d'un collegue : jamais en clair sur Internet.
-        assert!(!transport_acceptable("http://umami.86.253.219.203.sslip.io"));
+    fn http_public_est_refuse_par_defaut() {
+        // Ce sont les erreurs et le nom d'un collegue : pas en clair sans le vouloir.
+        assert!(!transport_acceptable_avec("http://umami.86.253.219.203.sslip.io", false));
+    }
+
+    #[test]
+    fn http_public_passe_si_on_l_assume() {
+        // Serveur maison sans certificat : la porte existe, mais elle se pousse a la main.
+        assert!(transport_acceptable_avec("http://umami.86.253.219.203.sslip.io", true));
     }
 
     #[test]
     fn http_local_est_accepte_pour_la_mise_au_point() {
-        assert!(transport_acceptable("http://localhost:3000"));
-        assert!(transport_acceptable("http://127.0.0.1:3000/"));
+        assert!(transport_acceptable_avec("http://localhost:3000", false));
+        assert!(transport_acceptable_avec("http://127.0.0.1:3000/", false));
     }
 
     #[test]
-    fn adresse_sans_protocole_est_refusee() {
-        assert!(!transport_acceptable("suivi.example.org"));
+    fn adresse_sans_protocole_est_refusee_meme_si_http_autorise() {
+        assert!(!transport_acceptable_avec("suivi.example.org", true));
     }
 
     #[test]

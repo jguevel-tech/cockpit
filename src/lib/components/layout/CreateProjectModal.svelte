@@ -74,7 +74,6 @@
       selectProject(trimmedName);
       close();
     } catch (e) {
-      signalerErreur("createProject.deps", String(e));
       // L'erreur s'affiche DANS le modal (c'est la que l'utilisateur regarde), mais elle
       // doit aussi etre journalisee : un affichage local ne remonte rien.
       error = String(e);

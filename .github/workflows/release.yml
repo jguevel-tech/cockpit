@@ -124,6 +124,14 @@ jobs:
           # sensible n'a besoin de transiter ailleurs que du fichier vers GitHub.
           # La variable doit exister quand meme (chaine vide), sinon la CLI la reclame.
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Remontee des erreurs : l'adresse du serveur de suivi est figee DANS le binaire a
+          # la compilation (`option_env!`), pas ecrite dans le depot — il est public, et
+          # l'adresse d'un serveur prive n'a pas a y etre indexee. Secrets absents = la
+          # remontee est simplement inactive, ce qui est le cas des builds locaux.
+          COCKPIT_REPORT_URL: ${{ secrets.COCKPIT_REPORT_URL }}
+          COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
+          # Serveur maison sans certificat : le HTTP est assume ici, explicitement.
+          COCKPIT_REPORT_ALLOW_HTTP: ${{ secrets.COCKPIT_REPORT_ALLOW_HTTP }}
         with:
           # `bundle.active` est volontairement absent de tauri.conf.json : l'y mettre a true
           # ECRASE le --no-bundle de la CLI et casserait le build de dev local (il tenterait

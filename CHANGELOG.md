@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **La remontée des erreurs fonctionne maintenant vers un serveur sans certificat.** Elle
+  exigeait une adresse sécurisée et restait donc inactive sur un serveur d'équipe en HTTP.
+- **Les erreurs remontées disent d'où elles viennent.** Certaines portaient une origine
+  dérivée d'un nom de variable (« global.dest »), inexploitable ; elles nomment désormais
+  l'action concernée (« agents.doDeletePlugin », « appearance.loadWallpaper »). Une erreur
+  qui partait en double n'est plus signalée qu'une fois.
+
 ## [0.29.0] — 2026-08-19
 
 ### Added

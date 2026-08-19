@@ -100,7 +100,7 @@ function loadSettings() {
     if (typeof s.wallpaperBlur === "number") wallpaperBlur.set(clamp(s.wallpaperBlur, 0, 24));
     // s.glassShine (0.24.0-0.25.1) : option retiree avec le verre depoli, ignoree si presente
   } catch (e) {
-      signalerErreur("appearance.s", String(e));
+      signalerErreur("appearance.loadSettings", String(e));
     // Reglages corrompus : on repart des valeurs par defaut plutot que de casser le demarrage.
   }
 }
