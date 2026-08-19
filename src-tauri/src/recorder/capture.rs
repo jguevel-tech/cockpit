@@ -52,6 +52,16 @@ pub fn startup_error(mic: &str, system: &str) -> String {
     if !system.is_empty() && system != mic {
         details.push(format!("son systeme : {}", borne(system)));
     }
+    // Cas reconnu : PipeWire tourne, mais aucune entree audio n'est exposee. Le message
+    // brut (« no node available ») ne dit pas quoi faire.
+    if mic.contains("no node available") || system.contains("no node available") {
+        details.push(
+            "aucune entree audio disponible — verifie qu'un micro est branche et \
+             selectionne dans les reglages de son du systeme"
+                .to_string(),
+        );
+    }
+
     if details.is_empty() {
         // Aucune sortie : pw-record est mort sans rien dire.
         "pw-record s'est arrete aussitot, sans message. Verifie que PipeWire tourne \
@@ -60,6 +70,34 @@ pub fn startup_error(mic: &str, system: &str) -> String {
     } else {
         format!("pw-record a echoue au demarrage — {}", details.join(" ; "))
     }
+}
+
+/// `pw-record` accepte-t-il `-P` (proprietes de noeud) ?
+///
+/// L'option n'existe pas avant PipeWire 0.3.5x : sur Ubuntu 22.04 (libpipewire 0.3.48)
+/// elle fait echouer la commande avec « option invalide -- 'P' », et l'enregistrement du
+/// son systeme mourait aussitot. On lit donc l'aide de la commande une seule fois, et on
+/// choisit la forme qu'elle comprend. Cockpit ne demande pas a l'utilisateur de mettre son
+/// systeme a jour pour une option d'outil.
+fn supports_properties_flag() -> bool {
+    static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SUPPORTED.get_or_init(|| {
+        std::process::Command::new("pw-record")
+            .arg("--help")
+            .output()
+            .map(|out| {
+                // L'aide part sur stdout ou stderr selon la version.
+                let mut help = String::from_utf8_lossy(&out.stdout).to_string();
+                help.push_str(&String::from_utf8_lossy(&out.stderr));
+                help_mentions_properties(&help)
+            })
+            .unwrap_or(false)
+    })
+}
+
+/// Reconnait l'option de proprietes dans l'aide de pw-record.
+fn help_mentions_properties(help: &str) -> bool {
+    help.contains("--properties") || help.contains("-P ")
 }
 
 fn spawn_pw_record(out_path: &Path, capture_sink: bool) -> Result<Child, String> {
@@ -73,8 +111,14 @@ fn spawn_pw_record(out_path: &Path, capture_sink: bool) -> Result<Child, String>
     let mut cmd = Command::new("pw-record");
     cmd.args(["--rate", "16000", "--channels", "1", "--format", "s16"]);
     if capture_sink {
-        // Capture le monitor du sink par defaut = tout ce qui sort des enceintes/casque
-        cmd.args(["-P", "stream.capture.sink=true"]);
+        // Capture le monitor du sink par defaut = tout ce qui sort des enceintes/casque.
+        // Deux facons de le demander selon l'age de pw-record ; la variable
+        // d'environnement est comprise par les versions qui ignorent `-P`.
+        if supports_properties_flag() {
+            cmd.args(["-P", "stream.capture.sink=true"]);
+        } else {
+            cmd.env("PIPEWIRE_PROPS", "{ stream.capture.sink=true }");
+        }
     }
     cmd.arg("-") // "-" = PCM brut sur stdout
         .stdout(std::process::Stdio::from(file))
@@ -166,10 +210,36 @@ mod tests {
     }
 
     #[test]
+    fn absence_d_entree_audio_expliquee() {
+        let msg = startup_error("remote error: res:-2 no node available", "");
+        assert!(msg.contains("aucune entree audio disponible"), "{msg}");
+        assert!(msg.contains("micro"), "{msg}");
+    }
+
+    #[test]
     fn sortie_longue_bornee() {
         let long = "x".repeat(1000);
         let msg = startup_error(&long, "");
         assert!(msg.chars().count() < 400, "message trop long: {}", msg.chars().count());
+    }
+
+    #[test]
+    fn aide_recente_annonce_l_option_de_proprietes() {
+        // pw-record 1.0.5
+        let aide = "  -v, --verbose                         Enable verbose operations\n  \
+                    -P  --properties                      Set node properties\n";
+        assert!(help_mentions_properties(aide));
+    }
+
+    #[test]
+    fn aide_ancienne_ne_l_annonce_pas() {
+        // pw-record 0.3.48 (Ubuntu 22.04) : c'est l'aide remontee par l'utilisateur dont
+        // l'enregistrement du son systeme echouait sur « option invalide -- 'P' ».
+        let aide = "pw-record [options] <file>\n  -h, --help                            Show this help\n  \
+                    --version                         Show version\n  \
+                    -v, --verbose                     Enable verbose operations\n  \
+                    -R, --remote                      Remote daemon name\n";
+        assert!(!help_mentions_properties(aide));
     }
 
     #[test]

@@ -26,6 +26,14 @@ const ALLOW = new Set(["px", "ms", "fr", "en", "id", "px)", "%", "OK",
   "docker-compose.yml", "docker compose", "Ctrl+S", "Aa",
   // Sigles et valeurs de configuration, identiques dans les deux langues.
   "CPU", "RSS", "PID", "auto", "in-process", "tmux", "sk-...", "gpt-4o", "ccm-xxx",
+  "Ctrl", "Start", "Stop", "Restart", "Pull", "Push", "⬇ Pull", "⬆ Push", "main",
+  "⎇ main ▾", "running", "stopped", "running · 8080→80",
+  // Donnees d'exemple des maquettes de la documentation : noms de projets fictifs,
+  // commandes et termes de recherche. Elles illustrent, elles ne s'affichent pas.
+  "Core", "api-gateway", "worker", "mon-projet", "MON-PROJET - 1 ×", "MON-PROJET - 2 ×",
+  "COCKPIT - 1", "COCKPIT - 2", "Préprod", "Staging", "Dev", "Tests", "make up",
+  "cargo test", "api", "timeout", "🔍 timeout", "const TIMEOUT = 30_000;", "web-1", "Up", "Français", "English",
+  "· src/utils/timeout.ts", "→ cockpit-sauvegarde-2026-08-14.db",
   // Noms propres, entites HTML, exemples de commande et noms de signaux : identiques
   // dans les deux langues, ils n'ont rien a faire dans un catalogue.
   "Claude", "&times;", "npm run dev", "SIGTERM"]);
@@ -51,6 +59,7 @@ const TECHNIQUE = [
   /^[a-z]+([A-Z][a-z0-9]*)+$/, // cleDeConfiguration
   /[/@~]/,                     // chemins, plugin@marketplace
   /^&[a-z]+;$/,                // entites HTML
+  /^[\w.-]+\.[a-z]{2,4}$/,     // noms de fichiers : notes.md, logo.png
 ];
 const estTechnique = (s) => !s.includes(" ") && TECHNIQUE.some((re) => re.test(s));
 
@@ -104,7 +113,12 @@ for (const file of files.sort()) {
 
   // 4) Texte de markup entre deux balises, hors <script>.
   if (file.endsWith(".svelte")) {
-    const markup = src.replace(/<script[\s\S]*?<\/script>/g, (m) => m.replace(/[^\n]/g, " "));
+    let markup = src.replace(/<script[\s\S]*?<\/script>/g, blank);
+    // Les maquettes de la documentation contiennent du code et des sorties de terminal
+    // donnes en exemple (`.d-term`, `.d-code`) : ils s'ecrivent pareil dans toutes les
+    // langues. Les LIBELLES d'interface de ces maquettes, eux, sont bien traduits — ils
+    // reutilisent les cles de l'interface, ce qui les fait suivre la langue choisie.
+    markup = markup.replace(/<div class="d-(term|code)"[\s\S]*?<\/div>/g, blank);
     for (const m of markup.matchAll(/>([^<>{}]+)</g)) push(m.index + 1, "markup", m[1]);
   }
 }

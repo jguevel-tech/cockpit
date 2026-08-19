@@ -12,6 +12,25 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Cockpit parle français et anglais.** La langue se choisit dans Paramètres → Général :
+  l'interface bascule aussitôt, sans redémarrage, et le choix est retenu au prochain
+  lancement. Tout est traduit — les huit onglets de projet, le tableau de bord, les
+  paramètres, les messages d'erreur affichés, les menus du clic droit, jusqu'à la
+  documentation intégrée et ses illustrations, qui suivent la langue choisie.
+
+### Fixed
+
+- **L'enregistrement de réunion ne casse plus sur les systèmes livrés avec une version
+  ancienne de PipeWire.** La capture du son système utilisait une option de `pw-record`
+  absente avant PipeWire 0.3.5x (Ubuntu 22.04 par exemple) : la commande refusait de
+  démarrer et l'enregistrement échouait aussitôt. Cockpit détecte désormais ce que la
+  commande installée accepte et emploie la forme qu'elle comprend — rien à mettre à jour
+  sur la machine.
+- **Quand aucune entrée audio n'est disponible, le message le dit** et indique quoi
+  vérifier, au lieu de laisser l'erreur brute de PipeWire (« no node available »).
+
 ## [0.27.4] — 2026-08-19
 
 ### Fixed
