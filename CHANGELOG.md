@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-08-19
+
 ### Added
 
 - **Cockpit parle français et anglais.** La langue se choisit dans Paramètres → Général :
