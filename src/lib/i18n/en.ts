@@ -465,6 +465,8 @@ export const en: Catalog = {
   "project.noPath": "This project has no path: set one in Settings.",
   "project.urlOnline": "Online (HTTP {status})",
   "project.urlUnreachable": "Unreachable — {detail}",
+  "rec.lostMic": "Recording started without the microphone: no audio input available. Only the system sound is captured.",
+  "rec.lostSystem": "Recording started without the system sound: only your voice is captured.",
   "rec.failed": "⚠ Meeting failed",
   "rec.retryTranscription": "Retry transcription",
   "rec.deleteConfirm": "Delete this failed recording (audio included)?",

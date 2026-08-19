@@ -40,6 +40,22 @@ pub struct RecordingStatus {
     pub state: String,
     pub error: Option<String>,
     pub started_at: String,
+    /// Piste perdue au demarrage : "mic" ou "system". Un CODE, pas une phrase : c'est
+    /// l'interface qui l'affiche, dans la langue choisie.
+    pub lost_track: Option<String>,
+}
+
+/// Quelle piste manque, quand l'enregistrement demarre quand meme.
+///
+/// Renvoie un CODE ("mic" / "system") et non une phrase : l'interface le traduit dans la
+/// langue choisie. `None` quand les deux pistes tournent — ou quand aucune ne tourne, cas
+/// qui n'est pas un avertissement mais une erreur, traitee par l'appelant.
+fn lost_track_code(mic_ok: bool, sys_ok: bool) -> Option<&'static str> {
+    match (mic_ok, sys_ok) {
+        (false, true) => Some("mic"),
+        (true, false) => Some("system"),
+        _ => None,
+    }
 }
 
 fn emit_status(app: &AppHandle, status: &RecordingStatus) {
@@ -81,7 +97,7 @@ pub async fn start(
     let dir = recordings_root(&app)?.join(format!("rec_{}", rec.id));
     db.set_recording_dir(rec.id, &dir.to_string_lossy())?;
 
-    let mut handles = match capture::start_capture(&dir) {
+    let mut handles = match capture::start_capture(&dir).await {
         Ok(h) => h,
         Err(e) => {
             let _ = db.delete_recording(rec.id);
@@ -90,10 +106,10 @@ pub async fn start(
         }
     };
 
-    // Laisse pw-record s'attacher aux devices ; s'il meurt tout de suite,
-    // PipeWire est probablement indisponible.
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    if !handles.is_alive() {
+    // start_capture a deja laisse le temps aux enregistreurs de s'attacher, et bascule
+    // sur PulseAudio toute piste que PipeWire n'a pas su demarrer.
+    let (mic_ok, sys_ok) = handles.alive_tracks();
+    if !mic_ok && !sys_ok {
         // Ce que pw-record a dit AVANT de nettoyer : le dossier part juste apres.
         let why = handles.startup_error();
         let _ = handles.stop().await;
@@ -101,6 +117,10 @@ pub async fn start(
         let _ = std::fs::remove_dir_all(&dir);
         return Err(why);
     }
+    // Une seule piste suffit pour enregistrer utilement : sans micro on garde le son
+    // systeme (on entend les autres), sans son systeme on garde la voix. L'utilisateur
+    // doit en etre averti, sinon il croit enregistrer les deux.
+    let lost_track = lost_track_code(mic_ok, sys_ok).map(str::to_string);
 
     let status = RecordingStatus {
         recording_id: rec.id,
@@ -108,6 +128,7 @@ pub async fn start(
         state: "recording".into(),
         error: None,
         started_at: started_at.clone(),
+        lost_track,
     };
 
     {
@@ -147,6 +168,7 @@ pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result
             state: "transcribing".into(),
             error: None,
             started_at,
+            lost_track: None,
         },
     );
 
@@ -162,6 +184,7 @@ pub fn active_status(state: &RecorderState) -> Option<RecordingStatus> {
         state: "recording".into(),
         error: None,
         started_at: a.started_at.clone(),
+            lost_track: None,
     })
 }
 
@@ -183,6 +206,7 @@ pub fn retry(app: AppHandle, db: Database, recording_id: i64) -> Result<(), Stri
             state: "transcribing".into(),
             error: None,
             started_at: rec.started_at,
+            lost_track: None,
         },
     );
     tauri::async_runtime::spawn(run_pipeline(app, db, recording_id));
@@ -231,6 +255,7 @@ async fn run_pipeline(app: AppHandle, db: Database, recording_id: i64) {
             state: state.into(),
             error: error.map(String::from),
             started_at: rec.started_at.clone(),
+            lost_track: None,
         },
     );
 }
@@ -285,6 +310,7 @@ async fn pipeline_inner(
             state: "summarizing".into(),
             error: None,
             started_at: rec.started_at.clone(),
+            lost_track: None,
         },
     );
 
@@ -336,6 +362,29 @@ fn format_duration(secs: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sans_micro_on_signale_le_micro() {
+        // Cas remonte par un utilisateur : le son systeme se capte, le micro non.
+        // L'enregistrement doit partir quand meme, en le signalant.
+        assert_eq!(lost_track_code(false, true), Some("mic"));
+    }
+
+    #[test]
+    fn sans_son_systeme_on_signale_le_systeme() {
+        assert_eq!(lost_track_code(true, false), Some("system"));
+    }
+
+    #[test]
+    fn deux_pistes_vivantes_ne_signalent_rien() {
+        assert_eq!(lost_track_code(true, true), None);
+    }
+
+    #[test]
+    fn aucune_piste_n_est_pas_un_avertissement() {
+        // C'est une erreur, remontee ailleurs avec la sortie de pw-record.
+        assert_eq!(lost_track_code(false, false), None);
+    }
+
     use super::*;
 
     #[test]

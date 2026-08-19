@@ -12,6 +12,25 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **L'enregistrement de réunion fonctionne maintenant sur les machines où le son est géré
+  par PulseAudio.** C'est le cas d'Ubuntu 22.04 : PipeWire y est installé, mais ce n'est pas
+  lui qui gère l'audio, si bien que Cockpit ne voyait aucun micro (« no node available »)
+  alors qu'il y en avait un. Cockpit essaie désormais PipeWire puis, pour chaque piste qui
+  ne démarre pas, bascule sur l'outil PulseAudio. Rien à installer ni à mettre à jour.
+- **Un enregistrement démarre même si une seule des deux pistes répond**, avec un
+  avertissement indiquant laquelle manque, au lieu de tout refuser. Il n'échoue que si
+  aucune des deux ne fonctionne — et le message dit alors ce que chaque outil a répondu.
+
+### Fixed
+
+- **Un enregistrement de réunion démarre désormais même si une seule des deux pistes est
+  disponible.** Sur une machine où le micro n'est pas exposé par PipeWire, l'enregistrement
+  entier échouait alors que le son système, lui, se captait très bien : on perdait la seule
+  piste qui fonctionnait. Cockpit enregistre maintenant ce qui est disponible et prévient
+  clairement de la piste manquante. Il ne refuse que si aucune des deux ne répond.
+
 ## [0.28.0] — 2026-08-19
 
 ### Added

@@ -1,6 +1,8 @@
 import { writable } from "svelte/store";
 import { listen } from "@tauri-apps/api/event";
 import { getActiveRecording } from "../api/recorder";
+import { notify } from "./toast";
+import { translate } from "../i18n";
 import type { RecordingStatus } from "../types";
 
 // Pipeline en cours (recording/transcribing/summarizing), null sinon
@@ -18,4 +20,9 @@ listen<RecordingStatus>("recording_status", (e) => {
   const s = e.payload;
   lastRecordingEvent.set(s);
   recordingStatus.set(s.state === "done" || s.state === "error" ? null : s);
+  // Une piste manquante n'empeche plus d'enregistrer, mais le dire est obligatoire :
+  // sans cela l'utilisateur croit capter son micro alors qu'il ne capte que le systeme.
+  if (s.lost_track) {
+    notify(translate(s.lost_track === "mic" ? "rec.lostMic" : "rec.lostSystem"), "info");
+  }
 });

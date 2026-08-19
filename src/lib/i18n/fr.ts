@@ -473,6 +473,8 @@ export const fr = {
   "project.noPath": "Ce projet n'a pas de chemin : renseigne-le dans Paramètres.",
   "project.urlOnline": "En ligne (HTTP {status})",
   "project.urlUnreachable": "Injoignable — {detail}",
+  "rec.lostMic": "Enregistrement lancé sans le micro : aucune entrée audio disponible. Seul le son système est capté.",
+  "rec.lostSystem": "Enregistrement lancé sans le son système : seule ta voix est captée.",
   "rec.failed": "⚠ Réunion en échec",
   "rec.retryTranscription": "Réessayer la transcription",
   "rec.deleteConfirm": "Supprimer cet enregistrement en échec (audio inclus) ?",

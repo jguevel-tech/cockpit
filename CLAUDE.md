@@ -18,7 +18,11 @@ rappeler aucune de ces etapes.
 
 ### A chaque fonctionnalite
 
-1. **Coder**, en respectant les regles non negociables ci-dessous.
+1. **Coder**, en respectant les regles non negociables ci-dessous. **Tout libelle affiche
+   s'ecrit directement dans les deux catalogues** (`src/lib/i18n/fr.ts` puis `en.ts`) et
+   s'affiche par `{$trad("cle")}` : la traduction fait partie du code de la fonctionnalite,
+   pas d'une passe de rattrapage. Une fonctionnalite livree dans une seule langue est une
+   fonctionnalite non finie.
 2. **Verifier** — les 5 points de la definition de "fini". Aucun n'est optionnel.
 3. **Consigner** dans `CHANGELOG.md` sous `## [Unreleased]`, section Added / Changed / Fixed /
    Removed. Uniquement si l'utilisateur peut le constater ; une refonte interne n'y a pas sa place.

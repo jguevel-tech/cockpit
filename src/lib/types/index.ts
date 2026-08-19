@@ -221,6 +221,8 @@ export interface RecordingStatus {
   state: RecordingState;
   error: string | null;
   started_at: string;
+  /** Piste perdue au demarrage : "mic" ou "system". Un code, traduit a l'affichage. */
+  lost_track?: "mic" | "system" | null;
 }
 
 export interface TerminalInfo {

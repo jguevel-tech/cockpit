@@ -1,0 +1,21 @@
+# Recette : Ubuntu 22.04 tel que l'ont les testeurs, avec PulseAudio comme serveur audio.
+#
+# C'est le point important : sur 22.04, `pipewire` est installable mais ce n'est PAS le
+# serveur audio par defaut — PulseAudio l'est. `pw-record` n'y voit alors aucun noeud
+# (« no node available »), exactement ce qu'un utilisateur a remonte. Cette image sert a
+# reproduire ce cas au lieu de le deviner.
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb dbus-x11 x11-utils \
+      libgtk-3-0 libwebkit2gtk-4.1-0 libglib2.0-0 libgl1 libegl1 \
+      libwayland-client0 libwayland-server0 libwayland-cursor0 libwayland-egl1 \
+      pulseaudio pulseaudio-utils \
+      pipewire pipewire-bin \
+      tmux python3 python3-gi ca-certificates procps \
+  && rm -rf /var/lib/apt/lists/*
+
+# Un utilisateur non root : PulseAudio refuse de tourner en root.
+RUN useradd -m -u 1000 recette
+USER recette
+WORKDIR /home/recette
