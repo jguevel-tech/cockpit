@@ -7,6 +7,7 @@
   import { reorder, type DropPosition } from "../../utils/reorder";
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
+  import { trad } from "../../i18n";
 
   let { project }: { project: string } = $props();
 
@@ -61,7 +62,7 @@
 
 <div class="todo-list">
   <div class="header">
-    <h3>Todos</h3>
+    <h3>{$trad("todos.title")}</h3>
     {#if doneTodos.length > 0}
       <button class="toggle-done" class:active={showDone} onclick={() => showDone = !showDone}>
         Terminées ({doneTodos.length})
@@ -70,7 +71,7 @@
   </div>
   {#if !showDone}
     <div class="add-row">
-      <input type="text" bind:value={newText} placeholder="Nouvelle tache..." onkeydown={onKeydown} />
+      <input type="text" bind:value={newText} placeholder={$trad("todos.newPlaceholder")} onkeydown={onKeydown} />
       <button onclick={add}>+</button>
     </div>
   {/if}
@@ -97,7 +98,7 @@
           <button
             class="text-btn"
             onclick={() => (editingId = todo.id)}
-            title="Cliquer pour editer"
+            title={$trad("common.clickToEdit")}
           >{todo.text}</button>
         {/if}
         {#if editingDueId === todo.id}
@@ -118,9 +119,9 @@
             title="Échéance {todo.due_date} — cliquer pour modifier (vider = retirer)"
           >{dueLabel(todo.due_date)}</button>
         {:else if !todo.done}
-          <button class="due-add" onclick={() => (editingDueId = todo.id)} title="Ajouter une échéance">📅</button>
+          <button class="due-add" onclick={() => (editingDueId = todo.id)} title={$trad("todos.addDue")}>📅</button>
         {/if}
-        <button class="del" onclick={() => remove(todo.id)} title="Supprimer">×</button>
+        <button class="del" onclick={() => remove(todo.id)} title={$trad("common.delete")}>×</button>
       </li>
     {/each}
     {#if visibleTodos.length === 0}

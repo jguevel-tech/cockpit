@@ -2,6 +2,7 @@
   import { goHome, openSettings, openDocs, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
   import { toggleBase } from "../../stores/appearance";
   import { unreadCount } from "../../stores/notifications";
+  import { trad, tradN } from "../../i18n";
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
 
   // Cloche TOUJOURS visible : c'est le point d'entree unique des notifications, l'utilisateur
@@ -16,31 +17,29 @@
 
 <header>
   <h1>
-    <button class="logo-btn" onclick={goHome}>Cockpit</button>
+    <button class="logo-btn" onclick={goHome}>{$trad("header.appName")}</button>
   </h1>
   <div class="header-right">
     <button
       class="header-btn bell-btn"
       class:has-unread={$unreadCount > 0}
       onclick={() => (showNotifications = !showNotifications)}
-      title={$unreadCount > 0
-        ? `${$unreadCount} notification${$unreadCount > 1 ? "s" : ""} non lue${$unreadCount > 1 ? "s" : ""}`
-        : "Notifications"}
-      aria-label="Notifications"
+      title={$unreadCount > 0 ? $tradN("header.unread", $unreadCount) : $trad("header.notifications")}
+      aria-label={$trad("header.notifications")}
     >
       &#128276;
       {#if $unreadCount > 0}
         <span class="badge">{$unreadCount > 9 ? "9+" : $unreadCount}</span>
       {/if}
     </button>
-    <div class="zoom-group" title="Zoom de l'interface (Ctrl+molette)">
-      <button class="header-btn zoom-btn" onclick={zoomOut} disabled={atMin} aria-label="Dézoomer">&#8722;</button>
-      <button class="zoom-value" onclick={zoomReset} title="Revenir à 100 %">{zoomPercent}&nbsp;%</button>
-      <button class="header-btn zoom-btn" onclick={zoomIn} disabled={atMax} aria-label="Zoomer">&#43;</button>
+    <div class="zoom-group" title={$trad("header.zoom")}>
+      <button class="header-btn zoom-btn" onclick={zoomOut} disabled={atMin} aria-label={$trad("header.zoomOut")}>&#8722;</button>
+      <button class="zoom-value" onclick={zoomReset} title={$trad("header.zoomReset")}>{zoomPercent}&nbsp;%</button>
+      <button class="header-btn zoom-btn" onclick={zoomIn} disabled={atMax} aria-label={$trad("header.zoomIn")}>&#43;</button>
     </div>
-    <button class="header-btn docs-btn" onclick={openDocs} title="Documentation — toutes les fonctionnalités en exemples">i</button>
-    <button class="header-btn" onclick={openSettings} title="Parametres">&#9881;</button>
-    <button class="header-btn" onclick={toggleBase} title="Changer le theme">&#9681;</button>
+    <button class="header-btn docs-btn" onclick={openDocs} title={$trad("header.docs")}>i</button>
+    <button class="header-btn" onclick={openSettings} title={$trad("header.settings")}>&#9881;</button>
+    <button class="header-btn" onclick={toggleBase} title={$trad("header.theme")}>&#9681;</button>
   </div>
 </header>
 

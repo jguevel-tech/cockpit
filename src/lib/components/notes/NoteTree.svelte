@@ -6,6 +6,7 @@
   import InlineEdit from "../ui/InlineEdit.svelte";
   import NoteEditor from "./NoteEditor.svelte";
   import { onMount } from "svelte";
+  import { trad } from "../../i18n";
 
   let { project }: { project: string } = $props();
 
@@ -41,7 +42,7 @@
   }
 
   async function removeFolder(id: number) {
-    if (!confirm("Supprimer ce dossier et son contenu ?")) return;
+    if (!confirm($trad("notes.deleteFolderConfirm"))) return;
     try { await deleteNoteFolder(id); await loadTree(); } catch (e) { notify(String(e)); }
   }
 
@@ -229,9 +230,9 @@
 <div class="notes">
   <div class="tree-panel">
     <div class="tree-header">
-      <h3>Notes</h3>
-      <button class="sm-btn" onclick={addFolder} title="Nouveau dossier">📁+</button>
-      <button class="sm-btn" onclick={() => addFile(null)} title="Nouveau fichier">📄+</button>
+      <h3>{$trad("notes.title")}</h3>
+      <button class="sm-btn" onclick={addFolder} title={$trad("notes.newFolder")}>📁+</button>
+      <button class="sm-btn" onclick={() => addFile(null)} title={$trad("notes.newFile")}>📄+</button>
     </div>
 
     {#each tree.folders as folder, fi}
@@ -348,7 +349,7 @@
   {#if selectedFile}
     <NoteEditor file={selectedFile} onRename={(name) => renameFile(selectedFile!.id, name)} />
   {:else}
-    <div class="editor-panel empty-editor">Selectionnez un fichier</div>
+    <div class="editor-panel empty-editor">{$trad("notes.selectFile")}</div>
   {/if}
 </div>
 

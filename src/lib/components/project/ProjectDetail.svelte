@@ -18,6 +18,7 @@
   import GitTab from "./GitTab.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import { notify } from "../../stores/toast";
+  import { trad } from "../../i18n";
 
   let { name }: { name: string } = $props();
   let urls: Url[] = $state([]);
@@ -96,7 +97,7 @@
   }
 
   async function doDeleteRecording(id: number) {
-    if (!confirm("Supprimer cet enregistrement en echec (audio inclus) ?")) return;
+    if (!confirm($trad("rec.deleteConfirm"))) return;
     try { await deleteRecording(id); await loadFailedRecordings(); } catch (e) { notify(String(e)); }
   }
 
@@ -109,7 +110,7 @@
     try {
       const cmds = await getProjectCommands(name);
       if (cmds.length === 0) {
-        notify("Aucune commande rapide : ajoute-en dans Paramètres → Commandes.", "info");
+        notify($trad("project.noQuickCommand"), "info");
         return;
       }
       cmdMenu = { x: e.clientX, y: e.clientY, cmds };
@@ -117,7 +118,7 @@
   }
 
   async function runCommand(c: ProjectCommand) {
-    if (!project?.path) { notify("Ce projet n'a pas de chemin : renseigne-le dans Paramètres."); return; }
+    if (!project?.path) { notify($trad("project.noPath")); return; }
     try {
       const tid = await createTerminal(name, project.path, 80, 24, c.command);
       pendingTerminalId.set(tid);
@@ -141,13 +142,13 @@
 
   // Ajouter un onglet = une seule entree ici (+ le type activeTab dans ui.ts)
   const tabs = [
-    { id: "workspace" as const, label: "Workspace", component: WorkspaceTab },
-    { id: "docker" as const, label: "Docker", component: DockerTab },
-    { id: "terminal" as const, label: "Terminal", component: TerminalTab },
-    { id: "files" as const, label: "Fichiers", component: FilesTab },
-    { id: "git" as const, label: "Git", component: GitTab },
-    { id: "plugins" as const, label: "Plugins", component: PluginsTab },
-    { id: "settings" as const, label: "Parametres", component: SettingsTab },
+    { id: "workspace" as const, labelKey: "tab.workspace" as const, component: WorkspaceTab },
+    { id: "docker" as const, labelKey: "tab.docker" as const, component: DockerTab },
+    { id: "terminal" as const, labelKey: "tab.terminal" as const, component: TerminalTab },
+    { id: "files" as const, labelKey: "tab.files" as const, component: FilesTab },
+    { id: "git" as const, labelKey: "tab.git" as const, component: GitTab },
+    { id: "plugins" as const, labelKey: "tab.plugins" as const, component: PluginsTab },
+    { id: "settings" as const, labelKey: "tab.settings" as const, component: SettingsTab },
   ];
   let CurrentTab = $derived(tabs.find((t) => t.id === $activeTab)?.component ?? WorkspaceTab);
 </script>
@@ -173,12 +174,12 @@
         <button
           class="tab" class:active={$activeTab === tab.id}
           onclick={() => activeTab.set(tab.id)}
-        >{tab.label}</button>
+        >{$trad(tab.labelKey)}</button>
       {/each}
     </div>
 
     <div class="header-actions">
-      <button class="cmd-btn" onclick={openCmdMenu} title="Lancer une commande du projet dans un terminal (à définir dans Paramètres)">▶ Cmd</button>
+      <button class="cmd-btn" onclick={openCmdMenu} title={$trad("project.runCommandHint")}>{$trad("project.runCommand")}</button>
       {#if urls.length > 0}
         {#each urls as u}
           {@const h = urlHealth.get(u.url)}
@@ -187,7 +188,7 @@
             href={u.url}
             target="_blank"
             rel="noopener noreferrer"
-            title={h ? (h.ok ? `En ligne (HTTP ${h.status})` : `Injoignable — ${h.error || `HTTP ${h.status}`}`) : u.url}
+            title={h ? (h.ok ? $trad("project.urlOnline", { status: h.status }) : $trad("project.urlUnreachable", { detail: h.error || `HTTP ${h.status}` })) : u.url}
           >
             <span class="url-dot" class:up={h?.ok} class:down={h && !h.ok}></span>{u.label}
           </a>
@@ -195,27 +196,27 @@
       {/if}
       {#if failedRecordings.length > 0}
         <span class="rec-failed" title={failedRecordings[0].error ?? ""}>
-          ⚠ Réunion en échec
-          <button class="rec-failed-action" onclick={() => doRetryRecording(failedRecordings[0].id)} title="Réessayer la transcription">↻</button>
-          <button class="rec-failed-action" onclick={() => doDeleteRecording(failedRecordings[0].id)} title="Supprimer">✕</button>
+          {$trad("rec.failed")}
+          <button class="rec-failed-action" onclick={() => doRetryRecording(failedRecordings[0].id)} title={$trad("rec.retryTranscription")}>↻</button>
+          <button class="rec-failed-action" onclick={() => doDeleteRecording(failedRecordings[0].id)} title={$trad("common.delete")}>✕</button>
         </span>
       {/if}
       {#if recHere?.state === "recording"}
         <span class="rec-timer"><span class="rec-dot"></span>{recElapsed}</span>
-        <button class="rec-btn stop" onclick={toggleRecording} disabled={recBusy} title="Arreter l'enregistrement">⏹ Stop</button>
+        <button class="rec-btn stop" onclick={toggleRecording} disabled={recBusy} title={$trad("rec.stopHint")}>{$trad("rec.stop")}</button>
       {:else if recHere}
         <span class="rec-pipeline">
-          {recHere.state === "transcribing" ? "Transcription…" : "Résumé…"}
+          {recHere.state === "transcribing" ? $trad("rec.transcribing") : $trad("rec.summarizing")}
         </span>
       {:else if recDoneFlash}
-        <span class="rec-done">✓ Note créée</span>
+        <span class="rec-done">{$trad("rec.noteCreated")}</span>
       {:else}
         <button
           class="rec-btn"
           onclick={toggleRecording}
           disabled={recBusy || !!rec}
-          title={rec ? `Enregistrement en cours sur "${rec.project}"` : "Enregistrer la réunion (micro + son système)"}
-        >⏺ Enregistrer</button>
+          title={rec ? $trad("rec.busyElsewhere", { project: rec.project }) : $trad("rec.startHint")}
+        >{$trad("rec.start")}</button>
       {/if}
     </div>
   </div>

@@ -4,10 +4,11 @@
   import { selectProject } from "../../stores/ui";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { portal } from "../../actions/portal";
+  import { trad } from "../../i18n";
 
   async function browsePath() {
     try {
-      const selected = await openDialog({ directory: true, multiple: false, title: "Choisir le dossier du projet" });
+      const selected = await openDialog({ directory: true, multiple: false, title: $trad("newProject.browseTitle") });
       if (typeof selected === "string") {
         path = selected;
         // Pre-remplit le nom si vide, depuis le dossier choisi
@@ -83,38 +84,38 @@
 <div class="overlay" role="dialog" aria-modal="true" use:portal onclick={onOverlayClick} onkeydown={onKeydown}>
   <div class="modal">
     <div class="modal-header">
-      <h3>Nouveau projet</h3>
+      <h3>{$trad("newProject.title")}</h3>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
 
     <div class="modal-body">
       <label>
-        <span>Nom <span class="required">*</span></span>
+        <span>{$trad("newProject.name")} <span class="required">*</span></span>
         <!-- svelte-ignore a11y_autofocus -->
-        <input type="text" bind:value={name} placeholder="mon-projet" autofocus />
+        <input type="text" bind:value={name} placeholder={$trad("newProject.namePlaceholder")} autofocus />
       </label>
 
       <label>
-        <span>Chemin <span class="optional">(optionnel)</span></span>
+        <span>{$trad("newProject.path")} <span class="optional">{$trad("common.optional")}</span></span>
         <div class="path-row">
-          <input type="text" bind:value={path} placeholder="/chemin/vers/projet" />
-          <button type="button" class="browse-btn" onclick={browsePath} title="Parcourir…">📁</button>
+          <input type="text" bind:value={path} placeholder={$trad("newProject.pathPlaceholder")} />
+          <button type="button" class="browse-btn" onclick={browsePath} title={$trad("newProject.browse")}>📁</button>
         </div>
       </label>
 
       <label>
-        <span>Fichier compose <span class="optional">(optionnel)</span></span>
+        <span>{$trad("newProject.composeFile")} <span class="optional">{$trad("common.optional")}</span></span>
         <input type="text" bind:value={composeFile} placeholder="docker-compose.yml" disabled={!path.trim()} />
       </label>
 
       <label>
-        <span>Description <span class="optional">(optionnel)</span></span>
-        <textarea bind:value={description} placeholder="Description du projet" rows="2"></textarea>
+        <span>{$trad("newProject.description")} <span class="optional">{$trad("common.optional")}</span></span>
+        <textarea bind:value={description} placeholder={$trad("newProject.descriptionPlaceholder")} rows="2"></textarea>
       </label>
 
       <label>
-        <span>Dependances <span class="optional">(optionnel)</span></span>
-        <input type="text" bind:value={dependsOn} placeholder="projet-a, projet-b" />
+        <span>{$trad("newProject.dependencies")} <span class="optional">{$trad("common.optional")}</span></span>
+        <input type="text" bind:value={dependsOn} placeholder={$trad("newProject.dependenciesPlaceholder")} />
       </label>
 
       {#if error}
@@ -123,9 +124,9 @@
     </div>
 
     <div class="modal-footer">
-      <button class="btn-cancel" onclick={close}>Annuler</button>
+      <button class="btn-cancel" onclick={close}>{$trad("common.cancel")}</button>
       <button class="btn-create" onclick={submit} disabled={creating}>
-        {creating ? "Creation..." : "Creer"}
+        {creating ? $trad("newProject.creating") : $trad("newProject.create")}
       </button>
     </div>
   </div>

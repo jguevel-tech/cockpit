@@ -10,6 +10,7 @@
   import { dueLabel, dueUrgency } from "../../utils/due";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { Todo } from "../../types";
+  import { trad } from "../../i18n";
 
   let pendingTodos: Todo[] = $state([]);
 
@@ -178,7 +179,7 @@
 
 <div class="todos-panel">
   <div class="panel-header">
-    <h3>Tâches en cours</h3>
+    <h3>{$trad("tasks.title")}</h3>
     <span class="task-count">{totalTodoCount} tâches</span>
   </div>
   <div class="todos-list">
@@ -217,8 +218,8 @@
           >
             <button
               class="todo-checkbox"
-              title="Marquer comme termine"
-              aria-label="Marquer comme termine"
+              title={$trad("todos.markDone")}
+              aria-label={$trad("todos.markDone")}
               onclick={(e) => { e.stopPropagation(); toggleDone(todo); }}
               ondragstart={(e) => e.preventDefault()}
             ></button>
@@ -233,7 +234,7 @@
                 class="todo-text-btn"
                 onclick={(e) => { e.stopPropagation(); startEditTodo(todo); }}
                 ondragstart={(e) => e.preventDefault()}
-                title="Cliquer pour editer"
+                title={$trad("common.clickToEdit")}
               >{todo.text}</button>
             {/if}
             {#if todo.due_date}
@@ -243,8 +244,8 @@
             {/if}
             <button
               class="todo-del"
-              title="Supprimer"
-              aria-label="Supprimer"
+              title={$trad("common.delete")}
+              aria-label={$trad("common.delete")}
               onclick={(e) => { e.stopPropagation(); removeTodo(todo); }}
               ondragstart={(e) => e.preventDefault()}
             >×</button>
@@ -253,7 +254,7 @@
       </div>
     {/each}
     {#if groupedTodos.length === 0}
-      <p class="empty">Aucune tâche en attente</p>
+      <p class="empty">{$trad("tasks.empty")}</p>
     {/if}
   </div>
 </div>

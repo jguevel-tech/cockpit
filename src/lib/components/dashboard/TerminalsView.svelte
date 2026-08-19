@@ -6,6 +6,7 @@
   import { groupBy } from "../../utils/reorder";
   import { notify } from "../../stores/toast";
   import type { TerminalInfo } from "../../types";
+  import { trad } from "../../i18n";
 
   let allTerminals: TerminalInfo[] = $state([]);
   let terminalsLoaded = $state(false);
@@ -34,8 +35,8 @@
 
 <div class="terminals-panel">
   <div class="panel-header">
-    <h3>Terminaux en cours</h3>
-    <button class="metrics-btn" onclick={loadTerminals} title="Rafraîchir">↻</button>
+    <h3>{$trad("terminals.title")}</h3>
+    <button class="metrics-btn" onclick={loadTerminals} title={$trad("common.refresh")}>↻</button>
   </div>
   {#if groupedTerminals.length === 0}
     <p class="empty">
@@ -49,10 +50,10 @@
           <span class="group-count">{group.terminals.length}</span>
         </button>
         {#each group.terminals as t, i (t.id)}
-          <button class="term-row" onclick={() => gotoTerminal(t)} title="Aller à ce terminal">
-            {#if t.llm && t.alive}<img class="term-llm" src={claudeLogo} alt="Claude" title="Claude en cours dans ce terminal" />{:else}<span class="term-dot" class:dead={!t.alive} title="Terminal"></span>{/if}
+          <button class="term-row" onclick={() => gotoTerminal(t)} title={$trad("terminals.goTo")}>
+            {#if t.llm && t.alive}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" class:dead={!t.alive} title={$trad("sidebar.terminal")}></span>{/if}
             <span class="term-label">{terminalLabel(t, i)}</span>
-            {#if !t.alive}<span class="term-state">terminé</span>{/if}
+            {#if !t.alive}<span class="term-state">{$trad("terminals.finished")}</span>{/if}
             <span class="term-go">→</span>
           </button>
         {/each}

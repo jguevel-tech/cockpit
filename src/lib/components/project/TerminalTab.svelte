@@ -5,6 +5,7 @@
   import { notify as notifyGlobal } from "../../stores/toast";
   import type { Terminal as XTerminal } from "@xterm/xterm";
   import type { FitAddon as XFitAddon } from "@xterm/addon-fit";
+  import { trad } from "../../i18n";
 
   /// POOL PERSISTANT — LE COEUR DE L'ARCHITECTURE TERMINAUX (NE PAS RE-LOCALISER).
   ///
@@ -480,11 +481,11 @@
     // JAMAIS de retour silencieux ici : c'est exactement ce qui a laisse le premier
     // utilisateur externe cliquer sur + sans que rien ne se passe ni ne s'affiche.
     if (!project) {
-      notify("Projet introuvable dans la liste — redémarre Cockpit ou vérifie sa configuration.");
+      notify($trad("term.projectNotFound"));
       return;
     }
     if (!project.path) {
-      notify("Ce projet n'a pas de chemin : renseigne-le dans l'onglet Paramètres du projet.");
+      notify($trad("term.noProjectPath"));
       return;
     }
     // On mesure AVANT de creer le PTY : le shell (et une TUI lancee via
@@ -749,7 +750,7 @@
           onclick={() => activate(s.id)}
           ondblclick={() => startRename(s, i)}
           oncontextmenu={(e) => { e.preventDefault(); startRename(s, i); }}
-          title="Double-clic ou clic droit pour renommer"
+          title={$trad("term.renameHint")}
         >
           {tabLabel(s, i)}
           <span
@@ -762,7 +763,7 @@
         </button>
       {/if}
     {/each}
-    <button class="term-add" onclick={() => addTerminal()} title="Nouveau terminal">+</button>
+    <button class="term-add" onclick={() => addTerminal()} title={$trad("term.new")}>+</button>
 
     {#if searchOpen}
       <span class="term-search">
@@ -770,33 +771,33 @@
           class="term-search-input"
           bind:this={searchInputEl}
           bind:value={searchQuery}
-          placeholder="Rechercher dans l'historique…"
+          placeholder={$trad("term.searchPlaceholder")}
           onkeydown={(e) => {
             if (e.key === "Enter") { e.preventDefault(); runSearch(); }
             else if (e.key === "Escape") closeSearch();
           }}
         />
-        <button class="term-search-btn" onclick={() => searchStep("next")} title="Occurrence plus ancienne" disabled={!searchStarted}>↑</button>
-        <button class="term-search-btn" onclick={() => searchStep("prev")} title="Occurrence plus récente" disabled={!searchStarted}>↓</button>
-        <button class="term-search-btn" onclick={() => closeSearch()} title="Fermer (Échap)">×</button>
+        <button class="term-search-btn" onclick={() => searchStep("next")} title={$trad("term.searchOlder")} disabled={!searchStarted}>↑</button>
+        <button class="term-search-btn" onclick={() => searchStep("prev")} title={$trad("term.searchNewer")} disabled={!searchStarted}>↓</button>
+        <button class="term-search-btn" onclick={() => closeSearch()} title={$trad("term.searchClose")}>×</button>
       </span>
     {:else}
-      <button class="term-search-btn" onclick={openSearch} title="Rechercher dans l'historique (Ctrl+Maj+F)">🔍</button>
+      <button class="term-search-btn" onclick={openSearch} title={$trad("term.searchHint")}>🔍</button>
     {/if}
 
     <div class="claude-menu">
-      <button class="term-claude" onclick={toggleClaude} title="Reprendre une conversation Claude Code">
-        ✳ Claude ▾
+      <button class="term-claude" onclick={toggleClaude} title={$trad("term.claudeMenuHint")}>
+        {$trad("term.claudeMenu")}
       </button>
       {#if claudeOpen}
         <div class="claude-dropdown">
           <button class="claude-item new" onclick={() => { claudeOpen = false; addTerminal("claude"); }}>
-            + Nouvelle session claude
+            {$trad("term.claudeNewSession")}
           </button>
           {#if claudeLoading}
             <div class="claude-item muted">Chargement…</div>
           {:else if claudeSessions.length === 0}
-            <div class="claude-item muted">Aucune conversation passée sur ce projet</div>
+            <div class="claude-item muted">{$trad("term.noPastConversation")}</div>
           {:else}
             {#each claudeSessions as cs (cs.id)}
               {#if renamingClaudeId === cs.id}
@@ -805,7 +806,7 @@
                   class="claude-rename"
                   type="text"
                   bind:value={renameClaudeValue}
-                  placeholder="Nom (vide = label auto)"
+                  placeholder={$trad("term.sessionNamePlaceholder")}
                   onblur={commitRenameClaude}
                   onkeydown={(e) => {
                     if (e.key === "Enter") commitRenameClaude();
@@ -821,7 +822,7 @@
                   </button>
                   <button
                     class="claude-edit"
-                    title="Renommer cette session"
+                    title={$trad("term.renameSession")}
                     onclick={(e) => { e.stopPropagation(); startRenameClaude(cs); }}
                   >✎</button>
                 </div>
@@ -841,10 +842,10 @@
     oncontextmenu={openCtxMenu}
   >
     {#if sessions.length === 0}
-      <div class="term-empty">Aucun terminal. Clique sur + pour en ouvrir un.</div>
+      <div class="term-empty">{$trad("term.empty")}</div>
     {/if}
     {#if dropOver}
-      <div class="drop-hint">Lâcher pour insérer le chemin du fichier</div>
+      <div class="drop-hint">{$trad("term.dropHint")}</div>
     {/if}
   </div>
 </div>
@@ -854,8 +855,8 @@
     x={ctxMenu.x}
     y={ctxMenu.y}
     items={[
-      { label: "Copier", action: copySelection },
-      { label: "Coller", action: pasteClipboard },
+      { label: $trad("common.copy"), action: copySelection },
+      { label: $trad("common.paste"), action: pasteClipboard },
     ]}
     onClose={() => (ctxMenu = null)}
   />

@@ -12,6 +12,7 @@
 import { getSystemMetrics } from "../api/system";
 import { pushNotice, removeNotice } from "./notifications";
 import { openSystem } from "./ui";
+import { translate } from "../i18n";
 
 const SAMPLE_MS = 60_000;
 
@@ -55,11 +56,11 @@ async function check() {
       pushNotice({
         id,
         kind: "warning",
-        title: `Disque presque plein — ${d.mount}`,
+        title: translate("alerts.diskFull", { mount: d.mount }),
         body: `**${Math.round(d.percent)} %** utilisés, ${formatGb(d.free)} libres.`,
         createdAt: new Date().toISOString(),
         dismissible: true,
-        action: { label: "Voir le monitoring", run: openSystem },
+        action: { label: translate("alerts.seeMonitoring"), run: openSystem },
       });
     } else if (d.percent < DISK_CLEAR && diskAlerted.has(d.mount)) {
       diskAlerted.delete(d.mount);
@@ -74,11 +75,11 @@ async function check() {
     pushNotice({
       id: "sys:mem",
       kind: "warning",
-      title: "Mémoire saturée",
+      title: translate("alerts.memoryFull"),
       body: `**${Math.round(m.memory.percent)} %** utilisés depuis plusieurs minutes.`,
       createdAt: new Date().toISOString(),
       dismissible: true,
-      action: { label: "Voir le monitoring", run: openSystem },
+      action: { label: translate("alerts.seeMonitoring"), run: openSystem },
     });
   } else if (memAlerted && m.memory.percent < MEM_CLEAR) {
     memAlerted = false;
@@ -92,11 +93,11 @@ async function check() {
     pushNotice({
       id: "sys:cpu",
       kind: "warning",
-      title: "CPU saturé",
+      title: translate("alerts.cpuFull"),
       body: `**${Math.round(m.cpu.usage_percent)} %** depuis plusieurs minutes — un processus tourne peut-être en boucle.`,
       createdAt: new Date().toISOString(),
       dismissible: true,
-      action: { label: "Voir le monitoring", run: openSystem },
+      action: { label: translate("alerts.seeMonitoring"), run: openSystem },
     });
   } else if (cpuAlerted && m.cpu.usage_percent < CPU_CLEAR) {
     cpuAlerted = false;

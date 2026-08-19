@@ -11,6 +11,7 @@ import { getPendingTodos } from "../api/storage";
 import { pushNotice, removeNotice } from "./notifications";
 import { selectProject } from "./ui";
 import { daysUntil, dueLabel } from "../utils/due";
+import { translate } from "../i18n";
 
 const CHECK_MS = 30 * 60 * 1000; // le jour peut changer en cours de session
 
@@ -43,11 +44,11 @@ async function check() {
     pushNotice({
       id,
       kind: overdue ? "warning" : "info",
-      title: overdue ? "Tâche en retard" : "Tâche pour aujourd'hui",
+      title: overdue ? translate("alerts.todoOverdue") : translate("alerts.todoToday"),
       body: `**${t.project}** — ${t.text} *(${dueLabel(t.due_date)})*`,
       createdAt: new Date().toISOString(),
       dismissible: true,
-      action: { label: "Voir le projet", run: () => selectProject(project) },
+      action: { label: translate("alerts.seeProject"), run: () => selectProject(project) },
     });
   }
 

@@ -6,6 +6,7 @@
   import { notify } from "../../stores/toast";
   import ContainerLogsModal from "../docker/ContainerLogsModal.svelte";
   import type { Project } from "../../types";
+  import { trad } from "../../i18n";
 
   let { name }: { name: string } = $props();
   let loading = $state("");
@@ -26,7 +27,7 @@
   /// Ouvre un shell DANS le conteneur : un vrai terminal Cockpit du projet, avec
   /// docker exec injecte (bash si l'image en a un, sinon sh).
   async function openShell(containerName: string) {
-    if (!project?.path) { notify("Ce projet n'a pas de chemin configuré."); return; }
+    if (!project?.path) { notify($trad("docker.noPathConfigured")); return; }
     try {
       const cmd = `docker exec -it ${containerName} sh -c '[ -x /bin/bash ] && exec bash || exec sh'`;
       const tid = await createTerminal(name, project.path, 80, 24, cmd);
@@ -46,22 +47,20 @@
 {#if project}
 <div class="docker-tab">
   {#if !project.path}
-    <p class="no-docker">Ce projet n'a pas de repertoire configure. Les controles Docker ne sont pas disponibles.</p>
+    <p class="no-docker">{$trad("docker.noPath")}</p>
   {:else}
   {#if !project.has_compose}
     <!-- Le fichier compose est optionnel dans Cockpit : cet ecran doit expliquer l'absence,
          pas laisser docker repondre "no configuration file provided: not found". -->
     <div class="notice">
       <p>
-        Aucun fichier compose trouve dans <code>{project.path}</code>.
-        Les commandes Start / Stop / Restart passent par <code>docker compose</code> : elles ne
-        peuvent pas aboutir sans lui.
+        {$trad("docker.noComposeIn")} <code>{project.path}</code>. {$trad("docker.noComposeWhy")}
       </p>
       <p class="notice-fix">
-        Placez un <code>docker-compose.yml</code> dans le dossier du projet, ou indiquez le nom
-        du fichier a utiliser dans les parametres.
+        {$trad("docker.noComposeFixBefore")} <code>docker-compose.yml</code>
+        {$trad("docker.noComposeFixAfter")}
       </p>
-      <button class="btn" onclick={() => activeTab.set("settings")}>Ouvrir les parametres du projet</button>
+      <button class="btn" onclick={() => activeTab.set("settings")}>{$trad("docker.openProjectSettings")}</button>
     </div>
   {/if}
   <div class="controls">
@@ -83,22 +82,22 @@
 
   {#if project.depends_on.length > 0}
     <div class="deps">
-      <strong>Depend de:</strong>
+      <strong>{$trad("docker.dependsOn")}</strong>
       {#each project.depends_on as dep}<span class="dep-badge">{dep}</span>{/each}
     </div>
   {/if}
 
   {#if project.depended_by.length > 0}
     <div class="deps">
-      <strong>Requis par:</strong>
+      <strong>{$trad("docker.requiredBy")}</strong>
       {#each project.depended_by as dep}<span class="dep-badge">{dep}</span>{/each}
     </div>
   {/if}
 
   {#if project.containers.length > 0}
-    <h3>Conteneurs</h3>
+    <h3>{$trad("docker.containers")}</h3>
     <table>
-      <thead><tr><th>Service</th><th>Nom</th><th>Statut</th><th>Health</th><th>Ports</th><th></th></tr></thead>
+      <thead><tr><th>{$trad("docker.colService")}</th><th>{$trad("docker.colName")}</th><th>{$trad("docker.colStatus")}</th><th>{$trad("docker.colHealth")}</th><th>{$trad("docker.colPorts")}</th><th></th></tr></thead>
       <tbody>
         {#each project.containers as c}
           <tr>
@@ -108,9 +107,9 @@
             <td>{c.health || '-'}</td>
             <td class="ports">{c.ports || '-'}</td>
             <td class="row-actions">
-              <button class="mini" onclick={() => (logsFor = c.name)} title="Voir les logs">Logs</button>
+              <button class="mini" onclick={() => (logsFor = c.name)} title={$trad("docker.logsHint")}>{$trad("docker.logs")}</button>
               {#if c.status === 'running'}
-                <button class="mini" onclick={() => openShell(c.name)} title="Ouvrir un shell dans le conteneur">Shell</button>
+                <button class="mini" onclick={() => openShell(c.name)} title={$trad("docker.shellHint")}>{$trad("docker.shell")}</button>
               {/if}
             </td>
           </tr>
@@ -118,7 +117,7 @@
       </tbody>
     </table>
   {:else}
-    <p class="no-containers">Aucun conteneur actif</p>
+    <p class="no-containers">{$trad("docker.noContainer")}</p>
   {/if}
   {/if}
 </div>
