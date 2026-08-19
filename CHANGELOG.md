@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.29.5] — 2026-08-19
+
 ### Fixed
 
 - **Cockpit ne gèle plus à l'ouverture d'un terminal sur les distributions récentes.** Sur
