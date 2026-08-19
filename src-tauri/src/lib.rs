@@ -1202,6 +1202,61 @@ fn toggle_plugin_enabled(plugin_key: String, enabled: bool) -> Result<(), String
 // --- App Setup ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Ecarte les polices emoji en couleur du format COLRv1, pour l'interface de Cockpit
+/// UNIQUEMENT.
+///
+/// Le moteur de rendu embarque dans l'AppImage est plus ancien que ces polices : sur Fedora
+/// (`Noto-COLRv1.ttf`), il echoue sur une assertion interne au moment de dessiner un emoji
+/// dans le terminal, et la fenetre gele — sans trace, puisque l'assertion tue le processus de
+/// rendu. Confirme par un utilisateur : en ecartant cette police, l'onglet Terminal
+/// redevient utilisable.
+///
+/// On n'agit QUE dans l'AppImage (c'est son moteur qui est en cause, pas celui du systeme)
+/// et QUE pour notre processus : la configuration du systeme n'est pas touchee, les autres
+/// programmes gardent leurs emoji en couleur. Les notres s'affichent alors avec la police de
+/// repli — moins joli qu'un gel de l'application.
+#[cfg(target_os = "linux")]
+fn ecarter_polices_colrv1() {
+    if std::env::var_os("APPDIR").is_none() {
+        return;
+    }
+    // Respecte une configuration deja choisie par l'utilisateur.
+    if std::env::var_os("FONTCONFIG_FILE").is_some() {
+        return;
+    }
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share"))
+        });
+    let Some(dir) = base.map(|b| b.join("com.cockpit.dev")) else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let chemin = dir.join("fonts.conf");
+    if std::fs::write(&chemin, configuration_polices()).is_err() {
+        return;
+    }
+    std::env::set_var("FONTCONFIG_FILE", &chemin);
+}
+
+/// Contenu de la configuration de polices : celle du systeme, moins les polices COLRv1.
+fn configuration_polices() -> String {
+    // `include` d'abord : sans la configuration du systeme, plus AUCUNE police n'est
+    // trouvee et l'interface s'affiche en carres.
+    concat!(
+        "<?xml version=\"1.0\"?>\n",
+        "<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n",
+        "<fontconfig>\n",
+        "  <include ignore_missing=\"yes\">/etc/fonts/fonts.conf</include>\n",
+        "  <selectfont><rejectfont><glob>*COLRv1*</glob></rejectfont></selectfont>\n",
+        "</fontconfig>\n",
+    )
+    .to_string()
+}
+
 /// Precharge la libwayland-client DU SYSTEME pour les process enfants.
 ///
 /// Le WebKitWebProcess, qui fait le rendu, est un process enfant : il herite de
@@ -1261,6 +1316,11 @@ pub fn run() {
     // d'ou ce contournement ici. Doit etre pose AVANT l'init GTK.
     #[cfg(target_os = "linux")]
     preload_system_libwayland();
+
+    // Le moteur de rendu embarque gele sur les polices emoji COLRv1 des distributions
+    // recentes (Fedora). Doit etre pose AVANT l'init GTK, comme les reglages ci-dessus.
+    #[cfg(target_os = "linux")]
+    ecarter_polices_colrv1();
 
     // Un panic Rust ne passe par aucun `catch` de l'interface : sans ce filet, il ne
     // laissait aucune trace. Le journal local est ecrit ici meme (l'envoi, lui, demande un
@@ -1588,4 +1648,23 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn la_configuration_de_polices_inclut_celle_du_systeme() {
+        // Sans cet include, plus aucune police n'est trouvee : l'interface s'affiche en
+        // carres, ce qui serait pire que le defaut corrige.
+        let conf = super::configuration_polices();
+        assert!(conf.contains("/etc/fonts/fonts.conf"), "{conf}");
+        assert!(conf.contains("ignore_missing"), "{conf}");
+    }
+
+    #[test]
+    fn la_configuration_ecarte_les_polices_colrv1() {
+        let conf = super::configuration_polices();
+        assert!(conf.contains("rejectfont"), "{conf}");
+        assert!(conf.contains("*COLRv1*"), "{conf}");
+    }
 }

@@ -72,9 +72,70 @@ fn b64(data: &[u8]) -> String {
 /// constate le 2026-08-13), et LD_LIBRARY_PATH pouvait derregler n'importe quel binaire.
 const APPIMAGE_LEAKED_VARS: &[&str] = &[
     "PYTHONHOME", "PYTHONPATH", "LD_LIBRARY_PATH", "LD_PRELOAD",
-    "APPDIR", "APPIMAGE", "OWD", "GTK_PATH", "GDK_PIXBUF_MODULE_FILE",
-    "GIO_MODULE_DIR", "GSETTINGS_SCHEMA_DIR", "PERLLIB",
+    "APPDIR", "APPIMAGE", "APPIMAGE_ORIGINAL_APPDIR", "ARGV0", "OWD", "PERLLIB",
+    // Injectees par le hook GTK du bundle (verifiees dans l'AppImage publiee) : elles
+    // designent le montage /tmp/.mount_cockpi*, qui disparait et n'a rien a voir avec
+    // l'environnement de l'utilisateur.
+    "GTK_PATH", "GTK_EXE_PREFIX", "GTK_DATA_PREFIX", "GTK_IM_MODULE_FILE", "GTK_THEME",
+    "GDK_PIXBUF_MODULE_FILE", "GDK_BACKEND",
+    "GIO_MODULE_DIR", "GIO_EXTRA_MODULES", "GSETTINGS_SCHEMA_DIR", "GI_TYPELIB_PATH",
+    "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SYSTEM_PATH_1_0", "GST_PLUGIN_PATH",
+    "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SCANNER", "GST_PLUGIN_SCANNER_1_0",
+    // Notre propre configuration de polices (voir lib.rs) : elle sert au rendu de
+    // l'interface, pas aux programmes lances dans un terminal.
+    "FONTCONFIG_FILE", "FONTCONFIG_PATH",
 ];
+
+/// Variables qui sont des LISTES de chemins : on ne les supprime pas — le shell et les
+/// outils en ont besoin — on en retire seulement les entrees situees dans le montage de
+/// l'AppImage.
+const APPIMAGE_PATH_LISTS: &[&str] = &["XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "PATH"];
+
+/// Retire d'une liste `:` les chemins situes sous `appdir`.
+///
+/// Un utilisateur a signale des erreurs de `mise` dans les terminaux de Cockpit : ce genre
+/// d'outil lit XDG_DATA_DIRS et le PATH, et l'AppImage y ajoutait son propre montage. Ce
+/// n'etait donc ni son installation ni un probleme de `mise`.
+fn sans_chemins_appimage(valeur: &str, appdir: &str) -> String {
+    valeur
+        .split(':')
+        .filter(|part| !part.is_empty() && !part.starts_with(appdir))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+/// Ce qu'il faut changer a l'environnement avant de lancer une commande destinee a
+/// l'utilisateur (shell, tmux) : les variables a RETIRER, et celles a REDEFINIR.
+///
+/// Rend les deux listes au lieu d'agir directement : l'appelant les applique a sa commande,
+/// et la decision reste testable sans lancer de processus.
+fn modifications_environnement(
+    appdir: Option<&str>,
+    lire: &dyn Fn(&str) -> Option<String>,
+) -> (Vec<&'static str>, Vec<(&'static str, String)>) {
+    let mut retirer: Vec<&'static str> = APPIMAGE_LEAKED_VARS.to_vec();
+    let mut redefinir: Vec<(&'static str, String)> = Vec::new();
+    let Some(appdir) = appdir.filter(|d| !d.is_empty()) else {
+        return (retirer, redefinir);
+    };
+    for var in APPIMAGE_PATH_LISTS {
+        if let Some(valeur) = lire(var) {
+            let propre = sans_chemins_appimage(&valeur, appdir);
+            if propre.is_empty() {
+                retirer.push(var);
+            } else if propre != valeur {
+                redefinir.push((var, propre));
+            }
+        }
+    }
+    (retirer, redefinir)
+}
+
+/// Les memes modifications, calculees depuis l'environnement du processus.
+fn modifications_environnement_courant() -> (Vec<&'static str>, Vec<(&'static str, String)>) {
+    let appdir = std::env::var("APPDIR").ok();
+    modifications_environnement(appdir.as_deref(), &|v| std::env::var(v).ok())
+}
 
 /// Chemin du binaire tmux a utiliser, resolu UNE FOIS par setup_bundled_tmux().
 /// Vide tant que la resolution n'a pas eu lieu -> repli sur le tmux du PATH.
@@ -181,8 +242,12 @@ fn tmux_cmd(args: &[&str]) -> std::process::Command {
     cmd.arg("-u").arg("-L").arg(TMUX_SOCKET).args(args);
     cmd.env("LANG", utf8_locale()).env("LC_ALL", utf8_locale());
     // Le serveur tmux (et donc tous les shells) herite de CET environnement.
-    for var in APPIMAGE_LEAKED_VARS {
+    let (retirer, redefinir) = modifications_environnement_courant();
+    for var in retirer {
         cmd.env_remove(var);
+    }
+    for (var, valeur) in redefinir {
+        cmd.env(var, valeur);
     }
     cmd
 }
@@ -575,9 +640,14 @@ impl TerminalState {
         cmd.env("LANG", utf8_locale());
         cmd.env("LC_ALL", utf8_locale());
         // Ce client peut etre celui qui DEMARRE le serveur : meme nettoyage que tmux_cmd,
-        // sinon l'environnement AppImage fuite dans tous les shells (python3 casse).
-        for var in APPIMAGE_LEAKED_VARS {
+        // sinon l'environnement AppImage fuite dans tous les shells (python3 casse, et un
+        // utilisateur a vu `mise` echouer pour la meme raison).
+        let (retirer, redefinir) = modifications_environnement_courant();
+        for var in retirer {
             cmd.env_remove(var);
+        }
+        for (var, valeur) in redefinir {
+            cmd.env(var, valeur);
         }
 
         let child = pair
@@ -889,6 +959,71 @@ impl TerminalState {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn les_variables_du_montage_appimage_sont_retirees() {
+        let (retirer, _) = modifications_environnement(None, &|_| None);
+        for attendue in ["PYTHONHOME", "LD_LIBRARY_PATH", "GIO_EXTRA_MODULES", "GI_TYPELIB_PATH"] {
+            assert!(retirer.contains(&attendue), "{attendue} devrait etre retiree");
+        }
+    }
+
+    #[test]
+    fn gst_est_retire_car_il_masquait_le_gstreamer_du_systeme() {
+        let (retirer, _) = modifications_environnement(None, &|_| None);
+        assert!(retirer.contains(&"GST_PLUGIN_SYSTEM_PATH_1_0"));
+    }
+
+    #[test]
+    fn les_listes_de_chemins_perdent_seulement_les_entrees_du_montage() {
+        // XDG_DATA_DIRS ne doit PAS disparaitre : le shell et les outils s'en servent.
+        // Seule l'entree pointant dans le montage de l'AppImage s'en va.
+        let lire = |v: &str| match v {
+            "XDG_DATA_DIRS" => Some("/tmp/.mount_ck1/usr/share:/usr/share:/usr/local/share".to_string()),
+            _ => None,
+        };
+        let (_, redefinir) = modifications_environnement(Some("/tmp/.mount_ck1"), &lire);
+        let valeur = redefinir
+            .iter()
+            .find(|(k, _)| *k == "XDG_DATA_DIRS")
+            .map(|(_, v)| v.clone())
+            .expect("XDG_DATA_DIRS devrait etre redefinie");
+        assert_eq!(valeur, "/usr/share:/usr/local/share");
+    }
+
+    #[test]
+    fn une_liste_entierement_dans_le_montage_est_retiree() {
+        let lire = |v: &str| match v {
+            "XDG_CONFIG_DIRS" => Some("/tmp/.mount_ck1/etc/xdg".to_string()),
+            _ => None,
+        };
+        let (retirer, redefinir) = modifications_environnement(Some("/tmp/.mount_ck1"), &lire);
+        assert!(retirer.contains(&"XDG_CONFIG_DIRS"));
+        assert!(redefinir.iter().all(|(k, _)| *k != "XDG_CONFIG_DIRS"));
+    }
+
+    #[test]
+    fn hors_appimage_les_listes_ne_sont_pas_touchees() {
+        let lire = |v: &str| match v {
+            "PATH" => Some("/usr/bin:/bin".to_string()),
+            _ => None,
+        };
+        let (_, redefinir) = modifications_environnement(None, &lire);
+        assert!(redefinir.is_empty(), "{redefinir:?}");
+    }
+
+    #[test]
+    fn le_path_garde_les_entrees_de_l_utilisateur() {
+        // Cas de l'utilisateur dont `mise` echouait : ses raccourcis sont dans son PATH,
+        // il ne faut surtout pas le vider.
+        let lire = |v: &str| match v {
+            "PATH" => Some("/tmp/.mount_ck1/usr/bin:/home/moi/.local/share/mise/shims:/usr/bin".to_string()),
+            _ => None,
+        };
+        let (_, redefinir) = modifications_environnement(Some("/tmp/.mount_ck1"), &lire);
+        let path = redefinir.iter().find(|(k, _)| *k == "PATH").map(|(_, v)| v.clone()).unwrap();
+        assert_eq!(path, "/home/moi/.local/share/mise/shims:/usr/bin");
+    }
+
     use super::*;
 
     #[test]

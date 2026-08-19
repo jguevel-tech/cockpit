@@ -12,6 +12,19 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cockpit ne gèle plus à l'ouverture d'un terminal sur les distributions récentes.** Sur
+  Fedora, afficher un emoji dans le terminal figeait la fenêtre sans message : le moteur
+  d'affichage embarqué est plus ancien que les polices emoji en couleur du système. Ces
+  polices sont maintenant écartées pour Cockpit seulement — les emoji s'affichent avec la
+  police de remplacement, le reste du système n'est pas touché.
+- **Les outils lancés dans un terminal Cockpit retrouvent l'environnement de la machine.**
+  L'application transmettait aux terminaux des chemins qui la concernaient elle seule, ce qui
+  faisait échouer des outils comme `mise` — sans que ce soit un problème d'installation. Les
+  listes de chemins du système (PATH, dossiers de données) gardent maintenant tout ce qui
+  appartient à l'utilisateur et perdent seulement ce qui venait de Cockpit.
+
 ## [0.29.4] — 2026-08-19
 
 ### Fixed
