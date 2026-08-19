@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-08-19
+
 ### Fixed
 
 - **L'enregistrement de réunion fonctionne maintenant sur les machines où le son est géré
