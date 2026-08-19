@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.27.4] — 2026-08-19
+
 ### Fixed
 
 - **L'échec d'un enregistrement de réunion dit maintenant ce qui s'est réellement passé.**
