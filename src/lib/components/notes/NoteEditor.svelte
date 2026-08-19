@@ -6,7 +6,9 @@
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { NoteFile } from "../../types";
-  import { trad } from "../../i18n";
+  import { trad, translate } from "../../i18n";
+  import { openUrl } from "../../api/workspace";
+  import { signalerErreur } from "../../stores/errors";
 
   let {
     file,
@@ -21,6 +23,8 @@
   let markdownContent = $state("");
   let editorEl: HTMLDivElement | undefined = $state(undefined);
   let renaming = $state(false);
+  /// Ctrl enfonce : les liens deviennent cliquables et le curseur le montre.
+  let ctrlEnfonce = $state(false);
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let currentId: number | null = null;
@@ -52,6 +56,39 @@
     try { await saveNoteFile(id, content); } catch (e) { notify(String(e)); }
   }
 
+  /// Ouvre un lien de la note dans le navigateur du systeme.
+  ///
+  /// Ctrl+clic et non clic simple : la zone est un editeur, un clic doit pouvoir placer le
+  /// curseur pour corriger le texte d'un lien. C'est aussi le geste deja utilise ailleurs
+  /// dans Cockpit (terminal, onglet Fichiers) et dans les editeurs en general.
+  async function onEditorClick(e: MouseEvent) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const lien = (e.target as HTMLElement | null)?.closest("a");
+    const href = lien?.getAttribute("href");
+    if (!href) return;
+    e.preventDefault();
+
+    // Une note peut contenir n'importe quoi (collage, import) : on n'ouvre que des schemas
+    // sans danger. Un refus est DIT, jamais silencieux.
+    let cible: URL;
+    try {
+      cible = new URL(href, "http://note.invalid");
+    } catch {
+      notify(translate("note.linkInvalid", { href }), "error", 4000, { scope: "notes.lien" });
+      return;
+    }
+    if (!["http:", "https:", "mailto:"].includes(cible.protocol)) {
+      notify(translate("note.linkRefused"), "info", 5000, { report: false });
+      return;
+    }
+    try {
+      await openUrl(href);
+    } catch (err) {
+      signalerErreur("notes.ouvrirLien", String(err));
+      notify(String(err), "error", 4000, { report: false });
+    }
+  }
+
   function onEditorInput() {
     if (!editorEl) return;
     markdownContent = turndown.turndown(editorEl.innerHTML);
@@ -77,6 +114,12 @@
   }
 </script>
 
+<svelte:window
+  onkeydown={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = true; }}
+  onkeyup={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = false; }}
+  onblur={() => (ctrlEnfonce = false)}
+/>
+
 <div class="editor-panel">
   <div class="editor-header">
     {#if renaming}
@@ -86,7 +129,11 @@
         onCancel={() => (renaming = false)}
       />
     {:else}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- Zone d'edition : elle est deja focalisable et editable au clavier (contenteditable).
+       Le clic sert uniquement a ouvrir un lien avec Ctrl, geste souris qui n'a pas
+       d'equivalent clavier utile ici. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
       <span class="file-title" ondblclick={() => (renaming = true)}>{file.name}</span>
     {/if}
     <div class="toolbar">
@@ -103,20 +150,32 @@
       <button class="tb" onclick={() => format("formatBlock", "blockquote")} title={$trad("note.quote")}>❝</button>
       <span class="tb-sep"></span>
       <button class="tb" onclick={() => format("formatBlock", "pre")} title={$trad("note.codeBlock")}>&lt;/&gt;</button>
-      <button class="tb" onclick={() => { const url = prompt("URL :"); if (url) format("createLink", url); }} title={$trad("note.link")}>🔗</button>
+      <button class="tb" onclick={() => { const url = prompt($trad("note.linkUrlPrompt")); if (url) format("createLink", url); }} title={$trad("note.link")}>🔗</button>
     </div>
   </div>
 
+  <!-- Zone d'edition : elle est deja focalisable et editable au clavier (contenteditable).
+       Le clic sert uniquement a ouvrir un lien avec Ctrl, geste souris qui n'a pas
+       d'equivalent clavier utile ici. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     bind:this={editorEl}
     class="editor"
+    class:liens-actifs={ctrlEnfonce}
     contenteditable="true"
+    title={$trad("note.openHint")}
     oninput={onEditorInput}
+    onclick={onEditorClick}
   ></div>
 </div>
 
 <style>
   .editor-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  /* Les liens ne deviennent cliquables qu'avec Ctrl : le curseur le montre au survol.
+     `:global` est obligatoire — le contenu vient de `innerHTML`, donc Svelte ne voit pas
+     ces balises et eliminerait la regle. */
+  .editor.liens-actifs :global(a) { cursor: pointer; text-decoration: underline; }
   .editor-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
   .file-title { font-weight: 600; font-size: 0.9rem; }
 

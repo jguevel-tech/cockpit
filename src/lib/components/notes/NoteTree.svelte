@@ -26,13 +26,13 @@
   }
 
   async function addFolder() {
-    const name = prompt("Nom du dossier :");
+    const name = prompt($trad("notes.folderNamePrompt"));
     if (!name) return;
     try { await createNoteFolder(project, null, name); await loadTree(); } catch (e) { notify(String(e)); }
   }
 
   async function addFile(folderId: number | null) {
-    const name = prompt("Nom du fichier :");
+    const name = prompt($trad("notes.fileNamePrompt"));
     if (!name) return;
     try { await createNoteFile(project, folderId, name); await loadTree(); } catch (e) { notify(String(e)); }
   }

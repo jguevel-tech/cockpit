@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Les liens des notes s'ouvrent maintenant, au Ctrl+clic**, dans ton navigateur. Le clic
+  simple reste réservé à l'édition du texte, comme dans les autres éditeurs — et comme le
+  Ctrl+clic du terminal et de l'onglet Fichiers. Au survol avec Ctrl, le curseur indique que
+  le lien est actif. Seules les adresses http, https et mailto sont ouvertes ; toute autre est
+  refusée avec un message plutôt qu'en silence.
+
 ## [0.30.0] — 2026-08-19
 
 ### Added

@@ -102,7 +102,7 @@ for (const file of files.sort()) {
   }
 
   // 2) Messages passes a l'utilisateur depuis le code.
-  for (const m of src.matchAll(/\b(notify|confirm|alert)\(\s*(["'`])((?:(?!\2).)+)\2/g)) {
+  for (const m of src.matchAll(/\b(notify|confirm|alert|prompt)\(\s*(["'`])((?:(?!\2).)+)\2/g)) {
     push(m.index, m[1], m[3]);
   }
 
