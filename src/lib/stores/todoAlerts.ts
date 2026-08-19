@@ -12,6 +12,7 @@ import { pushNotice, removeNotice } from "./notifications";
 import { selectProject } from "./ui";
 import { daysUntil, dueLabel } from "../utils/due";
 import { translate } from "../i18n";
+import { signalerErreur } from "./errors";
 
 const CHECK_MS = 30 * 60 * 1000; // le jour peut changer en cours de session
 
@@ -29,6 +30,7 @@ async function check() {
   try {
     todos = await getPendingTodos();
   } catch (e) {
+      signalerErreur("todoAlerts.check", String(e));
     // Producteur de fond : pas de toast (il repassera dans 30 min), mais pas muet non plus.
     console.error("todoAlerts:", e);
     return;

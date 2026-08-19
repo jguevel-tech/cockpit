@@ -3,6 +3,7 @@
   import Modal from "../ui/Modal.svelte";
   import { containerLogs } from "../../api/docker";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { id, name, onClose }: { id: string; name: string; onClose: () => void } = $props();
 
@@ -27,6 +28,7 @@
       text = next;
       if (atBottom) requestAnimationFrame(() => preEl?.scrollTo({ top: preEl.scrollHeight }));
     } catch (e) {
+      signalerErreur("containerLogs.atBottom", String(e));
       error = String(e);
     } finally {
       loading = false;

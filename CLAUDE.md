@@ -131,6 +131,14 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - Ajouter une surcouche sur le chemin de frappe xterm (`onData` -> PTY doit rester direct)
 - Couleur/taille en dur dans un composant : uniquement les tokens de `styles/theme.css`
 - `catch {}` muet ou `catch (e: any)` : toujours `catch (e) { notify(String(e)); }`
+- **Un `catch` qui n'appelle ni `notify()` ni `signalerErreur()`** : le message reste dans la
+  console, donc nulle part. Tout `catch` remonte l'erreur par l'un des deux, avec un `scope`
+  qui situe la panne (`"terminal.attache"`, `"projet.creation"`). Un silence VOLONTAIRE est
+  autorise — un `fit()` sur un conteneur pas encore mesure, un decodage base64 tolere — mais
+  il porte alors un commentaire qui dit pourquoi sur place, sinon c'est un oubli.
+- **Nommer une fonction comme une globale du DOM** : `reportError` existe dans le navigateur
+  (et prend UN argument). Un import oublie appelait donc la globale, sans erreur visible.
+  D'ou `signalerErreur` — meme raison que `trad` plutot que `t`.
 - **Un silence, c'est un bug** (lecon du premier utilisateur externe, 2026-08-14) :
   - garde silencieuse sur une action utilisateur (`if (!x) return;` sur un clic) : INTERDIT —
     notifier POURQUOI l'action ne peut pas se faire ;
@@ -167,6 +175,14 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   contraste correct en theme sombre uni ne prouve rien.
 
 **Reflexes obligatoires** :
+- **Remontee des erreurs** : `notify(msg)` suffit dans un composant (il appelle
+  `signalerErreur` tout seul pour les erreurs). Quand l'erreur s'affiche AUTREMENT — dans un
+  modal, un bandeau, un etat local — l'appel est a faire a la main : l'affichage local ne
+  remonte rien, ce qu'un banc a demontre sur le modal de creation de projet. Toute erreur est
+  ecrite dans `<app_data>/logs/cockpit.log` (toujours, sans consentement) et envoyee au
+  serveur de suivi si l'utilisateur l'a accepte, avec la fiche de la machine (distribution,
+  serveur audio actif, versions de pw-record/tmux, AppImage ou binaire). C'est cette fiche
+  qui a manque pendant plusieurs corrections.
 - **Tout overlay `position: fixed` (modal, menu contextuel, panneau, toast) doit porter
   `use:portal`** (actions/portal.ts, le deplace dans `<body>`). Raison : en mode image de fond,
   les conteneurs structurels portent `isolation: isolate` (components.css) — chacun est un

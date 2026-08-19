@@ -6,6 +6,7 @@
   import type { Terminal as XTerminal } from "@xterm/xterm";
   import type { FitAddon as XFitAddon } from "@xterm/addon-fit";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   /// POOL PERSISTANT — LE COEUR DE L'ARCHITECTURE TERMINAUX (NE PAS RE-LOCALISER).
   ///
@@ -348,9 +349,13 @@
     if (entry?.term.hasSelection()) {
       const sel = entry.term.getSelection();
       entry.term.clearSelection();
-      if (sel) { try { await setClipboard(sel); } catch {} }
+      if (sel) {
+        try { await setClipboard(sel); }
+        catch (e) { signalerErreur("terminal.copie", String(e)); }
+      }
     } else {
-      try { await terminalCopySelection(activeId); } catch {}
+      try { await terminalCopySelection(activeId); }
+      catch (e) { signalerErreur("terminal.copieSelection", String(e)); }
     }
     entry?.term.focus();
   }
@@ -493,6 +498,8 @@
     const entry = createXterm();
     mounted.forEach((tid) => { const e = pool.get(tid); if (e) e.el.style.display = "none"; });
     entry.el.style.display = "block";
+    // `fit()` peut echouer sur un conteneur pas encore mesure : sans consequence, la
+    // taille est renvoyee au prochain ResizeObserver. Silence VOULU, pas un oubli.
     try { entry.fit.fit(); } catch {}
     const cols = entry.term.cols || 80;
     const rows = entry.term.rows || 24;
@@ -507,7 +514,8 @@
       // vide qui retombait sur le fallback « Terminal N ».
       const created = (await listTerminals(name)).find((t) => t.id === id);
       sessions.push({ id, alive: true, name: created?.name ?? "" });
-      try { await attachTerminal(id, cols, rows); } catch {}
+      try { await attachTerminal(id, cols, rows); }
+      catch (e) { signalerErreur("terminal.attache", String(e)); }
       entry.term.onData((data) => sendInput(id, data));
       activeId = id;
       entry.term.focus();
@@ -592,7 +600,8 @@
       // Si le client est mort entre-temps (reboot du serveur tmux), le backend en relance
       // un ; s'il est vivant, l'appel est un no-op silencieux.
       try { existing.fit.fit(); } catch {}
-      try { await attachTerminal(id, existing.term.cols || 80, existing.term.rows || 24); } catch {}
+      try { await attachTerminal(id, existing.term.cols || 80, existing.term.rows || 24); }
+      catch (e) { signalerErreur("terminal.reattache", String(e)); }
     } else if (!existing) {
       await attachExisting(id);
     }
@@ -690,7 +699,7 @@
     if (claudeOpen && project?.path) {
       claudeLoading = true;
       try { claudeSessions = await listClaudeSessions(project.path); }
-      catch { claudeSessions = []; }
+      catch (e) { claudeSessions = []; signalerErreur("terminal.sessionsClaude", String(e)); }
       finally { claudeLoading = false; }
     }
   }
@@ -707,7 +716,9 @@
     try {
       await renameClaudeSession(id, renameClaudeValue);
       if (project?.path) claudeSessions = await listClaudeSessions(project.path);
-    } catch {}
+    } catch (e) {
+      signalerErreur("terminal.renommageSessionClaude", String(e));
+    }
   }
 
   async function resumeClaude(session: ClaudeSession) {
@@ -716,7 +727,8 @@
     const active = sessions.find((s) => s.id === activeId);
     if (active) {
       active.name = `Claude · ${session.label.slice(0, 24)}`;
-      try { await renameTerminal(active.id, active.name); } catch {}
+      try { await renameTerminal(active.id, active.name); }
+      catch (e) { signalerErreur("terminal.renommage", String(e)); }
       loadTerminals();
     }
   }

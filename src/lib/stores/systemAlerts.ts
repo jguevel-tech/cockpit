@@ -13,6 +13,7 @@ import { getSystemMetrics } from "../api/system";
 import { pushNotice, removeNotice } from "./notifications";
 import { openSystem } from "./ui";
 import { translate } from "../i18n";
+import { signalerErreur } from "./errors";
 
 const SAMPLE_MS = 60_000;
 
@@ -44,6 +45,7 @@ async function check() {
   try {
     m = await getSystemMetrics();
   } catch (e) {
+      signalerErreur("systemAlerts.check", String(e));
     console.error("systemAlerts:", e);
     return;
   }

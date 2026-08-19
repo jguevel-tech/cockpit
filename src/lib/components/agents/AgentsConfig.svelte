@@ -8,6 +8,7 @@
   } from "../../api/agents";
   import type { OrchestratorConfig } from "../../types";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let config: OrchestratorConfig | null = $state(null);
   let loading = $state(true);
@@ -24,6 +25,7 @@
     try {
       config = await getOrchestratorConfig();
     } catch (e) {
+      signalerErreur("agentsConfig.reload", String(e));
       errorMsg = String(e);
     } finally {
       loading = false;
@@ -38,6 +40,7 @@
       await setTeamsEnabled(enabled);
       config.experimental_teams_enabled = enabled;
     } catch (e) {
+      signalerErreur("agentsConfig.enabled", String(e));
       errorMsg = String(e);
     } finally {
       busy = false;
@@ -52,6 +55,7 @@
       await setTeammateMode(mode);
       config.teammate_mode = mode;
     } catch (e) {
+      signalerErreur("agentsConfig.mode", String(e));
       errorMsg = String(e);
     } finally {
       busy = false;
@@ -65,6 +69,7 @@
       await togglePluginEnabled(key, !current);
       await reload();
     } catch (e) {
+      signalerErreur("agentsConfig.togglePlugin", String(e));
       errorMsg = String(e);
     } finally {
       busy = false;

@@ -9,6 +9,7 @@
   import { getProjectSettings } from "../../api/scanner";
   import type { PluginInfo } from "../../types";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { name }: { name: string } = $props();
 
@@ -30,7 +31,8 @@
         try {
           const plugins = await listPlugins(m.id);
           all.push(...plugins);
-        } catch {}
+        } catch (e) {
+      signalerErreur("plugins.plugins", String(e));}
       }
       allPlugins = all;
       const enabledList = await getProjectPlugins(projectPath);
@@ -38,6 +40,7 @@
       // On stocke la forme courte (avant le @).
       enabled = new Set(enabledList.map(p => p.split('@')[0]));
     } catch (e) {
+      signalerErreur("plugins.enabledList", String(e));
       errorMsg = String(e);
     } finally {
       loading = false;
@@ -58,6 +61,7 @@
     try {
       await setProjectPlugins(projectPath, Array.from(enabled));
     } catch (e) {
+      signalerErreur("plugins.save", String(e));
       errorMsg = String(e);
     } finally {
       saving = false;

@@ -2,6 +2,7 @@
 // pour ne pas embarquer les ~220 grammaires du bundle complet dans le binaire.
 import { createHighlighterCore } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
+import { signalerErreur } from "./stores/errors";
 
 // Les modules shiki/* sont declares en ambient (vite-env.d.ts), sans types :
 // on derive le type du highlighter depuis la factory.
@@ -65,7 +66,8 @@ export async function highlightCode(code: string, lang: string, dark: boolean): 
     // Les alias (bash, dockerfile, makefile...) sont resolus par shiki ;
     // langage inconnu -> throw -> fallback <pre> brut.
     return h.codeToHtml(code, { lang, theme });
-  } catch {
+  } catch (e) {
+      signalerErreur("shiki.h", String(e));
     return `<pre class="shiki"><code>${escapeHtml(code)}</code></pre>`;
   }
 }

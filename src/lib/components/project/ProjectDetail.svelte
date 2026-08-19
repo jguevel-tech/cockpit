@@ -19,6 +19,7 @@
   import InlineEdit from "../ui/InlineEdit.svelte";
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { name }: { name: string } = $props();
   let urls: Url[] = $state([]);
@@ -58,7 +59,8 @@
 
   onMount(() => {
     (async () => {
-      try { urls = await getUrls(name); } catch {}
+      try { urls = await getUrls(name); } catch (e) {
+      signalerErreur("projectDetail.next", String(e));}
       await checkQuickUrls();
       await loadFailedRecordings();
     })();
@@ -68,7 +70,8 @@
   });
 
   async function loadFailedRecordings() {
-    try { failedRecordings = await getFailedRecordings(name); } catch {}
+    try { failedRecordings = await getFailedRecordings(name); } catch (e) {
+      signalerErreur("projectDetail.loadFailedRecordings", String(e));}
   }
 
   $effect(() => {

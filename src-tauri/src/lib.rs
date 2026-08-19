@@ -5,6 +5,7 @@ mod docker;
 mod gitdiff;
 mod lsp;
 mod plugin;
+mod report;
 mod recorder;
 mod scanner;
 pub mod storage;
@@ -851,6 +852,57 @@ fn open_url(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+/// Journalise une erreur et la remonte au serveur de suivi si l'utilisateur l'a accepte.
+///
+/// Le JOURNAL est ecrit dans tous les cas : il marche hors ligne, ne demande aucun accord,
+/// et c'est lui qu'on relit quand une erreur est signalee de vive voix. L'ENVOI, lui, est
+/// conditionne a l'accord explicite, et refuse un transport en clair (voir report::send).
+///
+/// N'echoue jamais : une remontee cassee ne doit pas ajouter une erreur a l'erreur.
+async fn report_error(
+    app: tauri::AppHandle,
+    scope: String,
+    message: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    // Tout ce qui touche la base est lu AVANT le point d'attente : la connexion n'est pas
+    // faite pour traverser un await.
+    let (autorise, utilisateur) = {
+        let db = &state.db;
+        let autorise = db.get_setting(report::CONSENT_KEY).as_deref() == Some("on");
+        let utilisateur = db
+            .get_setting(report::USER_KEY)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| whoami_fallback());
+        (autorise, utilisateur)
+    };
+
+    if let Ok(dir) = app_data_dir(&app) {
+        let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        report::append_log(&dir, &report::format_log_line(&horodatage, &scope, &message));
+    }
+
+    if autorise {
+        report::send(&scope, &message, &utilisateur).await;
+    }
+    Ok(())
+}
+
+/// Nom par defaut a cote des erreurs : le compte du systeme, faute de mieux.
+fn whoami_fallback() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .unwrap_or_else(|_| "inconnu".to_string())
+}
+
+#[tauri::command]
+/// Fiche technique de la machine, telle qu'elle accompagne les erreurs.
+/// Sert aussi a l'afficher a l'utilisateur : il doit pouvoir voir ce qui serait envoye.
+fn machine_report() -> report::MachineInfo {
+    report::machine_info().clone()
+}
+
+#[tauri::command]
 fn debug_log(line: String) {
     use std::io::Write;
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/cockpit-debug.log") {
@@ -1210,6 +1262,32 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     preload_system_libwayland();
 
+    // Un panic Rust ne passe par aucun `catch` de l'interface : sans ce filet, il ne
+    // laissait aucune trace. Le journal local est ecrit ici meme (l'envoi, lui, demande un
+    // runtime async qui n'existe pas forcement a cet instant : la ligne journalisee est
+    // relue au signalement).
+    {
+        let precedent = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            // Le chemin est reconstruit a la main : a l'instant d'un panic, on ne peut
+            // pas compter sur le handle Tauri, et on n'ajoute pas une dependance pour ca.
+            let base = std::env::var_os("XDG_DATA_HOME")
+                .map(std::path::PathBuf::from)
+                .or_else(|| {
+                    std::env::var_os("HOME")
+                        .map(|h| std::path::PathBuf::from(h).join(".local/share"))
+                });
+            if let Some(dir) = base.map(|b| b.join("com.cockpit.dev")) {
+                let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                report::append_log(
+                    &dir,
+                    &report::format_log_line(&horodatage, "panic", &info.to_string()),
+                );
+            }
+            precedent(info);
+        }));
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -1429,6 +1507,8 @@ pub fn run() {
             search_command_history,
             terminal_alt_screen,
             debug_log,
+            report_error,
+            machine_report,
             // Connexion Claude Code
             claude_auth_status,
             start_claude_login,

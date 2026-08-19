@@ -12,6 +12,9 @@
   import { loadProjects } from "../../stores/projects";
   import { updateState, checkForUpdate } from "../../stores/update";
   import { trad, locale, setLocale, LOCALES, type Locale } from "../../i18n";
+  import { signalerErreur, reportingConsent, reportingUser, setReportingConsent, setReportingUser, machineReport } from "../../stores/errors";
+  import type { MachineReport } from "../../types";
+  import { notify } from "../../stores/toast";
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
   import AppearanceSettings from "./AppearanceSettings.svelte";
@@ -35,6 +38,7 @@
     { id: "projects", icon: "▤", labelKey: "settings.menu.projects" },
   ];
 
+  let machine: MachineReport | null = $state(null);
   let dbProjects: DbProject[] = $state([]);
   let importPath = $state("");
   let importResult = $state("");
@@ -61,6 +65,7 @@
       await backupDatabase(dest);
       backupResult = $trad("settings.backup.written", { path: dest });
     } catch (e) {
+      signalerErreur("global.dest", String(e));
       backupFailed = true;
       backupResult = `${$trad("common.error")} : ${e}`;
     } finally {
@@ -93,7 +98,8 @@
   }
 
   async function refreshClaudeStatus() {
-    try { claudeStatus = await claudeAuthStatus(); } catch {}
+    try { claudeStatus = await claudeAuthStatus(); } catch (e) {
+      signalerErreur("global.refreshClaudeStatus", String(e));}
   }
 
   async function beginLogin() {
@@ -112,7 +118,8 @@
         await refreshClaudeStatus();
       })
     );
-    try { await startClaudeLogin(); } catch (e) { loginLog = String(e); loginActive = false; }
+    try { await startClaudeLogin(); } catch (e) {
+      signalerErreur("global.beginLogin", String(e)); loginLog = String(e); loginActive = false; }
   }
 
   function cleanupLoginListeners() {
@@ -126,7 +133,8 @@
   }
 
   async function abortLogin() {
-    try { await cancelClaudeLogin(); } catch {}
+    try { await cancelClaudeLogin(); } catch (e) {
+      signalerErreur("global.abortLogin", String(e));}
     cleanupLoginListeners();
     loginActive = false;
   }
@@ -139,13 +147,16 @@
 
   onMount(async () => {
     await loadDbProjects();
-    try { dbPath = await invoke<string>("get_db_path"); } catch {}
+    await loadMachine();
+    try { dbPath = await invoke<string>("get_db_path"); } catch (e) {
+      signalerErreur("global.expiryLabel", String(e));}
     try {
       const s = await getAppSettings();
       apiKey = s.openai_api_key ?? "";
       summaryModel = s.summary_model ?? "";
       summaryPrompt = s.summary_prompt ?? "";
-    } catch {}
+    } catch (e) {
+      signalerErreur("global.s", String(e));}
     await refreshClaudeStatus();
   });
 
@@ -158,7 +169,8 @@
       await setAppSetting("summary_prompt", summaryPrompt.trim());
       meetingSaved = true;
       setTimeout(() => { meetingSaved = false; }, 3000);
-    } catch (e) { alert(e); }
+    } catch (e) {
+      signalerErreur("global.saveMeetingSettings", String(e)); alert(e); }
     finally { meetingSaving = false; }
   }
 
@@ -171,19 +183,26 @@
       importResult = result;
       await loadDbProjects();
       await loadProjects();
-    } catch(e) {
+    } catch (e) {
+      signalerErreur("global.result", String(e));
       importFailed = true;
       importResult = `${$trad("common.error")} : ${e}`;
     } finally { importing = false; }
   }
 
+  async function loadMachine() {
+    try { machine = await machineReport(); } catch (e) { notify(String(e), "error", 4000, { scope: "settings.machine" }); }
+  }
+
   async function loadDbProjects() {
-    try { dbProjects = await getDbProjects(); } catch {}
+    try { dbProjects = await getDbProjects(); } catch (e) {
+      signalerErreur("global.loadDbProjects", String(e));}
   }
 
   async function doDelete(id: number) {
     if (!confirm($trad("settings.projects.deleteConfirm"))) return;
-    try { await deleteDbProject(id); await loadDbProjects(); await loadProjects(); } catch(e) { alert(e); }
+    try { await deleteDbProject(id); await loadDbProjects(); await loadProjects(); } catch (e) {
+      signalerErreur("global.doDelete", String(e)); alert(e); }
   }
 </script>
 
@@ -250,6 +269,38 @@
               {/each}
             </select>
           </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>{$trad("settings.reporting.title")}</h3>
+            <p>{$trad("settings.reporting.help")}</p>
+          </div>
+          <label class="check-row">
+            <input
+              type="checkbox"
+              checked={$reportingConsent === "on"}
+              onchange={(e) => setReportingConsent((e.currentTarget as HTMLInputElement).checked)}
+            />
+            <span>{$trad("settings.reporting.enabled")}</span>
+          </label>
+          <div class="field-row">
+            <span class="field-label">{$trad("settings.reporting.user")}</span>
+            <input
+              class="input"
+              type="text"
+              value={$reportingUser}
+              onchange={(e) => setReportingUser((e.currentTarget as HTMLInputElement).value)}
+            />
+          </div>
+          {#if machine}
+            <div class="field-row">
+              <span class="field-label">{$trad("settings.reporting.machine")}</span>
+              <span class="field-value mono-value"
+                >{machine.distro} · {machine.audio_server} · pw-record {machine.pw_record || "—"} ·
+                {machine.tmux || "—"} · {machine.packaging}</span>
+            </div>
+          {/if}
         </section>
 
         <section class="card">

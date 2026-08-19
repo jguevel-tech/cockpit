@@ -12,6 +12,7 @@
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { DefLocation, SearchResults, SearchNameHit, SearchContentHit } from "../../types";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { name }: { name: string } = $props();
 
@@ -110,7 +111,8 @@
     if (!project?.path) { treeError = "Chemin du projet inconnu"; return; }
     try {
       tree = (await listProjectDir(project.path, "")).map(toNode);
-    } catch (e) { treeError = String(e); }
+    } catch (e) {
+      signalerErreur("files.loadRoot", String(e)); treeError = String(e); }
   }
 
   function toNode(e: { name: string; rel_path: string; is_dir: boolean }): TreeNode {
@@ -124,7 +126,8 @@
       node.loading = true;
       try {
         node.children = (await listProjectDir(project.path, node.rel_path)).map(toNode);
-      } catch { node.children = []; }
+      } catch (e) {
+      signalerErreur("files.toggleDir", String(e)); node.children = []; }
       finally { node.loading = false; }
     }
     node.expanded = true;
@@ -162,7 +165,8 @@
       if (f.truncated) fileNotice = $trad("files.truncatedNotice", { size: formatSize(f.size) });
       fileRaw = f.content;
       fileHtml = await highlightCode(f.content, langFor(relPath), $themeBase === "dark");
-    } catch (e) { fileNotice = String(e); }
+    } catch (e) {
+      signalerErreur("files.f", String(e)); fileNotice = String(e); }
     finally { loadingFile = false; }
   }
 
@@ -448,6 +452,7 @@
       if (seq !== searchSeq) return;
       globalResults = res;
     } catch (e) {
+      signalerErreur("files.res", String(e));
       if (seq !== searchSeq) return;
       globalError = String(e);
       globalResults = null;
@@ -587,7 +592,8 @@
       range.setEnd(t.node, t.e);
       const mark = document.createElement("mark");
       mark.className = current ? "find-match current" : "find-match";
-      try { range.surroundContents(mark); } catch { /* impossible : range dans un seul noeud */ }
+      try { range.surroundContents(mark); } catch (e) {
+      signalerErreur("files.mark", String(e)); /* impossible : range dans un seul noeud */ }
     }
   }
 

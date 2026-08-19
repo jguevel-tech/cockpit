@@ -12,6 +12,26 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Les erreurs sont maintenant consignées et peuvent être transmises pour être corrigées.**
+  Chaque erreur est écrite dans un journal sur ton poste — toujours, même hors ligne et sans
+  rien accepter. Si tu l'acceptes (une question posée une seule fois, refusable sans rien
+  perdre), elle est aussi transmise à l'équipe de développement avec les caractéristiques
+  techniques de la machine : système, serveur audio réellement actif, versions des outils,
+  type d'installation. Ce sont précisément les informations qui manquaient lors des derniers
+  correctifs. Réglable à tout moment dans Paramètres → Général, avec le nom affiché.
+  Ne sont jamais transmis : le contenu des projets, les notes, les tâches, ni ce qui se passe
+  dans les terminaux.
+
+### Fixed
+
+- **Des erreurs qui restaient invisibles sont désormais signalées.** Une soixantaine
+  d'endroits se contentaient d'écrire dans la console du navigateur — c'est-à-dire nulle
+  part : copie du terminal, rattachement d'une session, sessions Claude, renommages,
+  chargements de la marketplace. Les silences qui restent sont volontaires et expliqués sur
+  place.
+
 ## [0.28.1] — 2026-08-19
 
 ### Fixed

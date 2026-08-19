@@ -2,6 +2,7 @@ import { writable } from "svelte/store";
 import { listen } from "@tauri-apps/api/event";
 import { listAllTerminals } from "../api/workspace";
 import type { TerminalInfo } from "../types";
+import { signalerErreur } from "./errors";
 
 // Terminaux vivants (toutes sessions tmux), pour la sidebar et le dashboard.
 export const terminals = writable<TerminalInfo[]>([]);
@@ -9,7 +10,8 @@ export const terminals = writable<TerminalInfo[]>([]);
 export async function loadTerminals() {
   try {
     terminals.set((await listAllTerminals()).filter((t) => t.alive));
-  } catch {}
+  } catch (e) {
+      signalerErreur("terminals.loadTerminals", String(e));}
 }
 
 loadTerminals();

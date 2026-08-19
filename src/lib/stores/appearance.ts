@@ -2,6 +2,7 @@ import { writable, derived, get } from "svelte/store";
 import { setWallpaper, getWallpaper, clearWallpaper } from "../api/appearance";
 import { notify } from "./toast";
 import type { translate } from "../i18n";
+import { signalerErreur } from "./errors";
 
 /**
  * Apparence : palette, accent personnalise, image de fond.
@@ -98,7 +99,8 @@ function loadSettings() {
     if (typeof s.wallpaperDim === "number") wallpaperDim.set(clamp(s.wallpaperDim, 0, 0.95));
     if (typeof s.wallpaperBlur === "number") wallpaperBlur.set(clamp(s.wallpaperBlur, 0, 24));
     // s.glassShine (0.24.0-0.25.1) : option retiree avec le verre depoli, ignoree si presente
-  } catch {
+  } catch (e) {
+      signalerErreur("appearance.s", String(e));
     // Reglages corrompus : on repart des valeurs par defaut plutot que de casser le demarrage.
   }
 }
@@ -117,6 +119,7 @@ function saveSettings() {
       })
     );
   } catch (e) {
+      signalerErreur("appearance.saveSettings", String(e));
     console.error("appearance: localStorage", e);
   }
 }
@@ -179,6 +182,7 @@ export async function loadWallpaper() {
   try {
     wallpaper.set(await getWallpaper());
   } catch (e) {
+      signalerErreur("appearance.loadWallpaper", String(e));
     console.error("loadWallpaper", e);
   }
 }

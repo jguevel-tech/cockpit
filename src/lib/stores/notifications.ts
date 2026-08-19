@@ -1,4 +1,5 @@
 import { writable, derived } from "svelte/store";
+import { signalerErreur } from "./errors";
 
 /**
  * Centre de notifications.
@@ -43,7 +44,8 @@ function loadIds(key: string): Set<string> {
     const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return new Set(Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : []);
-  } catch {
+  } catch (e) {
+      signalerErreur("notifications.parsed", String(e));
     // localStorage corrompu ou illisible : on repart d'un etat vide plutot que de casser l'UI.
     return new Set();
   }
@@ -54,6 +56,7 @@ function saveIds(key: string, ids: Set<string>) {
   try {
     localStorage.setItem(key, JSON.stringify([...ids]));
   } catch (e) {
+      signalerErreur("notifications.saveIds", String(e));
     console.error("notifications: localStorage", e);
   }
 }

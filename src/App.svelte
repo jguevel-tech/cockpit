@@ -4,6 +4,8 @@
   import MainPanel from "./lib/components/layout/MainPanel.svelte";
   import Toast from "./lib/components/ui/Toast.svelte";
   import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
+  import ReportingConsent from "./lib/components/settings/ReportingConsent.svelte";
+  import { reportingConsent, loadReportingSettings } from "./lib/stores/errors";
   import { loadProjects } from "./lib/stores/projects";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
@@ -29,6 +31,8 @@
     if (e.deltaY < 0) zoomIn();
     else zoomOut();
   }
+
+  void loadReportingSettings();
 
   onMount(() => {
     loadProjects();
@@ -67,6 +71,9 @@
   </div>
   <Toast />
   <CommandPalette />
+  {#if $reportingConsent === "unset"}
+    <ReportingConsent />
+  {/if}
 </div>
 
 <style>

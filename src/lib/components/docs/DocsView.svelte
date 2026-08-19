@@ -388,6 +388,17 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.updates.errors")}</p>
+        <div class="demo">
+          <div class="d-row">
+            <strong>{$trad("settings.reporting.title")}</strong>
+            <span class="d-btn small">{$trad("settings.reporting.enabled")}</span>
+            <span class="d-note">{$trad("docs.updates.errorsDemo")}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.updates.alerts")}</p>
         <div class="demo">
           <div class="d-notif">⚠ <strong>{$trad("docs.updates.alertsDemo1")}</strong><br /><span class="d-muted">{$trad("docs.updates.alertsDemo2")}</span> <span class="d-btn small primary">{$trad("alerts.seeMonitoring")}</span></div>

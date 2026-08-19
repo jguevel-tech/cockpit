@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import { getSystemMetrics } from "../api/system";
 import type { SystemMetrics } from "../types";
+import { signalerErreur } from "./errors";
 
 const MAX_HISTORY = 60; // 60 points = 3 minutes at 3s interval
 const LIVE_INTERVAL_MS = 3000;
@@ -26,6 +27,7 @@ export async function refreshMetrics() {
       return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
     });
   } catch (e) {
+      signalerErreur("system.next", String(e));
     console.error("Failed to load system metrics:", e);
   }
 }

@@ -19,6 +19,7 @@
   import { notify } from "../../stores/toast";
   import type { ProjectCommand, SearchNameHit } from "../../types";
   import { trad, translate } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let open = $state(false);
   let query = $state("");
@@ -136,7 +137,8 @@
       try {
         const res = await searchProject(path, q);
         if (seq === fileSeq) fileHits = res.names.filter((n) => !n.is_dir).slice(0, 8);
-      } catch {
+      } catch (e) {
+      signalerErreur("commandPalette.res", String(e));
         if (seq === fileSeq) fileHits = [];
       }
     }, 250);
@@ -149,7 +151,8 @@
     fileHits = [];
     quickCommands = [];
     if (currentProject) {
-      try { quickCommands = await getProjectCommands(currentProject.name); } catch { quickCommands = []; }
+      try { quickCommands = await getProjectCommands(currentProject.name); } catch (e) {
+      signalerErreur("commandPalette.openPalette", String(e)); quickCommands = []; }
     }
     await tick();
     inputEl?.focus();

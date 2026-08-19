@@ -5,6 +5,7 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { portal } from "../../actions/portal";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   async function browsePath() {
     try {
@@ -14,7 +15,9 @@
         // Pre-remplit le nom si vide, depuis le dossier choisi
         if (!name.trim()) name = selected.split("/").filter(Boolean).pop() ?? "";
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      signalerErreur("projet.parcourir", String(e));
+    }
   }
 
   let { open = $bindable(false) }: { open: boolean } = $props();
@@ -71,7 +74,11 @@
       selectProject(trimmedName);
       close();
     } catch (e) {
+      signalerErreur("createProject.deps", String(e));
+      // L'erreur s'affiche DANS le modal (c'est la que l'utilisateur regarde), mais elle
+      // doit aussi etre journalisee : un affichage local ne remonte rien.
       error = String(e);
+      signalerErreur("projet.creation", error);
     } finally {
       creating = false;
     }

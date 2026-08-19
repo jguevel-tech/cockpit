@@ -2,6 +2,7 @@
   import { killProcess } from "../../api/system";
   import type { ProcessMetrics } from "../../types";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { topCpu, topMemory }: { topCpu: ProcessMetrics[]; topMemory: ProcessMetrics[] } = $props();
   let tab: "cpu" | "memory" = $state("cpu");
@@ -16,7 +17,8 @@
 
   async function kill(pid: number) {
     if (!confirm($trad("proc.killConfirm", { pid }))) return;
-    try { await killProcess(pid); } catch(e) { alert(e); }
+    try { await killProcess(pid); } catch (e) {
+      signalerErreur("process.kill", String(e)); alert(e); }
   }
 </script>
 

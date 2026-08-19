@@ -16,6 +16,7 @@
   import { notify } from "../../stores/toast";
   import { onMount } from "svelte";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let showCreateModal = $state(false);
   let folders: ProjectFolder[] = $state([]);
@@ -35,7 +36,8 @@
       const saved = localStorage.getItem("cockpit-collapsed-folders");
       if (saved) collapsedIds = new Set(JSON.parse(saved));
       terminalsCollapsed = localStorage.getItem("cockpit-terminals-collapsed") === "1";
-    } catch {}
+    } catch (e) {
+      signalerErreur("sidebar.saved", String(e));}
   });
 
   function toggleTerminals() {

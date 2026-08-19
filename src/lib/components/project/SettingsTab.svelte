@@ -9,6 +9,7 @@
   import type { DbProject } from "../../types";
   import { onMount } from "svelte";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { name }: { name: string } = $props();
 
@@ -52,7 +53,8 @@
       await deleteDbProject(settings.id);
       await loadProjects();
       goHome();
-    } catch (e) { alert(e); }
+    } catch (e) {
+      signalerErreur("settings.deleteProject", String(e)); alert(e); }
     finally { deleting = false; }
   }
 </script>

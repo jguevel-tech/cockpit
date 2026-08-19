@@ -10,6 +10,7 @@
   import ContainerLogsModal from "../docker/ContainerLogsModal.svelte";
   import type { DockerContainer, DiskUsage, DockerVolume, DockerImage } from "../../types";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let containers: DockerContainer[] = $state([]);
   let logsFor: DockerContainer | null = $state(null);
@@ -35,7 +36,8 @@
     containersError = "";
     try {
       containers = await listAllContainers();
-    } catch (e) { containersError = String(e); containers = []; }
+    } catch (e) {
+      signalerErreur("containers.loadContainers", String(e)); containersError = String(e); containers = []; }
     containersLoaded = true;
     // docker system df calcule la taille de chaque volume/image : tres lent
     // (10s+) -> charge en arriere-plan, le bandeau apparait quand c'est pret

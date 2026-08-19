@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { project }: { project: string } = $props();
 
@@ -38,6 +39,7 @@
       urls.forEach((u, i) => { if (res[i]) next.set(u.url, res[i]); });
       health = next;
     } catch (e) {
+      signalerErreur("url.next", String(e));
       console.error("checkUrls:", e); // verif de fond : pas de toast repete
     }
   }

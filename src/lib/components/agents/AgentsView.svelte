@@ -15,6 +15,7 @@
   import type { MarketplaceLocation, PluginInfo, AgentInfo } from "../../types";
   import AgentsConfig from "./AgentsConfig.svelte";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   type Mode = "agents" | "config";
 
@@ -63,6 +64,7 @@
         await reloadPlugins();
       }
     } catch (e) {
+      signalerErreur("agents.reloadMarketplaces", String(e));
       errorMsg = String(e);
     }
   }
@@ -90,6 +92,7 @@
         agents = [];
       }
     } catch (e) {
+      signalerErreur("agents.reloadPlugins", String(e));
       errorMsg = String(e);
     }
   }
@@ -119,6 +122,7 @@
         agentContentInitial = "";
       }
     } catch (e) {
+      signalerErreur("agents.reloadAgents", String(e));
       errorMsg = String(e);
     }
   }
@@ -136,6 +140,7 @@
       agentContent = content;
       agentContentInitial = content;
     } catch (e) {
+      signalerErreur("agents.content", String(e));
       errorMsg = String(e);
     }
   }
@@ -154,6 +159,7 @@
       agentContentInitial = agentContent;
       await reloadAgents();
     } catch (e) {
+      signalerErreur("agents.save", String(e));
       errorMsg = String(e);
     } finally {
       saving = false;
@@ -183,6 +189,7 @@
       await reloadAgents();
       await selectAgent(newName);
     } catch (e) {
+      signalerErreur("agents.newName", String(e));
       errorMsg = String(e);
     }
   }
@@ -198,6 +205,7 @@
       agentContentInitial = "";
       await reloadAgents();
     } catch (e) {
+      signalerErreur("agents.doDeleteAgent", String(e));
       errorMsg = String(e);
     }
   }
@@ -219,6 +227,7 @@
       if (selectedPlugin === pluginName) selectedPlugin = newName;
       await reloadPlugins();
     } catch (e) {
+      signalerErreur("agents.newName", String(e));
       errorMsg = String(e);
     }
   }
@@ -242,6 +251,7 @@
       }
       await reloadPlugins();
     } catch (e) {
+      signalerErreur("agents.doDeletePlugin", String(e));
       errorMsg = String(e);
     }
   }
@@ -261,6 +271,7 @@
       await reloadPlugins();
       await selectPlugin(name);
     } catch (e) {
+      signalerErreur("agents.name", String(e));
       errorMsg = String(e);
     }
   }
@@ -316,6 +327,7 @@ You are the **${name}** agent.
       await reloadAgents();
       await selectAgent(name);
     } catch (e) {
+      signalerErreur("agents.name", String(e));
       errorMsg = String(e);
     }
   }

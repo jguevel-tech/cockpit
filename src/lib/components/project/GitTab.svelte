@@ -9,6 +9,7 @@
   import type { GitStatus, GitStatusEntry, FileDiff, BranchInfo, CommitInfo } from "../../types";
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
+  import { signalerErreur } from "../../stores/errors";
 
   let { name }: { name: string } = $props();
 
@@ -72,7 +73,8 @@
       } else if (selectedPath) {
         await openDiff(selectedPath, selectedStaged);
       }
-    } catch (e) { statusError = String(e); }
+    } catch (e) {
+      signalerErreur("git.refresh", String(e)); statusError = String(e); }
     finally { loadingStatus = false; }
   }
 
@@ -86,7 +88,8 @@
     try {
       const untracked = status?.files.find((f) => f.path === path)?.untracked ?? false;
       diff = await gitDiffFile(project.path, path, untracked);
-    } catch (e) { diffError = String(e); }
+    } catch (e) {
+      signalerErreur("git.untracked", String(e)); diffError = String(e); }
     finally { loadingDiff = false; }
   }
 
@@ -123,6 +126,7 @@
       await gitPush(project.path, !status?.has_upstream);
       await refresh();
     } catch (e) {
+      signalerErreur("git.doPush", String(e));
       // Branche sans upstream : proposer --set-upstream
       const msg = String(e);
       if (/upstream/i.test(msg) && confirm($trad("git.noUpstreamConfirm"))) {
@@ -150,7 +154,8 @@
     if (!project?.path) return;
     loadingCommits = true;
     commitsError = "";
-    try { commits = await gitLog(project.path, 100); } catch (e) { commitsError = String(e); }
+    try { commits = await gitLog(project.path, 100); } catch (e) {
+      signalerErreur("git.loadHistory", String(e)); commitsError = String(e); }
     finally { loadingCommits = false; }
   }
 
@@ -174,7 +179,8 @@
   async function toggleBranchMenu() {
     branchMenuOpen = !branchMenuOpen;
     if (branchMenuOpen && project?.path) {
-      try { branches = await gitBranches(project.path); } catch { branches = []; }
+      try { branches = await gitBranches(project.path); } catch (e) {
+      signalerErreur("git.toggleBranchMenu", String(e)); branches = []; }
     }
   }
 
@@ -200,6 +206,7 @@
     try {
       await gitDeleteBranch(project.path, b.name, false);
     } catch (err) {
+      signalerErreur("git.deleteBranch", String(err));
       // Non mergee : proposer le force delete
       if (confirm($trad("git.forceDeleteConfirm", { name: b.name }))) {
         try { await gitDeleteBranch(project.path, b.name, true); } catch (e2) { notify(String(e2)); return; }
