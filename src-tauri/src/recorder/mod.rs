@@ -94,10 +94,12 @@ pub async fn start(
     // PipeWire est probablement indisponible.
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     if !handles.is_alive() {
+        // Ce que pw-record a dit AVANT de nettoyer : le dossier part juste apres.
+        let why = handles.startup_error();
         let _ = handles.stop().await;
         let _ = db.delete_recording(rec.id);
         let _ = std::fs::remove_dir_all(&dir);
-        return Err("pw-record a echoue au demarrage (PipeWire indisponible ?)".into());
+        return Err(why);
     }
 
     let status = RecordingStatus {

@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **L'échec d'un enregistrement de réunion dit maintenant ce qui s'est réellement passé.**
+  Le message annonçait « PipeWire indisponible ? » alors que la sortie d'erreur de
+  `pw-record` était jetée : sur une machine où PipeWire et pw-record sont bien installés,
+  il n'y avait aucun moyen de savoir ce qui bloquait. Cockpit remonte désormais ce que
+  `pw-record` a répondu, piste par piste (micro, son système), et indique quoi vérifier
+  quand il s'arrête sans rien dire.
+
 ## [0.27.3] — 2026-08-18
 
 ### Fixed
