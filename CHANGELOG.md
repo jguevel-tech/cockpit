@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.29.3] — 2026-08-19
+
 ### Fixed
 
 - **Cockpit ne s'ouvre plus en double, et une seconde fenêtre ne peut plus détruire tes
