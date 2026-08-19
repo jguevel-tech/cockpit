@@ -58,6 +58,27 @@ fn lost_track_code(mic_ok: bool, sys_ok: bool) -> Option<&'static str> {
     }
 }
 
+/// Reglage : joindre la transcription complete au compte rendu ("off" pour ne pas).
+pub const ATTACH_TRANSCRIPT_KEY: &str = "attach_transcript";
+
+/// Compose la note de reunion.
+///
+/// Sortie dans une fonction pure pour etre testee : c'est le contenu que l'utilisateur
+/// retrouve dans ses notes, et la presence de la transcription lui appartient.
+fn compose_note(
+    titre: &str,
+    duree: &str,
+    resume: &str,
+    transcription: &str,
+    joindre_transcription: bool,
+) -> String {
+    let mut note = format!("# {titre}\n\n*Durée : {duree}*\n\n## Résumé\n\n{resume}\n");
+    if joindre_transcription {
+        note.push_str(&format!("\n## Transcription\n\n{transcription}"));
+    }
+    note
+}
+
 fn emit_status(app: &AppHandle, status: &RecordingStatus) {
     let _ = app.emit("recording_status", status.clone());
 }
@@ -317,12 +338,19 @@ async fn pipeline_inner(
     let summary = summarize::summarize(&client, &api_key, &model, &system_prompt, &transcript).await?;
 
     let title = note_title(&rec.started_at);
-    let content = format!(
-        "# {}\n\n*Durée : {}*\n\n## Résumé\n\n{}\n\n## Transcription\n\n{}",
-        title,
-        format_duration(rec.duration_secs),
+    // La transcription complete est JOINTE PAR NOTRE CODE, pas par le modele : aucune
+    // consigne de prompt ne pouvait donc l'en empecher, ce qu'un utilisateur a signale
+    // apres avoir demande en vain de ne pas l'inclure. C'est un reglage, pas une regle.
+    let joindre = db
+        .get_setting(ATTACH_TRANSCRIPT_KEY)
+        .map(|v| v != "off")
+        .unwrap_or(true);
+    let content = compose_note(
+        &title,
+        &format_duration(rec.duration_secs),
         summary.trim(),
-        transcript.trim()
+        transcript.trim(),
+        joindre,
     );
 
     // Dossier "Réunions" a la racine des notes du projet (cree au premier usage)
@@ -362,6 +390,32 @@ fn format_duration(secs: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn la_note_contient_la_transcription_quand_on_la_veut() {
+        let note = super::compose_note("Réunion", "1 h 02", "Le résumé", "Moi: bonjour", true);
+        assert!(note.contains("## Transcription"), "{note}");
+        assert!(note.contains("Moi: bonjour"), "{note}");
+    }
+
+    #[test]
+    fn la_note_s_arrete_au_resume_quand_on_ne_la_veut_pas() {
+        // Le cas signale : la consigne « ne pas mettre la transcription » etait sans effet,
+        // parce que c'est notre code qui l'ajoutait.
+        let note = super::compose_note("Réunion", "1 h 02", "Le résumé", "Moi: bonjour", false);
+        assert!(!note.contains("## Transcription"), "{note}");
+        assert!(!note.contains("Moi: bonjour"), "{note}");
+        assert!(note.contains("Le résumé"), "{note}");
+    }
+
+    #[test]
+    fn la_note_garde_toujours_titre_et_duree() {
+        for joindre in [true, false] {
+            let note = super::compose_note("Réunion du 19/08", "58 min", "R", "T", joindre);
+            assert!(note.contains("# Réunion du 19/08"), "{note}");
+            assert!(note.contains("*Durée : 58 min*"), "{note}");
+        }
+    }
+
     #[test]
     fn sans_micro_on_signale_le_micro() {
         // Cas remonte par un utilisateur : le son systeme se capte, le micro non.

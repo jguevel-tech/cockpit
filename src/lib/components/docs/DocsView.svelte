@@ -274,6 +274,7 @@
 
       <div class="block">
         <p>{@html $trad("docs.tasks.meetings")}</p>
+        <p>{$trad("docs.tasks.transcript")}</p>
         <div class="demo">
           <div class="d-row"><span class="d-recdot"></span> <strong>12:34</strong> <span class="d-btn small danger">{$trad("rec.stop")}</span> <span class="d-muted">{$trad("docs.tasks.meetingsDemo")}</span></div>
         </div>

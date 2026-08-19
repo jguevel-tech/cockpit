@@ -12,6 +12,18 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **La transcription complète devient optionnelle dans les comptes rendus de réunion**
+  (Paramètres → Réunions). Elle était ajoutée par Cockpit après le résumé, donc demander dans
+  le prompt de ne pas l'inclure n'avait aucun effet — c'est maintenant une case à cocher, et
+  le prompt n'a plus à s'en occuper.
+
+### Fixed
+
+- **Supprimer une note demande confirmation.** Un compte rendu de réunion disparaissait sur un
+  simple clic, sans retour possible.
+
 ## [0.29.5] — 2026-08-19
 
 ### Fixed

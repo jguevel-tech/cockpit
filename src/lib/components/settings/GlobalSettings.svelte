@@ -39,6 +39,7 @@
   ];
 
   let machine: MachineReport | null = $state(null);
+  let attachTranscript = $state(true);
   let dbProjects: DbProject[] = $state([]);
   let importPath = $state("");
   let importResult = $state("");
@@ -155,6 +156,8 @@
       apiKey = s.openai_api_key ?? "";
       summaryModel = s.summary_model ?? "";
       summaryPrompt = s.summary_prompt ?? "";
+      // Absent = joindre, pour ne pas changer le comportement des comptes rendus existants.
+      attachTranscript = s.attach_transcript !== "off";
     } catch (e) {
       signalerErreur("global.expiryLabel", String(e));}
     await refreshClaudeStatus();
@@ -167,6 +170,7 @@
       await setAppSetting("openai_api_key", apiKey.trim());
       await setAppSetting("summary_model", summaryModel.trim());
       await setAppSetting("summary_prompt", summaryPrompt.trim());
+      await setAppSetting("attach_transcript", attachTranscript ? "on" : "off");
       meetingSaved = true;
       setTimeout(() => { meetingSaved = false; }, 3000);
     } catch (e) {
@@ -430,6 +434,11 @@
             <textarea bind:value={summaryPrompt} rows="12"></textarea>
             <span class="field-hint">{$trad("settings.meetings.promptHint")}</span>
           </label>
+          <label class="check-row">
+            <input type="checkbox" bind:checked={attachTranscript} />
+            <span>{$trad("settings.meetings.attachTranscript")}</span>
+          </label>
+          <p class="field-hint">{$trad("settings.meetings.attachTranscriptHelp")}</p>
           <div class="actions-row">
             <button class="btn primary" onclick={saveMeetingSettings} disabled={meetingSaving}>
               {meetingSaving ? $trad("projectSettings.saving") : $trad("common.save")}
