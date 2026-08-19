@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cockpit ne s'ouvre plus en double, et une seconde fenêtre ne peut plus détruire tes
+  terminaux.** Deux instances partagent la même base et le même serveur de terminaux, et
+  chacune supprime au démarrage les sessions qu'elle ne connaît pas : une seconde instance
+  faisait donc disparaître les terminaux de la première. Relancer Cockpit ramène désormais la
+  fenêtre déjà ouverte.
+- **Une installation de développement ne touche plus aux terminaux de l'installation
+  normale** (lancement avec une base choisie à la main).
+
 ## [0.29.2] — 2026-08-19
 
 ### Changed

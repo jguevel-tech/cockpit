@@ -1289,6 +1289,21 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        // UNE SEULE INSTANCE, et ce n'est pas cosmetique : deux Cockpit partagent la meme
+        // base ET le meme serveur tmux, or `purge_dead` TUE au demarrage les sessions
+        // `ckpt_*` absentes de sa base. Une seconde instance (a plus forte raison avec une
+        // autre base) detruisait donc les terminaux de la premiere. Constate sur une machine
+        // ou cinq instances tournaient en parallele, dont deux depuis cinq jours.
+        // Le lancement suivant redonne le focus a la fenetre existante au lieu d'ouvrir un
+        // second exemplaire.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            use tauri::Manager;
+            if let Some(fenetre) = app.webview_windows().values().next() {
+                let _ = fenetre.unminimize();
+                let _ = fenetre.show();
+                let _ = fenetre.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())

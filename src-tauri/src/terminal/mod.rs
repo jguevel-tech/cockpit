@@ -501,6 +501,14 @@ impl TerminalState {
         // sans ligne restait a tourner indefiniment. Elle est injoignable depuis l'interface —
         // aucun onglet ne peut plus l'afficher — donc son shell est perdu et ne fait que
         // consommer de la memoire. Ne concerne que nos sessions `ckpt_*`.
+        //
+        // SAUF si l'on tourne sur une base de donnees choisie a la main (`COCKPIT_DB`, mode
+        // developpement ou recette) : ces sessions appartiennent alors a une AUTRE
+        // installation, celle de l'utilisateur, et les tuer detruirait ses terminaux. C'est
+        // le scenario qui a coute des sessions vieilles de plusieurs jours.
+        if std::env::var_os("COCKPIT_DB").is_some() {
+            return;
+        }
         for session in orphan_sessions(db) {
             tmux_kill_session(&session);
         }
