@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-08-19
+
 ### Added
 
 - **Les erreurs sont maintenant consignées et peuvent être transmises pour être corrigées.**
