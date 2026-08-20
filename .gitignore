@@ -27,3 +27,4 @@ docs/superpowers/
 *.log
 .DS_Store
 .claude/issues-vues.json
+.claude/issues-vues-surveillance.json

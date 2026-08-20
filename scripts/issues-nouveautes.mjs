@@ -29,7 +29,12 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const REPERE = resolve(ROOT, ".claude/issues-vues.json");
+// Deux reperes distincts, et c'est voulu : la surveillance en continu ne doit pas marquer
+// comme vu ce que la lecture manuelle n'a pas encore traite, et inversement.
+const argRepere = process.argv.find((a) => a.startsWith("--repere="));
+const REPERE = resolve(ROOT, argRepere ? argRepere.slice(9) : ".claude/issues-vues.json");
+/// Mode surveillance : une ligne par evenement, rien du tout quand il n'y a rien.
+const brut = process.argv.includes("--brut");
 const DEPOT = "jguevel-tech/cockpit";
 
 const marquer = process.argv.includes("--marquer");
@@ -95,6 +100,13 @@ for (const issue of issues.sort((a, b) => a.number - b.number)) {
   if (neufs.length === 0) continue;
 
   nouveautes += neufs.length;
+  if (brut) {
+    for (const e of neufs) {
+      const extrait = e.texte.replace(/\r?\n/g, " ").slice(0, 220);
+      console.log(`ISSUE #${issue.number} ${e.genre} de ${e.qui} : ${extrait}`);
+    }
+    continue;
+  }
   const labels = issue.labels.map((l) => l.name).join(",") || "aucun label";
   console.log(`\n━━━ #${issue.number} — ${issue.title}`);
   console.log(`    [${labels}]  ouverte par ${issue.author.login}`);
@@ -105,7 +117,10 @@ for (const issue of issues.sort((a, b) => a.number - b.number)) {
   }
 }
 
-if (nouveautes === 0) {
+if (brut) {
+  // Silence total quand rien n'a bouge, et aucun bilan : chaque ligne emise est un
+  // evenement a traiter.
+} else if (nouveautes === 0) {
   console.log("Rien de neuf sur les issues depuis la derniere lecture.");
 } else {
   console.log(`\n${nouveautes} evenement(s) non lu(s).`);
@@ -113,7 +128,9 @@ if (nouveautes === 0) {
 
 // Une issue sans etat est une issue qui va se faire oublier : c'est exactement ce qui est
 // arrive a #6, restee sans label ni reponse pendant des heures.
-if (incoherences.length) {
+if (brut) {
+  // rien
+} else if (incoherences.length) {
   console.log(`\n⚠ ${incoherences.length} issue(s) mal etiquetee(s) — a corriger avant de continuer :`);
   for (const i of incoherences) console.log(`   ${i}`);
   console.log(`   Etats possibles : ${ETATS.join(" | ")}`);
@@ -124,7 +141,7 @@ if (incoherences.length) {
 if (marquer) {
   mkdirSync(dirname(REPERE), { recursive: true });
   writeFileSync(REPERE, JSON.stringify(aMarquer, null, 2) + "\n");
-  console.log(`\nRepere mis a jour (${Object.keys(aMarquer).length} issues).`);
+  if (!brut) console.log(`\nRepere mis a jour (${Object.keys(aMarquer).length} issues).`);
 } else if (nouveautes > 0) {
   console.log("Relancer avec --marquer quand chaque evenement a ete TRAITE — c'est-a-dire");
   console.log("lu ET aiguille : repondu, ou classe dans un etat qui dit ce qui reste a faire.");

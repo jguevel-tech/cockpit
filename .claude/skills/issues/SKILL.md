@@ -163,6 +163,42 @@ les promesses n'existaient pas : elles disparaissent alors du rapport et de la m
 Et au retour du nouveau chantier, **les promesses reprennent la tete de file** sans qu'il
 faille le redemander.
 
+## ARME LA SURVEILLANCE AVANT TOUT LE RESTE
+
+**Premiere action du run, avant meme l'etape 0** — parce que se fier a sa memoire a
+echoue trois fois le 2026-08-20, et que Jimmy a du le signaler chaque fois :
+
+```
+Monitor({
+  command: `cd <depot>
+while true; do
+  node scripts/issues-nouveautes.mjs --brut --marquer \\
+    --repere=.claude/issues-vues-surveillance.json 2>&1 | grep -E "^(ISSUE #|⚠)" || true
+  sleep 60
+done`,
+  description: "nouveaux commentaires sur les issues du repo cockpit",
+  persistent: true,
+})
+```
+
+Chaque commentaire arrive alors comme une notification dans la conversation, sans
+qu'on ait a y penser. Le mode `--brut` se TAIT quand rien n'a bouge : une ligne emise
+est un evenement a traiter.
+
+Le repere de la surveillance est un fichier SEPARE de celui de la lecture manuelle
+(`--repere=`). C'est voulu : la surveillance marque ce qu'elle annonce, et ne doit pas
+marquer comme vu ce que la lecture manuelle n'a pas encore traite.
+
+**Ce que ca remplace** : la regle « relire les issues avant chaque rapport » existait
+deja et n'a pas suffi — j'ai lu, marque, puis discute une demi-heure, puis rendu un
+rapport sans relire. Une reponse de Jimmy postee entre-temps est restee invisible
+jusqu'a ce qu'il demande « faut lire l'issue ^^ ». Une regle qu'on oublie ne vaut rien
+face a un mecanisme qui previent.
+
+**Et une consequence a accepter** : la surveillance annonce AUSSI nos propres
+commentaires, puisqu'on poste sous le compte de Jimmy et que rien ne les distingue. Ce
+n'est pas un defaut a corriger, c'est le prix de la seule methode qui ne mente pas.
+
 ## Etape 0 — Suivi des issues en attente de retour (EN PREMIER, ET A CHAQUE PAUSE)
 
 **Cette etape se rejoue a chaque fois que tu rends un rapport, pas seulement au
