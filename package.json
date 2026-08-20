@@ -10,7 +10,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
     "release": "node scripts/release.mjs",
-    "i18n:audit": "node scripts/i18n-audit.mjs"
+    "i18n:audit": "node scripts/i18n-audit.mjs",
+    "test:front": "node --experimental-strip-types --test scripts/tests/*.test.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",

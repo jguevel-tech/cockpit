@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les adresses écrites dans une tâche sont maintenant **soulignées et cliquables** :
+  `Ctrl`+clic ouvre le lien dans le navigateur, ou le client mail pour une adresse `@`. Le clic
+  simple continue d'ouvrir l'édition du texte. Vaut dans la colonne Todos d'un projet comme dans
+  le tableau de bord.
+
 ## [0.35.0] — 2026-08-20
 
 ### Added

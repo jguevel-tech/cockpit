@@ -348,6 +348,9 @@ npm run build
 # Tests Rust (147 tests)
 cd src-tauri && cargo test
 
+# Tests frontend des modules PURS (node strip-types, aucune dependance a installer)
+npm run test:front
+
 # Verification types frontend (0 erreur attendu)
 npm run check
 
@@ -595,7 +598,9 @@ reselectionne le projet que s'il etait DEJA affiche — renommer depuis la barre
 pas emmener ailleurs.
 
 - **Workspace** : Notes a gauche (flex: 2, arborescence + editeur WYSIWYG) + Todos a droite
-  (flex: 1). **Mode lecture** (bouton ▸◂ Lecture dans l'en-tete de la note, store `readingMode`) :
+  (flex: 1). Le TEXTE d'une tache est rendu par `todos/TodoText.svelte`, partage avec le
+  tableau de bord : clic simple = edition inline, Ctrl+clic sur une adresse = ouverture
+  (navigateur ou client mail). Ne pas remettre un balisage de texte de tache ailleurs. **Mode lecture** (bouton ▸◂ Lecture dans l'en-tete de la note, store `readingMode`) :
   les DEUX colonnes se replient d'un coup et le compte rendu prend toute la zone, borne a 70rem
   et centre. Echap en sort aussi
 - **Docker** : start/stop/restart, dependances ("depend de" / "requis par"), tableau des conteneurs
@@ -1077,7 +1082,8 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 ## Tableau de bord
 
 Menu a gauche, 4 vues (store `dashboardView`), un composant par vue dans `dashboard/` :
-- **Taches** : todos en attente groupes par projet (drag & drop, edition inline)
+- **Taches** : todos en attente groupes par projet (drag & drop, edition inline, adresses
+  ouvrables au Ctrl+clic — meme composant `todos/TodoText.svelte` que la colonne Todos)
 - **Monitoring** : jauges CPU/memoire, historique, top processus (Snapshot / Live)
 - **Terminaux** : tous les terminaux ouverts groupes par projet, clic = navigation directe
   vers la session (store `pendingTerminalId`, consomme par TerminalTab au montage ET a chaud)
@@ -1434,6 +1440,31 @@ Le backend (`system/metrics.rs`) collecte :
   message traduit (`renommerProjet`, et le modal de creation faisait la meme fuite) ; et cote
   Rust, toute ecriture du nom d'un projet passe par `erreur_nom` (storage/projects.rs) qui
   nomme la cause. Regle : une contrainte de base n'est jamais un message d'interface.
+- **UN LIEN NE PEUT PAS ETRE IMBRIQUE DANS UN `<button>`.** Le texte d'une tache est un
+  `<button>` (le clic ouvre l'edition), et il doit aussi porter des adresses ouvrables. Un
+  `<a>` la-dedans est du HTML invalide et le comportement n'est pas fiable. Les adresses sont
+  donc des `<span class="lien" data-href="...">` DANS le bouton, et le clic est trie par
+  `closest("[data-href]")` — meme technique que l'editeur de notes avec `closest("a")`. Ce
+  n'est PAS une violation de la regle « un controle cliquable est un vrai `<button>` » : le
+  controle, c'est le bouton exterieur ; le span n'est qu'un morceau de texte souligne. Ne pas
+  le « corriger » en `<a>` ni en `<span role="link">`. Consequence assumee, la meme que dans
+  les notes : il n'y a pas de chemin CLAVIER pour ouvrir l'adresse.
+- **Un module frontend qu'on veut tester sous node ne doit RIEN importer de l'application.**
+  `node --experimental-strip-types` execute un `.ts` sans outillage, mais il resout les imports
+  comme node : `import { x } from "../api/workspace"` (sans extension, forme que Vite accepte)
+  echoue en `ERR_MODULE_NOT_FOUND`. D'ou la coupe en deux : `utils/adresses.ts` est PUR (zero
+  import) et teste par `npm run test:front` (`scripts/tests/*.test.mjs`, node:test, aucune
+  dependance a installer), `utils/liens.ts` porte ce qui touche toasts/i18n/IPC et n'est
+  couvert que par le banc frontend. Les tests vivent dans `scripts/` et pas dans `src/` :
+  `tsconfig.json` n'inclut que `src/**` et `@types/node` n'est pas installe, donc un
+  `import ... from "node:test"` sous `src/` ferait echouer `npm run check`.
+- **Autolink : ne repere que ce qui est ouvrable TEL QUEL, et rogne la ponctuation finale.**
+  `utils/adresses.ts` ne reconnait que `http://`, `https://` et les adresses mail — pas
+  `www.exemple.com`, parce que `open_url` le refuserait et qu'on aurait souligne un lien mort.
+  Deux cas qui piegent, verrouilles par des tests : « va voir https://exemple.com. » (le point
+  n'est pas dans l'URL) et `https://fr.wikipedia.org/wiki/Deja_vu_(homonymie)` (la parenthese
+  appariee, elle, en fait partie). Invariant teste aussi : la concatenation des segments rend
+  toujours le texte saisi, au caractere pres.
 - **`scripts/release.mjs` doit bumper `Cargo.lock` en meme temps que `Cargo.toml`.** Sans ca le
   commit taggue se contredisait (lock en retard d'une version) et le premier `cargo build`
   suivant reecrivait le fichier : arbre sale, donc release suivante REFUSEE jusqu'a un commit

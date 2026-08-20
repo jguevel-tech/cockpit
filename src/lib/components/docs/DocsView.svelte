@@ -268,6 +268,14 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.todoLinks")}</p>
+        <div class="demo">
+          <div class="d-row"><span class="d-check"></span> {@html $trad("docs.tasks.todoLinksDemo")}</div>
+          <div class="d-row"><span class="kbd">Ctrl</span> + <span class="d-muted">{$trad("docs.tasks.todoLinksClick")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.bell")}</p>
         <div class="demo">
           <div class="d-notif">⚠ <strong>{$trad("alerts.todoOverdue")}</strong><br /><span class="d-muted">{$trad("docs.tasks.bellDemo")}</span> <span class="d-btn small primary">{$trad("alerts.seeProject")}</span></div>
@@ -451,6 +459,7 @@
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">F</span></td><td>{$trad("docs.shortcuts.findFile")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">{$trad("docs.shortcuts.keyShift")}</span><span class="kbd">F</span></td><td>{$trad("docs.shortcuts.findProject")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span>{$trad("docs.shortcuts.ctrlClick")}</td><td>{$trad("docs.shortcuts.definition")}</td></tr>
+            <tr><td><span class="kbd">Ctrl</span>{$trad("docs.shortcuts.ctrlClick")}</td><td>{$trad("docs.shortcuts.openLink")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">S</span></td><td>{$trad("docs.shortcuts.save")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span></td><td>{$trad("docs.shortcuts.commit")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span></td><td>{$trad("docs.shortcuts.leaveCodeBlock")}</td></tr>
