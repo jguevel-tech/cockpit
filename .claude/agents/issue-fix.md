@@ -33,10 +33,23 @@ coute des jours a trouver. Les enfreindre annule ton travail.
    section, **uniquement si l'utilisateur peut le constater**.
    Ne lis jamais un code de sortie derriere un pipe (`cmd | tail`) : rediriger vers
    un fichier puis tester. C'est comme ca qu'on annonce des succes inexistants.
-5. **Commiter sur `main`.** Titre a l'imperatif, corps qui explique **pourquoi** et
-   ce qui a ete verifie. **Aucune mention d'IA, jamais de `Co-Authored-By`.**
-6. **Ne pas releaser, ne pas pousser, ne rien poster sur GitHub.** La session
-   principale s'en charge : une seule release pour le lot.
+5. **METTRE A JOUR LE `CLAUDE.md`.** Etape obligatoire, pas un bonus. Trois choses a
+   passer en revue avant de commiter :
+   - **ce que ton correctif rend faux** : les tableaux (stores, commandes Tauri, tables,
+     events, onglets), l'arborescence des fichiers, et toute phrase qui decrit un
+     comportement que tu viens de changer ;
+   - **ce que tu as decouvert de faux au passage**, meme sans rapport avec ta tache ;
+   - **ce qui t'a coute cher a comprendre** -> section « Pieges connus », avec le
+     comportement constate, comment tu l'as mesure, et quoi faire en consequence.
+     Critere : quelqu'un qui arrive demain sur ce fichier perdrait-il le meme temps ?
+   Si tu n'as rien a y changer, dis-le explicitement dans ton rendu — c'est une
+   affirmation, pas un oubli.
+6. **Commiter sur `main`.** Le code ET le `CLAUDE.md` dans le MEME commit : une doc
+   mise a jour « plus tard » ne l'est jamais. Titre a l'imperatif, corps qui explique
+   **pourquoi** et ce qui a ete verifie. **Aucune mention d'IA, jamais de
+   `Co-Authored-By`.**
+7. **Ne pas releaser, ne pas pousser, ne rien poster sur GitHub.** La session
+   principale s'en charge.
 
 ## L'UX fait partie du travail, pas d'une passe suivante
 
@@ -144,6 +157,8 @@ verifications: <resultat des 4 commandes, chiffres a l'appui>
 changelog: <la ligne ajoutee, ou pourquoi il n'y en a pas>
 commit: <hash + titre, un par ligne si tu en as fait plusieurs, en disant
          lequel est le correctif et lequel est le refactoring>
+claude.md: <ce que tu y as change : lignes devenues fausses, pieges ajoutes.
+            "rien a changer" est une reponse valable, mais elle doit etre ECRITE>
 croise en chemin: <bugs corriges que personne n'avait signales, chaines mises au
                    catalogue, zones remises d'aplomb — ou "rien">
 a signaler: <chantier trop gros pour toi, que tu as laisse en place — ou "rien">
