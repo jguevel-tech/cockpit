@@ -1060,7 +1060,7 @@ Menu a gauche, 4 vues (store `dashboardView`), un composant par vue dans `dashbo
 - **Taches** : todos en attente groupes par projet (drag & drop, edition inline)
 - **Monitoring** : jauges CPU/memoire, historique, top processus (Snapshot / Live)
 - **Terminaux** : tous les terminaux ouverts groupes par projet, clic = navigation directe
-  vers la session (store `pendingTerminalId` lu par TerminalTab au mount)
+  vers la session (store `pendingTerminalId`, consomme par TerminalTab au montage ET a chaud)
 - **Conteneurs** : TOUS les conteneurs Docker de la machine (`docker ps -a`, pas seulement les
   projets Compose Cockpit), groupes par projet compose (label com.docker.compose.project), avec
   actions start/stop/restart/remove + bulk par groupe, sous-onglets Volumes/Images, bandeau
@@ -1105,7 +1105,7 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 | `selectedProject` | `stores/ui.ts` | Projet selectionne (utilise quand activeView === "project") |
 | `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/plugins/settings). MEMORISE PAR PROJET (map en memoire) : revenir sur un projet retrouve son onglet. Une navigation intentionnelle vers un onglet precis reste prioritaire et devient la nouvelle memoire |
 | `dashboardView` | `stores/ui.ts` | Sous-vue du tableau de bord (tasks/monitoring/terminals/containers) |
-| `pendingTerminalId` | `stores/ui.ts` | Session terminal a activer a l'arrivee sur l'onglet Terminal |
+| `pendingTerminalId` | `stores/ui.ts` | Session terminal a ouvrir. Consomme par `honorerDemande` (TerminalTab) au montage ET a chaud, quel que soit le producteur (barre laterale, tableau de bord, palette, commande rapide, `docker exec`). Il RECHARGE la liste des sessions avant de conclure, parce que la cible vient souvent d'etre creee. Toujours remis a null : ouverte, ou signalee disparue |
 | `readingMode` | `stores/ui.ts` | Mode lecture de l'onglet Workspace (replie notes + taches), persiste localStorage `cockpit-notes-reading` |
 | `theme` | `stores/appearance.ts` | Palette active (identifiant), persiste localStorage |
 | `themeBase` | `stores/appearance.ts` | Base derivee "dark" ou "light" — a consommer pour xterm et Shiki |
@@ -1254,6 +1254,30 @@ Le backend (`system/metrics.rs`) collecte :
   `purge_dead` ne purgeait rien et `close()` refusait de supprimer la ligne, donc des terminaux
   morts s'affichaient a vie. Les deux formes passent par `absence_definitive()` (3 tests).
   Tout AUTRE echec doit rester un doute : on ne supprime jamais sur un doute.
+- **Une liste chargee au montage n'est pas une source de verite, et une garde posee dessus
+  rejette exactement les cas qu'on voulait servir.** L'onglet Terminal n'honorait une demande
+  d'ouverture (`pendingTerminalId`) que si l'id figurait dans sa liste locale `sessions`,
+  chargee une seule fois au montage. Or les producteurs de cette demande CREENT la session
+  juste avant de poser l'id (commande rapide, shell d'un conteneur, palette Ctrl+K) : la
+  session tmux existait donc bien et la barre laterale la montrait, mais l'onglet n'affichait
+  rien, ne disait rien, l'id restait coince dans le magasin — empoisonnant les navigations
+  suivantes — et chaque nouvel essai laissait une session de plus derriere lui (issue #14 :
+  quatre `QUOTIDIEN - n` dans la barre laterale, deux onglets). Reproduit au banc frontend
+  ci-dessous, six scenarios verifies apres correction. Regle : avant de conclure qu'une cible
+  n'existe pas, la RECHARGER depuis le backend ; si elle n'existe vraiment plus, le dire et
+  vider le magasin. Detail qui compte : quand la cible n'appartient pas a CE projet, ne pas
+  vider le magasin — l'onglet du bon projet doit encore pouvoir la prendre.
+- **Banc frontend : jouer un composant Svelte sans lancer l'application** (2026-08-20). Un
+  Chrome sans tete + un FAUX backend Tauri suffisent, et le DOM rendu sert de preuve.
+  Recette : un dossier de travail HORS du depot avec `node_modules` symlinke, une
+  `vite.config.ts` qui remplace `@tauri-apps/api/{core,event,webview}` par des modules maison
+  (`invoke` -> table de reponses en memoire, `listen`/`emit` -> map d'abonnes), un `main.ts`
+  qui monte le composant, deroule le scenario et ecrit son journal dans un `<pre>`. Puis
+  `vite build`, `python3 -m http.server` (les modules ES ne se chargent PAS depuis `file://`)
+  et `google-chrome --headless=new --virtual-time-budget=30000 --dump-dom http://127.0.0.1:PORT/`.
+  On lit dedans le nombre d'onglets, lequel est actif, les toasts affiches, l'etat des
+  magasins. Les `setTimeout` du scenario avancent en temps virtuel, donc c'est instantane.
+  Ce que ca ne remplace pas : WebKitGTK (pour un bug de RENDU, garder le banc python3/gi).
 - **Rendu xterm** : le renderer DOM + `monospace` generique derive visuellement sur les glyphes
   accentues. Le modele est sain (verifiable par `tmux -L cockpit capture-pane -p`) : addon WebGL
   + police explicite.

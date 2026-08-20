@@ -542,6 +542,7 @@ export const en: Catalog = {
   "term.noProjectPath": "This project has no path: set one in the project Settings tab.",
   "term.pasteNoTerminal": "No terminal open: click + to open one.",
   "term.pasteEmpty": "The clipboard is empty: nothing to paste.",
+  "term.sessionGone": "That terminal is gone: its session ended in the meantime.",
   "tab.workspace": "Workspace",
   "tab.docker": "Docker",
   "tab.terminal": "Terminal",

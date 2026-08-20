@@ -189,7 +189,8 @@
 </script>
 
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
+  import { get } from "svelte/store";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
@@ -203,7 +204,7 @@
   import { loadTerminals } from "../../stores/terminals";
   import {
     createTerminal, resizeTerminal, closeTerminal,
-    attachTerminal, renameTerminal, listTerminals,
+    attachTerminal, renameTerminal, listTerminals, listAllTerminals,
     listClaudeSessions, renameClaudeSession, setClipboard, getClipboard,
     terminalCopySelection, terminalSearch, openUrl,
   } from "../../api/workspace";
@@ -299,8 +300,18 @@
     light: { background: "#ffffff", foreground: "#24292f", cursor: "#24292f", selectionBackground: "#b6d7ff80" },
   };
 
+  /// Chargement initial de ce montage. Une demande d'ouverture (voir `honorerDemande`)
+  /// arrivee pendant ce chargement s'enchaine APRES lui : sans cela les deux ecrivent
+  /// `sessions` en parallele et la derniere ecriture ecrase l'autre.
+  let montage: Promise<unknown> = Promise.resolve();
+
   onMount(() => {
-    (async () => {
+    // Les deux valeurs se consomment une fois, et l'effet plus bas peut prendre la main
+    // pendant nos `await` : on les lit AVANT.
+    const demande = $pendingTerminalId;
+    const restaure = consumeTabRestored();
+
+    montage = (async () => {
       // La sortie et le message de fin sont geres par les listeners GLOBAUX du pool
       // (script module) : ici on ne suit que l'etat d'UI de ce montage.
       unlisteners.push(
@@ -313,21 +324,22 @@
       const existing = (await listTerminals(name)).filter((t) => t.alive);
       sessions = existing.map((t) => ({ id: t.id, alive: t.alive, name: t.name }));
 
-      const wanted = $pendingTerminalId;
-      pendingTerminalId.set(null);
+      if (demande !== null && (await honorerDemande(demande))) return;
+      // Une demande traitee entre-temps a deja ouvert un terminal : on ne lui passe pas
+      // devant en activant autre chose.
+      if (activeId !== null) return;
       // Onglet REPOSE par la memoire par projet (simple retour sur le projet) : on n'ouvre
       // rien d'office. Sinon parcourir trois projets laisses sur l'onglet Terminal creerait
       // trois sessions tmux que personne n'a demandees — et elles survivent a l'app.
       // L'etat vide et son bouton prennent le relais.
-      const restaure = consumeTabRestored();
-      if (wanted !== null && sessions.some((s) => s.id === wanted)) {
-        await activate(wanted);
-      } else if (sessions.length === 0) {
+      if (sessions.length === 0) {
         if (!restaure) await addTerminal();
       } else {
         await activate(sessions[0].id);
       }
-    })();
+      // Un echec de chargement laissait l'onglet vide sans un mot : la liste des terminaux
+      // vient du backend, son absence doit se voir.
+    })().catch((e) => notify(String(e)));
 
     // Debounce : pendant un drag de fenetre, on n'envoie que la taille finale
     resizeObserver = new ResizeObserver(() => {
@@ -359,16 +371,66 @@
     };
   });
 
-  // Raccourci depuis la sidebar/dashboard vers un terminal du MEME projet :
-  // le composant n'est pas remonte (meme projet), donc on reagit au store.
+  // Raccourci vers un terminal du MEME projet (barre laterale, tableau de bord, palette,
+  // commande rapide, `docker exec`) : le composant n'est pas remonte, donc on reagit au
+  // magasin. `untrack` parce que la suite lit ET ecrit `sessions` : sans lui l'effet se
+  // redeclencherait sur sa propre ecriture.
   $effect(() => {
     const wanted = $pendingTerminalId;
     if (wanted === null) return;
+    untrack(() => {
+      void montage.then(() => honorerDemande(wanted)).catch((e) => notify(String(e)));
+    });
+  });
+
+  /// Recharge la liste des sessions du projet et la FUSIONNE avec celle affichee.
+  /// Fusion et non remplacement : une session terminee reste visible (barree) jusqu'a ce
+  /// que l'utilisateur ferme son onglet, un remplacement la ferait disparaitre sous ses yeux.
+  async function fusionnerSessions() {
+    const frais = (await listTerminals(name)).filter((t) => t.alive);
+    for (const t of frais) {
+      const connue = sessions.find((s) => s.id === t.id);
+      if (connue) connue.name = t.name;
+      else sessions.push({ id: t.id, alive: true, name: t.name });
+    }
+  }
+
+  /// Ouvre le terminal reclame par `pendingTerminalId`. Rend vrai s'il a ete pris en charge.
+  ///
+  /// `sessions` est un INSTANTANE : il date du montage de l'onglet. Or la cible vient
+  /// souvent d'etre creee a l'instant par une voie qui ne passe pas par ici — commande
+  /// rapide, `docker exec` de l'onglet Docker, palette Ctrl+K appellent tous
+  /// `create_terminal` puis posent l'id. Tester la seule liste locale rejetait donc
+  /// exactement les cas pour lesquels ce magasin existe : la session tmux etait bien creee
+  /// (elle apparaissait dans la barre laterale) mais l'onglet n'affichait rien et l'id
+  /// restait coince dans le magasin. D'ou : on RECHARGE avant de conclure.
+  async function honorerDemande(wanted: number): Promise<boolean> {
+    // Demande deja traitee, ou remplacee par une autre depuis : on ne la rejoue pas.
+    if (get(pendingTerminalId) !== wanted) return false;
+
+    if (!sessions.some((s) => s.id === wanted)) {
+      try { await fusionnerSessions(); }
+      catch (e) { notify(String(e)); return false; }
+    }
     if (sessions.some((s) => s.id === wanted)) {
       pendingTerminalId.set(null);
-      if (activeId !== wanted) activate(wanted);
+      if (activeId !== wanted) await activate(wanted);
+      return true;
     }
-  });
+
+    // Toujours absente de ce projet : soit la session appartient a un AUTRE projet et son
+    // onglet la prendra, soit elle n'existe plus. Dans ce dernier cas on le DIT et on vide
+    // le magasin : un clic sans effet est vecu comme une panne, et un id jamais consomme
+    // empoisonnerait les navigations suivantes.
+    let ailleurs: boolean;
+    try { ailleurs = (await listAllTerminals()).some((t) => t.id === wanted); }
+    catch (e) { notify(String(e)); return false; }
+    if (!ailleurs) {
+      pendingTerminalId.set(null);
+      notify($trad("term.sessionGone"));
+    }
+    return false;
+  }
 
   // Suit le theme de l'app
   $effect(() => {

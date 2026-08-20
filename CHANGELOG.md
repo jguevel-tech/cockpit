@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les commandes rapides d'un projet (bouton **▶ Cmd**, palette Ctrl+K) et le shell d'un
+  conteneur (onglet Docker) ouvrent enfin leur terminal. Quand l'onglet Terminal était déjà
+  affiché, la session était bien créée — elle apparaissait dans la barre latérale — mais aucun
+  onglet ne s'ouvrait et rien ne l'expliquait : chaque nouvel essai laissait un terminal de
+  plus derrière lui. Un clic sur un terminal de la barre latérale ou du tableau de bord ouvre
+  lui aussi la bonne session, et si celle-ci s'est terminée entre-temps, c'est écrit à l'écran.
+
 ## [0.34.0] — 2026-08-20
 
 ### Added

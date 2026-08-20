@@ -550,6 +550,7 @@ export const fr = {
   "term.noProjectPath": "Ce projet n'a pas de chemin : renseigne-le dans l'onglet Paramètres du projet.",
   "term.pasteNoTerminal": "Aucun terminal ouvert : clique sur + pour en ouvrir un.",
   "term.pasteEmpty": "Le presse-papier est vide : rien à coller.",
+  "term.sessionGone": "Ce terminal n'existe plus : sa session s'est terminée entre-temps.",
   "tab.workspace": "Workspace",
   "tab.docker": "Docker",
   "tab.terminal": "Terminal",
