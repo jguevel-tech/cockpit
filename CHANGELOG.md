@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-08-20
+
 ### Added
 
 - Notes : un bouton **▸◂ Lecture** dans l'en-tête de la note replie d'un coup la liste des
