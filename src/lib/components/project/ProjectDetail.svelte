@@ -54,7 +54,11 @@
       const next = new Map<string, UrlHealth>();
       urls.forEach((u, i) => { if (res[i]) next.set(u.url, res[i]); });
       urlHealth = next;
-    } catch (e) { console.error("checkUrls:", e); }
+    } catch (e) {
+      // Pas de notify() : la verification tourne toutes les 60 s, un reseau coupe ne doit pas
+      // empiler des toasts. Mais elle ne reste pas dans la console pour autant.
+      signalerErreur("projectDetail.checkQuickUrls", String(e));
+    }
   }
 
   onMount(() => {
