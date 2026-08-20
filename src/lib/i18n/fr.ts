@@ -37,7 +37,6 @@ export const fr = {
   "tasks.empty": "Aucune tâche en attente",
   "tasks.count.one": "{n} tâche",
   "tasks.count.other": "{n} tâches",
-  "tasks.due": "Échéance {date}",
   "terminals.title": "Terminaux en cours",
   "terminals.goTo": "Aller à ce terminal",
   "terminals.finished": "terminé",

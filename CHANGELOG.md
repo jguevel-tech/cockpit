@@ -19,6 +19,12 @@ le script de release.
   simple continue d'ouvrir l'édition du texte. Vaut dans la colonne Todos d'un projet comme dans
   le tableau de bord.
 
+### Fixed
+
+- Tableau de bord → Tâches : l'échéance d'une tâche se **modifie sur place** (clic sur le badge)
+  et se **pose** (📅 au survol de la ligne). Le badge n'était qu'un affichage, alors que c'est
+  l'écran où on trie ses tâches.
+
 ## [0.35.0] — 2026-08-20
 
 ### Added

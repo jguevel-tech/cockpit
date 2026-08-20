@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo } from "../../api/storage";
+  import { getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo, setTodoDue } from "../../api/storage";
   import { reorderProjects } from "../../api/scanner";
   import { selectProject, activeTab } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
@@ -63,6 +63,21 @@
 
   function cancelEditTodo() {
     editingTodoId = null;
+  }
+
+  // --- Echeances ---
+  // Le badge etait un <span> inerte ici alors qu'il ouvre le calendrier dans la colonne Todos :
+  // on voyait l'echeance depuis le tableau de bord sans pouvoir la deplacer, ni en poser une.
+  // C'est pourtant l'ecran ou on trie ses taches.
+  let editingDueId: number | null = $state(null);
+
+  async function commitDue(todo: Todo, value: string) {
+    editingDueId = null;
+    const due = value || null;
+    if (due === todo.due_date) return;
+    // Optimiste : la tache reste en place, on ne renvoie pas l'utilisateur en haut de liste.
+    pendingTodos = pendingTodos.map((t) => (t.id === todo.id ? { ...t, due_date: due } : t));
+    try { await setTodoDue(todo.id, due); } catch (e) { notify(String(e)); await reload(); }
   }
 
   // --- Drag & Drop des groupes (projets) via l'action partagee ---
@@ -235,10 +250,34 @@
             {:else}
               <TodoText texte={todo.text} dense sansGlisser onEdit={() => startEditTodo(todo)} />
             {/if}
-            {#if todo.due_date}
-              <span class="due-badge {dueUrgency(todo.due_date)}" title={$trad("tasks.due", { date: todo.due_date })}>
-                {dueLabel(todo.due_date)}
-              </span>
+            {#if editingDueId === todo.id}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                class="due-input"
+                type="date"
+                value={todo.due_date ?? ""}
+                autofocus
+                onclick={(e) => e.stopPropagation()}
+                ondragstart={(e) => e.preventDefault()}
+                onchange={(e) => commitDue(todo, e.currentTarget.value)}
+                onblur={() => (editingDueId = null)}
+                onkeydown={(e) => e.key === "Escape" && (editingDueId = null)}
+              />
+            {:else if todo.due_date}
+              <button
+                class="due-badge {dueUrgency(todo.due_date)}"
+                title={$trad("todos.dueHint", { date: todo.due_date })}
+                onclick={(e) => { e.stopPropagation(); editingDueId = todo.id; }}
+                ondragstart={(e) => e.preventDefault()}
+              >{dueLabel(todo.due_date)}</button>
+            {:else}
+              <button
+                class="due-add"
+                title={$trad("todos.addDue")}
+                aria-label={$trad("todos.addDue")}
+                onclick={(e) => { e.stopPropagation(); editingDueId = todo.id; }}
+                ondragstart={(e) => e.preventDefault()}
+              >📅</button>
             {/if}
             <button
               class="todo-del"
@@ -324,10 +363,23 @@
   .due-badge {
     flex-shrink: 0; border: 1px solid var(--border-color); border-radius: 10px;
     background: var(--bg-tertiary); color: var(--text-secondary);
-    font-size: 0.7rem; padding: 0.08rem 0.45rem; white-space: nowrap;
+    font-size: 0.7rem; padding: 0.08rem 0.45rem; white-space: nowrap; cursor: pointer;
   }
+  .due-badge:hover { border-color: var(--text-secondary); color: var(--text-primary); }
   .due-badge.today { border-color: var(--warning); color: var(--warning); }
   .due-badge.overdue { border-color: var(--error); color: var(--error); }
+  /* Le 📅 n'apparait qu'au survol de la ligne, comme la croix de suppression. */
+  .due-add {
+    background: none; border: none; cursor: pointer; padding: 0; font-size: 0.8rem;
+    opacity: 0; flex-shrink: 0; transition: opacity 0.15s;
+  }
+  .todo-item:hover .due-add { opacity: 0.7; }
+  .due-add:hover { opacity: 1; }
+  .due-input {
+    flex-shrink: 0; font-size: 0.75rem; padding: 0.1rem 0.3rem;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-primary); color: var(--text-primary);
+  }
   .todo-del {
     flex-shrink: 0; background: none; border: none;
     color: var(--error); font-size: 1.1rem; padding: 0; cursor: pointer;

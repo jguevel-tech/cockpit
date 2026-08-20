@@ -1083,7 +1083,10 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 Menu a gauche, 4 vues (store `dashboardView`), un composant par vue dans `dashboard/` :
 - **Taches** : todos en attente groupes par projet (drag & drop, edition inline, adresses
-  ouvrables au Ctrl+clic — meme composant `todos/TodoText.svelte` que la colonne Todos)
+  ouvrables au Ctrl+clic — meme composant `todos/TodoText.svelte` que la colonne Todos).
+  Echeance modifiable ICI AUSSI : badge cliquable, 📅 au survol pour en poser une. Le badge
+  y etait un `<span>` inerte jusqu'au 2026-08-20 — on lisait l'echeance sur l'ecran de tri
+  sans pouvoir la deplacer
 - **Monitoring** : jauges CPU/memoire, historique, top processus (Snapshot / Live)
 - **Terminaux** : tous les terminaux ouverts groupes par projet, clic = navigation directe
   vers la session (store `pendingTerminalId`, consomme par TerminalTab au montage ET a chaud)

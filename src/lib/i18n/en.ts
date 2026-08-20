@@ -35,7 +35,6 @@ export const en: Catalog = {
   "tasks.empty": "No pending task",
   "tasks.count.one": "{n} task",
   "tasks.count.other": "{n} tasks",
-  "tasks.due": "Due {date}",
   "terminals.title": "Open terminals",
   "terminals.goTo": "Go to this terminal",
   "terminals.finished": "finished",
