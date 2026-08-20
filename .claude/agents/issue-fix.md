@@ -74,4 +74,6 @@ ecart au workflow: <toute regle du skill qui s'est revelee fausse, absente ou
 _(Chaque entree vient d'une erreur reelle commise sur un run precedent. Ne pas les
 retirer : elles coutent moins cher a lire qu'a re-apprendre.)_
 
-- (aucune pour l'instant)
+- **Ton dernier message EST le rendu.** Ne termine jamais ton tour sur un accuse de
+  reception ou une question : le texte final est la seule chose qui remonte. Vu le
+  2026-08-20 sur des agents de triage, meme cause possible ici.

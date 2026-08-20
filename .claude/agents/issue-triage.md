@@ -37,7 +37,17 @@ correction: <fichiers a toucher, une phrase chacun> (vide si non pertinent)
 cout: petit | moyen | gros
 captures: <ce qu'elles montrent, ou "aucune">
 doute: <ce dont tu n'es pas sur, ou "aucun">
+       Dis explicitement s'il est BLOQUANT ou NON BLOQUANT.
+       Bloquant = la reponse de l'auteur change ce qu'il faut faire (quel ecran il
+       visait, quel perimetre, ce qu'il a vu). Dans ce cas, propose la question
+       fermee a lui poser : deux ou trois lectures possibles, nommees avec leur
+       chemin dans l'interface, pour qu'il reponde en un mot.
+       Non bloquant = un choix technique que tu peux trancher toi-meme.
 ```
+
+**Mieux vaut une question qu'une hypothese.** Un doute bloquant honnete vaut
+infiniment mieux qu'un classement affirmatif qui envoie coder la mauvaise
+fonctionnalite. Ne force pas une classe pour rendre une fiche propre.
 
 Regles de classement :
 
@@ -83,4 +93,8 @@ Dans ce cas :
 _(Chaque entree vient d'une erreur reelle commise sur un run precedent. Ne pas les
 retirer : elles coutent moins cher a lire qu'a re-apprendre.)_
 
-- (aucune pour l'instant)
+- **Ton dernier message EST la fiche.** Ne termine jamais ton tour sur un accuse de
+  reception, un resume de ce que tu as lu, ou une question. Le texte final est la
+  seule chose qui remonte : s'il ne contient pas la fiche complete, ton travail est
+  perdu et il faut te relancer. Constate le 2026-08-20 sur les issues #2 et #4, ou
+  deux agents se sont mis en attente sans rien rendre.

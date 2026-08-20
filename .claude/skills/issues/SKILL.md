@@ -102,6 +102,11 @@ d'une regle ne prend plus effet.
 Chaque agent rend la fiche decrite dans sa definition : classe, preuve
 (`fichier:ligne`), cause, correction proposee, cout, langue de l'auteur, doute.
 
+**Un agent peut se mettre en attente sans rien rendre** (vu le 2026-08-20 sur deux
+des neuf agents). Ce n'est pas une raison de refaire son travail toi-meme : relance-le
+par `SendMessage` en lui redemandant la fiche au format, et en lui donnant la question
+precise qui tranche son classement. Il a deja lu le code, il repond vite.
+
 Regle de classement qui revient souvent : **une fonctionnalite qui existe mais que
 l'utilisateur n'a pas trouvee est un probleme de decouvrabilite, pas un bug.** Elle
 se traite par une reponse + un ajout dans la doc integree
@@ -130,6 +135,35 @@ c'est une modification visible : elle passe par le changelog et part dans la rel
 
 **Ne jamais ecrire a un auteur qu'une demande est refusee** sans l'accord de Jimmy.
 Une demande non retenue reste ouverte, sans reponse.
+
+### Si tu ne comprends pas l'issue : demande
+
+**Une question a l'auteur coute un aller-retour ; se tromper coute une release, une
+fonctionnalite a jeter et sa confiance.** Des qu'une fiche laisse un doute qui change
+ce qu'il faudrait faire, tu ne devines pas : tu demandes, **dans la langue de
+l'auteur**, puis tu poses le label `attente-retour` et tu passes a la suite.
+
+Ca vaut pour tous les cas de figure :
+
+- l'issue est vide ou tient en un titre, et plusieurs lectures sont possibles ;
+- l'application a plusieurs endroits qui correspondent au titre (« arborescence »
+  peut viser les notes, les dossiers de projets ou l'onglet Fichiers) ;
+- le perimetre demande n'est pas clair (une zone precise, ou toute la mise en page) ;
+- l'auteur decrit un symptome que le code contredit : demande ce qu'il a vu a
+  l'ecran, pas une confirmation de ton hypothese.
+
+Comment demander, en une question **fermee** quand c'est possible : proposer les
+lectures possibles et lui faire choisir, plutot qu'un « pouvez-vous preciser ? » qui
+lui laisse tout le travail. Deux ou trois options nommees avec le chemin dans
+l'interface, il repond en un mot.
+
+Ce qui reste interdit : poser la question ET coder l'hypothese en parallele. On
+attend la reponse — sauf si une partie de l'issue est certaine, auquel cas cette
+partie se corrige et la question ne porte que sur le reste.
+
+Le champ `doute` des fiches de triage sert exactement a reperer ces cas. Une fiche
+qui dit « a confirmer d'un mot avant d'ouvrir le chantier » est une question a poser,
+pas une hypothese a retenir.
 
 ## Etape 4 — Corrections, EN SERIE
 
@@ -291,6 +325,26 @@ machine de l'auteur, c'est « ca devrait etre regle ». On ne sait pas encore.
 Demander precisement ce qui manque, jamais « pouvez-vous donner plus de details » :
 la version installee (Parametres -> General), la distribution, les etapes exactes,
 et une capture si le symptome est visuel. Meme label, meme delai de dix jours.
+
+### Question a l'auteur (issue ambigue)
+
+Proposer les lectures possibles, ne pas lui demander de tout reformuler :
+
+> Je veux etre sur de viser le bon endroit avant de m'y mettre : vous parlez de
+> [option A, avec son chemin dans l'interface], de [option B] ou des deux ?
+>
+> [Si utile : ce qui existe deja aujourd'hui pour chacune.]
+
+Version anglaise :
+
+> I want to make sure I'm looking at the right place before starting: do you mean
+> [option A, with where it is in the app], [option B], or both?
+
+Pour un symptome que le code contredit, demander ce qu'il a vu, pas une confirmation :
+
+> Chez moi [ce que fait le code]. Qu'est-ce que vous voyez a l'ecran a ce
+> moment-la — un message d'erreur, rien du tout, autre chose ? Une capture
+> m'aiderait beaucoup.
 
 ### Fonctionnalite qui existe deja
 
