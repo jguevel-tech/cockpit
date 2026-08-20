@@ -102,10 +102,25 @@ d'une regle ne prend plus effet.
 Chaque agent rend la fiche decrite dans sa definition : classe, preuve
 (`fichier:ligne`), cause, correction proposee, cout, langue de l'auteur, doute.
 
-**Un agent peut se mettre en attente sans rien rendre** (vu le 2026-08-20 sur deux
-des neuf agents). Ce n'est pas une raison de refaire son travail toi-meme : relance-le
-par `SendMessage` en lui redemandant la fiche au format, et en lui donnant la question
-precise qui tranche son classement. Il a deja lu le code, il repond vite.
+**Prevois une passe de relance : la PLUPART des agents se mettent en attente sans
+rien rendre** (le 2026-08-20, six sur neuf). Ce n'est pas une raison de refaire leur
+travail toi-meme : relance chacun par `SendMessage` en lui redemandant la fiche au
+format, et en lui donnant la question precise qui tranche son classement. Ils ont
+deja lu le code et repondent vite — les fiches obtenues ainsi ont ete les meilleures
+du lot.
+
+Profite de la relance pour transmettre ce que les autres fiches ont deja etabli : sur
+ce meme run, savoir que l'aller-retour marked/turndown perd le `<pre>` nu a oriente
+utilement le triage des liens. Les agents ne se parlent pas entre eux, c'est a toi de
+faire circuler.
+
+**Deux relances sans fiche = agent perdu, on le remplace.** Ne le relance pas une
+troisieme fois et ne refais pas son travail toi-meme : lance un agent NEUF sur la meme
+issue, avec un prompt plus resserre (les questions precises a trancher, ce qui est
+deja etabli par les autres fiches). Constate le 2026-08-20 sur l'issue #9.
+
+`ListAgents` ne sert a rien pour ca : il ne liste que les autres sessions Claude, pas
+tes propres sous-agents. Leur etat ne se connait que par leurs notifications.
 
 Regle de classement qui revient souvent : **une fonctionnalite qui existe mais que
 l'utilisateur n'a pas trouvee est un probleme de decouvrabilite, pas un bug.** Elle
@@ -179,6 +194,16 @@ son fichier.
 Si un agent n'arrive pas a reproduire ce qu'un agent de triage avait classe
 `bug-confirme`, l'issue redescend en `bug-non-reproduit` : on ne patche pas a
 l'aveugle.
+
+**Les defauts trouves en chemin font partie du lot.** Un triage qui ouvre un fichier
+en trouve souvent plus que l'issue n'en demandait : un bug voisin, une chaine non
+traduite, un garde-fou qui ne garde rien. Ca ne se met pas de cote au motif que
+personne ne l'a signale — ca se corrige, ca va au changelog si c'est visible, et ca
+part dans la meme release. Le champ `croise en chemin` du rendu des agents de
+correction sert a en garder la trace.
+
+Ce qui remonte a Jimmy plutot que d'etre fait : un remaniement dont l'ampleur depasse
+largement l'issue. La aussi c'est une decision de perimetre, donc la sienne.
 
 **Entre deux agents, applique l'etape 4bis.** C'est la raison d'etre de la serie.
 

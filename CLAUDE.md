@@ -236,6 +236,17 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - Commandes externes (git, docker, tmux...) : args en tableau via Command, jamais `sh -c` interpole
 - Bug a corriger -> reproduire et instrumenter AVANT de patcher (lecon du bug accents) ;
   ne jamais enchainer des correctifs hypothetiques
+- **Un bug croise en chemin se corrige**, meme si personne ne l'a signale : on est dans
+  le fichier, on vient de le comprendre, c'est maintenant qu'il coute le moins cher.
+  L'objectif est zero bug, pas « la demande est traitee ».
+- **Un fichier en mauvais etat se refactore quand on y touche** — fonction de 200 lignes,
+  etat duplique, logique melangee au rendu, copier-coller. Un correctif greffe sur du code
+  pourri fabrique le bug suivant. Trois limites : le refactoring va dans un commit SEPARE
+  du correctif (un diff qui fait les deux ne se relit pas et ne s'annule pas), le
+  comportement ne change pas pendant un refactoring, et on se limite a la zone touchee et
+  son voisinage immediat — un remaniement dont l'ampleur depasse la demande se signale a
+  Jimmy au lieu d'etre entrepris. Ne s'applique jamais au code marque `NE PAS RETIRER` ni
+  aux contournements documentes sur place : ils ont l'air inutiles parce qu'ils marchent.
 
 ## Stack technique
 

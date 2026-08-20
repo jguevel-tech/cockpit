@@ -38,6 +38,37 @@ coute des jours a trouver. Les enfreindre annule ton travail.
 6. **Ne pas releaser, ne pas pousser, ne rien poster sur GitHub.** La session
    principale s'en charge : une seule release pour le lot.
 
+## Ce que tu croises en chemin : tu le corriges
+
+L'objectif du projet est zero bug et du code maintenable, pas « l'issue est fermee ».
+Donc :
+
+- **Un bug que tu croises se corrige**, meme si personne ne l'a signale. Tu es dans le
+  fichier, tu l'as compris, c'est maintenant qu'il coute le moins cher. Il va dans le
+  changelog comme les autres s'il est visible.
+- **Un fichier en mauvais etat se refactore.** Si la zone que tu touches est
+  illisible — fonction de 200 lignes, etat duplique, logique melangee au rendu,
+  copier-coller — remets-la d'aplomb au lieu d'ajouter une couche par-dessus. Un
+  correctif greffe sur du code pourri fabrique le bug suivant.
+- **Une chaine affichee non traduite se met au catalogue**, c'est une regle non
+  negociable du projet et l'utilisateur anglais lit du francais sans ca.
+
+Les limites, pour que ca reste relisable :
+
+- **Le refactoring va dans un commit SEPARE du correctif**, avant ou apres, jamais
+  melange : un diff qui fait les deux est impossible a relire et impossible a annuler
+  proprement. Dis dans ton rendu ce que chaque commit contient.
+- **Le comportement ne change pas** pendant un refactoring. Si tu decouvres qu'il
+  devait changer, c'est un correctif, donc un autre commit.
+- **Ne refactore pas ce que tu n'as pas besoin de comprendre.** La zone que tu touches
+  et son voisinage immediat, pas le fichier entier parce qu'il te deplait. Si le
+  chantier depasse largement l'issue, arrete-toi et decris-le dans ton rendu : c'est a
+  Jimmy de decider d'un gros remaniement.
+- **Rien de tout ca ne s'applique au code marque `NE PAS RETIRER`**, ni aux
+  contournements documentes sur place : ils ont l'air inutiles justement parce qu'ils
+  fonctionnent.
+- Les 5 points de la definition de « fini » couvrent l'ENSEMBLE de tes commits.
+
 ## Rendu attendu
 
 ```
@@ -47,7 +78,11 @@ cause reelle: <ce qui se passait>
 fichiers: <liste>
 verifications: <resultat des 4 commandes, chiffres a l'appui>
 changelog: <la ligne ajoutee, ou pourquoi il n'y en a pas>
-commit: <hash + titre>
+commit: <hash + titre, un par ligne si tu en as fait plusieurs, en disant
+         lequel est le correctif et lequel est le refactoring>
+croise en chemin: <bugs corriges que personne n'avait signales, chaines mises au
+                   catalogue, zones remises d'aplomb — ou "rien">
+a signaler: <chantier trop gros pour toi, que tu as laisse en place — ou "rien">
 pour l'auteur: <2 phrases expliquant ce qui se passait, dans sa langue —
                au passe, sans affirmer que c'est regle chez lui : il n'a
                encore rien pu constater, c'est lui qui le dira>
