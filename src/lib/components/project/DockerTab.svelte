@@ -36,7 +36,7 @@
     } catch (e) { notify(String(e)); }
   }
 
-  const composeHint = "Aucun fichier compose pour ce projet — voir le message ci-dessus.";
+  const composeHint = $derived($trad("docker.composeMissingHint"));
 
   const stateColors: Record<string, string> = {
     running: "var(--success)", starting: "var(--warning)",

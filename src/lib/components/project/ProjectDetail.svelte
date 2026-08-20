@@ -168,7 +168,9 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <h2
         ondblclick={startRename}
-        title={project?.description ? `${project.description} — double-clic pour renommer` : "Double-clic pour renommer"}
+        title={project?.description
+          ? $trad("project.renameHintWithDescription", { description: project.description })
+          : $trad("project.renameHint")}
       >{name}</h2>
     {/if}
 

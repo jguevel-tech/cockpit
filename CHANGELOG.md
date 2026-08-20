@@ -17,6 +17,10 @@ le script de release.
 - Notes : le Ctrl+clic sur une adresse mail ouvre le client mail au lieu d'afficher une
   erreur. Un lien incomplet (`www.exemple.com`, `../doc.md`) explique maintenant qu'il
   manque une adresse complète, au lieu de remonter un message technique.
+- Interface en anglais : quelques libellés restaient en français — le message qui explique
+  pourquoi un dossier de projets ne peut pas être supprimé, l'infobulle des terminaux de la
+  barre latérale, celle du nom de projet à renommer, et l'aide des boutons Docker quand le
+  projet n'a pas de fichier compose.
 
 ## [0.31.1] — 2026-08-20
 

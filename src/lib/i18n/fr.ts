@@ -73,6 +73,9 @@ export const fr = {
   "sidebar.terminal": "Terminal",
   "sidebar.closeTerminal": "Fermer le terminal",
   "sidebar.noProject": "Aucun projet",
+  "sidebar.gotoTerminal": "Aller à ce terminal ({project}) — clic droit pour renommer",
+  "sidebar.folderNotEmpty.one": "Ce dossier contient encore un projet : déplace-le d'abord.",
+  "sidebar.folderNotEmpty.other": "Ce dossier contient encore {n} projets : déplace-les d'abord.",
 
   // Tableau de bord
   "dashboard.title": "Tableau de bord",
@@ -458,6 +461,7 @@ export const fr = {
   "docker.shellHint": "Ouvrir un shell dans le conteneur",
   "docker.noContainer": "Aucun conteneur actif",
   "docker.noPathConfigured": "Ce projet n'a pas de chemin configuré.",
+  "docker.composeMissingHint": "Aucun fichier compose pour ce projet — voir le message ci-dessus.",
   "term.renameHint": "Double-clic ou clic droit pour renommer",
   "term.new": "Nouveau terminal",
   "term.searchOlder": "Occurrence plus ancienne",
@@ -490,6 +494,8 @@ export const fr = {
   "project.noPath": "Ce projet n'a pas de chemin : renseigne-le dans Paramètres.",
   "project.urlOnline": "En ligne (HTTP {status})",
   "project.urlUnreachable": "Injoignable — {detail}",
+  "project.renameHint": "Double-clic pour renommer",
+  "project.renameHintWithDescription": "{description} — double-clic pour renommer",
   "rec.lostMic": "Enregistrement lancé sans le micro : aucune entrée audio disponible. Seul le son système est capté.",
   "rec.lostSystem": "Enregistrement lancé sans le son système : seule ta voix est captée.",
   "rec.failed": "⚠ Réunion en échec",

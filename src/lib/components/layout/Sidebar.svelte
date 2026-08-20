@@ -15,7 +15,7 @@
   import claudeLogo from "../../assets/claude-logo.svg";
   import { notify } from "../../stores/toast";
   import { onMount } from "svelte";
-  import { trad } from "../../i18n";
+  import { trad, tradN } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
 
   let showCreateModal = $state(false);
@@ -136,9 +136,7 @@
     // vers la racine en silence — surprise garantie. On explique au lieu d'agir.
     const count = getFolderProjects(id).length;
     if (count > 0) {
-      notify(count === 1
-        ? "Ce dossier contient encore un projet : déplace-le d'abord."
-        : `Ce dossier contient encore ${count} projets : déplace-les d'abord.`);
+      notify($tradN("sidebar.folderNotEmpty", count));
       return;
     }
     try {
@@ -237,7 +235,7 @@
   {#if $terminals.length > 0}
     <div class="sidebar-header terminals-header">
       <button class="section-toggle" onclick={toggleTerminals}>
-        {terminalsCollapsed ? '▸' : '▾'} Terminaux
+        {terminalsCollapsed ? '▸' : '▾'} {$trad("sidebar.terminals")}
       </button>
       <span class="terminals-count">{$terminals.length}</span>
     </div>
@@ -260,7 +258,7 @@
                 class="terminal-item"
                 onclick={() => gotoTerminal(t)}
                 oncontextmenu={(e) => openTermContextMenu(e, t)}
-                title="Aller à ce terminal ({t.project}) — clic droit pour renommer"
+                title={$trad("sidebar.gotoTerminal", { project: t.project })}
               >
                 {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
                 <span class="terminal-name">{terminalLabel(t)}</span>
