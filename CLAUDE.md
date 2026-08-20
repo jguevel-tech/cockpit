@@ -876,7 +876,11 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 - `debug_log` (diagnostic : append dans /tmp/cockpit-debug.log)
 
 ### Explorateur de fichiers / Git
-- `list_project_dir`, `read_project_file`, `write_project_file` (fichiers existants, racine verrouillee)
+- `list_project_dir`, `read_project_file` (rend aussi la mtime), `write_project_file` (fichiers
+  existants, racine verrouillee)
+- `stat_project_file` : mtime + taille seules, sans lire le contenu. Rend `None` — pas une erreur —
+  quand le fichier a disparu. Sert au suivi du fichier ouvert dans l'onglet Fichiers (stat toutes
+  les 2 s + controle au retour de focus ; relecture UNIQUEMENT si mtime ou taille ont bouge)
 - `search_project` (recherche globale : noms de dossiers/fichiers + contenu, gitignore-aware,
   insensible a la casse, bornee a 100 noms / 400 occurrences avec flag `truncated` ;
   `spawn_blocking` pour ne pas bloquer le runtime)
@@ -1179,6 +1183,17 @@ Le backend (`system/metrics.rs`) collecte :
   RESOLUE contre une base bidon tout en envoyant le href BRUT : `[x](www.ex.com)` passait le
   controle puis se faisait rejeter par le backend, avec un message technique a l'ecran. Deux
   gardes qui ne s'accordent pas fabriquent des erreurs sur des liens legitimes.
+- **Un debounce qui repart a chaque frappe n'expire JAMAIS pendant une frappe continue.**
+  L'editeur de fichiers recalculait la couche coloree Shiki 120 ms apres la DERNIERE touche :
+  a 80 ms par touche (rythme de dactylo ordinaire), 0 caractere sur 33 s'affichait pendant la
+  rafale — et le textarea etant transparent, on tapait litteralement dans le vide jusqu'a la
+  premiere pause. Mesure au banc, et le piege est ailleurs que la ou on le cherche : ce n'est PAS
+  un probleme de cout de coloration (37 ms pour 1500 lignes de markdown, 105 ms pour 1000 lignes
+  de TypeScript) ni de taille de fichier (0/33 aussi sur 40 lignes). Correctif : tant que la
+  couche coloree est en retard, on affiche le texte BRUT du textarea — les deux couches partagent
+  police, taille, interligne et padding, donc la substitution ne deplace rien. **Regle generale :
+  un rendu asynchrone superpose a une saisie doit avoir un repli synchrone, sinon la saisie est
+  invisible.**
 - **`scripts/release.mjs` doit bumper `Cargo.lock` en meme temps que `Cargo.toml`.** Sans ca le
   commit taggue se contredisait (lock en retard d'une version) et le premier `cargo build`
   suivant reecrivait le fichier : arbre sale, donc release suivante REFUSEE jusqu'a un commit
