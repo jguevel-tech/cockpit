@@ -333,12 +333,30 @@ premier et le dernier, jamais omis.
 
 ### 1. Ce que j'attends de toi
 
-En premier, toujours. Une liste numerotee de decisions ou de reponses, chacune
-formulee pour qu'un mot suffise a y repondre. Pour une decision, ta recommandation
-avec elle.
+En premier, toujours. **Pose-les avec `AskUserQuestion`, en choix cliquables**, pas en
+prose : sinon Jimmy doit recopier la question pour y repondre, il l'a demande le
+2026-08-20. Une question par decision, ta recommandation en premiere option et marquee
+comme telle.
 
 **S'il n'y a rien, ecris-le franchement : « Rien de ton cote. »** C'est une
 information, pas un blanc a combler.
+
+**Formule le comportement par un EXEMPLE CONCRET, pas par la mecanique interne.**
+Jimmy a du reformuler lui-meme une question mal posee sur l'issue #7, et sa version est
+le modele a suivre :
+
+> « si j'etais sur l'onglet fichier dans le projet toto, quand je vais sur le projet
+> tata voir un truc et que je reviens sur toto, faut que je revienne sur l'onglet
+> fichiers »
+
+Ce que ca donne comme regle : raconte ce que fait l'utilisateur et ce qu'il voit, pas
+le nom du store ni la ligne qui change. « L'onglet actif est remis a workspace dans
+selectProject » ne dit pas ce que la personne vit ; « quand tu reviens sur un projet,
+tu retombes sur Workspace au lieu de l'onglet ou tu etais » le dit. La mecanique va
+apres, si elle sert a decider.
+
+Cette regle vaut aussi pour les rapports et pour les questions posees aux auteurs
+d'issues.
 
 ### 2. Termine
 
