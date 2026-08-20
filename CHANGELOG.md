@@ -36,6 +36,10 @@ le script de release.
   l'instantané pris à l'ouverture et il fallait recliquer le fichier dans l'arbre. Une
   modification qui arrive pendant qu'on édite n'écrase rien : elle est signalée par un bandeau,
   avec un bouton pour prendre la version du disque. Un fichier disparu se dit aussi.
+- Onglet Fichiers : taper dans l'éditeur affiche les caractères tout de suite. La coloration
+  attend une pause de frappe, et comme cette pause repartait de zéro à chaque touche, une
+  frappe continue ne réaffichait rien : on tapait dans le vide. Le texte apparaît maintenant
+  sans attendre et les couleurs se posent à la pause.
 
 ## [0.31.2] — 2026-08-20
 

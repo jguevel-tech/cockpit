@@ -16,7 +16,15 @@
     onSave: () => void;
   } = $props();
 
+  // La coloration est relancee apres une pause de frappe. Mesure dans le WebKitGTK
+  // de Tauri : 37 ms sur 1500 lignes de markdown, 105 ms sur 1000 lignes de
+  // TypeScript — la colorer a chaque touche couterait ce prix a chaque touche.
+  const HIGHLIGHT_DEBOUNCE_MS = 120;
+
   let html = $state("");
+  // La couche coloree est en retard sur le texte tape. Vrai au montage : la
+  // premiere coloration n'est pas encore calculee.
+  let stale = $state(true);
   let hlEl: HTMLDivElement | undefined = $state();
   let taEl: HTMLTextAreaElement | undefined = $state();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -26,10 +34,18 @@
     const v = value + "\n";
     const l = lang;
     const d = dark;
+    stale = true;
     if (timer) clearTimeout(timer);
     timer = setTimeout(async () => {
-      html = await highlightCode(v, l, d);
-    }, 120);
+      const out = await highlightCode(v, l, d);
+      // Une frappe plus recente a pris la main pendant le calcul : son propre
+      // timer s'en occupe, ce resultat est perime.
+      if (v !== value + "\n") return;
+      html = out;
+      stale = false;
+      // Le {@html} remplace le DOM de la couche : on la recale sur le textarea.
+      syncScroll();
+    }, HIGHLIGHT_DEBOUNCE_MS);
   });
 
   $effect(() => {
@@ -55,7 +71,7 @@
   }
 </script>
 
-<div class="editor">
+<div class="editor" class:stale>
   <div class="hl" bind:this={hlEl} aria-hidden="true">{@html html}</div>
   <textarea
     bind:this={taEl}
@@ -98,4 +114,12 @@
     border: none; outline: none; resize: none;
   }
   textarea::selection { background: var(--accent-soft); }
+  /* Tant que la couche coloree est en retard, c'est le texte du textarea qui
+     s'affiche. Sans ca on tape dans le vide : le textarea est transparent et la
+     pause de 120 ms est remise a zero a chaque touche, donc une frappe continue
+     ne repeignait JAMAIS (mesure au banc WebKitGTK : 0 caractere sur 33 visible
+     a 80 ms/touche, quelle que soit la taille du fichier).
+     Les deux couches ont les memes metriques : la substitution ne deplace rien. */
+  .editor.stale .hl { visibility: hidden; }
+  .editor.stale textarea { color: var(--text-primary); }
 </style>
