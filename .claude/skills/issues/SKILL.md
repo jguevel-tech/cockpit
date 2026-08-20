@@ -63,6 +63,57 @@ sans lui poser la question.
 Ne lui remonte pas un tableau a valider ligne par ligne. Tu agis, puis tu annonces
 ce qui est parti.
 
+## L'ETAT DE CHAQUE ISSUE EST VISIBLE SUR GITHUB
+
+**Toute issue ouverte porte EXACTEMENT UN label d'etat, tout le temps.** Jimmy doit
+pouvoir ouvrir la liste des issues et voir d'un coup d'oeil ou en est chaque chose, sans
+demander. Zero etat ou deux etats est une incoherence, pas une nuance.
+
+| Etat | Ce que ca veut dire | La balle est chez |
+|---|---|---|
+| `a-trier` | arrivee, pas encore analysee | nous |
+| `en-analyse` | un agent de triage travaille dessus | nous |
+| `attente-arbitrage` | analysee, Jimmy doit trancher | **Jimmy** |
+| `a-livrer` | retenue, pas encore livree | nous |
+| `en-cours` | un agent ecrit la correction | nous |
+| `attente-retour` | livree et publiee, on attend la confirmation | l'auteur |
+| `attente-infos` | on attend des precisions pour avancer | l'auteur |
+| `refuse` | pas retenu (l'issue se ferme) | — |
+
+### Les transitions, et le geste qui va avec
+
+```
+ouverture ─> a-trier ─> en-analyse ─┬─> attente-arbitrage ─> a-livrer ou refuse
+                                    ├─> a-livrer        (bug confirme, ou demande retenue)
+                                    └─> attente-infos   (il manque une information)
+
+a-livrer ─> en-cours ─> [release publiee + auteur prevenu] ─> attente-retour
+                                                                    │
+                                          confirmation ou 10 jours ─┴─> ferme
+```
+
+Chaque changement d'etat se fait **dans le meme geste que l'action** qui le provoque :
+
+```bash
+# retirer l'ancien et poser le nouveau, jamais l'un sans l'autre
+gh issue edit <N> --repo jguevel-tech/cockpit --remove-label a-livrer --add-label en-cours
+```
+
+Deux moments ou on l'oublie systematiquement, donc a surveiller : quand on LANCE un agent
+(l'issue passe `en-analyse` ou `en-cours`) et quand un agent REND son travail (elle sort de
+cet etat). Un agent qui travaille sur une issue restee `a-livrer`, c'est un etat qui ment.
+
+### Le controle automatique
+
+`node scripts/issues-nouveautes.mjs` verifie les etats de TOUTES les issues ouvertes, y
+compris celles ou rien n'a bouge — parce qu'une issue oubliee est justement celle qui n'a
+rien de neuf. Il dit soit « toutes les issues ouvertes en portent exactement un », soit la
+liste des fautives. **Corriger avant de continuer** : c'est l'absence de label qui a laissé
+l'issue #6 sans reponse pendant des heures.
+
+Les labels de TYPE (`bug`, `enhancement`, `documentation`...) sont independants et peuvent
+coexister avec l'etat. Ne pas s'en servir comme etat.
+
 ## UNE PROMESSE EST UNE DETTE, ET ELLE SE SUIT
 
 **Ecrire « c'est retenu, je vous previens quand c'est livre » cree une obligation.** Ce

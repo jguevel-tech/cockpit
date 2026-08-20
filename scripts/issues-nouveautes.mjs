@@ -53,7 +53,16 @@ const issues = JSON.parse(
      "--json", "number,title,body,author,comments,labels,createdAt")
 );
 
+/** Les huit etats possibles d'une issue. Exactement UN a la fois : c'est ce qui rend le
+ *  tableau lisible d'un coup d'oeil sur GitHub. Deux etats ou aucun est une incoherence,
+ *  pas une nuance. */
+const ETATS = [
+  "a-trier", "en-analyse", "attente-arbitrage", "a-livrer",
+  "en-cours", "attente-retour", "attente-infos", "refuse",
+];
+
 let nouveautes = 0;
+const incoherences = [];
 const aMarquer = {};
 
 for (const issue of issues.sort((a, b) => a.number - b.number)) {
@@ -75,6 +84,13 @@ for (const issue of issues.sort((a, b) => a.number - b.number)) {
   const dernier = evenements[evenements.length - 1].date;
   aMarquer[n] = dernier;
 
+  const etats = issue.labels.map((l) => l.name).filter((n) => ETATS.includes(n));
+  if (etats.length !== 1) {
+    incoherences.push(
+      `#${issue.number} : ${etats.length === 0 ? "AUCUN etat" : "etats en conflit (" + etats.join(", ") + ")"}`
+    );
+  }
+
   const neufs = evenements.filter((e) => e.date > repere);
   if (neufs.length === 0) continue;
 
@@ -93,6 +109,16 @@ if (nouveautes === 0) {
   console.log("Rien de neuf sur les issues depuis la derniere lecture.");
 } else {
   console.log(`\n${nouveautes} evenement(s) non lu(s).`);
+}
+
+// Une issue sans etat est une issue qui va se faire oublier : c'est exactement ce qui est
+// arrive a #6, restee sans label ni reponse pendant des heures.
+if (incoherences.length) {
+  console.log(`\n⚠ ${incoherences.length} issue(s) mal etiquetee(s) — a corriger avant de continuer :`);
+  for (const i of incoherences) console.log(`   ${i}`);
+  console.log(`   Etats possibles : ${ETATS.join(" | ")}`);
+} else {
+  console.log("\nEtats : toutes les issues ouvertes en portent exactement un.");
 }
 
 if (marquer) {
