@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Une commande rapide (bouton **▶ Cmd** ou palette `Ctrl+K`) et le shell d'un conteneur
+  (onglet Docker) ouvrent enfin leur terminal **à la taille de la fenêtre**. Ces trois
+  raccourcis créaient la session en 80 colonnes sur 24 lignes : une application plein écran
+  lancée par une commande — `k9s`, `htop`, `top` — se dessinait dans un petit carré en haut à
+  gauche et y restait, et un simple shell coupait ses lignes bien avant le bord.
+
 ## [0.37.0] — 2026-08-20
 
 ### Added

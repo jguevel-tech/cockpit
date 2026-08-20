@@ -484,7 +484,7 @@ ai-workforce/
 │   │   │   ├── recording.ts        # Statut pipeline reunion (event recording_status)
 │   │   │   ├── system.ts           # Metriques systeme + historique CPU/mem (60 pts FIFO)
 │   │   │   ├── toast.ts            # notify(message, kind) — feedback non bloquant (erreurs/succes)
-│   │   │   └── ui.ts               # Navigation (activeView enum, selectedProject, activeTab, dashboardView, pendingTerminalId, theme)
+│   │   │   └── ui.ts               # Navigation (activeView enum, selectedProject, activeTab, dashboardView, pendingTerminalId, pendingTerminalCommand)
 │   │   ├── components/
 │   │   │   ├── ui/                 # Composants partages (a utiliser AVANT de recoder)
 │   │   │   │   ├── Modal.svelte        # Backdrop + Escape + clic exterieur
@@ -936,7 +936,9 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 - `get_project_commands`, `create_project_command`, `update_project_command`,
   `delete_project_command`, `reorder_project_commands` (table project_commands, DANS
   PROJECT_SCOPED_TABLES avec test qui verrouille la regle ; bouton ▶ Cmd de ProjectDetail
-  + entrees de la palette Ctrl+K, execution = createTerminal avec init_command)
+  + entrees de la palette Ctrl+K. Execution = depot dans le magasin `pendingTerminalCommand`,
+  l'onglet Terminal cree la session par `addTerminal` a la taille mesuree — l'appelant
+  n'appelle PAS `create_terminal` lui-meme)
 
 
 ### Project Folders
@@ -1030,7 +1032,10 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
   (table `terminals`), le serveur tmux survit a la fermeture de l'app : au redemarrage on se rattache
   (purge au boot des sessions disparues, suppression de la ligne quand le shell se termine).
   Les events IPC ne sont emis que si une UI est attachee. Ecritures/resizes serialises cote frontend
-  (file par terminal), PTY cree a la taille mesuree. Theme suit dark/light. RENDU : addon WebGL +
+  (file par terminal), PTY cree a la taille mesuree. **`addTerminal` (TerminalTab) est le SEUL
+  endroit qui cree une session** : une commande venue d'ailleurs (▶ Cmd, shell de conteneur,
+  palette Ctrl+K) arrive par le magasin `pendingTerminalCommand` et c'est l'onglet qui la lance,
+  parce que lui seul mesure son conteneur (voir « TUI lancee a la creation » dans Pieges connus). Theme suit dark/light. RENDU : addon WebGL +
   police mono explicite (DejaVu Sans Mono...) — le renderer DOM d'xterm avec "monospace" generique
   derive visuellement sur les glyphes accentues ; le modele terminal etait sain (verifie via
   tmux capture-pane), seul l'affichage etait corrompu.
@@ -1154,7 +1159,8 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 | `selectedProject` | `stores/ui.ts` | Projet selectionne (utilise quand activeView === "project") |
 | `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/plugins/settings). MEMORISE PAR PROJET (map en memoire) : revenir sur un projet retrouve son onglet. Une navigation intentionnelle vers un onglet precis reste prioritaire et devient la nouvelle memoire |
 | `dashboardView` | `stores/ui.ts` | Sous-vue du tableau de bord (tasks/monitoring/terminals/containers) |
-| `pendingTerminalId` | `stores/ui.ts` | Session terminal a ouvrir. Consomme par `honorerDemande` (TerminalTab) au montage ET a chaud, quel que soit le producteur (barre laterale, tableau de bord, palette, commande rapide, `docker exec`). Il RECHARGE la liste des sessions avant de conclure, parce que la cible vient souvent d'etre creee. Toujours remis a null : ouverte, ou signalee disparue |
+| `pendingTerminalId` | `stores/ui.ts` | Session EXISTANTE a ouvrir. Consomme par `honorerDemande` (TerminalTab) au montage ET a chaud, quel que soit le producteur (barre laterale, tableau de bord, palette). Il RECHARGE la liste des sessions avant de conclure, parce que la cible peut venir d'etre creee. Toujours remis a null : ouverte, ou signalee disparue |
+| `pendingTerminalCommand` | `stores/ui.ts` | Commande a lancer dans un NOUVEAU terminal du projet (`{ project, command }`) : bouton ▶ Cmd, shell d'un conteneur, commande rapide de la palette. Consomme par `honorerCommande` (TerminalTab) au montage ET a chaud, qui appelle `addTerminal(commande)` — c'est LUI qui cree la session, a la taille MESUREE du conteneur. Toujours remis a null, y compris quand la commande visait un autre projet (message a l'appui). NE PAS remettre un `create_terminal` chez l'appelant : voir « TUI lancee a la creation » dans les Pieges connus |
 | `readingMode` | `stores/ui.ts` | Mode lecture de l'onglet Workspace (replie notes + taches), persiste localStorage `cockpit-notes-reading` |
 | `theme` | `stores/appearance.ts` | Palette active (identifiant), persiste localStorage |
 | `themeBase` | `stores/appearance.ts` | Base derivee "dark" ou "light" — a consommer pour xterm et Shiki |
@@ -1306,8 +1312,10 @@ Le backend (`system/metrics.rs`) collecte :
 - **Une liste chargee au montage n'est pas une source de verite, et une garde posee dessus
   rejette exactement les cas qu'on voulait servir.** L'onglet Terminal n'honorait une demande
   d'ouverture (`pendingTerminalId`) que si l'id figurait dans sa liste locale `sessions`,
-  chargee une seule fois au montage. Or les producteurs de cette demande CREENT la session
-  juste avant de poser l'id (commande rapide, shell d'un conteneur, palette Ctrl+K) : la
+  chargee une seule fois au montage. Or les producteurs de cette demande CREAIENT la session
+  juste avant de poser l'id (commande rapide, shell d'un conteneur, palette Ctrl+K — ces trois
+  la passent DEPUIS par `pendingTerminalCommand`, voir l'entree suivante ; restent la barre
+  laterale, le tableau de bord et la palette, qui visent des sessions existantes) : la
   session tmux existait donc bien et la barre laterale la montrait, mais l'onglet n'affichait
   rien, ne disait rien, l'id restait coince dans le magasin — empoisonnant les navigations
   suivantes — et chaque nouvel essai laissait une session de plus derriere lui (issue #14 :
@@ -1316,6 +1324,27 @@ Le backend (`system/metrics.rs`) collecte :
   n'existe pas, la RECHARGER depuis le backend ; si elle n'existe vraiment plus, le dire et
   vider le magasin. Detail qui compte : quand la cible n'appartient pas a CE projet, ne pas
   vider le magasin — l'onglet du bon projet doit encore pouvoir la prendre.
+- **UNE TUI LANCEE A LA CREATION SE DESSINE A LA TAILLE DU PTY, ET PERSONNE NE LA
+  REDIMENSIONNE APRES.** Creer un terminal a une taille arbitraire n'est donc pas « une taille
+  provisoire que le premier redimensionnement corrigera » : c'est definitif. Le bouton ▶ Cmd, le
+  shell de conteneur de l'onglet Docker et la commande rapide de la palette appelaient tous
+  `create_terminal(..., 80, 24, commande)` — k9s s'affichait dans un carre de 80x24 en haut a
+  gauche d'un conteneur large, et un simple shell coupait ses lignes trop tot (issue #14,
+  deuxieme symptome).
+  Deux maillons expliquent l'absence de correction, et les DEUX sont voulus ailleurs :
+  - `attach()` (terminal/mod.rs) REUTILISE un client tmux vivant et rend la main aussitot : les
+    `cols`/`rows` passes a `attach_terminal` sont alors IGNORES. Or le client cree par
+    `create_terminal` est vivant, donc l'arrivee sur l'onglet ne recadre rien.
+  - `attachExisting` (TerminalTab) pre-renseigne `lastSentSize` avec la taille mesuree AVANT
+    l'attache, donc le `queueResize` du `fitActive()` suivant est saute (il croit la taille
+    deja envoyee). Aucun `resize_terminal` ne part.
+  Mesure (2026-08-20) : banc frontend, le journal des invoke montre `create_terminal
+  {cols:80,rows:24}` pour un conteneur de 1398x732 px = 196x48 cellules, `attach_terminal
+  {cols:196,rows:48}` et AUCUN `resize_terminal` ; banc tmux sur socket isole, un client cree
+  dans un PTY 80x24 donne un pane 80x24 et un htop dessine sur 80 colonnes, contre 177 colonnes
+  quand le PTY est cree a la taille mesuree. D'ou la regle : **seul l'onglet Terminal cree une
+  session** (`addTerminal`, qui mesure), les autres deposent leur commande dans
+  `pendingTerminalCommand`.
 - **UN `{@const}` EST UN DERIVE PARESSEUX : le lire depuis une action executee APRES la
   fermeture du menu leve une TypeError, avalee, et l'action ne se fait jamais.** Les menus
   contextuels s'ecrivent tous sur le meme moule — `{#if menu}{@const n = menu.node}` puis des

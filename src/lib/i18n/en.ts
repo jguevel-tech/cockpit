@@ -571,6 +571,8 @@ export const en: Catalog = {
   "term.noTerminalOpen": "No terminal open: click + to open one.",
   "term.pasteEmpty": "The clipboard is empty: nothing to paste.",
   "term.sessionGone": "That terminal is gone: its session ended in the meantime.",
+  "term.commandOtherProject": "The command was meant for project “{project}”: it was not started here.",
+  "term.viewNotReady": "The terminal view is not ready yet: try again in a moment.",
   "tab.workspace": "Workspace",
   "tab.docker": "Docker",
   "tab.terminal": "Terminal",

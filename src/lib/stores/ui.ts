@@ -24,6 +24,15 @@ export const pendingTerminalId = writable<number | null>(null);
 /** Fichier a ouvrir a l'arrivee sur l'onglet Fichiers (palette Ctrl+K), meme mecanique
  *  que pendingTerminalId : pose puis consomme et remis a null par FilesTab. */
 export const pendingFilePath = writable<string | null>(null);
+/** Commande a lancer dans un NOUVEAU terminal du projet (bouton ▶ Cmd, shell d'un
+ *  conteneur, palette Ctrl+K). Meme mecanique que pendingTerminalId : posee ici,
+ *  consommee par TerminalTab au montage ET a chaud, toujours remise a null.
+ *
+ *  Pourquoi passer par un magasin plutot que d'appeler `create_terminal` sur place :
+ *  seul l'onglet Terminal connait la taille de son conteneur, et une TUI lancee a la
+ *  creation (k9s, htop, top) se dessine a la taille du PTY. Creer la session a une
+ *  taille arbitraire la laisse dans un petit carre — voir `honorerCommande`. */
+export const pendingTerminalCommand = writable<{ project: string; command: string } | null>(null);
 // Sous-vue active du tableau de bord
 export const dashboardView = writable<"tasks" | "monitoring" | "terminals" | "containers">("tasks");
 

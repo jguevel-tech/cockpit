@@ -1,8 +1,7 @@
 <script lang="ts">
   import { projects } from "../../stores/projects";
   import { startProject, stopProject, restartProject } from "../../api/docker";
-  import { createTerminal } from "../../api/workspace";
-  import { activeTab, pendingTerminalId } from "../../stores/ui";
+  import { activeTab, pendingTerminalCommand } from "../../stores/ui";
   import { notify } from "../../stores/toast";
   import ContainerLogsModal from "../docker/ContainerLogsModal.svelte";
   import type { Project } from "../../types";
@@ -26,14 +25,15 @@
 
   /// Ouvre un shell DANS le conteneur : un vrai terminal Cockpit du projet, avec
   /// docker exec injecte (bash si l'image en a un, sinon sh).
-  async function openShell(containerName: string) {
+  ///
+  /// La session est creee par l'onglet Terminal (magasin pendingTerminalCommand) : lui seul
+  /// mesure son conteneur, et un shell ouvert en 80x24 coupe ses lignes trop tot — un `top`
+  /// ou un `htop` lance dedans resterait dans un petit carre (voir honorerCommande).
+  function openShell(containerName: string) {
     if (!project?.path) { notify($trad("docker.noPathConfigured")); return; }
-    try {
-      const cmd = `docker exec -it ${containerName} sh -c '[ -x /bin/bash ] && exec bash || exec sh'`;
-      const tid = await createTerminal(name, project.path, 80, 24, cmd);
-      pendingTerminalId.set(tid);
-      activeTab.set("terminal");
-    } catch (e) { notify(String(e)); }
+    const cmd = `docker exec -it ${containerName} sh -c '[ -x /bin/bash ] && exec bash || exec sh'`;
+    pendingTerminalCommand.set({ project: name, command: cmd });
+    activeTab.set("terminal");
   }
 
   const composeHint = $derived($trad("docker.composeMissingHint"));

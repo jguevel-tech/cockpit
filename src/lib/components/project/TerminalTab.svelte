@@ -197,7 +197,9 @@
   import { WebglAddon } from "@xterm/addon-webgl";
   import { WebLinksAddon } from "@xterm/addon-web-links";
   import "@xterm/xterm/css/xterm.css";
-  import { pendingTerminalId, TERMINAL_FONT_SIZE, consumeTabRestored } from "../../stores/ui";
+  import {
+    pendingTerminalId, pendingTerminalCommand, TERMINAL_FONT_SIZE, consumeTabRestored,
+  } from "../../stores/ui";
   // themeBase et non la palette : xterm n a que deux jeux de couleurs.
   import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
@@ -306,9 +308,10 @@
   let montage: Promise<unknown> = Promise.resolve();
 
   onMount(() => {
-    // Les deux valeurs se consomment une fois, et l'effet plus bas peut prendre la main
-    // pendant nos `await` : on les lit AVANT.
+    // Les trois valeurs se consomment une fois, et les effets plus bas peuvent prendre la
+    // main pendant nos `await` : on les lit AVANT.
     const demande = $pendingTerminalId;
+    const commande = $pendingTerminalCommand;
     const restaure = consumeTabRestored();
 
     montage = (async () => {
@@ -324,6 +327,9 @@
       const existing = (await listTerminals(name)).filter((t) => t.alive);
       sessions = existing.map((t) => ({ id: t.id, alive: t.alive, name: t.name }));
 
+      // La commande d'abord : elle CREE un terminal, alors qu'une demande d'ouverture ne
+      // fait qu'activer un terminal existant.
+      if (commande !== null && (await honorerCommande(commande))) return;
       if (demande !== null && (await honorerDemande(demande))) return;
       // Une demande traitee entre-temps a deja ouvert un terminal : on ne lui passe pas
       // devant en activant autre chose.
@@ -383,6 +389,16 @@
     });
   });
 
+  // Commande rapide / shell de conteneur demandee alors que l'onglet est DEJA monte :
+  // meme enchainement que ci-dessus (apres le montage, hors suivi reactif).
+  $effect(() => {
+    const commande = $pendingTerminalCommand;
+    if (commande === null) return;
+    untrack(() => {
+      void montage.then(() => honorerCommande(commande)).catch((e) => notify(String(e)));
+    });
+  });
+
   /// Recharge la liste des sessions du projet et la FUSIONNE avec celle affichee.
   /// Fusion et non remplacement : une session terminee reste visible (barree) jusqu'a ce
   /// que l'utilisateur ferme son onglet, un remplacement la ferait disparaitre sous ses yeux.
@@ -430,6 +446,33 @@
       notify($trad("term.sessionGone"));
     }
     return false;
+  }
+
+  /// Lance dans un NOUVEAU terminal la commande posee dans `pendingTerminalCommand`
+  /// (bouton ▶ Cmd de l'en-tete, shell d'un conteneur, palette Ctrl+K). Rend vrai si elle
+  /// a ete prise en charge.
+  ///
+  /// Le terminal est cree ICI, et pas chez l'appelant : `addTerminal` MESURE le conteneur
+  /// avant d'ouvrir le PTY. Une TUI lancee par `init_command` (k9s, htop, top) se dessine a
+  /// la taille du PTY et rien ne la redimensionne apres coup — le rattachement de l'onglet
+  /// reutilise le client tmux vivant, donc la taille qu'il demande est ignoree cote Rust.
+  /// Ces appelants creaient la session en 80x24 : la TUI restait dans un petit carre en
+  /// haut a gauche d'un conteneur large (issue #14).
+  async function honorerCommande(demande: { project: string; command: string }): Promise<boolean> {
+    // Demande deja traitee, ou remplacee par une autre depuis : on ne la rejoue pas.
+    if (get(pendingTerminalCommand) !== demande) return false;
+    // Vide AVANT de creer : une commande consommee ne doit pas pouvoir etre rejouee au
+    // prochain passage sur l'onglet, meme si la creation echoue (addTerminal dit alors
+    // pourquoi).
+    pendingTerminalCommand.set(null);
+    // Un autre projet : on ne lance rien chez celui-ci, et on le DIT — le magasin est
+    // vide, donc personne ne se demandera plus tard pourquoi une commande a demarre.
+    if (demande.project !== name) {
+      notify($trad("term.commandOtherProject", { project: demande.project }));
+      return false;
+    }
+    await addTerminal(demande.command);
+    return true;
   }
 
   // Suit le theme de l'app
@@ -610,9 +653,14 @@
   }
 
   async function addTerminal(initCommand?: string) {
-    if (!container) return;
     // JAMAIS de retour silencieux ici : c'est exactement ce qui a laisse le premier
     // utilisateur externe cliquer sur + sans que rien ne se passe ni ne s'affiche.
+    // Y COMPRIS pour le conteneur : c'est lui qui donne la taille du PTY, et une commande
+    // rapide arrive par un magasin — un abandon muet ferait disparaitre la commande.
+    if (!container) {
+      notify($trad("term.viewNotReady"));
+      return;
+    }
     if (!project) {
       notify($trad("term.projectNotFound"));
       return;
@@ -746,7 +794,10 @@
   }
 
   async function attachExisting(id: number) {
-    if (!container) return;
+    if (!container) {
+      notify($trad("term.viewNotReady"));
+      return;
+    }
     const entry = createXterm();
     pool.set(id, entry);
     mounted.add(id);

@@ -12,10 +12,10 @@
   import { terminals } from "../../stores/terminals";
   import {
     activeView, selectedProject, activeTab, dashboardView,
-    pendingTerminalId, pendingFilePath, selectProject, openView,
+    pendingTerminalId, pendingTerminalCommand, pendingFilePath, selectProject, openView,
   } from "../../stores/ui";
   import { getProjectCommands } from "../../api/storage";
-  import { searchProject, createTerminal } from "../../api/workspace";
+  import { searchProject } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import type { ProjectCommand, SearchNameHit } from "../../types";
   import { trad, translate } from "../../i18n";
@@ -115,14 +115,14 @@
     return out;
   });
 
-  async function runQuickCommand(c: ProjectCommand) {
+  // Le terminal est cree par l'onglet Terminal, seul a connaitre la taille de son
+  // conteneur : une TUI lancee a la creation garde celle du PTY (voir honorerCommande
+  // dans TerminalTab).
+  function runQuickCommand(c: ProjectCommand) {
     const p = currentProject;
     if (!p?.path) { notify($trad("palette.noPathConfigured")); return; }
-    try {
-      const tid = await createTerminal(p.name, p.path, 80, 24, c.command);
-      pendingTerminalId.set(tid);
-      activeTab.set("terminal");
-    } catch (e) { notify(String(e)); }
+    pendingTerminalCommand.set({ project: p.name, command: c.command });
+    activeTab.set("terminal");
   }
 
   // Fichiers du projet courant : recherche par NOM, en async debounce

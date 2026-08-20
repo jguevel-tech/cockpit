@@ -579,6 +579,8 @@ export const fr = {
   "term.noTerminalOpen": "Aucun terminal ouvert : clique sur + pour en ouvrir un.",
   "term.pasteEmpty": "Le presse-papier est vide : rien à coller.",
   "term.sessionGone": "Ce terminal n'existe plus : sa session s'est terminée entre-temps.",
+  "term.commandOtherProject": "La commande visait le projet « {project} » : elle n'a pas été lancée ici.",
+  "term.viewNotReady": "L'affichage du terminal n'est pas prêt : réessaie dans un instant.",
   "tab.workspace": "Workspace",
   "tab.docker": "Docker",
   "tab.terminal": "Terminal",

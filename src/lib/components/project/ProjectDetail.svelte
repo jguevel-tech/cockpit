@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { activeTab, pendingTerminalId } from "../../stores/ui";
+  import { activeTab, pendingTerminalCommand } from "../../stores/ui";
   import { projects, renommerProjet } from "../../stores/projects";
   import { recordingStatus, lastRecordingEvent } from "../../stores/recording";
   import { getUrls, getProjectCommands, checkUrls } from "../../api/storage";
-  import { createTerminal } from "../../api/workspace";
   import { startRecording, stopRecording, getFailedRecordings, retryRecording, deleteRecording } from "../../api/recorder";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import type { Url, UrlHealth, Recording, ProjectCommand } from "../../types";
@@ -123,13 +122,13 @@
     } catch (e2) { notify(String(e2)); }
   }
 
-  async function runCommand(c: ProjectCommand) {
+  // La session est creee par l'onglet Terminal, pas ici : lui seul mesure son conteneur, et
+  // une TUI (k9s, htop) lancee a la creation garde la taille du PTY (voir honorerCommande
+  // dans TerminalTab). Cette barre n'a aucune taille a proposer.
+  function runCommand(c: ProjectCommand) {
     if (!project?.path) { notify($trad("project.noPath")); return; }
-    try {
-      const tid = await createTerminal(name, project.path, 80, 24, c.command);
-      pendingTerminalId.set(tid);
-      activeTab.set("terminal");
-    } catch (e) { notify(String(e)); }
+    pendingTerminalCommand.set({ project: name, command: c.command });
+    activeTab.set("terminal");
   }
 
   function startRename() {
