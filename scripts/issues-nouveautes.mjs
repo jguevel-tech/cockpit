@@ -126,5 +126,8 @@ if (marquer) {
   writeFileSync(REPERE, JSON.stringify(aMarquer, null, 2) + "\n");
   console.log(`\nRepere mis a jour (${Object.keys(aMarquer).length} issues).`);
 } else if (nouveautes > 0) {
-  console.log("Relancer avec --marquer une fois que tout a ete TRAITE, pas seulement lu.");
+  console.log("Relancer avec --marquer quand chaque evenement a ete TRAITE — c'est-a-dire");
+  console.log("lu ET aiguille : repondu, ou classe dans un etat qui dit ce qui reste a faire.");
+  console.log("Le repere ne dit pas « le travail est fait », il dit « je l'ai vu et j'en ai");
+  console.log("tire une consequence ». Ce qui reste a faire est porte par le label d'etat.");
 }
