@@ -166,7 +166,7 @@ le recopie pas dans le prompt, sinon les deux versions divergent et la correctio
 d'une regle ne prend plus effet.
 
 Chaque agent rend la fiche decrite dans sa definition : classe, preuve
-(`fichier:ligne`), cause, correction proposee, cout, langue de l'auteur, doute.
+(`fichier:ligne`), cause, correction proposee, portee, langue de l'auteur, doute.
 
 **Le protocole normal est en DEUX temps : l'agent signale qu'il est disponible, puis
 tu lui demandes sa fiche.** Ce n'est pas une panne, c'est ce qui se passe a chaque

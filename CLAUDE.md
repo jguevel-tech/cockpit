@@ -143,7 +143,9 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   demontages du composant : chaque retour sur un terminal ajoutait sinon un abonnement, et
   tout ce qui etait tape ou colle partait autant de fois vers le PTY. C'est l'origine du
   « collage en double » signale par Jimmy — un clic molette, un seul appel de collage
-  (mesure au banc), et plusieurs insertions.
+  (mesure au banc), et plusieurs insertions. ATTENTION : le meme symptome est revenu en
+  2026-08 pour une cause TOUTE AUTRE (voir « DOUBLE COLLAGE » dans les Pieges connus) —
+  `brancherEntree` etait intact. Mesurer avant de soupconner cet endroit.
 - Couleur/taille en dur dans un composant : uniquement les tokens de `styles/theme.css`
 - `catch {}` muet ou `catch (e: any)` : toujours `catch (e) { notify(String(e)); }`
 - **Un `catch` qui n'appelle ni `notify()` ni `signalerErreur()`** : le message reste dans la
@@ -239,6 +241,18 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - **Un bug croise en chemin se corrige**, meme si personne ne l'a signale : on est dans
   le fichier, on vient de le comprendre, c'est maintenant qu'il coute le moins cher.
   L'objectif est zero bug, pas « la demande est traitee ».
+- **LE TEMPS DE REALISATION N'ENTRE JAMAIS EN LIGNE DE COMPTE.** Ni dans une
+  recommandation, ni dans un arbitrage, ni comme argument pour reduire un perimetre. Ne
+  jamais ecrire « cout petit/moyen/gros », « deux semaines », « c'est plus rapide », ni
+  proposer une version amoindrie au motif qu'elle coute moins cher. Jimmy l'a demande
+  explicitement le 2026-08-20 apres que plusieurs recommandations aient ete justifiees par
+  l'effort plutot que par le fond.
+  On decide sur : ce qui est juste pour l'utilisateur, ce qui tient dans l'architecture, ce
+  qui supprime une classe de bugs, ce qui sera maintenable. Une solution plus longue et
+  meilleure gagne contre une solution rapide et bancale, sans discussion.
+  Ce qui reste legitime a dire, parce que ce n'est pas du temps mais du RISQUE : ce que le
+  changement touche, ce qui peut casser, ce qui devra etre maintenu en double, et ce qui
+  n'est pas reversible. Formuler en portee et en consequences, jamais en duree.
 - **L'UX fait partie de la fonctionnalite, pas d'une passe suivante.** Une fonctionnalite
   techniquement juste mais penible reste a refaire. A chaque ajout visible : le geste doit
   se voir (curseur, infobulle, entree de menu — sinon il n'existe pas, cf. le renommage de
@@ -915,7 +929,8 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 - **Terminal** : multi-terminaux par projet, renommables (double-clic sur l'onglet, clic droit dans
   la sidebar), PERSISTANTS : chaque terminal est une session tmux `ckpt_<id>` sur un socket dedie
   (`tmux -L cockpit`, isole du tmux perso). Conf geree par Cockpit (`<app_data>/tmux.conf`, reecrite
-  au demarrage + options appliquees au serveur vivant via apply_server_options) : status off, mouse on,
+  au demarrage + options appliquees au serveur vivant via apply_server_options(app), qui JOURNALISE
+  ses echecs — un `unbind` rate ramenait le double collage sans laisser de trace) : status off, mouse on,
   history 10000, set-clipboard on (OSC 52), mode-style bleu accent, selection qui RESTE au relachement
   (stop-selection), Ctrl+C copie en copy-mode, pas de menus tmux au clic droit. Metadonnees en DB
   (table `terminals`), le serveur tmux survit a la fermeture de l'app : au redemarrage on se rattache
@@ -931,6 +946,12 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
   -> OSC 52 -> handler xterm (parser, chemin de sortie) -> commande set_clipboard (arboard, instance
   gardee en vie sinon le presse-papier X11 meurt avec elle). Shift+glisser = selection xterm locale
   dans les TUI qui capturent la souris (claude, vim).
+- **Collage : UN SEUL chemin, `pasteClipboard()`.** Clic droit -> « Coller » et clic molette
+  appellent la meme fonction, donc collent la meme chose (le presse-papier systeme). Les deux
+  autres candidats sont eteints exprès : tmux (`unbind -n MouseDown2Pane` dans la conf ET sur le
+  serveur vivant) et le collage natif du WebView (annule dans `createXterm`). Voir « DOUBLE
+  COLLAGE » dans les Pieges connus avant d'y toucher : la facon d'annuler le collage natif n'est
+  pas celle qu'on croit.
 - **Liens** : addon web-links, Ctrl+clic ouvre l'URL (http/https) dans le navigateur via open_url.
 - **Detection agents IA** : logo Claude dans la sidebar/dashboard quand un CLI LLM tourne dans la
   session (claude, codex, gemini, aider... — constante LLM_COMMANDS dans terminal/mod.rs, detection
@@ -1099,6 +1120,36 @@ Le backend (`system/metrics.rs`) collecte :
   retour "replay" d'attach_terminal reste ignore (course replay/live -> ecran dechire).
   init_command passe par `tmux send-keys` vers la SESSION. Historique molette = copy-mode
   tmux (history-limit 10000).
+- **DOUBLE COLLAGE AU CLIC MOLETTE : `preventDefault` sur l'evenement `paste` NE SERT A RIEN.**
+  Le symptome est revenu deux fois, avec deux causes DIFFERENTES (abonnements onData empiles la
+  premiere fois, puis celle-ci) : ne jamais supposer laquelle, mesurer.
+  Ce qui a ete constate au banc (xterm 6.0.0 charge pour de vrai, clic milieu simule par XTEST
+  dans le WebKitGTK systeme sous Xvfb, 2026-08-20) :
+  - **xterm implemente le collage LUI-MEME** : `handlePasteEvent` lit `e.clipboardData` et
+    injecte le texte via `triggerDataEvent` -> il ne depend pas de l'action par defaut du
+    navigateur, donc `preventDefault()` ne l'arrete pas. Il pose ce handler sur le textarea cache
+    ET sur `.xterm`, pendant `term.open()` — donc AVANT tout handler qu'on ajoute ensuite, et en
+    phase cible l'ordre est celui de l'inscription. Un `paste` intercepte sur le textarea arrive
+    toujours trop tard.
+  - **Il faut ecouter en CAPTURE sur un ANCETRE** (le `.term-host`) et appeler
+    `stopImmediatePropagation()` : c'est la seule facon qu'xterm ne voie jamais l'evenement.
+    Garder `preventDefault()` en plus, sinon le texte atterrit dans le textarea cache et
+    ressort a la frappe suivante (meme mecanisme que le BUG ACCENTS).
+  - **Le collage natif du clic molette lit CLIPBOARD, pas la selection PRIMARY** (verifie avec
+    deux contenus differents). Les deux collages portaient donc le MEME texte : a l'oeil, ca ne
+    ressemble pas a deux collages mais a une commande dupliquee ou a une frappe fantome.
+  - `preventDefault` sur `mousedown` n'empeche pas le collage natif, et le reglage GTK
+    `gtk-enable-primary-paste` est ignore par WebKitGTK. Ces deux pistes sont fermees.
+  - Ctrl+V dans le terminal n'emet AUCUN evenement `paste` : xterm envoie `^V` au PTY (mesure).
+    Ne pas construire de raisonnement sur « il faut preserver le collage Ctrl+V ».
+- **`tmux list-sessions` a DEUX facons de dire « aucun serveur »**, et n'en reconnaitre qu'une
+  laissait des terminaux infermables. Mesure sur tmux 3.4 (2026-08-20) : serveur mort mais
+  fichier de socket encore present -> `no server running on <chemin>` ; fichier de socket absent
+  -> `error connecting to <chemin> (No such file or directory)`. C'est la SECONDE qui se produit
+  apres un redemarrage de la machine (/tmp est vide), et elle etait classee « on ne sait pas » :
+  `purge_dead` ne purgeait rien et `close()` refusait de supprimer la ligne, donc des terminaux
+  morts s'affichaient a vie. Les deux formes passent par `absence_definitive()` (3 tests).
+  Tout AUTRE echec doit rester un doute : on ne supprime jamais sur un doute.
 - **Rendu xterm** : le renderer DOM + `monospace` generique derive visuellement sur les glyphes
   accentues. Le modele est sain (verifiable par `tmux -L cockpit capture-pane -p`) : addon WebGL
   + police explicite.

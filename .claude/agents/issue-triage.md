@@ -34,7 +34,13 @@ langue: fr | en | ...
 preuve: <fichier:ligne> — ce que le code fait reellement
 cause: <la mecanique, pas le symptome>
 correction: <fichiers a toucher, une phrase chacun> (vide si non pertinent)
-cout: petit | moyen | gros
+portee: <ce que le changement TOUCHE et ce qui peut casser : fichiers, tables,
+         comportements existants, ce qui devra etre maintenu en double, ce qui n'est
+         pas reversible.
+         JAMAIS de duree ni de « cout petit/moyen/gros » : le temps de realisation
+         n'entre pas en ligne de compte dans ce projet, et une estimation d'effort
+         fausserait l'arbitrage. On decide sur ce qui est juste, pas sur ce qui est
+         rapide.>
 captures: <ce qu'elles montrent, ou "aucune">
 doute: <ce dont tu n'es pas sur, ou "aucun">
        Dis explicitement s'il est BLOQUANT ou NON BLOQUANT.
