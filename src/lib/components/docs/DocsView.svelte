@@ -52,11 +52,14 @@
       </div>
 
       <div class="block">
-        <p>{$trad("docs.start.folders")}</p>
+        <p>{@html $trad("docs.start.folders")}</p>
         <div class="demo">
-          <div class="d-row"><span class="d-caret">▾</span> <strong>Core</strong> <span class="d-count">12</span> <span class="d-hover">🗑</span></div>
-          <div class="d-row indent"><span class="d-dot ok"></span> api-gateway <span class="d-muted">running</span></div>
-          <div class="d-row indent"><span class="d-dot"></span> worker <span class="d-muted">stopped</span></div>
+          <div class="d-row"><span class="d-caret">▾</span> <strong>Core</strong> <span class="d-count">12</span> <span class="d-hover">+▸ 🗑</span></div>
+          <div class="d-row indent"><span class="d-caret">▾</span> <strong>Back</strong> <span class="d-count">3</span></div>
+          <div class="d-row indent2"><span class="d-dot ok"></span> api-gateway <span class="d-muted">running</span></div>
+          <div class="d-row indent2"><span class="d-dot"></span> worker <span class="d-muted">stopped</span></div>
+          <div class="d-row indent"><span class="d-caret">▸</span> <strong>Front</strong> <span class="d-count">9</span></div>
+          <div class="d-note">{$trad("docs.start.foldersDemo")}</div>
         </div>
       </div>
 

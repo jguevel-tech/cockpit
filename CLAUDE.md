@@ -427,7 +427,7 @@ ai-workforce/
 │       │   ├── db.rs               # Init SQLite, WAL mode, migrations
 │       │   ├── import.rs           # Import ancienne DB Go (transactionnel)
 │       │   ├── projects.rs         # CRUD projets + PROJECT_SCOPED_TABLES + rename auto-reparant
-│       │   ├── project_folders.rs  # Dossiers de projets (UN SEUL niveau : ni parent_id, ni recursion)
+│       │   ├── project_folders.rs  # Dossiers de projets HIERARCHIQUES (parent_id, imbrication illimitee)
 │       │   ├── notes.rs            # Notes simples + arborescence dossiers/fichiers
 │       │   ├── todos.rs            # CRUD todos + reorder + pending cross-projet
 │       │   ├── urls.rs             # CRUD URLs
@@ -566,9 +566,22 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
   terminal_exit, apres creation/fermeture/renommage, et toutes les 5 s (suivi du flag llm).
 - Boutons **« + Projet »** et **« + Dossier »** en toutes lettres (une icone seule n'etait pas
   comprise — retour utilisateur 2026-08-14, ne pas revenir aux icones).
-- Dossiers de projets : repliables, renommables (double-clic sur le nom ou clic droit),
-  supprimables par la **corbeille au survol** de l'en-tete — UNIQUEMENT s'ils sont vides, sinon un message
-  explique combien de projets restent a deplacer (pas de detachement silencieux vers la racine).
+- Dossiers de projets **imbriques sans limite de profondeur** (issue #2, 2026-08-20) : rendu
+  recursif, repliables (clic n'importe ou sur la ligne), renommables (double-clic sur le nom ou
+  clic droit), supprimables par la **corbeille au survol** de l'en-tete — UNIQUEMENT s'ils sont
+  VIDES, sous-dossiers compris, sinon un message dit ce qui reste a deplacer (pas de detachement
+  silencieux vers la racine, et surtout pas d'une branche repliee donc invisible).
+  - Creer un sous-dossier : bouton `+▸` au survol de l'en-tete, ou clic droit -> Nouveau
+    sous-dossier. Le parent est DEPLIE automatiquement, sinon le champ de saisie apparaitrait
+    dans une branche fermee.
+  - Glisser un dossier : l'en-tete visee a TROIS zones — quart haut / quart bas = reordonner
+    dans la fratrie (trait accent), moitie centrale = ranger DEDANS (cadre accent + teinte).
+    Une cible impossible (soi-meme ou un de ses descendants) s'affiche en pointilles rouges
+    pendant le survol et explique le refus au lacher. La zone du bas (racine) sort un dossier
+    de son parent, avec un libelle qui l'annonce pendant le glisser.
+  - Le compteur d'un dossier compte les projets de TOUTE sa branche : un compte direct
+    afficherait « 0 » sur un dossier replie qui contient des projets deux niveaux plus bas.
+  - Un dossier vide affiche quoi en faire au lieu de rester un trou.
 - Liste de tous les projets avec :
   - Dot de couleur selon l'etat (running/starting/stopping/error/stopped)
   - Nom du projet
@@ -874,7 +887,7 @@ SQLite stockee dans `~/.local/share/com.cockpit.dev/data.db` (ou via `COCKPIT_DB
 | Table | Contenu |
 |-------|---------|
 | `projects` | Projets Docker (name, path, compose_file, description, depends_on JSON, position, folder_id, summary_prompt) |
-| `project_folders` | Dossiers de projets, UN SEUL niveau (id, name, position — pas de parent_id) |
+| `project_folders` | Dossiers de projets hierarchiques (id, name, position, parent_id nullable — imbrication sans limite depuis le 2026-08-20). `position` est LOCALE A LA FRATRIE |
 | `notes` | Note simple par projet (une seule par projet) |
 | `note_folders` | Dossiers de notes hierarchiques (parent_id nullable, cascade delete) |
 | `note_files` | Fichiers de notes dans les dossiers (content Markdown, cascade delete) |
@@ -892,7 +905,7 @@ La colonne `summary_prompt` (nullable) sur `projects` surcharge le prompt global
 Le champ `depends_on` dans `projects` est un JSON array stocke comme TEXT (ex: `["docker-devbox"]`).
 
 Index : idx_notes_project, idx_note_folders_project, idx_note_files_project, idx_note_files_folder,
-idx_todos_project, idx_urls_project, idx_projects_folder,
+idx_todos_project, idx_urls_project, idx_projects_folder, idx_project_folders_parent,
 idx_recordings_project, idx_terminals_project, idx_command_history_ts.
 
 Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign keys actives.
@@ -927,7 +940,14 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 
 ### Project Folders
-- `get_project_folders`, `create_project_folder`, `rename_project_folder`, `delete_project_folder`, `reorder_project_folders`, `move_project_to_folder`
+- `get_project_folders` (tous les dossiers a plat, `ORDER BY position, name` — l'arbre est
+  reconstruit cote frontend depuis `parent_id`)
+- `create_project_folder(name, parent_id)` — `parent_id` a None = premier niveau
+- `rename_project_folder`, `move_project_folder(id, parent_id)` (refuse les BOUCLES : un dossier
+  ne peut pas devenir son propre descendant, message remonte),
+  `delete_project_folder` (refuse un dossier NON VIDE : sous-dossiers ou projets),
+  `reorder_project_folders(ids)` — les ids d'UNE SEULE fratrie, les positions sont locales au
+  parent, `move_project_to_folder` (un projet)
 
 ### Scanner/Settings
 - `scan_dir`, `scan_subdirs`
@@ -1468,6 +1488,40 @@ Le backend (`system/metrics.rs`) collecte :
   n'est pas dans l'URL) et `https://fr.wikipedia.org/wiki/Deja_vu_(homonymie)` (la parenthese
   appariee, elle, en fait partie). Invariant teste aussi : la concatenation des segments rend
   toujours le texte saisi, au caractere pres.
+- **`next_position_null(table, "id")` ne filtre RIEN : `WHERE id IS NULL` n'est jamais vrai.**
+  `create_project_folder` l'appelait ainsi, donc chaque dossier naissait avec `position = 0` —
+  verifie sur la base reelle le 2026-08-20 : 6 dossiers, tous a 0. Consequences invisibles a la
+  lecture : l'ordre affiche retombait sur `name` (le `ORDER BY position, name` du SELECT) et
+  `reorder_project_folders` etait INERTE, il ecrivait des positions qu'aucun tri ne distinguait
+  ensuite. Depuis l'imbrication, la position se calcule PAR FRATRIE avec
+  `WHERE parent_id IS ?1` — `IS` et non `=`, sinon la fratrie racine (parent NULL) ne se compte
+  jamais. Regle : un helper de position qui prend un nom de colonne en parametre doit etre lu
+  sur son APPEL, pas sur son nom.
+- **`ON DELETE SET NULL` ajoute par `ALTER TABLE ADD COLUMN` EST bien applique par SQLite**
+  (mesure du 2026-08-20 sur une copie de la base reelle : parent supprime -> `parent_id` de
+  l'enfant passe a NULL, avec `PRAGMA foreign_keys=ON`). Le commentaire de
+  `project_folders.rs` qui affirmait le contraire (« ALTER TABLE ne supporte pas ON DELETE SET
+  NULL ») etait FAUX ; il justifiait un `UPDATE ... SET folder_id=NULL` fait a la main avant
+  chaque suppression. La garde utile n'est pas la : c'est le REFUS de supprimer un dossier non
+  vide. Prerequis rappele par la doc SQLite : la colonne ajoutee doit avoir `DEFAULT NULL`.
+- **Un rendu recursif ne doit JAMAIS indenter par `padding-left` imbrique** : chaque niveau
+  s'ajouterait au precedent et la barre laterale (largeur fixe, 260 px) deborderait a la
+  troisieme profondeur. Le retrait se calcule en ABSOLU depuis la profondeur
+  (`base + min(profondeur, 8) * 0.75rem`, comme l'arbre de l'onglet Fichiers) et les `<ul>`
+  imbriques portent `padding-left: 0`. Le plafond a 8 niveaux n'est pas une limite de
+  l'imbrication — seulement de l'indentation, pour garder un nom lisible.
+- **Dans une liste imbriquee, `dragstart` et `dragover` REMONTENT jusqu'au parent glissable.**
+  Une ligne projet vit dans le `<li>` de son dossier, lui aussi `draggable` : sans
+  `stopPropagation()` sur `dragstart`, glisser un projet demarrait AUSSI le glisser de son
+  dossier, et sans `stopPropagation()` sur `dragover`, deux retours visuels differents
+  s'allumaient pour un seul depot (la ligne visee ET la zone qui l'englobe). Mesure au banc
+  frontend le 2026-08-20. Corollaire : mettre les gestionnaires de depot sur l'EN-TETE du
+  dossier, pas sur le `<li>` qui contient toute la branche — sinon survoler un petit-enfant
+  vise l'ancetre.
+- **Banc frontend : Chrome sans tete passe par le PROXY de la machine.** `--dump-dom
+  http://127.0.0.1:<port>` a rendu une page d'un site CCM au lieu du banc (2026-08-20) : la
+  config proxy du systeme s'applique aussi a `127.0.0.1`. Ajouter `--no-proxy-server`. Sans ca
+  on croit a une erreur de build alors que le build est bon.
 - **`scripts/release.mjs` doit bumper `Cargo.lock` en meme temps que `Cargo.toml`.** Sans ca le
   commit taggue se contredisait (lock en retard d'une version) et le premier `cargo build`
   suivant reecrivait le fichier : arbre sale, donc release suivante REFUSEE jusqu'a un commit

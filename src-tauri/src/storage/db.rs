@@ -146,6 +146,17 @@ impl Database {
         let _ = conn.execute("ALTER TABLE projects ADD COLUMN folder_id INTEGER DEFAULT NULL REFERENCES project_folders(id) ON DELETE SET NULL", []);
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_projects_folder ON projects(folder_id);");
 
+        // Migration: imbrication sans limite des dossiers de projets (issue #2).
+        // parent_id NULL = dossier de premier niveau. Pas de ON DELETE CASCADE : la
+        // suppression d'un dossier n'est autorisee que s'il est VIDE (aucun projet, aucun
+        // sous-dossier), donc il n'y a jamais d'enfant a emporter ni a remonter — et une
+        // branche entiere ne peut pas disparaitre derriere un dossier replie.
+        let _ = conn.execute(
+            "ALTER TABLE project_folders ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES project_folders(id) ON DELETE SET NULL",
+            [],
+        );
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_project_folders_parent ON project_folders(parent_id);");
+
         // Migration: drop removed AI orchestration tables if they exist.
         conn.execute_batch(
             "DROP TABLE IF EXISTS ticket_comments;

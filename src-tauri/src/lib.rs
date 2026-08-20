@@ -338,8 +338,8 @@ fn get_project_folders(state: tauri::State<'_, AppState>) -> Result<Vec<storage:
 }
 
 #[tauri::command]
-fn create_project_folder(name: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectFolder, String> {
-    state.db.create_project_folder(&name)
+fn create_project_folder(name: String, parent_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<storage::ProjectFolder, String> {
+    state.db.create_project_folder(&name, parent_id)
 }
 
 #[tauri::command]
@@ -355,6 +355,12 @@ fn delete_project_folder(id: i64, state: tauri::State<'_, AppState>) -> Result<(
 #[tauri::command]
 fn reorder_project_folders(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.db.reorder_project_folders(&ids)
+}
+
+/// Deplace un dossier sous un autre (`parent_id` a None = racine). Refuse les boucles.
+#[tauri::command]
+fn move_project_folder(id: i64, parent_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.db.move_project_folder(id, parent_id)
 }
 
 #[tauri::command]
@@ -1565,6 +1571,7 @@ pub fn run() {
             rename_project_folder,
             delete_project_folder,
             reorder_project_folders,
+            move_project_folder,
             move_project_to_folder,
             // Scanner
             scan_dir,

@@ -30,7 +30,7 @@ const ALLOW = new Set(["px", "ms", "fr", "en", "id", "px)", "%", "OK",
   "⎇ main ▾", "running", "stopped", "running · 8080→80",
   // Donnees d'exemple des maquettes de la documentation : noms de projets fictifs,
   // commandes et termes de recherche. Elles illustrent, elles ne s'affichent pas.
-  "Core", "api-gateway", "worker", "mon-projet", "MON-PROJET - 1 ×", "MON-PROJET - 2 ×",
+  "Core", "Back", "Front", "api-gateway", "worker", "mon-projet", "MON-PROJET - 1 ×", "MON-PROJET - 2 ×",
   "COCKPIT - 1", "COCKPIT - 2", "Préprod", "Staging", "Dev", "Tests", "make up",
   "cargo test", "api", "timeout", "🔍 timeout", "const TIMEOUT = 30_000;", "const x = 1;",
   "web-1", "Up", "Français", "English",

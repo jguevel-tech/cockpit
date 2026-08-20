@@ -12,6 +12,19 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Les dossiers de projets s'imbriquent, sans limite de profondeur.** Un dossier dans un
+  dossier dans un dossier, autant de niveaux que voulu. Pour créer un sous-dossier : « +▸ » au
+  survol de l'en-tête d'un dossier, ou clic droit → **Nouveau sous-dossier**. Un dossier se
+  déplace au glisser-déposer, et la ligne visée dit ce qui va se passer : le **milieu** le range
+  DEDANS (cadre bleu), le **haut** et le **bas** le réordonnent À CÔTÉ (trait bleu). Déposer dans
+  la zone du bas — ou clic droit → **Sortir du dossier** — le ramène au premier niveau. Un
+  déplacement impossible (un dossier dans un de ses propres sous-dossiers) se signale en rouge
+  pendant le glisser et l'explique au lâcher. Le compteur d'un dossier compte désormais les
+  projets de **toute** sa branche, un dossier vide dit quoi en faire, et la suppression reste
+  réservée aux dossiers vides — sous-dossiers compris.
+
 ## [0.36.0] — 2026-08-20
 
 ### Added

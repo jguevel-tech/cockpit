@@ -38,6 +38,8 @@ export interface ProjectFolder {
   id: number;
   name: string;
   position: number;
+  /** Dossier parent, ou null au premier niveau. L'imbrication n'a pas de limite. */
+  parent_id: number | null;
 }
 
 export interface Todo {

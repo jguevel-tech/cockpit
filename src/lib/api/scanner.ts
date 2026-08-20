@@ -17,8 +17,13 @@ export const updateProjectSettings = (name: string, path: string, composeFile: s
 
 // Project Folders
 export const getProjectFolders = () => invoke<ProjectFolder[]>("get_project_folders");
-export const createProjectFolder = (name: string) => invoke<ProjectFolder>("create_project_folder", { name });
+export const createProjectFolder = (name: string, parentId: number | null = null) =>
+  invoke<ProjectFolder>("create_project_folder", { name, parentId });
 export const renameProjectFolder = (id: number, name: string) => invoke("rename_project_folder", { id, name });
 export const deleteProjectFolder = (id: number) => invoke("delete_project_folder", { id });
+/** Reordonne UNE fratrie : passer les ids d'un meme parent, dans l'ordre voulu. */
 export const reorderProjectFolders = (ids: number[]) => invoke("reorder_project_folders", { ids });
+/** Range un dossier dans un autre (null = racine). Le backend refuse les boucles. */
+export const moveProjectFolder = (id: number, parentId: number | null) =>
+  invoke("move_project_folder", { id, parentId });
 export const moveProjectToFolder = (projectName: string, folderId: number | null) => invoke("move_project_to_folder", { projectName, folderId });
