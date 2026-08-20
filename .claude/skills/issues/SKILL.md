@@ -333,6 +333,40 @@ chose s'est mal passe est un skill qui reproduira la meme erreur.
 
 **Ne pas demander la permission de corriger le skill.** C'est de l'outillage interne.
 
+## REGLE NUMERO 2 — NE JAMAIS ATTENDRE LES BRAS BALLANTS
+
+**Attendre une CI ou une release n'occupe aucune ressource locale.** Le build tourne
+chez GitHub pendant ~10 min : pendant ce temps la machine est libre, donc le sujet
+suivant DEMARRE. Ne reste jamais a regarder un build.
+
+Ce qui peut tourner en meme temps, sans se genner :
+
+| En parallele | Pourquoi c'est sans risque |
+|---|---|
+| Une CI qui construit + un agent de correction local | le build est chez GitHub, la machine ne fait rien |
+| Un agent de correction + des agents de TRIAGE | le triage est en lecture seule |
+| Un agent de correction + les reponses aux auteurs d'un lot deja publie | ce sont des appels `gh`, aucun fichier touche |
+
+La SEULE chose qui reste strictement sequentielle : **deux agents qui ECRIVENT du
+code**. Ils se disputent `src-tauri/target/` pendant `cargo test` et `tauri build`, et
+ils se marchent dessus sur `CHANGELOG.md`. Un seul agent de correction a la fois, donc —
+mais jamais un seul agent en tout.
+
+Le deroule normal ressemble donc a ca, et non a une file d'attente :
+
+```
+sujet N : commit -> release -> tag pousse ─┐
+                                            ├─> CI (~10 min, chez GitHub)
+sujet N+1 : agent de correction lance ─────┘        │
+triage des issues neuves en parallele              │
+                                            CI verte -> prevenir les auteurs du sujet N
+```
+
+Quand la CI se termine, tu reviens prevenir les auteurs du lot precedent — sans
+interrompre le sujet en cours. Utilise une attente en arriere-plan
+(`run_in_background` avec une boucle `until`) pour etre notifie, plutot que de boucler
+en avant-plan.
+
 ## Regle de cadence : FINIR CE QUI EST COMMENCE
 
 **On ne s'ouvre pas un nouveau chantier tant que ceux en cours ne sont pas termines.**
