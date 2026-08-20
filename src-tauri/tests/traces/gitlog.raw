@@ -1,0 +1,319 @@
+* [33mcommit b6a9d4986081aab1aceb5a7ac0768aa400c5cab6[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:45:07 2026 +0200
+[31m|[m 
+[31m|[m     Sortir l'interface des terminaux dans un trait Rust
+[31m|[m     
+[31m|[m     Etape A du chantier des terminaux (docs/portabilite/plan-terminaux.md) :
+[31m|[m     figer ce que Cockpit demande a un serveur de terminaux AVANT d'ecrire le
+[31m|[m     service maison, sinon le service sera dessine a l'image de tmux — donc
+[31m|[m     avec ses defauts.
+[31m|[m     
+[31m|[m     terminal/interface.rs porte le trait `Terminaux` (12 operations) et ne
+[31m|[m     contient pas une ligne de tmux. L'ancien terminal/mod.rs devient
+[31m|[m     terminal/tmux.rs : tout ce qui est propre a tmux y est enferme, et ce
+[31m|[m     fichier disparaitra entier a la bascule. terminal/mod.rs ne fait plus que
+[31m|[m     choisir l'implementation (`terminaux()`), et AppState.terminals est un
+[31m|[m     `Box<dyn Terminaux>` : aucune commande Tauri ne connait plus tmux.
+[31m|[m     
+[31m|[m     Ecrire le trait a montre trois choses, consignees dans le plan :
+[31m|[m     - `detacher` et `ecran_alternatif` sont des contournements de tmux ET du
+[31m|[m       code mort (aucun appelant frontend depuis le pool de xterm) ;
+[31m|[m     - `attacher` ne rend plus rien : son « replay » etait ignore. La commande
+[31m|[m       Tauri rend toujours une chaine vide, le contrat IPC est intact ;
+[31m|[m     - `&Database` traverse 9 operations sur 12, parce que l'identite d'un
+[31m|[m       terminal vit en SQLite. C'est le point a trancher a l'etape B.
+[31m|[m     
+[31m|[m     Aucun comportement observable ne change : memes commandes, memes
+[31m|[m     signatures, memes retours, meme ordre au demarrage (setup du binaire,
+[31m|[m     purge, options serveur sont regroupes dans `preparer`).
+[31m|[m     
+[31m|[m     Corrige au passage deux affirmations fausses du CLAUDE.md : attach_terminal
+[31m|[m     tuait et respawnait un client (c'est l'inverse depuis 2026-08-13), et deux
+[31m|[m     commandes terminal etaient decrites comme utilisees.
+[31m|[m     
+[31m|[m     Verifie : npm run check 0 erreur 0 warning (261 fichiers), cargo test 158
+[31m|[m     verts (156 + 2 sur le contrat des actions de recherche), tauri build
+[31m|[m     --no-bundle OK, i18n:audit 0 chaine en dur.
+[31m|[m 
+[31m|[m  CLAUDE.md                                    |   37 [32m+[m[31m-[m
+[31m|[m  docs/portabilite/plan-terminaux.md           |   56 [32m+[m[31m-[m
+[31m|[m  docs/portabilite/terminaux.md                |    4 [32m+[m
+[31m|[m  src-tauri/src/lib.rs                         |   63 [32m+[m[31m-[m
+[31m|[m  src-tauri/src/terminal/interface.rs          |  186 [32m++[m
+[31m|[m  src-tauri/src/terminal/mod.rs                | 1520 [32m+[m[31m---------------[m
+[31m|[m  src-tauri/src/terminal/tmux.rs               | 1512 [32m+++++++++++++++[m
+[31m|[m  .../components/project/TerminalTab.svelte    |    4 [32m+[m[31m-[m
+[31m|[m  8 files changed, 1830 insertions(+), 1552 deletions(-)
+[31m|[m 
+* [33mcommit cf02cd3cdb14a6ac5f0060633332fcedb5d37d2e[m[33m ([m[1;31morigin/main[m[33m)[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:30:46 2026 +0200
+[31m|[m 
+[31m|[m     Ecrire le plan du chantier des terminaux dans le depot
+[31m|[m     
+[31m|[m     Le chantier va durer plusieurs sessions et passer par plusieurs agents : son etat
+[31m|[m     d'avancement doit vivre dans le depot, pas dans une conversation. Trois etapes, chacune
+[31m|[m     publiable seule pour ne jamais livrer une application a moitie fonctionnelle : sortir
+[31m|[m     l'interface avec tmux derriere, ecrire le service sans le brancher, brancher puis
+[31m|[m     supprimer tmux.
+[31m|[m     
+[31m|[m     Le document porte deux listes qui decident si le chantier est fini : les treize
+[31m|[m     fonctionnalites que tmux nous rend aujourd'hui et qu'il faudra toutes reprendre, et les
+[31m|[m     chiffres de performance mesures avant de commencer — pour que le service soit juge sur
+[31m|[m     des mesures et non sur une impression. Avec les deux pieges qui remplacent des avantages
+[31m|[m     qu'on avait sans le savoir : tmux jetait la moitie des octets a dessiner, et son surcout
+[31m|[m     de frappe n'etait que de 0,4 ms.
+[31m|[m 
+[31m|[m  docs/portabilite/plan-terminaux.md | 125 [32m+++++++++++++++++++++++++++[m
+[31m|[m  1 file changed, 125 insertions(+)
+[31m|[m 
+* [33mcommit ef80c15b8e146cbcae7b56fa234b03922bc7a2ef[m[33m ([m[1;33mtag: [m[1;33mv0.37.1[m[33m)[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:29:47 2026 +0200
+[31m|[m 
+[31m|[m     Release 0.37.1
+[31m|[m 
+[31m|[m  CHANGELOG.md         | 2 [32m++[m
+[31m|[m  package.json         | 2 [32m+[m[31m-[m
+[31m|[m  src-tauri/Cargo.lock | 2 [32m+[m[31m-[m
+[31m|[m  src-tauri/Cargo.toml | 2 [32m+[m[31m-[m
+[31m|[m  4 files changed, 5 insertions(+), 3 deletions(-)
+[31m|[m 
+* [33mcommit 318e8297fc94613b8283ff98699e34f8cd4f1d2f[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:26:39 2026 +0200
+[31m|[m 
+[31m|[m     Ouvrir les terminaux de commande a la taille de la fenetre
+[31m|[m     
+[31m|[m     Le bouton ▶ Cmd, le shell de conteneur de l'onglet Docker et la commande
+[31m|[m     rapide de la palette creaient eux-memes la session tmux, en 80x24 ecrit en
+[31m|[m     dur. Or une TUI lancee par la commande initiale (k9s, htop, top) se dessine a
+[31m|[m     la taille du PTY et rien ne la recadre ensuite : attach_terminal REUTILISE le
+[31m|[m     client tmux vivant, donc la taille qu'on lui demande est ignoree, et
+[31m|[m     attachExisting pre-renseigne lastSentSize, donc le fitActive suivant n'envoie
+[31m|[m     aucun resize. K9s restait dans un carre de 80x24 en haut a gauche d'un
+[31m|[m     conteneur large, et un simple shell coupait ses lignes bien avant le bord.
+[31m|[m     
+[31m|[m     Ces trois appelants ne creent plus rien : ils deposent leur commande dans le
+[31m|[m     magasin pendingTerminalCommand, et c'est l'onglet Terminal qui la lance par
+[31m|[m     addTerminal — lui seul MESURE son conteneur avant d'ouvrir le PTY. Le magasin
+[31m|[m     se consomme au montage ET a chaud, se vide dans tous les cas, et une commande
+[31m|[m     visant un autre projet est signalee au lieu de repartir plus tard sans
+[31m|[m     explication.
+[31m|[m     
+[31m|[m     Au passage, les deux gardes muettes `if (!container) return` de TerminalTab
+[31m|[m     disent maintenant pourquoi l'action ne se fait pas : l'une est sur le chemin
+[31m|[m     d'une commande rapide, un abandon silencieux y ferait disparaitre la commande.
+[31m|[m     
+[31m|[m     Reproduit avant de corriger, deux bancs. Banc frontend (Chrome sans tete, faux
+[31m|[m     backend) : create_terminal recevait 80x24 pour un conteneur de 1398x732 px,
+[31m|[m     soit 196x48 cellules, attach_terminal recevait bien 196x48 et aucun
+[31m|[m     resize_terminal ne partait ; apres correctif, create_terminal recoit 196x48,
+[31m|[m     comme le bouton +. Banc tmux sur socket isole : un client cree dans un PTY
+[31m|[m     80x24 donne un pane 80x24 avec htop dessine sur 80 colonnes, contre 177
+[31m|[m     colonnes quand le PTY est cree a la taille mesuree.
+[31m|[m     
+[31m|[m     Verifie : npm run check 0 erreur 0 warning (261 fichiers), cargo test 156
+[31m|[m     verts, npm run test:front, npx tauri build --no-bundle, npm run i18n:audit
+[31m|[m     0 chaine en dur.
+[31m|[m 
+[31m|[m  CHANGELOG.md                                 |  8 [32m+++[m
+[31m|[m  CLAUDE.md                                    | 41 [32m++++++++++[m[31m--[m
+[31m|[m  src/lib/components/project/DockerTab.svelte  | 18 [32m+++[m[31m---[m
+[31m|[m  .../components/project/ProjectDetail.svelte  | 15 [32m++[m[31m---[m
+[31m|[m  .../components/project/TerminalTab.svelte    | 61 [32m++++++++++++++++[m[31m--[m
+[31m|[m  src/lib/components/ui/CommandPalette.svelte  | 16 [32m++[m[31m---[m
+[31m|[m  src/lib/i18n/en.ts                           |  2 [32m+[m
+[31m|[m  src/lib/i18n/fr.ts                           |  2 [32m+[m
+[31m|[m  src/lib/stores/ui.ts                         |  9 [32m+++[m
+[31m|[m  9 files changed, 136 insertions(+), 36 deletions(-)
+[31m|[m 
+* [33mcommit 91c0e61c8dade3c272ae51e3308336037a2bdbbf[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:18:37 2026 +0200
+[31m|[m 
+[31m|[m     Ecrire les rapports simplement, avec mes propres contre-exemples
+[31m|[m     
+[31m|[m     Jimmy l'a demande deux fois, et la deuxieme avec agacement. Le probleme n'est pas le
+[31m|[m     vocabulaire technique — commit, PTY, migration, tmux ne le genent pas — mais les
+[31m|[m     tournures abstraites et les phrases tordues.
+[31m|[m     
+[31m|[m     La regle porte donc cinq exemples tires de mes propres rapports, avec ce qu'il fallait
+[31m|[m     ecrire a la place : « un second agent se marcherait dessus » devient « les deux
+[31m|[m     modifieraient les memes fichiers », « un mensonge de la doc » devient « l'aide de l'app
+[31m|[m     dit quelque chose de faux ». Un contre-exemple concret vaut mieux qu'une consigne de
+[31m|[m     style.
+[31m|[m     
+[31m|[m     Plus le rappel de raconter ce que vit l'utilisateur avant d'expliquer la mecanique.
+[31m|[m 
+[31m|[m  .claude/skills/issues/SKILL.md | 22 [32m++++++++++++++++++++++[m
+[31m|[m  1 file changed, 22 insertions(+)
+[31m|[m 
+* [33mcommit 309c5db97bc31c675fa4822b672cf5296cea403e[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:14:50 2026 +0200
+[31m|[m 
+[31m|[m     Exiger que la matiere d'arbitrage soit deposee sur l'issue
+[31m|[m     
+[31m|[m     L'etat attente-arbitrage a ete pose sur #11 sans qu'aucun commentaire n'y soit
+[31m|[m     depose : cinq etudes faites, 136 Ko de mesures, et Jimmy ouvrant l'issue n'y trouvait
+[31m|[m     rien a trancher. Le label mentait, et la matiere n'existait que dans la conversation
+[31m|[m     et dans un dossier temporaire — donc perdue a la fermeture de la session.
+[31m|[m     
+[31m|[m     Un commentaire d'arbitrage porte desormais ce qui est etabli, les options distinguees
+[31m|[m     sur le fond, la recommandation et son pourquoi, ce qui n'est pas reversible, et les
+[31m|[m     questions ouvertes. Une analyse volumineuse va dans le depot et le commentaire y
+[31m|[m     renvoie.
+[31m|[m 
+[31m|[m  .claude/skills/issues/SKILL.md | 15 [32m+++++++++++++++[m
+[31m|[m  1 file changed, 15 insertions(+)
+[31m|[m 
+* [33mcommit 2403c4bab7499518d578ea7d6feca0562b038810[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:14:27 2026 +0200
+[31m|[m 
+[31m|[m     Sauver les cinq etudes de portabilite dans le depot
+[31m|[m     
+[31m|[m     Elles vivaient dans un dossier temporaire de session : 136 Ko de mesures et de
+[31m|[m     decisions qui disparaissaient a la fermeture, alors que l'issue #11 portait l'etat
+[31m|[m     « Jimmy doit trancher » sans que rien ne lui ait ete soumis.
+[31m|[m     
+[31m|[m     Un fichier par domaine plus un sommaire qui donne l'essentiel sans les lire. Tout ce
+[31m|[m     qui y est affirme est mesure sur la machine ou verifie dans les sources : c'est ce qui
+[31m|[m     les rend relisables dans six mois plutot que perimees.
+[31m|[m 
+[31m|[m  docs/portabilite/README.md    |  44 [32m++[m
+[31m|[m  docs/portabilite/audio.md     | 314 [32m++++++++++++++[m
+[31m|[m  docs/portabilite/divers.md    | 697 [32m++++++++++++++++++++++++++++++++[m
+[31m|[m  docs/portabilite/livraison.md | 304 [32m++++++++++++++[m
+[31m|[m  docs/portabilite/systeme.md   | 362 [32m+++++++++++++++++[m
+[31m|[m  docs/portabilite/terminaux.md | 649 [32m+++++++++++++++++++++++++++++[m
+[31m|[m  6 files changed, 2370 insertions(+)
+[31m|[m 
+* [33mcommit a29f6a2c56f1152c2c1c500ba34f1ef33653c76e[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:02:08 2026 +0200
+[31m|[m 
+[31m|[m     Sortir une issue de l'attente des que l'auteur dit qu'il reste quelque chose
+[31m|[m     
+[31m|[m     Le schema des etats ne prevoyait que « confirmation ou dix jours -> ferme ». Un retour
+[31m|[m     negatif n'avait donc pas de transition, et l'issue #14 est restee en attente-retour
+[31m|[m     apres un « c'est mieux mais K9s s'affiche en petit » : elle serait tombee en fermeture
+[31m|[m     automatique au bout de dix jours alors qu'il restait du travail, et elle avait disparu
+[31m|[m     du tableau des choses a faire. C'est Jimmy qui l'a vu.
+[31m|[m     
+[31m|[m     « C'est mieux mais... » compte autant que « toujours pas » : des que l'auteur signale
+[31m|[m     qu'il reste quelque chose, la balle est chez nous. Note au passage qu'un retour negatif
+[31m|[m     n'invalide pas le correctif precedent — il peut avoir regle le symptome principal et en
+[31m|[m     reveler un second, ce qui est le cas ici : le terminal s'ouvre bien maintenant.
+[31m|[m 
+[31m|[m  .claude/skills/issues/SKILL.md | 19 [32m++++++++++++++++++[m[31m-[m
+[31m|[m  1 file changed, 18 insertions(+), 1 deletion(-)
+[31m|[m 
+* [33mcommit 84319fdd01a5a8acf3c7022b24a0a12fe6a82fd8[m[33m ([m[1;33mtag: [m[1;33mv0.37.0[m[33m)[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 21:01:31 2026 +0200
+[31m|[m 
+[31m|[m     Release 0.37.0
+[31m|[m 
+[31m|[m  CHANGELOG.md         | 2 [32m++[m
+[31m|[m  package.json         | 2 [32m+[m[31m-[m
+[31m|[m  src-tauri/Cargo.lock | 2 [32m+[m[31m-[m
+[31m|[m  src-tauri/Cargo.toml | 2 [32m+[m[31m-[m
+[31m|[m  4 files changed, 5 insertions(+), 3 deletions(-)
+[31m|[m 
+* [33mcommit f1b0e49f66d7e96563ef5e32f6547202c93a2ed3[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 20:56:40 2026 +0200
+[31m|[m 
+[31m|[m     Imbriquer les dossiers de projets sans limite de profondeur
+[31m|[m     
+[31m|[m     La barre laterale ne connaissait qu'un seul niveau : la table `project_folders`
+[31m|[m     n'avait aucune colonne de parent, donc l'imbrication etait impossible jusqu'en
+[31m|[m     base. Reproduit sur la base reelle (schema sans parent_id) et au banc frontend :
+[31m|[m     trois dossiers dont deux marques comme enfants s'affichaient tous au meme
+[31m|[m     retrait, les lignes de dossier n'etaient meme pas glissables, et un depot d'un
+[31m|[m     dossier sur un autre ne declenchait rien — sans message.
+[31m|[m     
+[31m|[m     Le stockage porte maintenant `parent_id` (migration ALTER TABLE idempotente,
+[31m|[m     verifiee sur une copie de la base reelle) et les positions sont calculees PAR
+[31m|[m     FRATRIE : elles etaient toutes a zero jusqu'ici, `WHERE id IS NULL` ne
+[31m|[m     selectionnant jamais rien, ce qui rendait `reorder_project_folders` inerte et
+[31m|[m     faisait retomber l'ordre sur le nom.
+[31m|[m     
+[31m|[m     La suppression reste refusee sur un dossier non vide, et cette regle est etendue
+[31m|[m     aux sous-dossiers : sans cela une branche entiere, peut-etre repliee donc
+[31m|[m     invisible, disparaitrait sur un clic. Le refus vit aussi cote Rust, pas seulement
+[31m|[m     dans l'interface. Les boucles (un dossier dans un de ses descendants) sont
+[31m|[m     refusees des deux cotes : message traduit a l'interface, garde en base comme
+[31m|[m     filet.
+[31m|[m     
+[31m|[m     Cote geste, le depot doit se lire avant le lacher : le milieu d'un en-tete range
+[31m|[m     DEDANS, le haut et le bas reordonnent A COTE, une cible impossible passe en
+[31m|[m     pointilles rouges. Un dossier replie se deplie quand on y depose quelque chose,
+[31m|[m     sinon le clic n'aurait aucun effet visible.
+[31m|[m     
+[31m|[m     Corriges au passage, dans les memes fichiers : l'echec de reordonnancement des
+[31m|[m     projets ne disait rien en revenant en arriere, et le nom d'un dossier etait un
+[31m|[m     `<span role="button">` au lieu d'un vrai bouton.
+[31m|[m     
+[31m|[m     Verifie : npm run check (0 erreur, 0 warning), cargo test (156 tests, dont 9 sur
+[31m|[m     les dossiers : imbrication a 6 niveaux, refus des boucles, refus de suppression,
+[31m|[m     positions par fratrie), npx tauri build --no-bundle, npm run i18n:audit (0
+[31m|[m     chaine en dur), npm run test:front (12). Rendu recursif, trois zones de depot,
+[31m|[m     repli, compteur de branche et sortie vers la racine verifies au banc frontend
+[31m|[m     (Chrome sans tete, faux backend) ; lisibilite des quatre etats de depot verifiee
+[31m|[m     sur image de fond dans le WebKitGTK systeme.
+[31m|[m 
+[31m|[m  CHANGELOG.md                             |  13 [32m+[m
+[31m|[m  CLAUDE.md                                |  68 [32m++[m[31m-[m
+[31m|[m  scripts/i18n-audit.mjs                   |   2 [32m+[m[31m-[m
+[31m|[m  src-tauri/src/lib.rs                     |  11 [32m+[m[31m-[m
+[31m|[m  src-tauri/src/storage/db.rs              |  11 [32m+[m
+[31m|[m  src-tauri/src/storage/project_folders.rs | 299 [32m++++++++++[m[31m-[m
+[31m|[m  src/lib/api/scanner.ts                   |   7 [32m+[m[31m-[m
+[31m|[m  src/lib/components/docs/DocsView.svelte  |  13 [32m+[m[31m-[m
+[31m|[m  src/lib/components/layout/Sidebar.svelte | 551 [32m+++++++++++++++++[m[31m----[m
+[31m|[m  src/lib/i18n/en.ts                       |  24 [32m+[m[31m-[m
+[31m|[m  src/lib/i18n/fr.ts                       |  24 [32m+[m[31m-[m
+[31m|[m  src/lib/types/index.ts                   |   2 [32m+[m
+[31m|[m  12 files changed, 895 insertions(+), 130 deletions(-)
+[31m|[m 
+* [33mcommit 3f5b3e9b3f77ca3bd7ea8b64fc2110449ac5057b[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 20:55:55 2026 +0200
+[31m|[m 
+[31m|[m     Surveiller les issues en continu au lieu de compter sur sa memoire
+[31m|[m     
+[31m|[m     La regle « relire les issues avant chaque rapport » existait deja et n'a pas suffi :
+[31m|[m     trois fois dans la journee une reponse est restee invisible, et chaque fois c'est
+[31m|[m     Jimmy qui a du le signaler. La derniere avait ete postee pendant qu'on travaillait,
+[31m|[m     apres un marquage — donc rien ne la rappelait.
+[31m|[m     
+[31m|[m     Le script gagne un mode surveillance : `--brut` n'emet qu'une ligne par evenement et
+[31m|[m     se TAIT quand rien n'a bouge, ce qui le rend utilisable dans une boucle. `--repere=`
+[31m|[m     lui donne un fichier d'etat distinct de la lecture manuelle, pour que la surveillance
+[31m|[m     ne marque pas comme vu ce que la lecture n'a pas encore traite.
+[31m|[m     
+[31m|[m     Le skill demande d'armer cette surveillance en PREMIERE action du run, avant meme la
+[31m|[m     relecture des issues : une regle qu'on oublie ne vaut rien face a un mecanisme qui
+[31m|[m     previent. Consequence assumee : nos propres commentaires sont annonces aussi, puisque
+[31m|[m     rien ne les distingue de ceux de Jimmy — meme compte GitHub.
+[31m|[m 
+[31m|[m  .claude/skills/issues/SKILL.md | 36 [32m++++++++++++++++++++++++++++++++[m
+[31m|[m  .gitignore                     |  1 [32m+[m
+[31m|[m  scripts/issues-nouveautes.mjs  | 25 [32m++++++++++++++++++[m[31m----[m
+[31m|[m  3 files changed, 58 insertions(+), 4 deletions(-)
+[31m|[m 
+* [33mcommit e0687660a4d4b42a256e4451f894c238e852a67b[m[33m ([m[1;33mtag: [m[1;33mv0.36.0[m[33m)[m
+[31m|[m Author: jguevel-tech <jguevel-tech@users.noreply.github.com>
+[31m|[m Date:   Thu Aug 20 20:27:12 2026 +0200
+[31m|[m 
+[31m|[m     Release 0.36.0
+[31m|[m 
+[31m|[m  CHANGELOG.md         | 2 [32m++[m
+[31m|[m  package.json         | 2 [32m+[m[31m-[m
+[31m|[m  src-tauri/Cargo.lock | 2 [32m+[m[31m-[m
+[31m|[m  src-tauri/Cargo.toml | 2 [32m+[m[31m-[m
+[31m|[m  4 files changed, 5 insertions(+), 3 deletions(-)

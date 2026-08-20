@@ -7,6 +7,7 @@
 //! Chantier en cours — remplacer tmux par notre propre service, le meme sur les trois
 //! systemes : `docs/portabilite/plan-terminaux.md`.
 
+pub mod ecran;
 pub mod history;
 mod interface;
 mod tmux;

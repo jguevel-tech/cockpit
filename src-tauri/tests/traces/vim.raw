@@ -1,0 +1,12 @@
+[?1049h[22;0;0t[>4;2m[?1h=[?2004h[?1004h[1;24r[?12h[?12l[22;2t[22;1t[27m[23m[29m[m[H[2J[?25l[24;1H"src-tauri/src/terminal/interface.rs" 186L, 8897B[2;1H▽[6n[2;1H  [3;1HPzz\[0%m[6n[3;1H           [1;1H[>c]10;?]11;?[1;1H[38;5;130m  1 [m[35m//! L'interface que Cockpit demande a un serveur de terminaux, et RIEN de pll[m[2;1H[38;5;130m    [m[35mus.[m[2;8H[K[3;1H[38;5;130m  2 [m[35m//![m[3;8H[K[4;1H[38;5;130m  3 [m[35m//! Elle est ecrite depuis les besoins du frontend (les commandes Tauri de ``[m[5;1H[38;5;130m    [m[35mlib.rs`), pas[m
+[38;5;130m  4 [m[35m//! depuis ce que tmux sait faire : c'est tout l'objet de l'etape A du chantt[m[7;1H[38;5;130m    [m[35mier[m
+[38;5;130m  5 [m[35m//! (`docs/portabilite/plan-terminaux.md`). Chaque operation porte ci-dessouu[m[9;1H[38;5;130m    [m[35ms si elle est un[m
+[38;5;130m  6 [m[35m//! BESOIN de Cockpit ou un CONTOURNEMENT de tmux —[10;56H les seconds sont a ne paa[m[11;1H[38;5;130m    [m[35ms reproduire[m
+[38;5;130m  7 [m[35m//! dans le service maison.[m
+[38;5;130m  8 [m[35m//![m
+[38;5;130m  9 [m[35m//! Deux dependances traversent l'interface et ne sont pas des details :[m
+[38;5;130m 10 [m[35m//! - `AppHandle` : la sortie d'un terminal remonte au webview par un evenemm[m[16;1H[38;5;130m    [m[35ment Tauri. Toute[m
+[38;5;130m 11 [m[35m//!   implementation qui attache doit pouvoir emettre. Besoin reel.[m
+[38;5;130m 12 [m[35m//! - `&Database` : aujourd'hui l'identite d'un terminal (`id` -> nom de sess[m[19;1H[38;5;130m    [m[35msion tmux) vit en[m
+[38;5;130m 13 [m[35m//!   SQLite, donc presque chaque operation relit la base pour savoir a QUI  [m[21;1H[38;5;130m    [m[35mparler. Un service[m
+[38;5;130m 14 [m[35m//!   qui tient ses propres metadonnees n'en aurait besoin que pour lister —[22;80H— [m[23;1H[38;5;130m    [m[35m c'est le point a[1;5H[?25h[?4m[3;5H[4;5H[6;5H[?25l[m[24;1H[K[24;1H:set number[?25h[?25l[6;5H[?25h[4;5H

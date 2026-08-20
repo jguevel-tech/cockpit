@@ -1,0 +1,125 @@
+[?1049h[22;0;0t[?1h=//! Implementation tmux du trait `Terminaux` (voir `interface.rs`).[m
+//![m
+//! Chaque terminal est une session tmux (`ckpt_<id>`) sur un socket dedie (`-L [m cockpit`,[m
+//! isole du tmux perso). Le serveur tmux survit a la fermeture de l'app : au re[m demarrage,[m
+//! Cockpit recharge les terminaux depuis SQLite et se rattache aux sessions viv[m antes.[m
+//![m
+//! Attach = 1 process `tmux attach` dans un PTY + 1 thread lecteur + 1 thread e[m metteur[m
+//! qui regroupe. Les events IPC (`terminal_output`, base64) ne partent que si u[m ne UI est[m
+//! attachee. Il n'y a PLUS de buffer de replay : il n'etait plus lu par personn[m e depuis[m
+//! que le frontend garde ses xterm dans un pool, et il recopiait 100 Ko a chaqu[m e lecture[m
+//! du PTY.[m
+//![m
+//! Ce fichier entier disparait a l'etape C du chantier des terminaux[m
+//! (`docs/portabilite/plan-terminaux.md`) : tout ce qui est specifique a tmux d[m oit rester[m
+//! DEDANS, jamais remonter dans `interface.rs` ni dans `lib.rs`.[m
+[7msrc-tauri/src/terminal/tmux.rs[27m[K[K[m
+use super::interface::{ActionRecherche, Creation, Taille, TerminalInfo, Terminau[m x};[m
+use crate::storage::Database;[m
+use base64::Engine;[m
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, Pt[m ySize};[m
+use serde::Serialize;[m
+use std::collections::{HashMap, HashSet};[m
+use std::io::{Read, Write};[m
+use std::path::PathBuf;[m
+use std::sync::{Arc, Condvar, Mutex};[m
+use tauri::{AppHandle, Emitter, Manager};[m
+[m
+const TMUX_SOCKET: &str = "cockpit";[m
+[m
+/// Taille du tampon de lecture du PTY. Ne change RIEN a la latence : `read()` r[m end la main[m
+/// des qu'UN octet est disponible, l'echo d'une touche part donc toujours seul.[m  Mais sur une[m
+/// rafale, chaque lecture devient un evenement de moins — banc du 2026-08-20 su[m r une rafale[m
+/// de 1,9 Mo a travers un vrai PTY : 2547 evenements en 8 Ko, 3 avec ce tampon [m :[K[Ket le[m
+/// regroupement de `pomper`.[m
+const PTY_READ_BUF: usize = 64 * 1024;[m
+[m
+/// Au-dela de ce volume en attente, on considere qu'une RAFALE est en cours et [m on laisse[m
+/// `PTY_GROUP_WAIT` d'accumulation avant d'emettre. En dessous, emission immedi[m ate.[m
+///[m
+/// 8 Ko d'un coup ne peuvent pas etre de la frappe : l'echo d'une touche fait q[m uelques[m
+/// octets, un redraw de prompt quelques centaines. Le seuil ne se declenche don[m c jamais[m
+/// sur le chemin de frappe, dont la latence reste inchangee.[m
+const PTY_GROUP_THRESHOLD: usize = 8 * 1024;[m
+[m
+/// Fenetre d'accumulation en rafale. 2 ms : un huitieme d'image a 60 Hz, donc i[m nvisible,[m
+/// et assez pour agreger plusieurs lectures. NE PAS monter a 20-50 ms « pour mi[m eux[m
+/// regrouper » : ce serait payer en latence percue ce qu'on gagne en nombre d'e[m venements.[m
+const PTY_GROUP_WAIT: std::time::Duration = std::time::Duration::from_millis(2);[m
+:[K[K/[Ktt[Krr[Kuu[Kee[K[1;1Het le[m
+[2;1H/// regroupement de `pomper`.[m
+[3;1Hconst PTY_READ_BUF: usize = 64 * 1024;[m
+[4;1H[m
+[5;1H/// Au-dela de ce volume en attente, on considere qu'une RAFALE est en cours et [m [6;1Hon laisse[m
+[7;1H/// `PTY_GROUP_WAIT` d'accumulation avant d'emettre. En dessous, emission immedi[m [8;1Hate.[m
+[9;1H///[m
+[10;1H/// 8 Ko d'un coup ne peuvent pas etre de la frappe : l'echo d'une touche fait q[m [11;1Huelques[m
+[12;1H/// octets, un redraw de prompt quelques centaines. Le seuil ne se declenche don[m [13;1Hc jamais[m
+[14;1H/// sur le chemin de frappe, dont la latence reste inchangee.[m
+[15;1Hconst PTY_GROUP_THRESHOLD: usize = 8 * 1024;[m
+[16;1H[m
+[17;1H/// Fenetre d'accumulation en rafale. 2 ms : un huitieme d'image a 60 Hz, donc i[m [18;1Hnvisible,[m
+[19;1H/// et assez pour agreger plusieurs lectures. NE PAS monter a 20-50 ms « pour mi[m [20;1Heux[m
+[21;1H/// regrouper » : ce serait payer en latence percue ce qu'on gagne en nombre d'e[m [22;1Hvenements.[m
+[23;1Hconst PTY_GROUP_WAIT: std::time::Duration = std::time::Duration::from_millis(2);[m
+[24;1H[1;1Het le[m
+[2;1H/// regroupement de `pomper`.[m
+[3;1Hconst PTY_READ_BUF: usize = 64 * 1024;[m
+[4;1H[m
+[5;1H/// Au-dela de ce volume en attente, on considere qu'une RAFALE est en cours et [m [6;1Hon laisse[m
+[7;1H/// `PTY_GROUP_WAIT` d'accumulation avant d'emettre. En dessous, emission immedi[m [8;1Hate.[m
+[9;1H///[m
+[10;1H/// 8 Ko d'un coup ne peuvent pas etre de la frappe : l'echo d'une touche fait q[m [11;1Huelques[m
+[12;1H/// octets, un redraw de prompt quelques centaines. Le seuil ne se declenche don[m [13;1Hc jamais[m
+[14;1H/// sur le chemin de frappe, dont la latence reste inchangee.[m
+[15;1Hconst PTY_GROUP_THRESHOLD: usize = 8 * 1024;[m
+[16;1H[m
+[17;1H/// Fenetre d'accumulation en rafale. 2 ms : un huitieme d'image a 60 Hz, donc i[m [18;1Hnvisible,[m
+[19;1H/// et assez pour agreger plusieurs lectures. NE PAS monter a 20-50 ms « pour mi[m [20;1Heux[m
+[21;1H/// regrouper » : ce serait payer en latence percue ce qu'on gagne en nombre d'e[m [22;1Hvenements.[m
+[23;1Hconst PTY_GROUP_WAIT: std::time::Duration = std::time::Duration::from_millis(2);[m
+[24;1H...skipping...
+        _ => [7mtrue[27m, // dans le doute, ne rien toucher[m
+    };[m
+    if same_size {[m
+        return;[m
+    }[m
+    // Some(vide) = reponse definitive "aucune session" (le serveur tmux s'etein[m t de[m
+    // lui-meme sans session). None ou des sessions -> on ne touche a rien.[m
+    if !matches!(tmux_alive_sessions(), Some(s) if s.is_empty()) {[m
+        return;[m
+    }[m
+    let _ = copy_executable(&resource, dest);[m
+}[m
+[m
+/// Copie via fichier temporaire + rename : ecrire directement dans un binaire[m
+/// potentiellement en cours d'execution echoue (ETXTBSY) ou corrompt le process[m us.[m
+fn copy_executable(src: &std::path::Path, dest: &std::path::Path) -> Result<(), [m String> {[m
+    let dir = dest.parent().ok_or("chemin sans parent")?;[m
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;[m
+    let tmp = dir.join("tmux.new");[m
+    std::fs::copy(src, &tmp).map_err(|e| e.to_string())?;[m
+:[K[K...skipping...
+        drop(pair.slave);[m
+        let mut reader = pair.master.try_clone_reader().unwrap();[m
+[m
+        let partage = file_vide();[m
+        let lecteur = {[m
+            let partage = partage.clone();[m
+            std::thread::spawn(move || {[m
+                super::lire_pty(&mut reader, &partage);[m
+                terminer(&partage);[m
+            })[m
+        };[m
+[m
+        let mut recu: Vec<u8> = Vec::new();[m
+        super::pomper(&partage, |octets| recu.extend_from_slice(octets));[m
+        lecteur.join().unwrap();[m
+        let _ = child.wait();[m
+[m
+        // Le PTY est en mode « cooked » : il traduit chaque \n en \r\n. `printf[m  %s` n'en[m
+        // emet aucun, la comparaison est donc directe.[m
+        assert_eq!(String::from_utf8_lossy(&recu), attendu);[m
+    }[m
+}[m
+[7m(END)[27m[K

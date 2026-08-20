@@ -70,12 +70,7 @@ projet optionnel) : la douzième commande Tauri n'est pas une douzième opérati
 Le service tient les shells et leur écran. Il tourne à part et survit à la fermeture de
 l'app. Personne ne l'utilise encore : il se teste seul.
 
-Écrire **en premier** la partie qui redessine l'écran au retour, avec son test : c'est là
-qu'est tout le risque. Le test est un aller-retour — on redessine, on relit dans un
-émulateur neuf, les deux doivent être identiques cellule par cellule. Le nourrir avec de
-vraies traces de `claude`, `vim`, `htop`, `less`.
-
-Trois choses à décider dès le départ, parce qu'on ne revient pas en arrière dessus :
+Trois choses décidées dès le départ, parce qu'on ne revient pas en arrière dessus :
 
 1. **Le service n'écrit rien sur disque.** Il tient tout en mémoire et meurt avec la
    machine. Ça correspond au besoin — survivre à la fermeture de l'app, pas au
@@ -86,7 +81,95 @@ Trois choses à décider dès le départ, parce qu'on ne revient pas en arrière
 3. **Un service par utilisateur, pas un service système.** Les terminaux appartiennent à
    une session utilisateur : son environnement, son presse-papier, son `HOME`.
 
-**État : à faire.**
+#### B1. La grille et le redessin
+
+**État : FAITE le 2026-08-20.**
+
+`src-tauri/src/terminal/ecran/` : `Ecran` avale les octets du shell (`alacritty_terminal`
+`=0.26.0`), `redessiner()` rend une suite d'octets qui refabrique cet état dans un terminal
+neuf. Le module se teste **seul** : personne ne l'appelle, et un `#![allow(dead_code)]`
+commenté sur place tient les avertissements à distance jusqu'à B2.
+
+**Le test qui borne le travail** (`ecran/tests.rs`) : sérialiser, relire dans un émulateur
+neuf, comparer les deux états — cellule par cellule (caractère, couleurs, attributs,
+accents combinants, couleur de soulignement, lien OSC 8), plus la position et la forme du
+curseur, l'écran actif, la région de défilement, les modes DEC, la palette modifiée, le
+titre et sa pile, les jeux de caractères. Trois sources : 44 états fabriqués à la main, des
+octets au hasard (deux générateurs, graines fixes pour que tout échec soit rejouable), et
+6 traces réelles captées dans un PTY 80x24 (`vim`, `htop`, `less`, `git log`, `ls --color`,
+`claude`) par `scripts/capturer-trace.py`, rejouées entières **et** tronquées à toutes les
+longueurs.
+
+**Résultat : l'aller-retour est EXACT sur les états fabriqués et sur les traces réelles.**
+La mise au point a tourné à 6 000 tirages au hasard par graine sur cinq jeux de graines
+différents (≈ 100 000 états) ; ce qui reste dans le test est réduit à 1 600 tirages par
+générateur pour que `cargo test` reste rapide.
+
+**Ce que les octets au hasard ont trouvé, et qui ne se voyait sur aucune trace :**
+
+| Symptôme | Cause |
+|---|---|
+| Toute la fin d'une ligne décalée d'une colonne | `unicode-width` rend 3 pour certains signes khmers, `Term::input` ne connaît que 1 et 2 |
+| Ligne suivante écrite PAR-DESSUS la précédente | le dessin enchaînait sur un enroulement qui n'aurait pas lieu (dernière cellule sautée) |
+| Un fond de couleur qui bave sur les lignes suivantes | la ligne qui entre par le bas hérite du fond du stylo (`Cell::reset` ne recopie que `bg`) |
+| Tout le reste de la ligne décalé de huit colonnes | `\t` réémis tel quel relance la logique de tabulation au lieu de reposer la cellule |
+| Curseur qui atterrit en dernière colonne au lieu de sa colonne | l'état « en butée à droite » suit un retour de tabulation (`CSI Z`), le seul geste qui déplace la colonne sans l'annuler |
+| Région de défilement collée au bas de l'écran non restaurée | `CSI 24;24r` est REFUSÉ (haut ≥ bas) ; il faut demander `CSI 24;25r` et laisser le bornage ramener à 24 |
+
+**Les cas qui résistent, tous écrits dans le code** (`ecran/tests.rs`, fonction
+`mettre_de_cote_les_cas_connus`, et l'en-tête de `ecran/mod.rs`). Ils tournent tous autour
+d'une même famille : une grille malmenée par des insertions et des effacements garde des
+restes de caractères larges qui ne désignent plus rien, et aucune séquence d'échappement ne
+sait les reposer tels quels. Ce qui se perd est à chaque fois **invisible** : un indice de
+largeur sur une cellule vide, un `WRAPLINE` inerte, la cellule que le remplissage d'un
+caractère large recouvre de toute façon. **Aucun programme réel ne produit ces états** — les
+six traces passent l'aller-retour exact, et c'est le test qui le verrouille. Sur des
+séquences d'échappement tirées au hasard, environ 1 % des états les rencontrent.
+
+Deux limites de plus, sans rapport avec les caractères larges :
+- **les taquets de tabulation** (HTS, TBC) ne sont ni lisibles depuis `Term` ni
+  restaurables (HTS pose un taquet à la colonne du curseur, que l'espion ne connaît pas) ;
+- **le curseur sauvegardé** (DECSC/DECRC) n'est pas restauré ;
+- **la grille principale cachée sous l'écran alternatif** n'est pas lisible :
+  `swap_alt()` remet l'écran alternatif à zéro quand on y revient. Le redessin ne rend que
+  l'écran actif. Ce n'est pas une perte — voir la contrainte pour B2 ci-dessous.
+
+**Les mesures, sur cette machine, en `--release`** (à comparer aux chiffres de tmux plus
+bas) :
+
+| Ce qu'on mesure | Notre émulateur | tmux |
+|---|---|---|
+| Ingestion d'une rafale de 4 Mo (par blocs de 64 Ko) | **53 à 60 ms** (70 à 76 Mo/s) | 417 ms, et il ne livrait que 1,96 Mo |
+| Sérialisation d'un écran complet (80x24) | **22 µs pour 1 280 octets** | 3,1 ms pour 4,1 Ko (`capture-pane`) |
+| Sérialisation écran + 10 000 lignes d'historique | 10,5 ms pour 544 Ko | — |
+| Mémoire d'une session de plus, historique plein | **35 Mo** (dont 19 Mo de cellules : 24 octets x 801 920) | — |
+
+Le redessin **ne transmet pas la rafale** : 4,19 Mo avalés donnent 1 280 octets à redessiner
+pour l'écran seul. C'est le service que tmux rendait sans qu'on le sache, et il est rendu.
+
+**Ce que B2 doit reprendre de B1, sans le redécouvrir :**
+
+1. **Redessiner à chaque changement d'écran actif.** Le redessin ne rend que l'écran actif ;
+   quand une application plein écran se termine (`?1049l`), le service doit renvoyer un
+   redessin, sinon le frontend affiche un écran principal vide.
+2. **35 Mo par terminal à historique plein, c'est beaucoup.** Dix terminaux ouverts = 350 Mo.
+   À surveiller avant de livrer : soit on assume, soit on descend l'historique, soit on
+   compacte. Ne pas découvrir ça chez un utilisateur.
+3. **Le chemin de frappe ne passe PAS par ce module.** `Ecran::avaler` est pour la sortie du
+   shell. L'entrée va au PTY directement, comme aujourd'hui (0,4 ms était le prix de tmux,
+   faire pire ne se pardonne pas).
+4. **Les réponses au shell doivent être renvoyées.** `Ecran::sortants()` rend ce que
+   l'émulateur veut dire : `VersLeShell` (identification, position du curseur — un programme
+   qui les demande ATTEND la réponse et se figerait sans elle) et `VersLePressePapier`
+   (OSC 52, la chaîne de copie d'aujourd'hui). Les ramasser après chaque `avaler`.
+5. **La version d'`alacritty_terminal` est épinglée à l'exact.** Ce sur quoi on s'appuie est
+   listé en tête de `ecran/mod.rs` — à relire avant toute montée de version, la crate ne
+   promet aucune stabilité d'API.
+
+#### B2. Le service, le socket, les PTY
+
+**État : à faire.** Tenir les shells (`portable-pty`), le tuyau avec l'app
+(`interprocess`), la poignée de main versionnée, la réconciliation au démarrage.
 
 ### C. Brancher, puis supprimer tmux
 

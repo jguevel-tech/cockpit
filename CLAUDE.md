@@ -309,6 +309,8 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 | Async runtime | tokio | 1 (via Tauri) |
 | HTTP client | reqwest 0.12 | rustls, json, multipart (APIs OpenAI) |
 | PTY | portable-pty 0.9 | terminaux integres + flow claude setup-token |
+| Emulateur de terminal | alacritty_terminal `=0.26.0` | grille, curseur, ecran alternatif, historique — version EPINGLEE A L'EXACT, la crate ne promet aucune stabilite d'API |
+| Largeur des caracteres | unicode-width 0.2 | compter les colonnes d'un CJK/emoji comme l'emulateur les compte |
 | Persistance terminaux | tmux >= 3 | socket dedie `-L cockpit` ; statique 3.5a EMBARQUE dans l'AppImage |
 | Scan fichiers | ignore 0.4 | walker gitignore-aware (celui de ripgrep) |
 | Dates | chrono 0.4 | titres de notes reunion |
@@ -345,7 +347,7 @@ npx tauri build --no-bundle
 # Build frontend seul
 npm run build
 
-# Tests Rust (147 tests)
+# Tests Rust (172 tests)
 cd src-tauri && cargo test
 
 # Tests frontend des modules PURS (node strip-types, aucune dependance a installer)
@@ -447,6 +449,13 @@ ai-workforce/
 │       │   │                       #   terminaux, sans une ligne de tmux (12 operations)
 │       │   ├── tmux.rs             # Implementation tmux : sessions ckpt_*, clients attaches en
 │       │   │                       #   permanence, detection agents LLM (flag llm), copie OSC 52
+│       │   ├── ecran/              # Emulateur maison (etape B1 du chantier) — se teste SEUL,
+│       │   │   │                   #   aucun appelant encore
+│       │   │   ├── mod.rs          # `Ecran` : avale les octets du shell, tient l'etat, ramasse
+│       │   │   │                   #   les reponses a renvoyer ; `Espion` pour ce que Term cache
+│       │   │   ├── etat.rs         # `EtatEcran` : photo comparable, JUGE du test d'aller-retour
+│       │   │   ├── redessin.rs     # Etat -> octets ANSI qui le refabriquent a l'identique
+│       │   │   └── tests.rs        # Aller-retour : etats fabriques + octets au hasard + traces
 │       │   └── history.rs          # Historique commandes (DB + zsh/bash history fusionnes, recherche)
 │       ├── workspace/
 │       │   ├── mod.rs              # Explorateur fichiers : listing gitignore-aware, lecture/ECRITURE, find_symbol
@@ -462,6 +471,11 @@ ai-workforce/
 │       │   └── mod.rs              # Scan filesystem pour docker-compose.yml (2 tests)
 │       └── plugin/
 │           └── mod.rs              # Trait Plugin (preparation future)
+│
+│   └── tests/
+│       └── traces/                 # Sorties BRUTES de vrais programmes dans un PTY 80x24
+│                                   #   (vim, htop, less, git log, ls, claude), rejouees par le
+│                                   #   test d'aller-retour. Captees par scripts/capturer-trace.py
 │
 ├── src/                            # Frontend Svelte 5 + TypeScript
 │   ├── App.svelte                  # Layout principal (Header + Sidebar + MainPanel)
@@ -1222,6 +1236,38 @@ Le backend (`system/metrics.rs`) collecte :
 - Le trait `Plugin` dans `plugin/mod.rs` prepare cette extensibilite
 
 ## Pieges connus (lecons apprises)
+
+- **`alacritty_terminal` cache trois etats dont un redessin a besoin** : la region de
+  defilement (DECSTBM), le titre et sa pile, le jeu de caracteres actif. `Term` n'a pas
+  d'accesseur pour eux. On les suit avec un ESPION : le meme flux d'octets est donne a un
+  SECOND analyseur `vte` dont le gestionnaire n'implemente que ces quatre operations
+  (`terminal/ecran/mod.rs`). Ne PAS remplacer ca par un gestionnaire qui envelopperait
+  `Term` : `Handler` compte 85 methodes a corps vide par defaut, un enveloppeur doit toutes
+  les reexpedier, et une faute de frappe dans l'une d'elles casserait l'EMULATION sans
+  qu'aucun test d'aller-retour ne le voie — les deux cotes du test passeraient par le meme
+  enveloppeur. L'espion, lui, n'a pas de grille : il ne peut rien casser.
+- **`swap_alt()` DETRUIT l'ecran alternatif quand on y revient** : il remet la grille
+  inactive a zero a chaque entree en ecran alternatif. Il n'existe donc aucun moyen de LIRE
+  la grille principale cachee sous une application plein ecran sans perdre l'autre. Le
+  redessin ne rend que l'ecran actif ; le service tient l'etat complet et redessinera quand
+  l'ecran actif changera (tmux repeint sur le meme evenement).
+- **La ligne qui entre par le bas herite du FOND du stylo** : `Cell::reset` ne recopie que
+  `bg`. Tout ce qui fait defiler — un saut de ligne, un enroulement — avec un fond actif
+  teinte la ligne d'arrivee, donc les fins de ligne qu'un redessin ne redessine pas.
+  Remettre le fond par defaut avant de faire defiler (`terminal/ecran/redessin.rs`).
+- **`unicode-width` rend parfois 3** (le signe khmer U+17D8, par exemple) alors que
+  `Term::input` ne connait que « une colonne » et « deux colonnes ». Compter comme la crate
+  au lieu de compter comme l'emulateur sautait une cellule et decalait toute la fin de la
+  ligne. Trouve par des octets au hasard, invisible sur des traces reelles.
+- **Le fanion `WRAPLINE` ne se pose qu'en ECRIVANT un caractere** alors que le curseur est
+  en butee a droite : aucune sequence ne le demande. Un redessin qui saute la ligne (`\r\n`)
+  le perd, et un redessin qui l'enchaine sans qu'un caractere suive ne le pose pas. C'est
+  pour ca que `dessiner_ligne` rend l'ETAT dans lequel elle laisse le curseur.
+- **La tabulation est le seul caractere de commande qui finit DANS une cellule** :
+  `put_tab` y ecrit `\t` si elle contient une espace, sans toucher ses attributs, puis saute
+  au taquet suivant. Reemettre `\t` a la place du caractere decale donc tout le reste de la
+  ligne de huit colonnes. Il faut poser une espace avec les bons attributs, revenir dessus,
+  tabuler, puis revenir a la colonne suivante.
 
 - **Build** : jamais `cargo build --release` seul pour le binaire final (mode dev -> cherche Vite
   sur localhost:5173). Toujours `npx tauri build --no-bundle`. Un rebuild du frontend seul ne

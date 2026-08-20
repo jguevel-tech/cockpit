@@ -38,6 +38,17 @@ trash = "5"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2"
+# Emulateur de terminal (grille de caracteres, curseur, ecran alternatif, historique).
+# Version EPINGLEE a l'exact : la crate ne promet aucune stabilite d'API (0.x, extraite
+# d'Alacritty). Ce sur quoi terminal/ecran/ s'appuie est liste en tete de
+# terminal/ecran/mod.rs — a relire avant toute montee de version.
+# `default-features = false` retire serde : on ne serialise jamais la grille en JSON,
+# le redessin passe par des octets ANSI.
+alacritty_terminal = { version = "=0.26.0", default-features = false }
+# Largeur d'affichage d'un caractere (CJK, emoji). MEME crate et MEME version que celle
+# qu'utilise alacritty_terminal : le redessin doit compter les colonnes exactement comme
+# l'emulateur, sinon une ligne contenant du CJK ressort decalee d'une colonne.
+unicode-width = "0.2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
