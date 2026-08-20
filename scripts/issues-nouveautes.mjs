@@ -50,7 +50,7 @@ if (existsSync(REPERE)) {
 
 const issues = JSON.parse(
   gh("issue", "list", "--repo", DEPOT, "--state", "open", "--limit", "200",
-     "--json", "number,title,author,comments,labels,createdAt")
+     "--json", "number,title,body,author,comments,labels,createdAt")
 );
 
 let nouveautes = 0;
@@ -63,7 +63,11 @@ for (const issue of issues.sort((a, b) => a.number - b.number)) {
   // commentaire. Sinon les issues #10 a #14, ouvertes puis jamais commentees, seraient
   // restees invisibles.
   const evenements = [
-    { date: issue.createdAt, qui: issue.author.login, texte: issue.title, genre: "ouverture" },
+    // Le CORPS, pas le titre : le titre est deja affiche en tete de bloc, et l'afficher a
+    // sa place faisait croire qu'une issue decrite etait vide. Bug de ce script, constate
+    // sur l'issue #14 dix minutes apres l'avoir ecrit.
+    { date: issue.createdAt, qui: issue.author.login,
+      texte: issue.body?.trim() || "(pas de description)", genre: "ouverture" },
     ...issue.comments.map((c) => ({
       date: c.createdAt, qui: c.author.login, texte: c.body, genre: "commentaire",
     })),
@@ -79,7 +83,7 @@ for (const issue of issues.sort((a, b) => a.number - b.number)) {
   console.log(`\n━━━ #${issue.number} — ${issue.title}`);
   console.log(`    [${labels}]  ouverte par ${issue.author.login}`);
   for (const e of neufs) {
-    const extrait = e.texte.replace(/\r?\n/g, " ").slice(0, 300);
+    const extrait = e.texte.replace(/\r?\n/g, " ").slice(0, 700);
     console.log(`  • ${e.date.slice(0, 16)}  ${e.genre} de ${e.qui}`);
     console.log(`    ${extrait}`);
   }
