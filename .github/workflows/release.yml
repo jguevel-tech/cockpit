@@ -242,3 +242,25 @@ jobs:
               -F draft=false -f make_latest=true > /dev/null
             echo "Release $TAG publiee : les utilisateurs peuvent mettre a jour."
           fi
+
+          # Une plateforme absente ne doit PAS passer inapercue. Sur la v0.32.0, le job macOS
+          # avait echoue : `latest.json` est sorti avec les seules entrees Linux, tous les
+          # utilisateurs mac ont ete coupes des mises a jour, et ce job est reste VERT. Personne
+          # n'a ete averti.
+          # On publie quand meme — les systemes qui ont reussi ne doivent pas attendre l'autre —
+          # puis on fait ECHOUER le run en nommant ce qui manque. Ajouter une plateforme a la
+          # matrice = l'ajouter ici, sinon son absence redevient silencieuse.
+          PLATEFORMES_ATTENDUES="linux- darwin-" python3 - <<'EOF'
+          import json, os, sys
+          plateformes = sorted(json.load(open("/tmp/latest.json")).get("platforms", {}))
+          attendues = os.environ["PLATEFORMES_ATTENDUES"].split()
+          manquantes = [a for a in attendues if not any(p.startswith(a) for p in plateformes)]
+          if manquantes:
+              noms = ", ".join(m.rstrip("-") for m in manquantes)
+              print(f"::error::release publiee mais INCOMPLETE — aucune entree {noms} dans "
+                    f"latest.json. Ces utilisateurs ne recevront pas la mise a jour. "
+                    f"Reparer par `gh run rerun <id> --failed` : tauri-action retrouve la "
+                    f"release et y fusionne la plateforme manquante.")
+              sys.exit(1)
+          print(f"latest.json complet : {plateformes}")
+          EOF

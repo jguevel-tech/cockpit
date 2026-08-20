@@ -29,8 +29,20 @@ needs no root privileges. Then run `cockpit`.
 ### macOS (beta, Apple Silicon)
 
 Download the `.dmg` from the [releases page](https://github.com/jguevel-tech/cockpit/releases/latest),
-drag Cockpit to Applications. The app is not notarized by Apple yet: on first launch,
-**right-click the app → Open** (or `xattr -d com.apple.quarantine /Applications/Cockpit.app`).
+drag Cockpit to Applications.
+
+The app is not notarized by Apple yet, so the first launch is refused. **Right-click → Open no
+longer works** — Apple removed that shortcut in macOS 15. Two cases:
+
+- macOS says it *"cannot verify this app is free of malware"* → click **Cancel** (not *Move to
+  Trash*), then open **System Settings → Privacy & Security**, scroll to the message about
+  Cockpit and click **Open Anyway**.
+- macOS says the app *"is damaged and cannot be opened"* → no button will help. Run
+  `xattr -d com.apple.quarantine /Applications/Cockpit.app` in a terminal, then open it normally.
+
+Updates afterwards need none of this: the in-app updater downloads them itself, and macOS only
+quarantines what comes from a browser.
+
 Persistent terminals need `brew install tmux`; the app tells you if it's missing.
 
 > **Updates happen inside the app** on both platforms. When a new version ships, a bell appears in
