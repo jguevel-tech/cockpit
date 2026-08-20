@@ -7,6 +7,13 @@ description: Traiter les issues GitHub ouvertes du repo cockpit de bout en bout 
 
 Repo : `jguevel-tech/cockpit`. `gh` est authentifie dessus.
 
+**Le fichier sur disque fait autorite.** Si la copie de ce skill qui t'a ete fournie
+au lancement ne contient pas l'etape 0 ou le label `attente-retour`, c'est un
+instantane perime : relis
+`.claude/skills/issues/SKILL.md` et `.claude/agents/issue-*.md` avant de commencer,
+et suis le fichier. Ca arrive quand le skill a ete modifie pendant la session en
+cours — donc a chaque fois que l'etape 4bis fait son travail.
+
 ## Principe
 
 **Tu vas jusqu'au bout, seul.** Jimmy ne tranche QU'UNE chose : les demandes de
