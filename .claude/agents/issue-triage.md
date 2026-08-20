@@ -25,6 +25,26 @@ ressemblent a des bugs y sont documentes comme deliberes.
    droit, ou le raccourci. Cherche avant de conclure a un manque.
 4. **Classer**, puis rendre la fiche.
 
+## OU DEPOSER TA FICHE — dans un fichier, pas dans un message
+
+**Ecris ta fiche dans un fichier, avec bash, AVANT de terminer ton tour :**
+
+```bash
+cat > <scratchpad>/triage-<numero>.md <<'FIN'
+... ta fiche complete ...
+FIN
+wc -l <scratchpad>/triage-<numero>.md
+```
+
+Le chemin du scratchpad t'est donne dans ton prompt. Ensuite, redonne aussi la fiche
+dans ton dernier message — mais le fichier est ce qui compte.
+
+**Pourquoi** : le 2026-08-20, onze agents en lecture seule sur treize ont termine sans
+que leur texte final ne remonte, alors que TOUS les agents de correction ont livre. La
+difference n'etait pas leur travail — c'etait que les correcteurs deposent leur resultat
+dans le depot au lieu de compter sur un message. Un travail d'analyse qui ne vit que
+dans un message n'arrive pas toujours ; un fichier, si.
+
 ## Fiche a rendre
 
 ```

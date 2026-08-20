@@ -168,6 +168,13 @@ d'une regle ne prend plus effet.
 Chaque agent rend la fiche decrite dans sa definition : classe, preuve
 (`fichier:ligne`), cause, correction proposee, portee, langue de l'auteur, doute.
 
+**DONNE A CHAQUE AGENT DE TRIAGE LE CHEMIN DU SCRATCHPAD** et demande-lui d'y ecrire sa
+fiche dans un fichier (`triage-<numero>.md`). C'est le point le plus important de cette
+etape : le 2026-08-20, onze agents en lecture seule sur treize ont termine sans que leur
+texte final ne remonte, alors que TOUS les agents de correction ont livre — parce qu'un
+correcteur depose son travail dans le depot au lieu de compter sur un message. Un fichier
+arrive toujours, un message non. Tu lis ensuite les fichiers toi-meme.
+
 **Le protocole normal est en DEUX temps : l'agent signale qu'il est disponible, puis
 tu lui demandes sa fiche.** Ce n'est pas une panne, c'est ce qui se passe a chaque
 fois — le 2026-08-20, sur neuf agents plus deux remplacants, tous ont annonce leur
@@ -351,6 +358,20 @@ La SEULE chose qui reste strictement sequentielle : **deux agents qui ECRIVENT d
 code**. Ils se disputent `src-tauri/target/` pendant `cargo test` et `tauri build`, et
 ils se marchent dessus sur `CHANGELOG.md`. Un seul agent de correction a la fois, donc —
 mais jamais un seul agent en tout.
+
+**Et toi non plus tu n'ecris pas dans les fichiers partages pendant qu'un agent de
+correction tourne.** `CHANGELOG.md` et `CLAUDE.md` sont ecrits par les agents depuis que
+la mise a jour de la doc est une etape de leur sequence : si tu y touches en meme temps,
+ton `git add` embarque leur travail en cours sous un message de commit qui ne le decrit
+pas. Constate le 2026-08-20 : une regle ajoutee au `CLAUDE.md` a emporte avec elle la
+moitie de la documentation qu'un agent etait en train d'ecrire sur le double collage.
+Les fichiers du skill et des agents (`.claude/`) restent libres, eux : personne d'autre
+n'y touche.
+
+Si une modification du `CLAUDE.md` ne peut pas attendre, commite en nommant
+EXPLICITEMENT les fichiers voulus (`git add CLAUDE.md` seul ne suffit pas si l'agent
+l'edite aussi) — ou attends la fin de l'agent, ce qui est plus simple. Et previens-le :
+son `git diff` montrera moins que ce qu'il a ecrit.
 
 Le deroule normal ressemble donc a ca, et non a une file d'attente :
 
