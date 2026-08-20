@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.37.1] — 2026-08-20
+
 ### Fixed
 
 - Une commande rapide (bouton **▶ Cmd** ou palette `Ctrl+K`) et le shell d'un conteneur
