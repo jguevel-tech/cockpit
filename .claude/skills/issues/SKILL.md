@@ -63,6 +63,55 @@ sans lui poser la question.
 Ne lui remonte pas un tableau a valider ligne par ligne. Tu agis, puis tu annonces
 ce qui est parti.
 
+## UNE PROMESSE EST UNE DETTE, ET ELLE SE SUIT
+
+**Ecrire « c'est retenu, je vous previens quand c'est livre » cree une obligation.** Ce
+n'est pas une formule de politesse : quelqu'un attend. Et rien ne le rappelle, puisque
+l'issue n'attend plus l'auteur — elle nous attend.
+
+D'ou le label **`a-livrer`** : promis, pas encore livre, la balle est chez nous. Il se
+pose **dans le meme geste** que le commentaire qui promet, jamais plus tard.
+
+```bash
+gh issue comment <N> --repo jguevel-tech/cockpit --body-file <fichier>
+gh issue edit    <N> --repo jguevel-tech/cockpit --add-label a-livrer
+```
+
+Il se retire quand c'est publie ET l'auteur prevenu — moment ou l'issue passe en
+`attente-retour`, puisque la balle repart chez lui.
+
+**Les deux labels sont symetriques et couvrent les deux sens de l'attente :**
+
+| Label | Qui attend | Ce qui le retire |
+|---|---|---|
+| `attente-retour` | nous attendons l'auteur | sa reponse, ou dix jours de silence |
+| `a-livrer` | l'auteur nous attend | la livraison, puis on le previent |
+
+### Ce qui a rendu cette regle necessaire
+
+Le 2026-08-20, trois issues (#2, #3, #6) ont recu « c'est retenu, je vous previens » puis
+plus rien pendant des heures, pendant qu'un autre chantier demarrait. Aucun label ne les
+suivait, aucun rapport ne les mentionnait, et c'est Jimmy qui a du les retrouver dans
+l'interface GitHub.
+
+**Le point important pour la suite** : ce jour-la, le nouveau chantier avait ete demande
+par Jimmy lui-meme. Le lancer n'etait donc pas la faute. **La faute etait de ne pas dire
+que des promesses etaient en attente.**
+
+### Quand une nouvelle demande arrive alors qu'une promesse est en attente
+
+Tu ne refuses pas, et tu ne repousses pas silencieusement la promesse. Tu **dis les
+deux** et tu laisses Jimmy ordonner :
+
+> « Je le fais. Note qu'il reste #2, #3 et #6 promises a gmarchault et non livrees — je
+>   les prends avant ou apres ? »
+
+Une seule phrase. Ce qui est interdit, c'est de partir sur la nouvelle demande comme si
+les promesses n'existaient pas : elles disparaissent alors du rapport et de la memoire.
+
+Et au retour du nouveau chantier, **les promesses reprennent la tete de file** sans qu'il
+faille le redemander.
+
 ## Etape 0 — Suivi des issues en attente de retour (EN PREMIER, ET A CHAQUE PAUSE)
 
 **Cette etape se rejoue a chaque fois que tu rends un rapport, pas seulement au
@@ -74,8 +123,17 @@ Le 2026-08-20, deux auteurs avaient repondu depuis deux heures et personne ne le
 lus : les questions avaient ete posees a 11h00, l'etape 0 n'avait tourne qu'a 10h30.
 C'est Jimmy qui a du le remarquer.
 
-Donc : avant chaque rapport, tu relis les issues en `attente-retour`. C'est court et
-c'est ce qui evite de laisser quelqu'un sans reponse pendant qu'on s'active ailleurs.
+Donc : avant chaque rapport, tu relis les DEUX listes — celles ou l'on attend l'auteur et
+celles ou l'auteur nous attend. C'est court, et c'est ce qui evite de laisser quelqu'un sans
+reponse pendant qu'on s'active ailleurs.
+
+```bash
+gh issue list --repo jguevel-tech/cockpit --state open --label attente-retour --json number,title,comments
+gh issue list --repo jguevel-tech/cockpit --state open --label a-livrer      --json number,title,comments
+```
+
+La deuxieme liste n'est pas informative : **c'est ta file de travail.** Une issue en
+`a-livrer` passe avant toute issue neuve.
 
 **Les reponses arrivent souvent par MAIL**, donc avec l'ancien message cite en dessous
 et des mentions du fournisseur (« Yahoo Mail : Recherchez, organisez... »). Ne lis que
@@ -527,11 +585,18 @@ savoir si ca continue de bouger tout seul ou si tout est arrete.
 | Agent | Sujet | Depuis |
 |---|---|---|
 
-### 4. En attente de quelqu'un d'autre
+### 4. Les deux sens de l'attente
 
-Les issues ou la balle est chez l'auteur, avec la date de fermeture automatique.
+**4a. On attend l'auteur** (label `attente-retour`) — avec la date de fermeture automatique.
 
 | Issue | On attend quoi | Ferme le |
+|---|---|---|
+
+**4b. L'auteur nous attend** (label `a-livrer`) — promis et pas encore livre, avec la date
+de la promesse. **Ce tableau ne s'omet jamais tant qu'il n'est pas vide**, meme si le sujet
+du moment est ailleurs : c'est le seul endroit ou une promesse oubliee redevient visible.
+
+| Issue | Ce qui a ete promis | Promis le |
 |---|---|---|
 
 ### 5. Etat de la session
