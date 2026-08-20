@@ -28,3 +28,4 @@ docs/superpowers/
 .DS_Store
 .claude/issues-vues.json
 .claude/issues-vues-surveillance.json
+*.swp
