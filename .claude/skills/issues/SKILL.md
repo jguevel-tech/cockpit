@@ -43,9 +43,19 @@ et des mentions du fournisseur (« Yahoo Mail : Recherchez, organisez... »). Ne
 le haut du commentaire : le reste est du bruit de citation, pas du contenu.
 
 
-Le label `attente-retour` veut dire : on a repondu, la balle est chez l'auteur. Rien
-d'autre ne se passe sur ces issues tant qu'il ne parle pas — **on ne relance pas une
-deuxieme fois**.
+Le label `attente-retour` veut dire une seule chose : **la balle est chez l'auteur**.
+Rien d'autre ne se passe sur ces issues tant qu'il ne parle pas — **on ne relance pas
+une deuxieme fois**.
+
+**Des que la balle revient chez nous, le label saute.** Un auteur qui a repondu et une
+demande que Jimmy a retenue : ce n'est plus une attente, c'est du travail a faire. Si le
+label restait, le compteur des dix jours fermerait tout seul une issue sur laquelle on
+est en train de bosser. On retire donc le label et on laisse l'issue ouverte jusqu'a la
+livraison :
+
+```bash
+gh issue edit <N> --repo jguevel-tech/cockpit --remove-label attente-retour
+```
 
 ```bash
 gh issue list --repo jguevel-tech/cockpit --state open --label attente-retour \
