@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-08-20
+
 ### Added
 
 - Les adresses écrites dans une tâche sont maintenant **soulignées et cliquables** :
