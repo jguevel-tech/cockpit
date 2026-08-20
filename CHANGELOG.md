@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-08-20
+
 ### Added
 
 - **Les dossiers de projets s'imbriquent, sans limite de profondeur.** Un dossier dans un
