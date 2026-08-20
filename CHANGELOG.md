@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.31.2] — 2026-08-20
+
 ### Fixed
 
 - Éditeur de notes : un bloc de code en fin de note ne bloque plus la saisie. On en sort en
