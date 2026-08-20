@@ -22,6 +22,27 @@ pub struct FileContent {
     pub size: u64,
     pub truncated: bool,
     pub binary: bool,
+    /// Date de modification en MILLISECONDES depuis epoch (0 si indisponible).
+    /// En millisecondes et pas en nanosecondes : le frontend recoit un `number`
+    /// JSON, et des nanosecondes depassent la precision entiere de JS (2^53).
+    pub mtime: u64,
+}
+
+/// Etat disque d'un fichier, sans lire son contenu : c'est ce qui permet de
+/// surveiller le fichier affiche pour trois sous et de ne relire que s'il a bouge.
+#[derive(Serialize, Clone)]
+pub struct FileStat {
+    pub size: u64,
+    pub mtime: u64,
+}
+
+/// mtime en millisecondes depuis epoch, 0 si la plateforme ne la donne pas.
+fn mtime_millis(meta: &std::fs::Metadata) -> u64 {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Joint `rel` a la racine du projet en interdisant de sortir de la racine.
@@ -74,7 +95,9 @@ pub fn read_project_file(project_path: &str, rel_path: &str) -> Result<FileConte
         return Err("pas un fichier".into());
     }
 
-    let size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    let size = meta.len();
+    let mtime = mtime_millis(&meta);
     let truncated = size > MAX_FILE_BYTES;
 
     let bytes = if truncated {
@@ -95,7 +118,40 @@ pub fn read_project_file(project_path: &str, rel_path: &str) -> Result<FileConte
         String::from_utf8_lossy(&bytes).to_string()
     };
 
-    Ok(FileContent { content, size, truncated, binary })
+    Ok(FileContent { content, size, truncated, binary, mtime })
+}
+
+/// Etat disque du fichier AFFICHE, pour detecter une modification exterieure
+/// (le cas courant ici : un agent qui edite le fichier dans un terminal Cockpit
+/// pendant qu'on le regarde dans l'onglet Fichiers).
+///
+/// `Ok(None)` = le fichier n'existe plus. Ce n'est pas une erreur a remonter
+/// comme une panne : l'appelant l'affiche comme un etat. Toute AUTRE erreur
+/// (droits, racine projet introuvable) reste une `Err`.
+pub fn stat_project_file(project_path: &str, rel_path: &str) -> Result<Option<FileStat>, String> {
+    let (root, _) = secure_join(project_path, "")?;
+    if rel_path.is_empty() {
+        return Err("chemin vide".into());
+    }
+    let joined = root.join(rel_path);
+    let leaf = joined.file_name().ok_or("chemin sans nom de fichier")?.to_owned();
+    // secure_join ne peut pas canonicaliser un chemin inexistant : on canonicalise
+    // le PARENT et on verifie qu'il est dans la racine. Parent disparu = fichier disparu.
+    let parent = match joined.parent().ok_or("chemin sans parent")?.canonicalize() {
+        Ok(p) => p,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    };
+    if !parent.starts_with(&root) {
+        return Err("chemin hors du projet".into());
+    }
+    match std::fs::metadata(parent.join(leaf)) {
+        Ok(m) if m.is_file() => Ok(Some(FileStat { size: m.len(), mtime: mtime_millis(&m) })),
+        // Remplace par un dossier : plus le fichier qu'on affichait.
+        Ok(_) => Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// Ecrit un fichier EXISTANT du projet (editeur de l'onglet Fichiers).
@@ -546,6 +602,66 @@ mod tests {
         assert_eq!(hits.len(), 1);
 
         assert!(find_symbol(dir.to_str().unwrap(), "a; DROP").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_stat_detecte_modification_exterieure() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_stat_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sous")).unwrap();
+        std::fs::write(dir.join("sous/f.txt"), "avant").unwrap();
+        let root = dir.to_str().unwrap();
+
+        let ouvert = read_project_file(root, "sous/f.txt").unwrap();
+        assert!(ouvert.mtime > 0, "read_project_file doit rendre une mtime exploitable");
+
+        let st = stat_project_file(root, "sous/f.txt").unwrap().expect("fichier present");
+        assert_eq!(st.mtime, ouvert.mtime, "meme fichier intact = meme mtime");
+        assert_eq!(st.size, ouvert.size);
+
+        // Un agent reecrit le fichier pendant qu'on l'affiche.
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        std::fs::write(dir.join("sous/f.txt"), "apres modification exterieure").unwrap();
+        let st2 = stat_project_file(root, "sous/f.txt").unwrap().expect("fichier present");
+        assert_ne!(st2.mtime, ouvert.mtime, "la modification exterieure doit se voir");
+        assert_eq!(read_project_file(root, "sous/f.txt").unwrap().content, "apres modification exterieure");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_stat_fichier_disparu_nest_pas_une_erreur() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_stat_gone_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sous")).unwrap();
+        std::fs::write(dir.join("sous/f.txt"), "x").unwrap();
+        let root = dir.to_str().unwrap();
+
+        std::fs::remove_file(dir.join("sous/f.txt")).unwrap();
+        assert!(stat_project_file(root, "sous/f.txt").unwrap().is_none(), "fichier supprime = None");
+
+        // Dossier parent supprime : le fichier a disparu aussi, toujours pas une panne.
+        std::fs::remove_dir_all(dir.join("sous")).unwrap();
+        assert!(stat_project_file(root, "sous/f.txt").unwrap().is_none(), "parent supprime = None");
+
+        // Remplace par un dossier : ce n'est plus le fichier qu'on affichait.
+        std::fs::create_dir_all(dir.join("d")).unwrap();
+        assert!(stat_project_file(root, "d").unwrap().is_none(), "dossier = None");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_stat_refuse_de_sortir_de_la_racine() {
+        let dir = std::env::temp_dir().join(format!("cockpit_ws_stat_esc_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let root = dir.to_str().unwrap();
+
+        assert!(stat_project_file(root, "../../etc/passwd").is_err(), "traversee interdite");
+        assert!(stat_project_file(root, "").is_err(), "chemin vide refuse");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TerminalInfo, DirEntry, FileContent, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
+import type { TerminalInfo, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
 
 // Terminaux integres
 export const createTerminal = (project: string, cwd: string, cols: number, rows: number, initCommand?: string) =>
@@ -52,6 +52,10 @@ export const listProjectDir = (projectPath: string, relPath: string) =>
   invoke<DirEntry[]>("list_project_dir", { projectPath, relPath });
 export const readProjectFile = (projectPath: string, relPath: string) =>
   invoke<FileContent>("read_project_file", { projectPath, relPath });
+// Etat disque du fichier affiche : null s'il n'existe plus (suivi des
+// modifications exterieures, cf. FilesTab). Un stat, pas une relecture.
+export const statProjectFile = (projectPath: string, relPath: string) =>
+  invoke<FileStat | null>("stat_project_file", { projectPath, relPath });
 export const writeProjectFile = (projectPath: string, relPath: string, content: string) =>
   invoke("write_project_file", { projectPath, relPath, content });
 // Recherche globale : noms de dossiers/fichiers + contenu, gitignore-aware

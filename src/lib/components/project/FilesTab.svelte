@@ -6,7 +6,7 @@
   import { projects } from "../../stores/projects";
   import { pendingFilePath } from "../../stores/ui";
   import { notify } from "../../stores/toast";
-  import { listProjectDir, readProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard, createProjectFile, createProjectDir, renameProjectEntry, trashProjectEntry, readProjectImage } from "../../api/workspace";
+  import { listProjectDir, readProjectFile, statProjectFile, writeProjectFile, gotoDefinition, searchProject, setClipboard, createProjectFile, createProjectDir, renameProjectEntry, trashProjectEntry, readProjectImage } from "../../api/workspace";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import CodeEditor from "../ui/CodeEditor.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
@@ -36,6 +36,18 @@
   let fileImage = $state(""); // data URL si le fichier est une image
   let loadingFile = $state(false);
 
+  // --- Suivi du fichier affiche (modifications exterieures) ---
+  // Le cas courant ici : un agent tourne dans un terminal Cockpit et reecrit le
+  // fichier pendant qu'on le regarde. Sans ce suivi, le viewer montre un
+  // instantane pris a l'ouverture, sans jamais le dire.
+  const DISK_POLL_MS = 2000;
+  let fileMtime = $state(0); // mtime du contenu AFFICHE
+  let fileGone = $state(false); // le fichier a disparu du disque
+  let diskChanged = $state(false); // le disque a bouge, on n'a pas pu recharger seul
+  let reloadFlash = $state(false); // badge discret apres un rechargement automatique
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  let checkingDisk = false;
+
   const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]);
   function isImagePath(p: string): boolean {
     const ext = p.split(".").pop()?.toLowerCase() ?? "";
@@ -43,6 +55,9 @@
   }
   let wrapLines = $state(false);
   let codeWrapEl: HTMLDivElement | undefined = $state();
+  // C'est .files-viewer qui defile verticalement (overflow: auto), pas .code-wrap :
+  // c'est donc lui qu'il faut recaler apres un rechargement.
+  let viewerEl: HTMLDivElement | undefined = $state();
 
   // Nombre de lignes affiche dans l'en-tete : un \n final ne compte pas une ligne de plus
   const lineCount = $derived.by(() => {
@@ -149,6 +164,10 @@
     fileTruncated = false;
     fileSize = 0;
     fileImage = "";
+    fileMtime = 0;
+    fileGone = false;
+    diskChanged = false;
+    reloadFlash = false;
     try {
       // Les images ont leur apercu dedie, sans passer par la lecture texte
       if (isImagePath(relPath)) {
@@ -157,6 +176,7 @@
       }
       const f = await readProjectFile(project.path, relPath);
       fileSize = f.size;
+      fileMtime = f.mtime;
       if (f.binary) {
         fileNotice = $trad("files.binaryNotice", { size: formatSize(f.size) });
         return;
@@ -196,10 +216,100 @@
       await writeProjectFile(project.path, selectedPath, draft);
       fileRaw = draft;
       fileHtml = await highlightCode(draft, langFor(selectedPath), $themeBase === "dark");
+      // Notre propre ecriture ne doit pas etre prise pour une modification
+      // exterieure au prochain controle : on adopte la mtime qu'on vient de poser.
+      const st = await statProjectFile(project.path, selectedPath);
+      if (st) { fileMtime = st.mtime; fileSize = st.size; }
+      diskChanged = false;
       notify($trad("files.saved"), "success");
     } catch (e) { notify(String(e)); }
     finally { saving = false; }
   }
+
+  // --- Modifications exterieures du fichier affiche ---
+
+  /** Controle periodique : un stat, et une relecture SEULEMENT si le disque a bouge. */
+  async function checkDisk() {
+    const path = project?.path;
+    const rel = selectedPath;
+    // Rien a suivre, ou une operation est deja en cours : le prochain tick reessaiera.
+    if (!path || !rel || checkingDisk || loadingFile || saving || fileImage) return;
+    checkingDisk = true;
+    try {
+      const st = await statProjectFile(path, rel);
+      if (rel !== selectedPath) return;
+      if (!st) { fileGone = true; return; }
+      fileGone = false;
+      if (st.mtime === fileMtime && st.size === fileSize) return;
+      // On n'ecrase JAMAIS une edition en cours, et on ne relit pas en boucle un
+      // gros fichier tronque : dans ces deux cas on SIGNALE, l'utilisateur decide.
+      if (editing || fileTruncated) { diskChanged = true; return; }
+      await reloadFromDisk();
+    } catch (e) {
+      signalerErreur("files.checkDisk", String(e));
+    } finally {
+      checkingDisk = false;
+    }
+  }
+
+  /**
+   * Relit le fichier affiche sans faire bouger le sol : la coloration est calculee
+   * AVANT de remplacer le rendu (pas de clignotement) et la position de defilement
+   * est restauree apres.
+   */
+  async function reloadFromDisk() {
+    const path = project?.path;
+    const rel = selectedPath;
+    if (!path || !rel) return;
+    const f = await readProjectFile(path, rel);
+    if (rel !== selectedPath || editing) return;
+    diskChanged = false;
+    fileGone = false;
+    fileMtime = f.mtime;
+    fileSize = f.size;
+    fileTruncated = f.truncated;
+    fileNotice = f.binary
+      ? $trad("files.binaryNotice", { size: formatSize(f.size) })
+      : f.truncated
+        ? $trad("files.truncatedNotice", { size: formatSize(f.size) })
+        : "";
+    if (f.binary) { fileRaw = ""; fileHtml = ""; return; }
+    if (f.content === fileRaw) return; // mtime touchee sans changement de contenu
+    const html = await highlightCode(f.content, langFor(rel), $themeBase === "dark");
+    if (rel !== selectedPath || editing) return;
+    const top = viewerEl?.scrollTop ?? 0;
+    const left = codeWrapEl?.querySelector("pre")?.scrollLeft ?? 0;
+    fileRaw = f.content;
+    fileHtml = html;
+    flashReloaded();
+    await tick();
+    if (viewerEl) viewerEl.scrollTop = top;
+    const pre = codeWrapEl?.querySelector("pre");
+    if (pre) pre.scrollLeft = left;
+  }
+
+  /** Rechargement demande explicitement (bandeau) : peut abandonner l'edition en cours. */
+  async function reloadNow() {
+    if (editing && dirty && !confirm($trad("files.discardConfirm"))) return;
+    editing = false;
+    try {
+      await reloadFromDisk();
+    } catch (e) { notify(String(e)); }
+  }
+
+  function flashReloaded() {
+    reloadFlash = true;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => (reloadFlash = false), 2500);
+  }
+
+  $effect(() => {
+    // Un seul fichier suivi a la fois, et rien du tout hors de cet onglet :
+    // le composant est demonte au changement d'onglet, l'intervalle part avec.
+    if (!project?.path || !selectedPath) return;
+    const timer = setInterval(() => void checkDisk(), DISK_POLL_MS);
+    return () => clearInterval(timer);
+  });
 
   // --- Aller a la definition (Ctrl+clic) ---
 
@@ -634,6 +744,7 @@
   onkeydown={(e) => { onKeyState(e); onShortcuts(e); }}
   onkeyup={onKeyState}
   onblur={() => (ctrlHeld = false)}
+  onfocus={() => void checkDisk()}
 />
 
 {#snippet createRow(depth: number)}
@@ -756,7 +867,7 @@
     {/if}
   </div>
 
-  <div class="files-viewer" class:editing>
+  <div class="files-viewer" class:editing bind:this={viewerEl}>
     {#if selectedPath}
       <div class="viewer-header">
         <div class="viewer-header-row">
@@ -764,6 +875,7 @@
           <button class="icon-mini" onclick={copyPath} title={$trad("files.copyPath")}>⧉</button>
           {#if dirty}<span class="dirty-dot" title={$trad("files.unsaved")}>●</span>{/if}
           <span class="viewer-actions">
+            {#if reloadFlash}<span class="reload-flash">{$trad("files.diskReloaded")}</span>{/if}
             {#if defBusy}<span class="def-busy">{$trad("files.definitionBusy")}</span>{/if}
             {#if fileRaw && !editing}
               <span class="file-stats">{$trad("files.lines", { count: lineCount })} · {formatSize(fileSize)}</span>
@@ -800,6 +912,14 @@
           </div>
         {/if}
       </div>
+      {#if fileGone}
+        <p class="disk-banner">{$trad("files.diskGone")}</p>
+      {:else if diskChanged}
+        <div class="disk-banner">
+          <span>{editing ? $trad("files.diskChangedEditing") : $trad("files.diskChanged")}</span>
+          <button class="btn small" onclick={reloadNow}>{$trad("files.diskReload")}</button>
+        </div>
+      {/if}
       {#if fileNotice}<p class="viewer-notice">{fileNotice}</p>{/if}
       {#if loadingFile}
         <p class="viewer-notice">{$trad("common.loading")}</p>
@@ -972,6 +1092,16 @@
   .files-viewer.editing { display: flex; flex-direction: column; overflow: hidden; }
   .editor-host { flex: 1; min-height: 0; }
   .viewer-notice { padding: 0.6rem 0.8rem; color: var(--text-muted); font-size: 0.85rem; }
+  /* Modification exterieure qu'on ne peut pas appliquer seul (edition en cours,
+     fichier tronque) ou fichier disparu : ca se dit, ca ne s'ecrase pas. */
+  .disk-banner {
+    display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+    padding: 0.5rem 0.8rem; font-size: 0.85rem;
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--warning) 16%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  }
+  .reload-flash { color: var(--success); font-size: 0.75rem; }
   .image-preview {
     display: flex; align-items: center; justify-content: center; padding: 1.5rem;
     /* Damier : les zones transparentes d'un PNG restent visibles sur tout theme */

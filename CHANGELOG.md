@@ -28,6 +28,15 @@ le script de release.
   seul quand il n'y en a aucune. L'écran propose de l'ouvrir, ce qui évite de créer des
   terminaux en série juste en parcourant ses projets.
 
+### Fixed
+
+- Onglet Fichiers : un fichier resté ouvert suit ce qui se passe sur le disque. Quand un agent
+  le réécrit dans un terminal Cockpit, le contenu affiché se met à jour tout seul en moins de
+  deux secondes, sans faire bouger la position de lecture — jusqu'ici l'onglet montrait
+  l'instantané pris à l'ouverture et il fallait recliquer le fichier dans l'arbre. Une
+  modification qui arrive pendant qu'on édite n'écrase rien : elle est signalée par un bandeau,
+  avec un bouton pour prendre la version du disque. Un fichier disparu se dit aussi.
+
 ## [0.31.2] — 2026-08-20
 
 ### Fixed

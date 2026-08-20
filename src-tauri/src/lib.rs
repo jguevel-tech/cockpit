@@ -945,6 +945,16 @@ fn read_project_file(project_path: String, rel_path: String) -> Result<workspace
     workspace::read_project_file(&project_path, &rel_path)
 }
 
+/// Etat disque du fichier affiche : sert au suivi des modifications exterieures
+/// (relire 2 Mo toutes les deux secondes serait absurde, un stat ne coute rien).
+#[tauri::command]
+fn stat_project_file(
+    project_path: String,
+    rel_path: String,
+) -> Result<Option<workspace::FileStat>, String> {
+    workspace::stat_project_file(&project_path, &rel_path)
+}
+
 #[tauri::command]
 fn write_project_file(project_path: String, rel_path: String, content: String) -> Result<(), String> {
     workspace::write_project_file(&project_path, &rel_path, &content)
@@ -1607,6 +1617,7 @@ pub fn run() {
             // Explorateur de fichiers
             list_project_dir,
             read_project_file,
+            stat_project_file,
             search_project,
             read_project_image,
             backup_database,

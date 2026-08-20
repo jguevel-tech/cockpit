@@ -257,6 +257,14 @@ export interface FileContent {
   size: number;
   truncated: boolean;
   binary: boolean;
+  /** Date de modification en millisecondes depuis epoch (0 si indisponible) */
+  mtime: number;
+}
+
+/** Etat disque d'un fichier, sans son contenu : suivi du fichier affiche */
+export interface FileStat {
+  size: number;
+  mtime: number;
 }
 
 export interface SearchNameHit {
