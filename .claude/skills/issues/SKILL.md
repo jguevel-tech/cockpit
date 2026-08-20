@@ -41,23 +41,16 @@ Ne jamais ecrire « d'apres la capture » sans l'avoir ouverte.
 
 ## Etape 2 — Triage, un agent par issue, en parallele
 
-Un agent `Explore` ou `general-purpose` par issue, **tous lances dans le meme
-message** pour qu'ils tournent en parallele. Ils sont en LECTURE SEULE : aucun agent
-de triage ne modifie un fichier, ne commite, ne poste sur GitHub.
+Un agent `issue-triage` par issue (definition dans `.claude/agents/issue-triage.md`),
+**tous lances dans le meme message** pour qu'ils tournent en parallele.
 
-Donne a chaque agent : le titre, le corps, les commentaires, le chemin des captures
-deja telechargees (il peut les relire), et la consigne de fouiller le code avant de
-conclure.
+Donne a chaque agent : le numero, le titre, le corps, les commentaires, et le chemin
+des captures deja telechargees. Le reste de ses consignes est dans son fichier — ne
+le recopie pas dans le prompt, sinon les deux versions divergent et la correction
+d'une regle ne prend plus effet.
 
-Chaque agent rend une fiche :
-
-- **classe** : `bug-confirme` | `bug-non-reproduit` | `existe-deja` | `nouvelle-fonctionnalite`
-- **preuve** : fichier:ligne qui explique le symptome, ou ce qui a ete essaye sans
-  reproduire. Une hypothese sans code a l'appui n'est pas une preuve.
-- **cause** : la mecanique reelle, pas le symptome
-- **correction proposee** : les fichiers a toucher, en une phrase chacun
-- **cout** : petit (< 1 h) / moyen / gros
-- **langue de l'auteur** : deduite du texte de l'issue
+Chaque agent rend la fiche decrite dans sa definition : classe, preuve
+(`fichier:ligne`), cause, correction proposee, cout, langue de l'auteur, doute.
 
 Regle de classement qui revient souvent : **une fonctionnalite qui existe mais que
 l'utilisateur n'a pas trouvee est un probleme de decouvrabilite, pas un bug.** Elle
@@ -81,27 +74,66 @@ Une demande non retenue reste ouverte, sans reponse.
 
 ## Etape 4 — Corrections, EN SERIE
 
-Un agent par bug confirme, **lances un par un, jamais en parallele**. Raison :
-`cargo test`, `npm run check` et `tauri build` se disputent `target/`, et deux
-agents qui touchent `CHANGELOG.md` en meme temps fabriquent un conflit.
+Un agent `issue-fix` par bug confirme (definition dans `.claude/agents/issue-fix.md`),
+**lances un par un, jamais en parallele**. Raison : `cargo test`, `npm run check` et
+`tauri build` se disputent `target/`, et deux agents qui touchent `CHANGELOG.md` en
+meme temps fabriquent un conflit.
 
-Chaque agent de correction travaille sur `main` dans le repo, et doit :
+Donne a chaque agent : le numero d'issue, la fiche de triage, et les captures. Sa
+sequence (reproduire, corriger, traduire, verifier les 5 points, commiter) est dans
+son fichier.
 
-1. **Reproduire avant de patcher.** C'est une regle du projet, pas un conseil.
-   Ne jamais enchainer des correctifs hypothetiques.
-2. Corriger, en respectant les regles non negociables du `CLAUDE.md` du projet
-   (traduction fr + en obligatoire, tokens de theme, `notify()` dans les `catch`,
-   vrais `<button>`, `use:portal` sur les overlays...).
-3. Passer les 5 points de la definition de « fini » : `npm run check`,
-   `cd src-tauri && cargo test`, `npx tauri build --no-bundle`,
-   `npm run i18n:audit`, entree dans `CHANGELOG.md` sous `[Unreleased]`.
-4. Commiter sur `main` avec un message a l'imperatif expliquant **pourquoi**, et
-   **aucune mention d'IA** (pas de `Co-Authored-By`).
-5. **Ne PAS releaser** ni repondre sur GitHub. C'est l'etape 5, centralisee.
-6. Rendre : numero d'issue, ce qui a ete corrige, ce qui a ete verifie.
+Si un agent n'arrive pas a reproduire ce qu'un agent de triage avait classe
+`bug-confirme`, l'issue redescend en `bug-non-reproduit` : on ne patche pas a
+l'aveugle.
 
-Si un agent n'arrive pas a reproduire ce qu'un autre avait classe `bug-confirme`,
-l'issue redescend en `bug-non-reproduit` : on ne patche pas a l'aveugle.
+**Entre deux agents, applique l'etape 4bis.** C'est la raison d'etre de la serie.
+
+## Etape 4bis — Corriger le skill et les agents, PENDANT le run
+
+**Une erreur de workflow se corrige dans le fichier, tout de suite, pas dans ta
+tete.** Ce skill et les deux definitions d'agents sont faits pour etre modifies en
+cours de route. Une lecon qui ne vit que dans la conversation est perdue au prochain
+run.
+
+Declencheurs — des qu'un de ces cas se produit, tu edites avant de continuer :
+
+- un agent a conclu sans ouvrir une capture ;
+- un agent a patche sans reproduire ;
+- un agent a oublie `en.ts`, le changelog, ou une des 4 commandes de verification ;
+- un agent a annonce un succes que le log ne montre pas ;
+- une consigne du skill s'est revelee fausse, ambigue ou absente (le champ
+  `ecart au workflow` de la fiche `issue-fix` sert exactement a ca) ;
+- une commande donnee ici n'a pas marche telle quelle ;
+- Jimmy te reprend sur la facon de faire.
+
+Ou ecrire la correction :
+
+| Nature de l'erreur | Fichier a modifier |
+|---|---|
+| Un agent de triage s'est trompe de methode | `.claude/agents/issue-triage.md`, section « Regles ajoutees apres une erreur » |
+| Un agent de correction a mal travaille | `.claude/agents/issue-fix.md`, meme section |
+| L'enchainement, la release, les reponses, le decoupage | ce fichier |
+| Une regle du projet qui manquait | `CLAUDE.md` du projet |
+
+Comment ecrire l'entree : **la regle d'abord, la raison ensuite, en une ou deux
+lignes.** Pas de recit. Ce qui compte est ce qu'il faut faire la prochaine fois, et
+pourquoi — sans le pourquoi, la regle sera « simplifiee » plus tard par quelqu'un
+qui la croit inutile.
+
+Effet immediat :
+
+- **Corrections (serie)** : l'agent suivant lit la version corrigee. C'est pour ca
+  qu'elles ne sont pas parallelisees — une lecon du bug n°1 profite au bug n°2.
+- **Triage (parallele)** : les agents deja lances ne verront pas la correction. Si
+  l'erreur invalide une fiche, **relance cet agent-la** apres avoir edite. Sinon la
+  lecon sert au prochain run.
+
+Ces modifications partent dans le commit du lot, avec les corrections de code. Le
+message dit ce qui a ete appris. Un skill qui n'a pas bouge apres un run ou quelque
+chose s'est mal passe est un skill qui reproduira la meme erreur.
+
+**Ne pas demander la permission de corriger le skill.** C'est de l'outillage interne.
 
 ## Etape 5 — Une seule release, puis les reponses
 
@@ -147,6 +179,9 @@ En fin de traitement, une reponse courte :
 - **les demandes de nouvelle fonctionnalite, avec pour chacune : ce que ca donnerait,
   ce que ca touche, le cout, et ta recommandation.** C'est la seule partie ou il a
   quelque chose a decider.
+- **ce qui a ete corrige dans le skill ou les agents pendant le run**, en une ligne
+  par regle ajoutee. S'il n'y a rien, ne rien inventer — mais si quelque chose s'est
+  mal passe et que rien n'a bouge, c'est que l'etape 4bis a ete sautee.
 
 ## Repondre a l'auteur
 
