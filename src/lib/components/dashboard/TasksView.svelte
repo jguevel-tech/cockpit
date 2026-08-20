@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo } from "../../api/storage";
   import { reorderProjects } from "../../api/scanner";
-  import { selectProject } from "../../stores/ui";
+  import { selectProject, activeTab } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
   import { reorderable } from "../../actions/reorderable";
   import { reorder, groupBy, type DropPosition } from "../../utils/reorder";
@@ -197,7 +197,9 @@
           ondragleave={onGroupHeaderDragLeave}
           ondrop={(e) => onGroupHeaderDrop(e, group.project)}
         >
-          <button class="group-header" onclick={() => selectProject(group.project)}>
+          <!-- Depart depuis une tache : on va la voir, donc sur l'onglet qui porte les taches.
+               Cette intention passe devant l'onglet memorise du projet. -->
+          <button class="group-header" onclick={() => { selectProject(group.project); activeTab.set("workspace"); }}>
             <span class="group-name">{group.project}</span>
             <span class="group-count">{group.todos.length}</span>
           </button>

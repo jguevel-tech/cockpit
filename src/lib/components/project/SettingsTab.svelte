@@ -3,7 +3,7 @@
   import { getProjectSummaryPrompt, setProjectSummaryPrompt } from "../../api/recorder";
   import { loadProjects } from "../../stores/projects";
   import { notify } from "../../stores/toast";
-  import { goHome } from "../../stores/ui";
+  import { goHome, forgetProjectTab } from "../../stores/ui";
   import UrlList from "../urls/UrlList.svelte";
   import CommandList from "./CommandList.svelte";
   import type { DbProject } from "../../types";
@@ -52,6 +52,7 @@
     try {
       await deleteDbProject(settings.id);
       await loadProjects();
+      forgetProjectTab(name);
       goHome();
     } catch (e) {
       signalerErreur("settings.deleteProject", String(e)); alert(e); }

@@ -69,6 +69,7 @@
             <span class="d-spring"></span>
             <span class="d-btn small">{$trad("project.runCommand")}</span><span class="d-btn small danger">{$trad("rec.start")}</span>
           </div>
+          <div class="d-note">{$trad("docs.start.barMemory")}</div>
         </div>
       </div>
 

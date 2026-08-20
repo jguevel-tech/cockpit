@@ -18,6 +18,16 @@ le script de release.
   élément de liste ou un bloc de code redevient un paragraphe — jusqu'ici, une ligne passée
   en titre ne pouvait plus en sortir. Le gras, l'italique et les liens sont conservés.
 
+### Changed
+
+- Chaque projet se souvient de son onglet : aller voir autre chose puis revenir sur un projet
+  le retrouve là où on l'avait laissé, au lieu de repartir de Workspace à chaque aller-retour.
+  Les raccourcis qui visent un onglet précis (un terminal depuis la barre latérale, le tableau
+  de bord ou la palette Ctrl+K, une tâche en retard) continuent d'y emmener directement.
+- Onglet Terminal : revenir sur un projet laissé sur cet onglet n'ouvre plus de session tout
+  seul quand il n'y en a aucune. L'écran propose de l'ouvrir, ce qui évite de créer des
+  terminaux en série juste en parcourant ses projets.
+
 ## [0.31.2] — 2026-08-20
 
 ### Fixed

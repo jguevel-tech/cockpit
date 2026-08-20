@@ -9,7 +9,7 @@
  */
 import { getPendingTodos } from "../api/storage";
 import { pushNotice, removeNotice } from "./notifications";
-import { selectProject } from "./ui";
+import { selectProject, activeTab } from "./ui";
 import { daysUntil, dueLabel } from "../utils/due";
 import { translate } from "../i18n";
 import { signalerErreur } from "./errors";
@@ -50,7 +50,9 @@ async function check() {
       body: `**${t.project}** — ${t.text} *(${dueLabel(t.due_date)})*`,
       createdAt: new Date().toISOString(),
       dismissible: true,
-      action: { label: translate("alerts.seeProject"), run: () => selectProject(project) },
+      // Alerte d'echeance : on emmene sur l'onglet des taches, pas sur l'onglet memorise
+      // du projet — c'est la tache que l'utilisateur vient voir.
+      action: { label: translate("alerts.seeProject"), run: () => { selectProject(project); activeTab.set("workspace"); } },
     });
   }
 

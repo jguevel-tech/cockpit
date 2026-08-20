@@ -7,7 +7,16 @@ export type ActiveView = "dashboard" | "project" | "settings" | "system" | "docs
 
 export const activeView = writable<ActiveView>("dashboard");
 export const selectedProject = writable<string | null>(null);
-export const activeTab = writable<"workspace" | "docker" | "terminal" | "files" | "git" | "settings" | "plugins">("workspace");
+
+/// Onglets de la vue projet. Ajouter un onglet = une entree ici + une entree dans la map
+/// `tabs` de ProjectDetail.svelte.
+export type ProjectTab = "workspace" | "docker" | "terminal" | "files" | "git" | "settings" | "plugins";
+
+/// Onglet d'arrivee sur un projet dont on ne sait rien (jamais visite, ou fraichement
+/// cree : sans compose ni depot git, Docker et Git n'auraient rien a montrer).
+export const DEFAULT_TAB: ProjectTab = "workspace";
+
+export const activeTab = writable<ProjectTab>(DEFAULT_TAB);
 // Session terminal a activer a l'arrivee sur l'onglet Terminal (navigation depuis le dashboard)
 export const pendingTerminalId = writable<number | null>(null);
 /** Fichier a ouvrir a l'arrivee sur l'onglet Fichiers (palette Ctrl+K), meme mecanique
@@ -87,10 +96,70 @@ export function openView(view: Exclude<ActiveView, "project">) {
   activeView.set(view);
 }
 
+// --- Memoire de l'onglet par projet ---
+
+/// Chaque projet se souvient de l'onglet ou on l'a laisse : partir voir autre chose puis
+/// revenir le retrouve tel qu'on l'a quitte, au lieu de repartir de Workspace a chaque
+/// aller-retour. Ce n'est PAS un onglet global traine de projet en projet : deux projets
+/// laisses sur des onglets differents gardent chacun le sien.
+///
+/// En memoire seulement, volontairement : la demande porte sur les allers-retours d'une
+/// session de travail. Persister obligerait a purger les projets disparus et a decider ce
+/// que vaut un onglet vieux de trois jours, pour un gain nul.
+const tabByProject = new Map<string, ProjectTab>();
+
+/// Projet a crediter quand activeTab change. Passer par le store plutot que par les
+/// appelants garde la memoire juste quel que soit le chemin emprunte (clic sur l'onglet,
+/// palette Ctrl+K, raccourci du tableau de bord) — rien a penser en ajoutant un appelant.
+let rememberFor: string | null = null;
+selectedProject.subscribe((name) => { rememberFor = name; });
+
+/// Vrai quand l'onglet affiche vient de la memoire ci-dessus, faux quand l'utilisateur l'a
+/// demande. TerminalTab le consomme au montage : un onglet Terminal RESTAURE ne doit pas
+/// creer de session tmux d'office, sinon parcourir trois projets laisses sur cet onglet en
+/// ouvre trois que personne n'a demandees.
+let tabRestored = false;
+
+activeTab.subscribe((tab) => {
+  if (rememberFor) tabByProject.set(rememberFor, tab);
+  // Un set explicite (quel qu'en soit l'appelant) est une demande de l'utilisateur.
+  // selectProject repose le drapeau APRES son propre set.
+  tabRestored = false;
+});
+
+/// A appeler quand un projet disparait, sinon un projet recree sous le meme nom
+/// ressortirait l'onglet du precedent.
+export function forgetProjectTab(name: string) {
+  tabByProject.delete(name);
+}
+
+/// Un projet renomme est le MEME projet : il emporte son onglet. Sans ce transfert le
+/// renommage renverrait l'utilisateur sur Workspace, alors qu'il n'a rien demande de tel.
+export function renameProjectTab(from: string, to: string) {
+  const tab = tabByProject.get(from);
+  tabByProject.delete(from);
+  if (tab) tabByProject.set(to, tab);
+}
+
+/// Lit et remet a zero le drapeau de restauration (voir tabRestored).
+export function consumeTabRestored(): boolean {
+  const restored = tabRestored;
+  tabRestored = false;
+  return restored;
+}
+
 export function selectProject(name: string | null) {
   selectedProject.set(name);
   activeView.set(name ? "project" : "dashboard");
-  activeTab.set("workspace");
+  if (!name) return;
+  const remembered = tabByProject.get(name);
+  const tab = remembered ?? DEFAULT_TAB;
+  activeTab.set(tab);
+  // Les deux lignes qui suivent sont ecrites APRES le set, et pas laissees a la
+  // souscription : un writable ne notifie pas quand la valeur ne change pas (deux projets
+  // sur le meme onglet), et c'est justement ce cas qui multipliait les sessions tmux.
+  tabByProject.set(name, tab);
+  tabRestored = remembered !== undefined;
 }
 
 export const openSettings = () => openView("settings");

@@ -186,7 +186,7 @@
   import { WebglAddon } from "@xterm/addon-webgl";
   import { WebLinksAddon } from "@xterm/addon-web-links";
   import "@xterm/xterm/css/xterm.css";
-  import { pendingTerminalId, TERMINAL_FONT_SIZE } from "../../stores/ui";
+  import { pendingTerminalId, TERMINAL_FONT_SIZE, consumeTabRestored } from "../../stores/ui";
   // themeBase et non la palette : xterm n a que deux jeux de couleurs.
   import { themeBase } from "../../stores/appearance";
   import { projects } from "../../stores/projects";
@@ -305,10 +305,15 @@
 
       const wanted = $pendingTerminalId;
       pendingTerminalId.set(null);
+      // Onglet REPOSE par la memoire par projet (simple retour sur le projet) : on n'ouvre
+      // rien d'office. Sinon parcourir trois projets laisses sur l'onglet Terminal creerait
+      // trois sessions tmux que personne n'a demandees — et elles survivent a l'app.
+      // L'etat vide et son bouton prennent le relais.
+      const restaure = consumeTabRestored();
       if (wanted !== null && sessions.some((s) => s.id === wanted)) {
         await activate(wanted);
       } else if (sessions.length === 0) {
-        await addTerminal();
+        if (!restaure) await addTerminal();
       } else {
         await activate(sessions[0].id);
       }
@@ -876,7 +881,10 @@
     oncontextmenu={openCtxMenu}
   >
     {#if sessions.length === 0}
-      <div class="term-empty">{$trad("term.empty")}</div>
+      <div class="term-empty">
+        <p>{$trad("term.empty")}</p>
+        <button class="btn" onclick={() => addTerminal()}>{$trad("term.openOne")}</button>
+      </div>
     {/if}
     {#if dropOver}
       <div class="drop-hint">{$trad("term.dropHint")}</div>
@@ -1005,7 +1013,9 @@
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   }
   .term-empty {
-    display: flex; align-items: center; justify-content: center; height: 100%;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    align-items: center; justify-content: center; height: 100%;
     color: var(--text-muted); font-size: 0.85rem;
   }
+  .term-empty p { margin: 0; }
 </style>

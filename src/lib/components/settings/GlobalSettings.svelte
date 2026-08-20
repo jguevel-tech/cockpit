@@ -10,6 +10,7 @@
     type ClaudeAuthStatus,
   } from "../../api/workspace";
   import { loadProjects } from "../../stores/projects";
+  import { forgetProjectTab } from "../../stores/ui";
   import { updateState, checkForUpdate } from "../../stores/update";
   import { trad, locale, setLocale, LOCALES, type Locale } from "../../i18n";
   import { signalerErreur, reportingConsent, reportingUser, setReportingConsent, setReportingUser, machineReport } from "../../stores/errors";
@@ -203,9 +204,16 @@
       signalerErreur("global.loadDbProjects", String(e));}
   }
 
-  async function doDelete(id: number) {
+  async function doDelete(id: number, name: string) {
     if (!confirm($trad("settings.projects.deleteConfirm"))) return;
-    try { await deleteDbProject(id); await loadDbProjects(); await loadProjects(); } catch (e) {
+    try {
+      await deleteDbProject(id);
+      // Le projet disparait : son onglet memorise aussi, sinon un projet recree sous le
+      // meme nom ressortirait celui du precedent.
+      forgetProjectTab(name);
+      await loadDbProjects();
+      await loadProjects();
+    } catch (e) {
       signalerErreur("global.doDelete", String(e)); alert(e); }
   }
 </script>
@@ -462,7 +470,7 @@
                   <td class="path-cell">{p.path}</td>
                   <td>{p.compose_file || '—'}</td>
                   <td class="actions-cell">
-                    <button class="btn danger small" onclick={() => doDelete(p.id)}>{$trad("common.delete")}</button>
+                    <button class="btn danger small" onclick={() => doDelete(p.id, p.name)}>{$trad("common.delete")}</button>
                   </td>
                 </tr>
               {/each}

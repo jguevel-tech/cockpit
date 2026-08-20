@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activeTab, selectProject, pendingTerminalId } from "../../stores/ui";
+  import { activeTab, selectProject, renameProjectTab, pendingTerminalId } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
   import { recordingStatus, lastRecordingEvent } from "../../stores/recording";
   import { getUrls, getProjectCommands, checkUrls } from "../../api/storage";
@@ -139,6 +139,9 @@
     try {
       await renameProject(name, next);
       await loadProjects();
+      // Le projet change de nom, pas d'onglet : on transfere sa memoire avant de le
+      // reselectionner, sinon le renommage ramenerait sur Workspace.
+      renameProjectTab(name, next);
       selectProject(next);
     } catch (e) { notify(String(e)); }
   }

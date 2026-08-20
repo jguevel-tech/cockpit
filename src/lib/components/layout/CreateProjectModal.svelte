@@ -1,7 +1,7 @@
 <script lang="ts">
   import { addProject } from "../../api/scanner";
   import { loadProjects } from "../../stores/projects";
-  import { selectProject } from "../../stores/ui";
+  import { selectProject, activeTab, DEFAULT_TAB } from "../../stores/ui";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { portal } from "../../actions/portal";
   import { trad } from "../../i18n";
@@ -72,6 +72,9 @@
       await addProject(trimmedName, path.trim(), composeFile.trim(), description.trim(), deps);
       await loadProjects();
       selectProject(trimmedName);
+      // Onglet d'arrivee pose explicitement : un projet neuf n'a ni compose ni depot git, et
+      // un nom deja utilise plus tot dans la session ne doit pas ressortir son ancien onglet.
+      activeTab.set(DEFAULT_TAB);
       close();
     } catch (e) {
       // L'erreur s'affiche DANS le modal (c'est la que l'utilisateur regarde), mais elle
