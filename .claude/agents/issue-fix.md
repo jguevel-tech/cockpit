@@ -48,7 +48,9 @@ fichiers: <liste>
 verifications: <resultat des 4 commandes, chiffres a l'appui>
 changelog: <la ligne ajoutee, ou pourquoi il n'y en a pas>
 commit: <hash + titre>
-pour l'auteur: <2 phrases expliquant le probleme, dans sa langue>
+pour l'auteur: <2 phrases expliquant ce qui se passait, dans sa langue —
+               au passe, sans affirmer que c'est regle chez lui : il n'a
+               encore rien pu constater, c'est lui qui le dira>
 ecart au workflow: <toute regle du skill qui s'est revelee fausse, absente ou
                     couteuse — sois precis, ca sert a corriger le skill>
 ```

@@ -52,6 +52,24 @@ Regles de classement :
 - `nouvelle-fonctionnalite` : demande legitime, pas encore implementee. Decris ce
   que ca impliquerait, sans le coder.
 
+## Cas particulier : issue deja corrigee une fois
+
+Si on te donne une issue qui portait le label `attente-retour` et dont l'auteur
+vient de dire que **ca ne marche toujours pas**, tu ne repars pas de zero mais tu ne
+fais pas confiance au diagnostic precedent non plus : il etait incomplet, puisque le
+symptome a survecu a une correction verifiee.
+
+Dans ce cas :
+
+- lis d'abord le commit de la correction precedente (`git log`) et ce qu'elle
+  supposait ;
+- traite ce que l'auteur vient d'ajouter (nouvelle capture, nouvelle etape) comme
+  l'information la plus importante du dossier ;
+- cherche explicitement ce qui differe entre sa machine et le cas teste :
+  distribution, version installee, AppImage ou binaire, etat du projet ouvert ;
+- dis dans `doute` ce qui reste non explique. Une deuxieme correction a l'aveugle
+  au meme endroit est pire que la premiere.
+
 ## Interdits
 
 - Conclure sur une hypothese non verifiee dans le code.

@@ -17,6 +17,49 @@ sans lui poser la question.
 Ne lui remonte pas un tableau a valider ligne par ligne. Tu agis, puis tu annonces
 ce qui est parti.
 
+## Etape 0 — Suivi des issues en attente de retour (TOUJOURS en premier)
+
+Le label `attente-retour` veut dire : on a repondu, la balle est chez l'auteur. Rien
+d'autre ne se passe sur ces issues tant qu'il ne parle pas — **on ne relance pas une
+deuxieme fois**.
+
+```bash
+gh issue list --repo jguevel-tech/cockpit --state open --label attente-retour \
+  --json number,title,author,comments
+```
+
+Pour chacune, compare **notre dernier commentaire** (auteur `jguevel-tech`) et le
+**dernier commentaire de l'auteur de l'issue** :
+
+| Situation | Ce que tu fais |
+|---|---|
+| L'auteur a repondu apres nous que c'est bon | remercier, retirer le label, **fermer** |
+| L'auteur a repondu que c'est toujours casse | retirer le label, reprendre l'issue au triage **avec les nouvelles informations** (souvent une capture de plus) |
+| L'auteur a repondu autre chose (question, cas different) | repondre, garder le label — le compteur des dix jours repart de notre reponse |
+| Aucune reponse de l'auteur, notre commentaire a **plus de 10 jours** | **fermer**, en disant que ca reste rouvrable |
+| Aucune reponse, moins de 10 jours | **ne rien faire** — ne pas relancer, ne pas commenter |
+
+Les dix jours se comptent depuis **notre dernier commentaire**, pas depuis
+l'ouverture de l'issue :
+
+```bash
+# age en jours de notre dernier commentaire sur l'issue N
+gh issue view <N> --repo jguevel-tech/cockpit --json comments \
+  --jq '[.comments[] | select(.author.login=="jguevel-tech")] | last | .createdAt'
+# comparer a : date -u -d '10 days ago' +%Y-%m-%dT%H:%M:%SZ
+```
+
+Commandes de fermeture et de label :
+
+```bash
+gh issue edit  <N> --repo jguevel-tech/cockpit --remove-label attente-retour
+gh issue close <N> --repo jguevel-tech/cockpit --comment "..."
+```
+
+Un « ca ne marche toujours pas » n'est pas un echec du run precedent, c'est une
+information neuve : le symptome a survecu a une correction verifiee, donc le
+diagnostic etait incomplet. Reprendre au triage, pas re-patcher au meme endroit.
+
 ## Etape 1 — Collecter les issues ET leurs captures
 
 ```bash
@@ -61,10 +104,19 @@ se traite par une reponse + un ajout dans la doc integree
 
 | Classe | Action | Fermer l'issue ? |
 |---|---|---|
-| `bug-confirme` | corriger (etape 4), releaser (etape 5), repondre, fermer | oui, apres release |
-| `bug-non-reproduit` | repondre en demandant ce qui manque | non, laisser ouverte |
-| `existe-deja` | expliquer ou c'est + completer la doc integree si elle est muette | oui |
+| `bug-confirme` | corriger (etape 4), releaser (etape 5), demander a l'auteur de verifier chez lui | **non** — label `attente-retour` |
+| `bug-non-reproduit` | repondre en demandant ce qui manque | **non** — label `attente-retour` |
+| `existe-deja` | expliquer ou c'est + completer la doc integree si elle est muette | **non** — label `attente-retour` |
 | `nouvelle-fonctionnalite` | analyser et s'arreter — Jimmy tranche | non, jamais |
+
+**On ne ferme JAMAIS une issue soi-meme au moment ou on la traite.** Ce n'est pas
+regle parce que le code est corrige et publie : c'est regle quand ca marche chez la
+personne qui l'a signalee. Une issue fermee de notre propre autorite oblige
+l'utilisateur a rouvrir ou a en creer une deuxieme pour dire que ca ne va toujours
+pas — et la plupart ne le font pas, ils arretent juste de signaler.
+
+La fermeture se fait a l'etape 0 d'un run suivant, sur confirmation de l'auteur ou
+apres dix jours de silence.
 
 Pour `existe-deja` et `nouvelle-fonctionnalite`, si la doc integree est completee,
 c'est une modification visible : elle passe par le changelog et part dans la release.
@@ -162,12 +214,16 @@ du CDN GitHub — re-tester avant de conclure. Un `404` qui persiste veut dire q
 release est incomplete : la reparer (voir les pieges du `CLAUDE.md` du projet) AVANT
 de dire a qui que ce soit de mettre a jour.
 
-Puis, issue par issue :
+Puis, issue par issue — **commenter et poser le label, sans fermer** :
 
 ```bash
 gh issue comment <N> --repo jguevel-tech/cockpit --body "..."
-gh issue close   <N> --repo jguevel-tech/cockpit
+gh issue edit    <N> --repo jguevel-tech/cockpit --add-label attente-retour
 ```
+
+Le commentaire doit demander a l'auteur de verifier chez lui et de repondre. Sans
+cette demande explicite, le label ne veut rien dire : personne ne sait qu'on attend
+quelque chose.
 
 ## Etape 6 — Rapport a Jimmy
 
@@ -192,47 +248,79 @@ ni signature, ni « genere par », rien : une reponse d'issue est un outil d'equ
 Ne jamais brancher une reponse sur une supposition : si le symptome n'est pas
 compris, on demande, on n'invente pas une explication credible.
 
-### Bug corrige et publie
+Tous les modeles ci-dessous se terminent par une **question**. C'est voulu : c'est
+elle qui justifie le label `attente-retour` et qui declenche la reponse permettant de
+fermer.
 
-> Corrige dans la v0.32.0, qui vient de sortir.
+### Bug corrige et publie (label `attente-retour`, pas de fermeture)
+
+> Ca devrait etre regle dans la v0.32.0, qui vient de sortir.
 >
 > [une ou deux phrases sur ce qui se passait reellement]
 >
-> Merci de mettre a jour Cockpit — la cloche en haut a droite propose la mise a
-> jour, sinon Parametres -> General -> Verifier les mises a jour. Dites-moi si le
-> probleme persiste.
+> Vous pouvez mettre a jour — la cloche en haut a droite propose la mise a jour,
+> sinon Parametres -> General -> Verifier les mises a jour — et me dire si c'est bon
+> chez vous ? Je laisse l'issue ouverte en attendant votre retour.
 >
 > Merci pour le signalement.
 
 Version anglaise :
 
-> Fixed in v0.32.0, just released.
+> This should be fixed in v0.32.0, which was just released.
 >
 > [what was actually happening]
 >
-> Please update Cockpit — the bell in the top right offers the update, or
-> Settings -> General -> Check for updates. Let me know if the problem is still
-> there.
+> Could you update — the bell in the top right offers the update, or
+> Settings -> General -> Check for updates — and let me know if it works for you
+> now? I'll leave the issue open until you confirm.
 >
 > Thanks for reporting it.
+
+Ne pas ecrire « corrige » tout court : tant que ca n'a pas ete constate sur la
+machine de l'auteur, c'est « ca devrait etre regle ». On ne sait pas encore.
 
 ### Bug non reproduit
 
 Demander precisement ce qui manque, jamais « pouvez-vous donner plus de details » :
 la version installee (Parametres -> General), la distribution, les etapes exactes,
-et une capture si le symptome est visuel.
+et une capture si le symptome est visuel. Meme label, meme delai de dix jours.
 
 ### Fonctionnalite qui existe deja
 
-Dire ou c'est, en une phrase et un chemin cliquable dans l'interface. Si la doc
-integree n'en parlait pas, le dire : c'est un manque cote projet, pas une erreur
-de l'utilisateur.
+Dire ou c'est, en une phrase et un chemin cliquable dans l'interface, puis demander
+si ca repond au besoin — il arrive que la demande soit en realite plus large que ce
+qui existe. Si la doc integree n'en parlait pas, le dire : c'est un manque cote
+projet, pas une erreur de l'utilisateur.
+
+### Fermeture apres confirmation
+
+> Parfait, merci pour la confirmation. Je ferme.
+
+> Great, thanks for confirming. Closing this one.
+
+### Fermeture apres dix jours sans reponse
+
+> Sans retour de votre cote, je ferme — le correctif est parti dans la v0.32.0. Si
+> le probleme est toujours la, repondez ici et l'issue sera rouverte.
+
+> No news on your side, so I'm closing this one — the fix shipped in v0.32.0. If the
+> problem is still there, just reply here and the issue will be reopened.
+
+Ton neutre. Ne pas reprocher le silence, ne pas dire « faute de retour de votre
+part ». L'issue nous a rendu service, la personne ne doit rien.
 
 ## Pieges
 
 - **Une capture non regardee est une issue mal comprise.** Telecharger et lire,
   toujours.
-- **Ne pas fermer une issue avant que la release soit publiee et verifiee.**
+- **Ne jamais fermer une issue au moment de la traiter** — seulement a l'etape 0,
+  sur confirmation de l'auteur ou apres dix jours de silence.
+- **Ne pas relancer deux fois.** Une issue en `attente-retour` de trois jours ne se
+  commente pas « alors ? ». On attend.
+- **Ne pas oublier de poser le label** apres avoir commente : sans lui, l'issue
+  sort du suivi et personne ne la ferme jamais.
+- **Ne pas compter les dix jours depuis l'ouverture de l'issue** mais depuis notre
+  dernier commentaire.
 - **Ne pas paralleliser les corrections** — conflits sur `CHANGELOG.md` et
   `package.json`, et `release.mjs` refuse un arbre sale.
 - **Ne pas creer de branche** : sur ce repo, `main` en direct est la regle, et un
