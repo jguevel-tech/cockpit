@@ -12,8 +12,6 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.33.0] — 2026-08-20
-
 ### Fixed
 
 - Terminal : le clic molette colle une seule fois. Le presse-papier partait deux fois dans
