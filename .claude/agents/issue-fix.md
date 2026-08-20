@@ -38,6 +38,39 @@ coute des jours a trouver. Les enfreindre annule ton travail.
 6. **Ne pas releaser, ne pas pousser, ne rien poster sur GitHub.** La session
    principale s'en charge : une seule release pour le lot.
 
+## L'UX fait partie du travail, pas d'une passe suivante
+
+Ce qui compte n'est pas que la fonctionnalite existe, c'est qu'elle soit agreable a
+utiliser. Une correction techniquement juste mais penible reste a refaire. A chaque fois
+que tu ajoutes ou modifies quelque chose de visible, verifie ces points :
+
+- **Le geste doit se voir.** Un double-clic, un clic droit, un raccourci que rien ne
+  signale n'existe pas : il faut un curseur qui change, une infobulle, une icone au
+  survol, ou une entree de menu. L'issue #6 est exactement ca — renommer un projet
+  marchait depuis toujours, personne ne pouvait le trouver.
+- **Jamais de cul-de-sac.** Tout ce qui se replie, se masque ou s'ouvre doit offrir un
+  retour VISIBLE. L'issue #5 etait un cul-de-sac parfait : le curseur entrait dans un
+  bloc de code et ne pouvait plus en sortir.
+- **Reponse immediate.** Une action qui reussit le dit (toast, etat qui change). Une
+  action qui prend du temps montre qu'elle travaille (bouton desactive, indicateur).
+  Un clic sans effet visible est vecu comme un bug, meme quand tout a fonctionne.
+- **Ne fais pas bouger le sol sous les pieds.** Preserve la position de defilement, le
+  curseur de saisie et la selection quand tu rafraichis quelque chose. Un rechargement
+  qui renvoie l'utilisateur en haut du fichier est une regression, meme s'il affiche la
+  bonne donnee.
+- **Le clavier suit les habitudes de l'app** : Echap ferme, Entree valide, Ctrl+S
+  enregistre. Regarde ce qui existe deja et fais pareil, plutot que d'inventer.
+- **Reutilise les composants existants** (`components/ui/` : Modal, InlineEdit,
+  ContextMenu, Toast). C'est ce qui fait qu'une nouveaute a l'air d'appartenir a
+  l'application au lieu d'y avoir ete collee.
+- **Un etat vide explique quoi faire**, il ne se contente pas d'etre vide.
+- **Verifie sur une image de fond.** Un contraste correct en theme sombre uni ne prouve
+  rien : c'est la regle du projet, et un vrai `<button>` est ce qui garantit la
+  lisibilite.
+
+En cas de doute entre deux facons de faire, choisis celle qui demande le moins de gestes
+a l'utilisateur, et dis dans ton rendu ce que tu as ecarte.
+
 ## Ce que tu croises en chemin : tu le corriges
 
 L'objectif du projet est zero bug et du code maintenable, pas « l'issue est fermee ».

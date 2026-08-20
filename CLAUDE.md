@@ -239,6 +239,16 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - **Un bug croise en chemin se corrige**, meme si personne ne l'a signale : on est dans
   le fichier, on vient de le comprendre, c'est maintenant qu'il coute le moins cher.
   L'objectif est zero bug, pas « la demande est traitee ».
+- **L'UX fait partie de la fonctionnalite, pas d'une passe suivante.** Une fonctionnalite
+  techniquement juste mais penible reste a refaire. A chaque ajout visible : le geste doit
+  se voir (curseur, infobulle, entree de menu — sinon il n'existe pas, cf. le renommage de
+  projet introuvable), jamais de cul-de-sac (tout ce qui se replie ou s'ouvre offre un
+  retour visible, cf. le curseur enferme dans un bloc de code), reponse immediate (un clic
+  sans effet visible est vecu comme un bug meme quand tout marche), et on ne fait pas
+  bouger le sol sous les pieds (position de defilement, curseur de saisie et selection
+  preserves au rafraichissement). Le clavier suit les habitudes de l'app (Echap ferme,
+  Entree valide, Ctrl+S enregistre) et on reutilise `components/ui/` pour qu'une nouveaute
+  ait l'air d'appartenir a l'application.
 - **Un fichier en mauvais etat se refactore quand on y touche** — fonction de 200 lignes,
   etat duplique, logique melangee au rendu, copier-coller. Un correctif greffe sur du code
   pourri fabrique le bug suivant. Trois limites : le refactoring va dans un commit SEPARE
