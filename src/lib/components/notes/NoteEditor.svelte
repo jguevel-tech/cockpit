@@ -68,12 +68,14 @@
     if (!href) return;
     e.preventDefault();
 
-    // Une note peut contenir n'importe quoi (collage, import) : on n'ouvre que des schemas
-    // sans danger. Un refus est DIT, jamais silencieux.
-    let cible: URL;
-    try {
-      cible = new URL(href, "http://note.invalid");
-    } catch {
+    // Une note peut contenir n'importe quoi (collage, import) : on n'ouvre que des adresses
+    // ABSOLUES a schema sans danger. Un refus est DIT, jamais silencieux.
+    const cible = analyserLien(href);
+    if (cible === "incomplet") {
+      notify(translate("note.linkIncomplete"), "info", 5000, { report: false });
+      return;
+    }
+    if (cible === "illisible") {
       notify(translate("note.linkInvalid", { href }), "error", 4000, { scope: "notes.lien" });
       return;
     }
@@ -82,10 +84,32 @@
       return;
     }
     try {
-      await openUrl(href);
+      // L'adresse ABSOLUE, pas le href brut : c'est la seule que le systeme sait ouvrir.
+      await openUrl(cible.href);
     } catch (err) {
       signalerErreur("notes.ouvrirLien", String(err));
       notify(String(err), "error", 4000, { report: false });
+    }
+  }
+
+  /// Trie un href de note en trois cas : adresse absolue, lien incomplet (relatif ou sans
+  /// schema), href illisible.
+  ///
+  /// La distinction compte parce que le message affiche en depend. Resoudre le href contre une
+  /// base bidon (`new URL(href, "http://note.invalid")`) faisait passer `[x](www.ex.com)` et
+  /// `[x](../doc.md)` pour des liens http valides : la liste blanche les acceptait, puis le
+  /// backend refusait le href brut et l'utilisateur recevait une erreur technique.
+  function analyserLien(href: string): URL | "incomplet" | "illisible" {
+    try {
+      return new URL(href);
+    } catch {
+      // Pas absolu. Silence VOLONTAIRE : le cas est traite juste en dessous, pas avale.
+    }
+    try {
+      new URL(href, "http://note.invalid");
+      return "incomplet";
+    } catch {
+      return "illisible";
     }
   }
 

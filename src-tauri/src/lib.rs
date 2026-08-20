@@ -842,11 +842,25 @@ fn cancel_claude_login(state: tauri::State<'_, AppState>) {
     state.claude_login.cancel()
 }
 
+/// Schemas d'adresse que l'application accepte de confier au systeme.
+///
+/// `http` est la pour les liens de dev locaux (localhost:8060...). `mailto` est la parce
+/// qu'une note en fabrique tout seule : marked autolinke les adresses mail, donc un compte
+/// rendu de reunion qui cite un correspondant contient un `mailto:` que le frontend presente
+/// comme ouvrable. Le refuser ici affichait une erreur technique sur un lien parfaitement
+/// legitime. xdg-open sait le passer au client mail par defaut.
+///
+/// Le schema seul ne suffit pas : `mailto:` sans destinataire ouvrirait un brouillon vide.
+fn schema_ouvrable(url: &str) -> bool {
+    ["https://", "http://", "mailto:"]
+        .iter()
+        .any(|schema| url.len() > schema.len() && url.starts_with(schema))
+}
+
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    // http autorise pour les liens de dev locaux (localhost:8060...)
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err("URL non http(s)".into());
+    if !schema_ouvrable(&url) {
+        return Err(format!("adresse non ouvrable : {url}"));
     }
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
@@ -1666,5 +1680,34 @@ mod tests {
         let conf = super::configuration_polices();
         assert!(conf.contains("rejectfont"), "{conf}");
         assert!(conf.contains("*COLRv1*"), "{conf}");
+    }
+
+    #[test]
+    fn une_adresse_mail_est_ouvrable() {
+        // marked autolinke les adresses mail des notes : le cas arrive sans que personne
+        // n'ecrive un lien a la main, et le frontend l'annonce comme ouvrable.
+        assert!(super::schema_ouvrable("mailto:bob@ex.com"));
+        assert!(super::schema_ouvrable("mailto:bob@ex.com?subject=Reunion"));
+    }
+
+    #[test]
+    fn le_web_reste_ouvrable() {
+        assert!(super::schema_ouvrable("https://example.com"));
+        assert!(super::schema_ouvrable("http://localhost:8060/"));
+    }
+
+    #[test]
+    fn les_adresses_incompletes_ou_dangereuses_sont_refusees() {
+        for url in [
+            "www.ex.com",       // lien de note sans schema
+            "../doc.md",        // lien relatif
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "mailto:",          // brouillon vide
+            "https://",
+            "",
+        ] {
+            assert!(!super::schema_ouvrable(url), "{url}");
+        }
     }
 }

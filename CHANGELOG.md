@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Notes : le Ctrl+clic sur une adresse mail ouvre le client mail au lieu d'afficher une
+  erreur. Un lien incomplet (`www.exemple.com`, `../doc.md`) explique maintenant qu'il
+  manque une adresse complète, au lieu de remonter un message technique.
+
 ## [0.31.1] — 2026-08-20
 
 ### Fixed
