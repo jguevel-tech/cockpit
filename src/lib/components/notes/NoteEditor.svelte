@@ -56,6 +56,12 @@
   /// il n'y a rien apres lui, donc rien a viser. La note etait verrouillee.
   const BLOCS_TERMINAUX = ["PRE", "BLOCKQUOTE", "UL", "OL", "TABLE"];
 
+  /// Blocs porteurs d'une mise en forme que le bouton ¶ sait defaire.
+  const BLOCS_DE_TEXTE = "h1,h2,h3,h4,h5,h6,blockquote,pre,li,p,div";
+  /// Conteneurs a SCINDER pour en sortir un paragraphe : une liste ou une citation ne peut
+  /// pas contenir de texte normal, il faut couper autour du bloc qu'on remet a plat.
+  const CONTENEURS_A_SCINDER = ["UL", "OL", "BLOCKQUOTE", "LI"];
+
   let markdownContent = $state("");
   let editorEl: HTMLDivElement | undefined = $state(undefined);
   let renaming = $state(false);
@@ -251,24 +257,27 @@
     poserCaret(pre, position);
   }
 
-  /// Defait un bloc de code : chaque ligne redevient un paragraphe.
-  function ramenerEnParagraphes(pre: HTMLElement) {
+  /// Defait un bloc de code : chaque ligne redevient un paragraphe. Rend les paragraphes
+  /// produits, dont le bouton ¶ a besoin pour reposer la selection.
+  function ramenerEnParagraphes(pre: HTMLElement): HTMLParagraphElement[] {
     const lignes = texteDeBloc(pre).replace(/\n+$/, "").split("\n");
     const morceaux = document.createDocumentFragment();
-    let dernier: HTMLParagraphElement | null = null;
+    const produits: HTMLParagraphElement[] = [];
     for (const ligne of lignes) {
       const p = document.createElement("p");
       if (ligne) p.appendChild(document.createTextNode(ligne));
       else p.appendChild(document.createElement("br"));
       morceaux.appendChild(p);
-      dernier = p;
+      produits.push(p);
     }
     pre.replaceWith(morceaux);
-    if (!dernier) return;
+    const dernier = produits[produits.length - 1];
+    if (!dernier) return produits;
     const r = document.createRange();
     r.selectNodeContents(dernier);
     r.collapse(false);
     poserSelection(r);
+    return produits;
   }
 
   /// Place le caret apres `bloc`, dans un paragraphe ou ecrire.
@@ -431,6 +440,94 @@
     editorEl?.focus();
     onEditorInput();
   }
+
+  /// Blocs de texte touches par la selection, du plus interne, dans l'ordre du document.
+  function unitesDeLaSelection(r: Range): HTMLElement[] {
+    if (!editorEl) return [];
+    const touches = Array.from(editorEl.querySelectorAll<HTMLElement>(BLOCS_DE_TEXTE))
+      .filter((el) => r.intersectsNode(el));
+    // Un bloc de code se traite d'un seul tenant : le `<code>` qu'il contient n'est pas une
+    // unite a part.
+    const dehors = touches.filter(
+      (el) => !touches.some((autre) => autre !== el && autre.nodeName === "PRE" && autre.contains(el)),
+    );
+    // Sinon on garde le bloc le plus INTERNE. `marked` rend une citation en
+    // `<blockquote><p>` et un element de liste large en `<li><p>` : convertir l'enveloppe
+    // imbriquerait deux paragraphes l'un dans l'autre.
+    return dehors.filter((el) => !dehors.some((x) => x !== el && el.contains(x)));
+  }
+
+  /// Scinde `parent` autour de `enfant` : l'enfant remonte d'un cran, ce qui le suivait
+  /// repart dans une copie du parent. C'est ce qui permet de sortir UN element du milieu
+  /// d'une liste sans toucher aux autres.
+  function scinderAutour(parent: HTMLElement, enfant: HTMLElement) {
+    const grand = parent.parentNode;
+    if (!grand) return;
+    const apres = parent.cloneNode(false) as HTMLElement;
+    let n = enfant.nextSibling;
+    while (n) {
+      const suivant = n.nextSibling;
+      apres.appendChild(n);
+      n = suivant;
+    }
+    grand.insertBefore(enfant, parent.nextSibling);
+    // Un parent vide de contenu reste peuple des sauts de ligne du rendu Markdown : c'est
+    // la presence d'un element ou d'un vrai texte qui dit s'il a encore une raison d'etre.
+    if (apres.querySelector("*") || apres.textContent?.trim()) grand.insertBefore(apres, enfant.nextSibling);
+    if (!parent.querySelector("*") && !parent.textContent?.trim()) parent.remove();
+  }
+
+  /// Ramene un bloc a un paragraphe de premier niveau et rend ce qui a ete produit.
+  function remettreAPlat(unite: HTMLElement): HTMLElement[] {
+    if (unite.nodeName === "PRE") return ramenerEnParagraphes(unite);
+    let bloc = unite;
+    if (bloc.nodeName !== "P") {
+      const p = document.createElement("p");
+      while (bloc.firstChild) p.appendChild(bloc.firstChild);
+      bloc.replaceWith(p);
+      bloc = p;
+    }
+    while (bloc.parentElement && bloc.parentElement !== editorEl
+      && CONTENEURS_A_SCINDER.includes(bloc.parentElement.nodeName)) {
+      scinderAutour(bloc.parentElement, bloc);
+    }
+    if (!bloc.firstChild) bloc.appendChild(document.createElement("br"));
+    return [bloc];
+  }
+
+  /// Bouton ¶ : le texte redevient un paragraphe normal.
+  ///
+  /// Ecrit a la main plutot qu'avec `execCommand("formatBlock", "p")`, dont le banc
+  /// WebKitGTK montre les degats : une selection couvrant plusieurs blocs les FUSIONNE en
+  /// un seul paragraphe separe par des `<br>` (deux paragraphes perdus a la sauvegarde), une
+  /// citation relue du Markdown (`<blockquote><p>`) n'est pas touchee du tout, une liste
+  /// devient `<p><ul>…</ul></p>` et un bloc de code ressort en morceaux.
+  ///
+  /// Ne touche QUE le bloc : gras, italique et liens sont conserves, c'est la mise en forme
+  /// de bloc qu'on defait.
+  function texteNormal() {
+    if (!caretPret()) return;
+    const sel = selectionDansEditeur();
+    if (!sel) return;
+    const r = sel.getRangeAt(0);
+    const unites = unitesDeLaSelection(r);
+    const replie = r.collapsed;
+    const position = replie && unites[0] ? decalageCaret(unites[0]) : 0;
+    const produits: HTMLElement[] = [];
+    for (const unite of unites) produits.push(...remettreAPlat(unite));
+    if (produits.length > 0) {
+      if (replie) {
+        poserCaret(produits[0], position);
+      } else {
+        const nouvelle = document.createRange();
+        nouvelle.setStartBefore(produits[0]);
+        nouvelle.setEndAfter(produits[produits.length - 1]);
+        poserSelection(nouvelle);
+      }
+    }
+    editorEl?.focus();
+    onEditorInput();
+  }
 </script>
 
 <svelte:window
@@ -460,6 +557,7 @@
       <button class="tb" onclick={() => format("italic")} title={$trad("note.italic")}><i>I</i></button>
       <button class="tb" onclick={() => format("strikeThrough")} title={$trad("note.strike")}><s>S</s></button>
       <span class="tb-sep"></span>
+      <button class="tb" onclick={texteNormal} title={$trad("note.normalText")}>¶</button>
       <button class="tb" onclick={() => insertHeading(1)} title={$trad("note.h1")}>H1</button>
       <button class="tb" onclick={() => insertHeading(2)} title={$trad("note.h2")}>H2</button>
       <button class="tb" onclick={() => insertHeading(3)} title={$trad("note.h3")}>H3</button>

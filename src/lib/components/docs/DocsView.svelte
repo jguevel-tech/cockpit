@@ -267,8 +267,9 @@
       <div class="block">
         <p>{@html $trad("docs.tasks.notes")}</p>
         <p>{@html $trad("docs.tasks.notesLinks")}</p>
+        <p>{@html $trad("docs.tasks.notesNormal")}</p>
         <div class="demo">
-          <div class="d-tabs"><span class="d-btn small"><b>B</b></span><span class="d-btn small"><i>I</i></span><span class="d-btn small">H1</span><span class="d-btn small">{$trad("docs.tasks.notesDemoList")}</span><span class="d-btn small">‹/›</span></div>
+          <div class="d-tabs"><span class="d-btn small"><b>B</b></span><span class="d-btn small"><i>I</i></span><span class="d-btn small">¶</span><span class="d-btn small">H1</span><span class="d-btn small">{$trad("docs.tasks.notesDemoList")}</span><span class="d-btn small">‹/›</span></div>
           <div class="d-note">{$trad("docs.tasks.notesDemo")}</div>
         </div>
       </div>

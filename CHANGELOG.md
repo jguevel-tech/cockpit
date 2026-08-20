@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Éditeur de notes : bouton **¶** pour revenir au texte normal. Un titre, une citation, un
+  élément de liste ou un bloc de code redevient un paragraphe — jusqu'ici, une ligne passée
+  en titre ne pouvait plus en sortir. Le gras, l'italique et les liens sont conservés.
+
 ## [0.31.2] — 2026-08-20
 
 ### Fixed
