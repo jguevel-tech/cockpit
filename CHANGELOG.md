@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-08-20
+
 ### Added
 
 - **Renommer un projet se voit enfin.** Clic droit sur un projet dans la barre latérale →
