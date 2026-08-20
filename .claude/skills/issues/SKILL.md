@@ -89,8 +89,25 @@ ouverture ─> a-trier ─> en-analyse ─┬─> attente-arbitrage ─> a-livre
 
 a-livrer ─> en-cours ─> [release publiee + auteur prevenu] ─> attente-retour
                                                                     │
-                                          confirmation ou 10 jours ─┴─> ferme
+                                          confirmation ou 10 jours ─┼─> ferme
+                                                                    │
+                          « c'est mieux mais... » / « toujours pas » ┴─> en-cours
 ```
+
+**Un retour negatif SORT l'issue de `attente-retour` immediatement.** « Ca ne marche
+toujours pas », mais aussi « c'est mieux mais... » : des que l'auteur signale qu'il reste
+quelque chose, la balle est revenue chez nous et l'etat doit le dire. Laisser
+`attente-retour` ferait fermer l'issue tout seule au bout de dix jours alors qu'il reste
+du travail — et surtout, elle disparaitrait du tableau des choses a faire.
+
+Constate le 2026-08-20 sur l'issue #14 : Jimmy avait ecrit « c'est mieux mais quand je
+lance ma commande qui lance K9s ca l'affiche en petit », et l'issue est restee en
+`attente-retour`. C'est lui qui a du le signaler.
+
+Nuance : un retour negatif n'est PAS un echec du correctif precedent. Il peut avoir
+regle le symptome principal et en decouvrir un second — c'est exactement le cas ici.
+Le nouveau symptome se traite comme un nouveau diagnostic, pas comme une rustine sur
+l'ancien.
 
 Chaque changement d'etat se fait **dans le meme geste que l'action** qui le provoque :
 
