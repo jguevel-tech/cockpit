@@ -94,6 +94,21 @@ a-livrer ─> en-cours ─> [release publiee + auteur prevenu] ─> attente-reto
                           « c'est mieux mais... » / « toujours pas » ┴─> en-cours
 ```
 
+**`attente-arbitrage` exige que la matiere soit SUR L'ISSUE.** Poser cet etat sans avoir
+depose le dossier en commentaire, c'est un label qui ment : Jimmy ouvre l'issue et n'y
+trouve rien a trancher. Discuter le sujet dans la conversation ne compte pas — elle ne
+survit pas a la session, et il ne peut pas la relire depuis GitHub.
+
+Ce qu'un commentaire d'arbitrage doit porter : ce qui a ete etabli, les options avec ce
+qui les distingue sur le FOND, la recommandation et son pourquoi, ce qui n'est pas
+reversible, et une liste explicite des questions ouvertes. Si l'analyse est volumineuse,
+elle va dans le depot (`docs/`) et le commentaire y renvoie — un dossier temporaire de
+session ne conserve rien.
+
+Constate le 2026-08-20 sur l'issue #11 : cinq etudes faites, 136 Ko de mesures, l'etat
+`attente-arbitrage` pose... et pas un commentaire sur l'issue. Les etudes allaient
+disparaitre avec la session. C'est Jimmy qui a demande « rien ne m'a ete soumis ».
+
 **Un retour negatif SORT l'issue de `attente-retour` immediatement.** « Ca ne marche
 toujours pas », mais aussi « c'est mieux mais... » : des que l'auteur signale qu'il reste
 quelque chose, la balle est revenue chez nous et l'etat doit le dire. Laisser
