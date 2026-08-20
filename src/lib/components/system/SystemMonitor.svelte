@@ -39,14 +39,14 @@
     <div class="metrics-grid">
       <!-- CPU -->
       <div class="metric-card">
-        <h3>CPU ({m.cpu.cores} cores)</h3>
+        <h3>{$trad("sys.cpuCores", { count: m.cpu.cores })}</h3>
         <div class="bar-container">
           <div class="bar" style="width:{m.cpu.usage_percent}%"></div>
         </div>
         <span class="metric-value">{m.cpu.usage_percent.toFixed(1)}%</span>
         <div class="per-core">
           {#each m.cpu.per_core as core, i}
-            <div class="mini-bar-wrap" title="Core {i}: {core.toFixed(0)}%">
+            <div class="mini-bar-wrap" title={$trad("sys.core", { index: i, percent: core.toFixed(0) })}>
               <div class="mini-bar" style="height:{core}%"></div>
             </div>
           {/each}

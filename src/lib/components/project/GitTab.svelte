@@ -62,7 +62,7 @@
   onMount(refresh);
 
   async function refresh() {
-    if (!project?.path) { statusError = "Chemin du projet inconnu"; return; }
+    if (!project?.path) { statusError = $trad("project.unknownPath"); return; }
     loadingStatus = true;
     statusError = "";
     try {
@@ -140,7 +140,7 @@
   function doPull() {
     op("pull", async () => {
       const out = await gitPull(project!.path);
-      notify(out.split("\n")[0] || "À jour", "success");
+      notify(out.split("\n")[0] || $trad("git.upToDate"), "success");
       if (view === "history") await loadHistory();
     });
   }
@@ -303,7 +303,7 @@
         </div>
       {:else}
       {#if status.behind}
-        <p class="git-behind">↓ {status.behind} commit(s) en retard sur l'upstream</p>
+        <p class="git-behind">{$trad("git.behind", { n: status.behind })}</p>
       {/if}
 
       <div class="file-groups">

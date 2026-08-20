@@ -65,7 +65,7 @@
     <h3>{$trad("todos.title")}</h3>
     {#if doneTodos.length > 0}
       <button class="toggle-done" class:active={showDone} onclick={() => showDone = !showDone}>
-        Terminées ({doneTodos.length})
+        {$trad("todos.doneToggle", { count: doneTodos.length })}
       </button>
     {/if}
   </div>
@@ -85,8 +85,8 @@
           class="check"
           class:checked={todo.done}
           onclick={() => toggle(todo)}
-          title={todo.done ? 'Marquer comme non termine' : 'Marquer comme termine'}
-          aria-label={todo.done ? 'Marquer comme non termine' : 'Marquer comme termine'}
+          title={todo.done ? $trad("todos.markUndone") : $trad("todos.markDone")}
+          aria-label={todo.done ? $trad("todos.markUndone") : $trad("todos.markDone")}
         ></button>
         {#if editingId === todo.id}
           <InlineEdit
@@ -116,7 +116,7 @@
           <button
             class="due-badge {dueUrgency(todo.due_date)}"
             onclick={() => (editingDueId = todo.id)}
-            title="Échéance {todo.due_date} — cliquer pour modifier (vider = retirer)"
+            title={$trad("todos.dueHint", { date: todo.due_date })}
           >{dueLabel(todo.due_date)}</button>
         {:else if !todo.done}
           <button class="due-add" onclick={() => (editingDueId = todo.id)} title={$trad("todos.addDue")}>📅</button>
@@ -125,7 +125,7 @@
       </li>
     {/each}
     {#if visibleTodos.length === 0}
-      <li class="empty">{showDone ? 'Aucune tache terminée' : 'Aucune tache'}</li>
+      <li class="empty">{showDone ? $trad("todos.emptyDone") : $trad("todos.empty")}</li>
     {/if}
   </ul>
 </div>

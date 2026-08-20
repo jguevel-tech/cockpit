@@ -125,16 +125,16 @@
           <span class="df-kind">{d.kind}</span>
           <span class="df-size">{d.size}</span>
           {#if d.reclaimable && !d.reclaimable.startsWith("0B")}
-            <span class="df-reclaim">récupérable {d.reclaimable}</span>
+            <span class="df-reclaim">{$trad("cont.reclaimable", { size: d.reclaimable })}</span>
           {/if}
         </div>
       {/each}
       <div class="prune-actions">
-        <button disabled={!!pruning} onclick={() => doPrune("containers", "conteneurs arrêtés")}>{$trad("cont.pruneContainers")}</button>
-        <button disabled={!!pruning} onclick={() => doPrune("images", "images sans tag")}>{$trad("cont.pruneImages")}</button>
-        <button disabled={!!pruning} onclick={() => doPrune("images_all", "toutes les images inutilisées")}>{$trad("cont.pruneImagesAll")}</button>
-        <button disabled={!!pruning} onclick={() => doPrune("volumes", "volumes non utilisés")}>{$trad("cont.pruneVolumes")}</button>
-        <button disabled={!!pruning} onclick={() => doPrune("builder", "cache de build")}>{$trad("cont.pruneBuildCache")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("containers", $trad("cont.pruneLabelContainers"))}>{$trad("cont.pruneContainers")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("images", $trad("cont.pruneLabelImages"))}>{$trad("cont.pruneImages")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("images_all", $trad("cont.pruneLabelImagesAll"))}>{$trad("cont.pruneImagesAll")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("volumes", $trad("cont.pruneLabelVolumes"))}>{$trad("cont.pruneVolumes")}</button>
+        <button disabled={!!pruning} onclick={() => doPrune("builder", $trad("cont.pruneLabelBuilder"))}>{$trad("cont.pruneBuildCache")}</button>
       </div>
     </div>
   {/if}
@@ -190,10 +190,10 @@
     {:else}
       {#each volumes as v (v.name)}
         <div class="ctn-row">
-          <span class="ctn-dot" class:running={!v.dangling} title={v.dangling ? "non utilisé" : "utilisé"}></span>
+          <span class="ctn-dot" class:running={!v.dangling} title={v.dangling ? $trad("cont.unused") : $trad("cont.used")}></span>
           <div class="ctn-info">
             <span class="ctn-name">{v.name}</span>
-            <span class="ctn-meta">{v.driver}{#if v.dangling} · non utilisé{/if}</span>
+            <span class="ctn-meta">{v.driver}{#if v.dangling} · {$trad("cont.unused")}{/if}</span>
           </div>
           <div class="ctn-actions">
             <button title={$trad("common.delete")} class="danger" onclick={() => doRemoveVolume(v)}>🗑</button>
@@ -210,10 +210,10 @@
     {:else}
       {#each images as img (img.id)}
         <div class="ctn-row">
-          <span class="ctn-dot" class:running={!img.dangling} title={img.dangling ? "sans tag" : ""}></span>
+          <span class="ctn-dot" class:running={!img.dangling} title={img.dangling ? $trad("cont.untagged") : ""}></span>
           <div class="ctn-info">
             <span class="ctn-name">{img.repository === "<none>" ? img.id.slice(0, 12) : `${img.repository}:${img.tag}`}</span>
-            <span class="ctn-meta">{#if img.dangling}sans tag · {/if}{img.id.slice(0, 12)}</span>
+            <span class="ctn-meta">{#if img.dangling}{$trad("cont.untagged")} · {/if}{img.id.slice(0, 12)}</span>
           </div>
           <span class="ctn-status">{img.size}</span>
           <div class="ctn-actions">

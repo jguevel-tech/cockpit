@@ -169,14 +169,14 @@
     </section>
 
     <section class="card">
-      <h3>Marketplaces detectes ({config.marketplaces.length})</h3>
+      <h3>{$trad("agents.marketplacesDetected", { count: config.marketplaces.length })}</h3>
       <ul class="market-list">
         {#each config.marketplaces as m}
           <li>
             <div class="market-head">
               <strong>{m.display_name}</strong>
               <span class="badge badge-{m.editable ? 'ok' : 'ro'}">
-                {m.editable ? "editable" : "lecture seule"}
+                {m.editable ? $trad("agents.editable") : $trad("agents.readOnly")}
               </span>
               <span class="badge">{m.plugins_count} plugins</span>
               <span class="badge">{m.source_type}</span>

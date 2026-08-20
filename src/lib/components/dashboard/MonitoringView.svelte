@@ -2,7 +2,7 @@
   import { systemMetrics, cpuHistory, memoryHistory, metricsLive, refreshMetrics, startLiveMetrics, stopLiveMetrics } from "../../stores/system";
   import { formatBytes } from "../../utils/format";
   import type { SystemMetrics } from "../../types";
-  import { trad, translate } from "../../i18n";
+  import { trad, tradN, translate } from "../../i18n";
 
   // Metrics shortcuts
   let metrics: SystemMetrics | null = $derived($systemMetrics);
@@ -91,7 +91,7 @@
             {metrics.cpu.usage_percent.toFixed(1)}%
           </text>
           <text x="60" y="75" text-anchor="middle" fill="var(--text-muted)" font-size="10">
-            {metrics.cpu.cores} cœurs
+            {$tradN("mon.cores", metrics.cpu.cores)}
           </text>
         </svg>
         <div class="gauge-sub">{metrics.cpu.model_name}</div>

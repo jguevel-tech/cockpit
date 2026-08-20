@@ -93,7 +93,7 @@
                   onclick={() => runAction(n.id, n.action!.run)}
                   disabled={running.has(n.id)}
                 >
-                  {running.has(n.id) ? "En cours…" : n.action.label}
+                  {running.has(n.id) ? $trad("notif.running") : n.action.label}
                 </button>
               {/if}
               {#if n.dismissible}

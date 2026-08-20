@@ -21,6 +21,12 @@ le script de release.
   pourquoi un dossier de projets ne peut pas être supprimé, l'infobulle des terminaux de la
   barre latérale, celle du nom de projet à renommer, et l'aide des boutons Docker quand le
   projet n'a pas de fichier compose.
+- Interface en anglais, suite : une quarantaine d'autres libellés restaient en français —
+  onglet Conteneurs (volumes non utilisés, images sans tag, boutons de nettoyage), compteur
+  de tâches et échéances, cœurs du monitoring, recherche de fichiers, retard sur l'upstream
+  dans Git, réglages d'apparence et vue Agents. Y compris des messages d'erreur : chemin de
+  projet inconnu dans les onglets Fichiers et Git, aperçu d'un fichier binaire, nom refusé à
+  la création d'un projet ou d'un agent.
 
 ## [0.31.1] — 2026-08-20
 

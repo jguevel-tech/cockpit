@@ -64,7 +64,7 @@
       oninput={(e) => accent.set(e.currentTarget.value)}
       aria-label={$trad("appearance.accent")}
     />
-    <code class="mono-value">{$accent ?? "accent de la palette"}</code>
+    <code class="mono-value">{$accent ?? $trad("appearance.paletteAccent")}</code>
     {#if $accent}
       <button class="btn small" onclick={() => accent.set(null)}>{$trad("common.reset")}</button>
     {/if}
@@ -85,7 +85,7 @@
 
   <div class="inline-row">
     <button class="btn primary" onclick={pickImage} disabled={busy}>
-      {busy ? "Traitement…" : $wallpaper ? "Changer l'image" : "Choisir une image"}
+      {busy ? $trad("appearance.processing") : $wallpaper ? $trad("appearance.changeImage") : $trad("appearance.chooseImage")}
     </button>
     {#if $wallpaper}
       <button class="btn danger" onclick={removeWallpaper}>{$trad("common.remove")}</button>

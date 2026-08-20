@@ -396,7 +396,7 @@
                     {$trad("settings.claude.openBrowser")}
                   </button>
                 {/if}
-                <pre class="login-log">{loginLog || "Démarrage de claude setup-token…"}</pre>
+                <pre class="login-log">{loginLog || $trad("settings.claude.loginStarting")}</pre>
                 <div class="inline-row">
                   <input
                     type="text"

@@ -108,7 +108,7 @@
 
   async function loadRoot() {
     treeError = "";
-    if (!project?.path) { treeError = "Chemin du projet inconnu"; return; }
+    if (!project?.path) { treeError = $trad("project.unknownPath"); return; }
     try {
       tree = (await listProjectDir(project.path, "")).map(toNode);
     } catch (e) {
@@ -158,7 +158,7 @@
       const f = await readProjectFile(project.path, relPath);
       fileSize = f.size;
       if (f.binary) {
-        fileNotice = `Fichier binaire (${formatSize(f.size)})`;
+        fileNotice = $trad("files.binaryNotice", { size: formatSize(f.size) });
         return;
       }
       fileTruncated = f.truncated;
@@ -709,7 +709,7 @@
             <p class="search-note">{$trad("files.noResult")}</p>
           {/if}
           {#if globalResults.names.length > 0}
-            <div class="search-section">Noms · {globalResults.names.length}</div>
+            <div class="search-section">{$trad("files.searchNames", { count: globalResults.names.length })}</div>
             {#each globalResults.names as hit (hit.rel_path)}
               <div
                 class="tree-row"
@@ -724,7 +724,7 @@
             {/each}
           {/if}
           {#if globalResults.contents.length > 0}
-            <div class="search-section">Contenu · {globalResults.contents.length}{globalResults.truncated ? "+" : ""}</div>
+            <div class="search-section">{$trad("files.searchContents", { count: globalResults.contents.length })}{globalResults.truncated ? "+" : ""}</div>
             {#each contentGroups as [path, hits] (path)}
               <div class="search-file" title={path}>{path} <span class="search-count">{hits.length}</span></div>
               {#each hits as h (h.line)}

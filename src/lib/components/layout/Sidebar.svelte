@@ -317,8 +317,8 @@
           <button
             class="folder-delete"
             title={getFolderProjects(folder.id).length > 0
-              ? "Vide le dossier pour pouvoir le supprimer"
-              : "Supprimer le dossier"}
+              ? $trad("sidebar.folderNotEmptyHint")
+              : $trad("sidebar.deleteFolderHint")}
             onclick={() => deleteFolder(folder.id)}
           >🗑</button>
         </div>
@@ -352,7 +352,7 @@
                   <div class="project-meta">
                     <span class="project-state">{proj.state}</span>
                     {#if proj.containers.length > 0}
-                      <span class="container-count">{proj.containers.length} containers</span>
+                      <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
                     {/if}
                   </div>
                 </button>
@@ -393,7 +393,7 @@
             <div class="project-meta">
               <span class="project-state">{proj.state}</span>
               {#if proj.containers.length > 0}
-                <span class="container-count">{proj.containers.length} containers</span>
+                <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
               {/if}
             </div>
           </button>

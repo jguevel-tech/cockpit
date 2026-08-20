@@ -40,7 +40,7 @@
   </div>
   {#if groupedTerminals.length === 0}
     <p class="empty">
-      {terminalsLoaded ? "Aucun terminal ouvert. Ouvre-en un depuis l'onglet Terminal d'un projet." : "Chargement…"}
+      {terminalsLoaded ? $trad("dashboard.noTerminal") : $trad("common.loading")}
     </p>
   {:else}
     {#each groupedTerminals as group (group.project)}

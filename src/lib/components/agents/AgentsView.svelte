@@ -174,7 +174,7 @@
       return;
     }
     if (!/^[a-z0-9][a-z0-9-]*$/.test(newName)) {
-      errorMsg = "Nom invalide (kebab-case)";
+      errorMsg = $trad("agents.invalidName");
       return;
     }
     try {
@@ -218,7 +218,7 @@
       return;
     }
     if (!/^[a-z][a-z0-9-]*$/.test(newName)) {
-      errorMsg = "Nom invalide (kebab-case)";
+      errorMsg = $trad("agents.invalidName");
       return;
     }
     try {
@@ -260,7 +260,7 @@
     const name = newPluginName.trim();
     if (!name) return;
     if (!/^ccm-[a-z0-9][a-z0-9-]*$/.test(name)) {
-      errorMsg = "Nom invalide (prefixe 'ccm-' + kebab-case)";
+      errorMsg = $trad("agents.invalidPluginName");
       return;
     }
     try {
@@ -312,7 +312,7 @@ You are the **${name}** agent.
     const name = newAgentName.trim();
     if (!name) return;
     if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-      errorMsg = "Nom invalide (kebab-case)";
+      errorMsg = $trad("agents.invalidName");
       return;
     }
     try {
@@ -363,7 +363,7 @@ You are the **${name}** agent.
             <option value={m.id}>
               {m.display_name} ({m.plugins_count} plugins){m.editable
                 ? ""
-                : " — lecture seule"}
+                : ` — ${$trad("agents.readOnly")}`}
             </option>
           {/each}
         </select>
@@ -569,12 +569,12 @@ You are the **${name}** agent.
         {:else}
           <p class="empty">
             {#if !selectedPlugin}
-              Selectionne un plugin pour voir ses agents.
+              {$trad("agents.selectPluginForAgents")}
             {:else if agents.length === 0}
-              Ce plugin n'a pas d'agent.
-              {#if isEditable}Clique sur + pour en creer un.{/if}
+              {$trad("agents.pluginHasNoAgent")}
+              {#if isEditable}{$trad("agents.createAgentHint")}{/if}
             {:else}
-              Selectionne un agent pour l'editer.
+              {$trad("agents.selectAgent")}
             {/if}
           </p>
         {/if}

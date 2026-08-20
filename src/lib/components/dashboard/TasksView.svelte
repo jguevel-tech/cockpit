@@ -10,7 +10,7 @@
   import { dueLabel, dueUrgency } from "../../utils/due";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import type { Todo } from "../../types";
-  import { trad } from "../../i18n";
+  import { trad, tradN } from "../../i18n";
 
   let pendingTodos: Todo[] = $state([]);
 
@@ -180,7 +180,7 @@
 <div class="todos-panel">
   <div class="panel-header">
     <h3>{$trad("tasks.title")}</h3>
-    <span class="task-count">{totalTodoCount} tâches</span>
+    <span class="task-count">{$tradN("tasks.count", totalTodoCount)}</span>
   </div>
   <div class="todos-list">
     {#each groupedTodos as group, gi}
@@ -238,7 +238,7 @@
               >{todo.text}</button>
             {/if}
             {#if todo.due_date}
-              <span class="due-badge {dueUrgency(todo.due_date)}" title="Échéance {todo.due_date}">
+              <span class="due-badge {dueUrgency(todo.due_date)}" title={$trad("tasks.due", { date: todo.due_date })}>
                 {dueLabel(todo.due_date)}
               </span>
             {/if}

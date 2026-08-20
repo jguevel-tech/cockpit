@@ -56,7 +56,7 @@
   async function submit() {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      error = "Le nom est obligatoire";
+      error = $trad("project.nameRequired");
       return;
     }
 

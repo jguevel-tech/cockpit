@@ -50,9 +50,9 @@
 
 <Modal title="Logs — {name}" width="min(60rem, 92vw)" {onClose}>
   <div class="logs-toolbar">
-    <span class="hint">{TAIL} dernières lignes</span>
+    <span class="hint">{$trad("logs.lastLines", { count: TAIL })}</span>
     <button class="btn small" class:primary={follow} onclick={() => setFollow(!follow)}>
-      {follow ? "⏸ Suivi actif" : "▶ Suivre"}
+      {follow ? $trad("logs.following") : $trad("logs.follow")}
     </button>
     <button class="btn small" onclick={refresh}>{$trad("logs.refresh")}</button>
   </div>
