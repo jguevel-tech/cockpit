@@ -311,6 +311,27 @@ du CDN GitHub — re-tester avant de conclure. Un `404` qui persiste veut dire q
 release est incomplete : la reparer (voir les pieges du `CLAUDE.md` du projet) AVANT
 de dire a qui que ce soit de mettre a jour.
 
+**Le code 200 NE SUFFIT PAS : il faut lire la VERSION servie.** La release sort en
+brouillon, et `releases/latest` continue de servir la version PRECEDENTE jusqu'a ce
+que le job `publier` leve le brouillon. Donc 200 pendant tout le build, avec l'ancienne
+version dedans. Le 2026-08-20, `latest.json` repondait 200 avec `0.31.1` alors que la
+`0.31.2` etait en cours de construction : repondre aux auteurs a ce moment-la, c'etait
+leur dire de mettre a jour vers une version que GitHub ne servait pas encore.
+
+```bash
+curl -sL -o /tmp/latest.json \
+  https://github.com/jguevel-tech/cockpit/releases/latest/download/latest.json
+python3 -c "import json;d=json.load(open('/tmp/latest.json'));print(d['version'], sorted(d['platforms']))"
+```
+
+La version affichee doit etre CELLE QUE TU VIENS DE TAGUER, et `platforms` doit
+contenir une entree `linux-*`. Tant que ce n'est pas le cas, on attend : `gh run list`
+pour suivre, et rien n'est annonce a personne.
+
+Ne pas lire ce fichier avec `curl | head` : le proxy `rtk` reformate la sortie et
+remplace les valeurs par des longueurs de chaine. Ecrire dans un fichier, puis lire
+avec `python3`.
+
 Puis, issue par issue — **commenter et poser le label, sans fermer** :
 
 ```bash
