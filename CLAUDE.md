@@ -100,6 +100,10 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   maillon. Rediriger vers un fichier puis tester, sinon on annonce des succes inexistants.
 - **Sorties de `grep`** : le proxy `rtk` les reformate et fausse les `grep -c`. Passer par
   `rtk proxy grep ...` quand le comptage compte.
+- **`ls` ne rend RIEN** : le meme proxy reformate `ls`/`ls -la` en un resume, et sur certains
+  chemins il ressort vide — on croit le dossier vide alors qu'il est plein (constate le
+  2026-08-20 sur un dossier de travail contenant 31 fichiers). Utiliser `find <dir> -type f`,
+  ou `rtk proxy ls`, avant de conclure qu'un fichier n'existe pas.
 
 ## Regles non negociables (a lire AVANT de coder)
 
