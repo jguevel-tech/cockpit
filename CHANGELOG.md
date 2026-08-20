@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- macOS : les mises à jour repartent. La version 0.32.0 est sortie sans archive macOS parce
+  qu'une vérification interne échouait sur ce système uniquement — les utilisateurs Linux
+  n'étaient pas concernés.
+
 ## [0.32.0] — 2026-08-20
 
 ### Added

@@ -133,6 +133,18 @@ pub fn stat_project_file(project_path: &str, rel_path: &str) -> Result<Option<Fi
     if rel_path.is_empty() {
         return Err("chemin vide".into());
     }
+    // Traversee refusee AVANT toute canonicalisation. Le controle par le parent
+    // canonicalise (plus bas) ne voit une remontee que si le dossier vise EXISTE : sinon
+    // canonicalize rend NotFound et on repondait Ok(None), c'est-a-dire « pas de fichier »
+    // au lieu de « chemin interdit ». La garde dependait donc de la disposition du disque.
+    // Constate en CI sur macOS : depuis /var/folders/<hash>/T/, « ../../etc » vise un
+    // dossier inexistant, la ou sous Linux depuis /tmp il vise /etc, qui existe.
+    if Path::new(rel_path)
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)))
+    {
+        return Err("chemin hors du projet".into());
+    }
     let joined = root.join(rel_path);
     let leaf = joined.file_name().ok_or("chemin sans nom de fichier")?.to_owned();
     // secure_join ne peut pas canonicaliser un chemin inexistant : on canonicalise
@@ -660,8 +672,23 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let root = dir.to_str().unwrap();
 
+        // Une remontee est refusee QUELLE QUE SOIT l'existence de la cible : c'est la regle
+        // qu'on teste, pas la disposition du disque de la machine de test. La version
+        // precedente passait sous Linux (« ../../etc » depuis /tmp tombe sur /etc, qui
+        // existe) et echouait sur macOS, ou le dossier temporaire est profond et la cible
+        // n'existe pas — d'ou une release macOS cassee.
         assert!(stat_project_file(root, "../../etc/passwd").is_err(), "traversee interdite");
+        assert!(stat_project_file(root, "..").is_err(), "remontee simple interdite");
+        assert!(
+            stat_project_file(root, "../nulle_part_du_tout/x.txt").is_err(),
+            "remontee vers une cible inexistante refusee aussi"
+        );
+        assert!(stat_project_file(root, "/etc/passwd").is_err(), "chemin absolu refuse");
         assert!(stat_project_file(root, "").is_err(), "chemin vide refuse");
+
+        // Un chemin normal reste accepte : la garde ne doit pas tout interdire.
+        std::fs::write(dir.join("ok.txt"), b"x").unwrap();
+        assert!(stat_project_file(root, "ok.txt").unwrap().is_some(), "fichier normal lisible");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
