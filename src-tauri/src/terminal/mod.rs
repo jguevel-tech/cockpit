@@ -12,6 +12,7 @@ pub mod ecran;
 pub mod environnement;
 pub mod history;
 mod interface;
+pub mod service;
 mod tmux;
 
 pub use interface::{ActionRecherche, Creation, Taille, TerminalInfo, Terminaux};

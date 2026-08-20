@@ -311,6 +311,8 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 | PTY | portable-pty 0.9 | terminaux integres + flow claude setup-token |
 | Emulateur de terminal | alacritty_terminal `=0.26.0` | grille, curseur, ecran alternatif, historique — version EPINGLEE A L'EXACT, la crate ne promet aucune stabilite d'API |
 | Largeur des caracteres | unicode-width 0.2 | compter les colonnes d'un CJK/emoji comme l'emulateur les compte |
+| Tuyau app <-> service de terminaux | interprocess 2.4 | socket de domaine Unix et tuyau nomme Windows derriere la meme interface (sans `async`) |
+| Appels Unix du service | libc 0.2 (cible `cfg(unix)`) | `geteuid` (refuser un socket qui n'est pas le notre) et `setsid` (detacher le service) |
 | Persistance terminaux | tmux >= 3 | socket dedie `-L cockpit` ; statique 3.5a EMBARQUE dans l'AppImage |
 | Scan fichiers | ignore 0.4 | walker gitignore-aware (celui de ripgrep) |
 | Dates | chrono 0.4 | titres de notes reunion |
@@ -364,6 +366,11 @@ cd src-tauri && cargo check
 
 # Pointer vers une DB specifique
 COCKPIT_DB=/chemin/vers/data.db ./src-tauri/target/release/cockpit
+
+# Le MEME binaire sert de service de terminaux (etape B2 du chantier des terminaux).
+# Lance a la main, il ecoute et n'ouvre aucune fenetre ; l'application le relance elle-meme,
+# detache, quand elle en a besoin. Rien n'y passe encore.
+./src-tauri/target/release/cockpit --service-terminaux /run/user/1000/cockpit/terminaux.sock
 ```
 
 ## Dependances systeme (Linux)
@@ -404,6 +411,12 @@ Communication frontend <-> backend via IPC Tauri :
 - **events** : le backend push des mises a jour en temps reel (status_update, system_metrics_tick)
 
 Pas de serveur HTTP ni de WebSocket.
+
+**Un second processus arrive** (etape B2 du chantier des terminaux, faite le 2026-08-21) : le
+service de terminaux, le meme binaire lance avec `--service-terminaux`, detache de
+l'application pour lui survivre. Il parle par un socket de domaine Unix (tuyau nomme sous
+Windows), avec son propre protocole versionne. L'application ne s'en sert PAS encore — voir
+« Onglets Terminal / Fichiers / Git » et `docs/portabilite/plan-terminaux.md`.
 
 ## Arborescence du projet
 
@@ -448,14 +461,28 @@ ai-workforce/
 │       │   ├── interface.rs        # Trait `Terminaux` : ce que Cockpit demande a un serveur de
 │       │   │                       #   terminaux, sans une ligne de tmux (12 operations)
 │       │   ├── tmux.rs             # Implementation tmux : sessions ckpt_*, clients attaches en
-│       │   │                       #   permanence, detection agents LLM (flag llm), copie OSC 52
+│       │   │                       #   permanence, copie OSC 52 (disparait a l'etape C)
+│       │   ├── environnement.rs    # Nettoyage de l'environnement AppImage + locale UTF-8 posee sur
+│       │   │                       #   tout shell lance par Cockpit (tmux ET service maison)
+│       │   ├── agents_llm.rs       # Reconnaitre un agent IA sous un shell (flag llm de la sidebar)
 │       │   ├── ecran/              # Emulateur maison (etape B1 du chantier) — se teste SEUL,
 │       │   │   │                   #   aucun appelant encore
 │       │   │   ├── mod.rs          # `Ecran` : avale les octets du shell, tient l'etat, ramasse
 │       │   │   │                   #   les reponses a renvoyer ; `Espion` pour ce que Term cache
 │       │   │   ├── etat.rs         # `EtatEcran` : photo comparable, JUGE du test d'aller-retour
 │       │   │   ├── redessin.rs     # Etat -> octets ANSI qui le refabriquent a l'identique
+│       │   │   ├── texte.rs        # Lire l'ecran comme du texte : recherche, extraction d'une region
 │       │   │   └── tests.rs        # Aller-retour : etats fabriques + octets au hasard + traces
+│       │   ├── service/            # Service de terminaux maison (etape B2) — TOURNE mais l'app ne
+│       │   │   │                   #   s'en sert pas encore, la bascule est l'etape C
+│       │   │   ├── mod.rs          # Reconciliation base <-> service (fonction pure, testee)
+│       │   │   ├── protocole.rs    # Messages, cadrage, et la poignee de main VERSIONNEE
+│       │   │   ├── tuyau.rs        # Chemin du socket, dossier 0700, refus d'un autre utilisateur
+│       │   │   ├── session.rs      # Un shell dans un PTY + son ecran + la regle brut/redessin
+│       │   │   ├── serveur.rs      # Ecoute, connexions, sessions, plafond d'historique
+│       │   │   ├── client.rs       # Cote application de la conversation
+│       │   │   ├── lancement.rs    # Double fork + setsid (Unix) / DETACHED_PROCESS (Windows)
+│       │   │   └── tests.rs        # Le tour complet, la SURVIE en processus detache, les mesures
 │       │   └── history.rs          # Historique commandes (DB + zsh/bash history fusionnes, recherche)
 │       ├── workspace/
 │       │   ├── mod.rs              # Explorateur fichiers : listing gitignore-aware, lecture/ECRITURE, find_symbol
@@ -1055,6 +1082,38 @@ en UNE ligne (`terminaux()`), et `AppState.terminals` est un `Box<dyn Terminaux>
 permettra de remplacer l'implementation sans toucher aux commandes Tauri
 (`docs/portabilite/plan-terminaux.md`, etape A faite le 2026-08-20).
 
+**Le service maison EXISTE et tourne, mais rien ne passe encore par lui** (etape B2, faite le
+2026-08-21). Le meme binaire lance avec `--service-terminaux <socket>` devient un service de
+terminaux : il tient les shells dans ses propres PTY, leur ecran dans `terminal/ecran/`, et
+survit a la fermeture de l'application (double fork + setsid). Il n'ecrit RIEN sur disque.
+Ce qu'il faut en savoir avant l'etape C :
+
+- **Qui detient quoi** : le service tient l'etat VIVANT (sessions, taille, ecran, agent qui
+  tourne), SQLite garde le NOM d'onglet et le PROJET — ils doivent survivre a un redemarrage de
+  la machine, ce que le service ne fait pas. C'est pourquoi **l'identifiant d'un terminal est
+  fourni par l'application** a la creation (le rowid SQLite), et pourquoi `renommer` ne traverse
+  PAS le socket : deux verites pour une meme chaine, c'est la garantie qu'elles divergent.
+- **`detacher` et `ecran_alternatif` ne sont pas implementes** et ne doivent pas l'etre : ce sont
+  des contournements de tmux sans appelant (etape A). Ils partent a l'etape C avec leurs
+  commandes Tauri.
+- **Le service n'envoie pas le flux brut** : ce qui est petit part tel quel (l'echo d'une touche),
+  ce qui depasse quatre octets par cellule d'ecran est REMPLACE par un redessin. Mesure :
+  `seq 1 200000` (~1,3 Mo au shell) fait **94 octets** sur le socket. Consequence a assumer a
+  l'etape C : les lignes qui defilent pendant une rafale n'arrivent jamais au xterm du frontend,
+  donc **la molette devra demander l'historique au service** (`Redessiner` avec historique) au
+  lieu de compter sur le tampon d'xterm. tmux avait exactement la meme propriete.
+- **Poignee de main** : le SERVICE parle en premier, dix octets de forme figee (`CKPTERM\0` +
+  version sur 2 octets). Le client sait donc dire « ce service est plus ancien que moi » avec les
+  deux numeros, au lieu d'echouer sur un message incomprehensible. Tout changement de forme d'un
+  message = incrementer `protocole::VERSION`.
+- **Socket** : `$XDG_RUNTIME_DIR/cockpit/terminaux.sock` (repli `<temp>/cockpit-<uid>/`), dans un
+  dossier cree en 0700, et le service comme le client verifient l'euid du pair. Surchargeable par
+  `COCKPIT_TERMINAUX_SOCKET` — c'est ce qui permet a une installation de developpement
+  (`COCKPIT_DB`) d'avoir son propre service au lieu de partager celui de l'utilisateur.
+- **Historique borne en CELLULES, pas en lignes** (`serveur::CELLULES_D_HISTORIQUE`) : 10 000
+  lignes a 80 colonnes comme aujourd'hui, moins au-dela. Mesures en release : 19,5 Mo par session
+  pleine a 80 colonnes, 23,1 Mo a 240 — contre 57,1 Mo a 240 sans ce plafond.
+
 - **Terminal** : multi-terminaux par projet, renommables (double-clic sur l'onglet, clic droit dans
   la sidebar), PERSISTANTS : chaque terminal est une session tmux `ckpt_<id>` sur un socket dedie
   (`tmux -L cockpit`, isole du tmux perso). Conf geree par Cockpit (`<app_data>/tmux.conf`, reecrite
@@ -1086,7 +1145,7 @@ permettra de remplacer l'implementation sans toucher aux commandes Tauri
   pas celle qu'on croit.
 - **Liens** : addon web-links, Ctrl+clic ouvre l'URL (http/https) dans le navigateur via open_url.
 - **Detection agents IA** : logo Claude dans la sidebar/dashboard quand un CLI LLM tourne dans la
-  session (claude, codex, gemini, aider... — constante LLM_COMMANDS dans terminal/tmux.rs, detection
+  session (claude, codex, gemini, aider... — constante COMMANDES_LLM dans terminal/agents_llm.rs, detection
   pane_current_command + descente de l'arbre de process pour les CLIs node), point gris sinon.
   Store terminals rafraichi toutes les 5 s. La descente se fait par
   `/proc/<pid>/task/<tid>/children`, PAS par un `ps -e` global (voir Pieges connus) : toutes
@@ -1236,6 +1295,28 @@ Le backend (`system/metrics.rs`) collecte :
 - Le trait `Plugin` dans `plugin/mod.rs` prepare cette extensibilite
 
 ## Pieges connus (lecons apprises)
+
+- **Un processus detache par double fork n'est PAS adopte par le pid 1** sur un bureau Linux
+  moderne : `systemd --user` se declare sous-moissonneur et recupere les orphelins de la session.
+  Constate le 2026-08-21 en verifiant le detachement du service de terminaux (parent 6505 =
+  `systemd --user`, pas 1). Un test qui exigerait `ppid == 1` echouerait alors que tout va bien :
+  la bonne assertion est « le parent n'est plus celui qui a lance ».
+- **Un essai qui lance un VRAI processus doit l'arreter dans un `Drop`, pas a la fin du corps
+  du test.** Le 2026-08-21, un `assert!` rate au milieu de l'essai de survie a laisse un service
+  et ses shells tourner jusqu'a la deconnexion — invisible, puisqu'il est detache et sans
+  console. Meme regle pour tout ce qui survit au test (voir `BancDetache` dans
+  `terminal/service/tests.rs`).
+- **Un test qui guette le resultat d'une commande dans un terminal trouve d'abord ce qu'il vient
+  de TAPER.** Le PTY renvoie l'echo de la ligne avant que le shell ne l'execute : un
+  `contains("mon-marqueur")` reussit immediatement et on compare deux ecrans pris a des moments
+  differents. Remede employe : une commande dont la sortie porte un marqueur que la ligne tapee
+  ne contient pas (`printf 'trace%s\n' -avant-la-coupure`). Ne PAS guetter l'invite du shell non
+  plus : elle depend de la configuration de l'utilisateur (ici zsh + oh-my-zsh, invite « ➜ »).
+- **`interprocess` : `&Stream` implemente `Read` ET `Write`.** Pas besoin de `split()` (que la
+  crate deconseille elle-meme) : un `Arc<Stream>` partage entre un thread lecteur et un thread
+  ecrivain suffit. `Stream::peer_creds()` (trait `StreamCommon`) donne l'euid ET le pid du pair
+  sous Unix — c'est a la fois le controle de proprietaire et un moyen de retrouver le processus
+  d'en face.
 
 - **`alacritty_terminal` cache trois etats dont un redessin a besoin** : la region de
   defilement (DECSTBM), le titre et sa pile, le jeu de caracteres actif. `Term` n'a pas

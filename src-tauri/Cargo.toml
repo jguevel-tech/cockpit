@@ -49,6 +49,19 @@ alacritty_terminal = { version = "=0.26.0", default-features = false }
 # qu'utilise alacritty_terminal : le redessin doit compter les colonnes exactement comme
 # l'emulateur, sinon une ligne contenant du CJK ressort decalee d'une colonne.
 unicode-width = "0.2"
+# Le tuyau entre l'application et le service de terminaux : socket de domaine Unix et
+# tuyau nomme Windows derriere la MEME interface (`terminal/service/`). Sans `async` :
+# le service est fait de threads bloquants, un par PTY, ce qui suffit pour une dizaine de
+# terminaux et evite d'embarquer un second runtime a cote de celui de Tauri.
+interprocess = { version = "2.4.3", default-features = false }
+
+# Deux appels, tous deux indispensables au service de terminaux :
+# `geteuid` (refuser de parler a un socket qui n'est pas le notre) et `setsid` (detacher
+# le service de la session de l'application, pour qu'il lui survive). `interprocess`
+# expose deja des types libc dans son API publique (`PeerCreds::euid`), la dependance est
+# donc directe plutot que cachee.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

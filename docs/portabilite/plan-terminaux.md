@@ -152,9 +152,10 @@ pour l'écran seul. C'est le service que tmux rendait sans qu'on le sache, et il
 1. **Redessiner à chaque changement d'écran actif.** Le redessin ne rend que l'écran actif ;
    quand une application plein écran se termine (`?1049l`), le service doit renvoyer un
    redessin, sinon le frontend affiche un écran principal vide.
-2. **35 Mo par terminal à historique plein, c'est beaucoup.** Dix terminaux ouverts = 350 Mo.
-   À surveiller avant de livrer : soit on assume, soit on descend l'historique, soit on
-   compacte. Ne pas découvrir ça chez un utilisateur.
+2. ~~**35 Mo par terminal à historique plein, c'est beaucoup.**~~ **Tranché en B2** : mesuré
+   à 19,5 Mo en `--release` pour une session pleine de 80 colonnes, et l'historique se compte
+   désormais en CELLULES (800 000) et non en lignes, ce qui borne la facture quand la fenêtre
+   s'élargit. Voir B2, « la mémoire ».
 3. **Le chemin de frappe ne passe PAS par ce module.** `Ecran::avaler` est pour la sortie du
    shell. L'entrée va au PTY directement, comme aujourd'hui (0,4 ms était le prix de tmux,
    faire pire ne se pardonne pas).
@@ -168,8 +169,130 @@ pour l'écran seul. C'est le service que tmux rendait sans qu'on le sache, et il
 
 #### B2. Le service, le socket, les PTY
 
-**État : à faire.** Tenir les shells (`portable-pty`), le tuyau avec l'app
-(`interprocess`), la poignée de main versionnée, la réconciliation au démarrage.
+**État : FAITE le 2026-08-21.**
+
+`src-tauri/src/terminal/service/`. Le **même binaire**, lancé avec
+`--service-terminaux <socket>`, devient un service de terminaux : il tient les shells dans
+ses propres PTY, leur écran dans le module `ecran/` de B1, et il survit à la fermeture de
+l'application. Il n'écrit rien sur disque. **Rien de l'application n'y passe encore** — la
+bascule est l'étape C.
+
+| Fichier | Rôle |
+|---|---|
+| `protocole.rs` | messages, cadrage, poignée de main versionnée |
+| `tuyau.rs` | chemin du socket, dossier 0700, refus d'un autre utilisateur |
+| `session.rs` | un shell, son écran, et la règle « brut ou redessin » |
+| `serveur.rs` | écoute, connexions, sessions, plafond d'historique |
+| `client.rs` | côté application de la conversation |
+| `lancement.rs` | double `fork` + `setsid` (Unix) / `DETACHED_PROCESS` (Windows) |
+
+**Les décisions prises, et pourquoi**
+
+1. **L'identifiant d'un terminal vient de l'APPLICATION** (`Créer { id, ... }`). Le service
+   tient l'état vivant (sessions, taille, écran, agent qui tourne) ; SQLite garde le nom
+   d'onglet et le projet, parce qu'eux doivent survivre à un redémarrage de la machine.
+   Le rowid SQLite est donc la seule identité qui traverse un reboot.
+2. **`renommer` ne traverse pas le socket.** C'est la conséquence directe du point 1 : le
+   nom vit en base, le mettre aussi dans le service ferait deux vérités pour une même
+   chaîne. Le client de l'étape C le servira depuis la base, sans aller-retour.
+3. **`détacher` et `écran alternatif` ne sont pas implémentés**, comme demandé : ce sont des
+   contournements de tmux sans appelant.
+4. **`copier la sélection` prend une RÉGION** (début, fin) et rend son texte. La sélection
+   appartenait à tmux ; chez nous elle appartient au frontend, et le service est juste celui
+   qui sait lire une zone qui a défilé hors de l'écran. Un appel, comme promis.
+5. **`chercher` rend un résultat** (nombre d'occurrences, indice courant, position) au lieu
+   de peindre : le service n'a pas d'écran à peindre. Les lignes enroulées comptent pour une
+   seule — « --no-bundle » à cheval sur une coupure de 80 colonnes doit se trouver.
+6. **La poignée de main : le SERVICE parle en premier**, dix octets de forme figée
+   (`CKPTERM\0` + version sur 2 octets), avant tout autre échange. C'est ce qui permet à la
+   partie la plus récente de dire « ce service est plus ancien que moi » avec les deux
+   numéros, sans avoir à comprendre le format de l'autre. Erreur structurée
+   (`ErreurPoignée`), jamais une chaîne à analyser.
+7. **Socket** : `$XDG_RUNTIME_DIR/cockpit/terminaux.sock` (repli `<temp>/cockpit-<uid>/`),
+   dans un dossier créé en 0700, et l'euid du pair vérifié **des deux côtés**. Surchargeable
+   par `COCKPIT_TERMINAUX_SOCKET` : c'est ce qui permet à une installation de développement
+   (`COCKPIT_DB`) d'avoir son propre service — le garde-fou que tmux payait par une
+   exception en dur dans `purge_dead`.
+
+**Ce qui part sur le socket : pas le flux brut**
+
+C'est le point le plus important pour l'étape C. Ce qui est petit part tel quel et tout de
+suite (l'écho d'une touche) ; ce qui dépasse quatre octets par cellule d'écran est REMPLACÉ
+par un redessin. Mesure : `seq 1 200000`, soit ~1,3 Mo écrits par le shell, fait **94 octets**
+sur le socket.
+
+Le prix, à assumer à l'étape C : **les lignes qui défilent pendant une rafale n'arrivent
+jamais au xterm du frontend**. Elles ne sont pas perdues (le service garde l'historique) mais
+la molette devra les demander au service (`Redessiner` avec historique) au lieu de compter
+sur le tampon d'xterm. tmux avait exactement la même propriété — il jetait 53 % des octets.
+
+**Les deux chiffres**
+
+| Ce qu'on mesure | Notre service | tmux |
+|---|---|---|
+| Latence ajoutée par frappe (aller-retour complet moins PTY nu) | **0,034 ms** | 0,4 ms |
+| Dépôt d'une frappe sur le socket (ce que paie la commande Tauri) | 3,8 µs | — |
+| Aller-retour complet touche → écho affiché | 41 µs | — |
+| Volume transmis pour ~1,3 Mo de sortie shell | **94 octets** | ~47 % des octets |
+
+Mesures du 2026-08-21 sur cette machine, médiane sur 200 frappes (`cargo test -- --nocapture`,
+essai `la_latence_de_frappe_reste_sous_celle_de_tmux`). Le chemin de frappe ne passe ni par
+le verrou de l'écran, ni par une file, ni par un aller-retour : `Écrire` n'attend AUCUNE
+réponse, un échec revient en poussée `Panne`.
+
+**La mémoire : mesurée, puis bornée en CELLULES**
+
+B1 annonçait 35 Mo par session à historique plein et laissait la question ouverte. Mesures en
+`--release`, coût d'une session SUPPLÉMENTAIRE :
+
+| Session | À vide | Historique plein |
+|---|---|---|
+| 80 colonnes, 10 000 lignes | 204 Ko | 19,5 Mo |
+| 240 colonnes, 3 333 lignes (avec le plafond) | 320 Ko | 23,1 Mo |
+| 240 colonnes, 10 000 lignes (sans le plafond) | 320 Ko | **57,1 Mo** |
+
+Décision : **l'historique se compte en cellules, pas en lignes** — 800 000 cellules par
+session (`serveur::CELLULES_D_HISTORIQUE`), soit exactement les 10 000 lignes promises à 80
+colonnes, et moins de lignes au-delà. La facture cesse de suivre la largeur de la fenêtre :
+c'est la dernière ligne du tableau qui a tranché, une simple fenêtre plus large triplait le
+coût pour un historique que personne n'avait demandé plus long.
+
+Ce qui reste assumé, et qu'il faut savoir : onze terminaux de 80 colonnes RÉELLEMENT pleins
+font ~215 Mo. Ce pire cas n'est presque jamais atteint — alacritty n'alloue les lignes qu'au
+fur et à mesure qu'elles défilent (204 Ko pour une session neuve contre 19,5 Mo une fois
+pleine), donc un terminal où tourne un agent en plein écran ne coûte rien. Le levier suivant,
+s'il faut descendre plus bas, est de ranger les lignes de l'historique autrement que la
+grille vive (texte + attributs comprimés) : gros chantier, à ne lancer que sur une plainte
+réelle.
+
+**Ce que les essais prouvent** (`service/tests.rs`, 40 essais avec ceux des sous-modules)
+
+- le tour complet par le socket : créer, écrire, lire la sortie, redimensionner, fermer ;
+- **la survie** : un service dans un VRAI processus détaché (le même `lancer_detache` que
+  l'application, lancé depuis le binaire de test), on crée un terminal, on tue le client, on
+  se reconnecte, l'écran est identique au caractère près — et le service n'est plus un enfant
+  du processus qui l'a lancé ;
+- **vim** : reconnexion sur une application plein écran, elle est retrouvée dessinée ET elle
+  répond encore ;
+- **la reconnexion en plein flux** : ce qu'un terminal neuf montre après avoir rejoué tout ce
+  qu'il a reçu est exactement ce que le service affiche (rien perdu, rien dédoublé) ;
+- la poignée de main : version différente et interlocuteur étranger reconnus AVANT tout
+  échange ;
+- la réconciliation base ↔ service, en fonction pure.
+
+**Ce qui reste pour l'étape C**
+
+1. Écrire l'adaptateur `TerminauxService` qui implémente le trait `Terminaux` par-dessus
+   `service::Client` : c'est lui qui joint l'état vivant du service et le nom/projet de
+   SQLite, sert `renommer` depuis la base, et lance le service au démarrage
+   (`lancement::demarrer`).
+2. Rebrancher la sortie : les poussées `Sortie`/`Redessin` deviennent l'événement Tauri
+   `terminal_output` (base64, mêmes regroupements côté frontend), `Fini` devient
+   `terminal_exit`, `PressePapier` appelle `set_clipboard`.
+3. **La molette** : faire venir l'historique du service (`Redessiner` avec historique) au lieu
+   du tampon d'xterm — voir « pas le flux brut » ci-dessus.
+4. Brancher la réconciliation dans `preparer` (`reconcilier()` est déjà écrite et testée).
+5. Retirer `détacher`, `écran alternatif` et tmux, comme prévu ci-dessous.
 
 ### C. Brancher, puis supprimer tmux
 
@@ -178,7 +301,8 @@ Basculer l'implémentation derrière le trait — c'est une ligne, `terminaux()`
 inutile :
 
 - `src-tauri/src/terminal/tmux.rs` en entier (tout ce qui est propre à tmux y est enfermé
-  depuis l'étape A)
+  depuis l'étape A ; ce qui ne l'est pas en est sorti à l'étape B2 —
+  `terminal/environnement.rs` et `terminal/agents_llm.rs` RESTENT, le service s'en sert)
 - les commandes `detach_terminal` et `terminal_alt_screen`, leurs wrappers dans
   `src/lib/api/workspace.ts`, et les opérations correspondantes du trait : elles n'ont aucun
   appelant

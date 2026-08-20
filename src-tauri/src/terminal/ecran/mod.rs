@@ -68,10 +68,12 @@
 
 mod etat;
 mod redessin;
+mod texte;
 #[cfg(test)]
 mod tests;
 
 pub use etat::{Cellule, Curseur, EtatEcran};
+pub use texte::Occurrence;
 
 use std::sync::{Arc, Mutex};
 

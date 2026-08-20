@@ -1357,6 +1357,20 @@ fn preload_system_libwayland() {
     std::env::set_var("LD_PRELOAD", value);
 }
 
+/// Le meme binaire sert de SERVICE DE TERMINAUX quand on le lance avec
+/// `--service-terminaux <socket>` : c'est ainsi que l'application se relance elle-meme,
+/// detachee, pour que les shells lui survivent (`terminal/service/lancement.rs`).
+///
+/// A appeler en TOUT PREMIER dans `main` : rien de Tauri, de GTK ni de la base ne doit
+/// etre initialise dans ce processus, qui n'ouvre aucune fenetre. Rend `true` quand le
+/// processus vient de faire son travail et doit s'arreter.
+///
+/// Sans cet argument, ne fait rien : etape B2 du chantier des terminaux, aucun terminal de
+/// l'application ne passe encore par le service.
+pub fn service_terminaux_si_demande() -> bool {
+    terminal::service::lancement::tourner_si_demande()
+}
+
 pub fn run() {
     // FIX RACINE bug accents terminaux (NE PAS RETIRER) : sous Linux, ibus route
     // les touches accentuees DIRECTES de l'AZERTY (é è ç à) par le pipeline de
