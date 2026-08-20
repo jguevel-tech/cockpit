@@ -26,3 +26,4 @@ docs/superpowers/
 # Divers
 *.log
 .DS_Store
+.claude/issues-vues.json
