@@ -38,8 +38,6 @@ struct LiveAttach {
     killer: Box<dyn ChildKiller + Send + Sync>,
     shared: Arc<Mutex<SharedBuffer>>,
     alive: Arc<std::sync::atomic::AtomicBool>,
-    /// Kill volontaire (respawn au re-attach) : ne pas emettre terminal_exit.
-    suppress_exit: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Serialize, Clone)]
@@ -661,7 +659,7 @@ impl TerminalState {
             .master
             .try_clone_reader()
             .map_err(|e| format!("clone reader: {}", e))?;
-        let mut writer = pair
+        let writer = pair
             .master
             .take_writer()
             .map_err(|e| format!("take writer: {}", e))?;
@@ -689,12 +687,10 @@ impl TerminalState {
         // atteindre xterm, sinon la molette et l'affichage initial sont casses.
         let shared = Arc::new(Mutex::new(SharedBuffer { data: Vec::new(), attached: true }));
         let alive = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let suppress_exit = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         {
             let shared = shared.clone();
             let alive = alive.clone();
-            let suppress_exit = suppress_exit.clone();
             let app = app.clone();
             let db = db.clone();
             let tmux_name = tmux_name.to_string();
@@ -721,10 +717,10 @@ impl TerminalState {
                     }
                 }
                 alive.store(false, std::sync::atomic::Ordering::SeqCst);
-                // Kill volontaire (respawn d'un client frais) : silencieux.
-                if suppress_exit.load(std::sync::atomic::Ordering::SeqCst) {
-                    return;
-                }
+                // Il n'y a plus de kill volontaire a taire ici : depuis le revirement du
+                // 2026-08-13 (pool persistant), attach() REUTILISE un client vivant au lieu
+                // de le tuer pour en respawner un frais. Le seul kill restant est close(),
+                // ou terminal_exit est justement ce qu'on veut (les listes se rafraichissent).
                 // Shell termine (session tmux disparue) -> on nettoie la ligne.
                 // Client simplement detache (session encore la) -> on garde.
                 // tmux injoignable -> on garde AUSSI : c'est ce qui faisait disparaitre des
@@ -738,7 +734,7 @@ impl TerminalState {
 
         self.live.lock().unwrap().insert(
             id,
-            LiveAttach { writer, master: pair.master, killer, shared, alive, suppress_exit },
+            LiveAttach { writer, master: pair.master, killer, shared, alive },
         );
         Ok(())
     }
