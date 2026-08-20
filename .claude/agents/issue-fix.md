@@ -112,3 +112,11 @@ retirer : elles coutent moins cher a lire qu'a re-apprendre.)_
 - **Ton dernier message EST le rendu.** Ne termine jamais ton tour sur un accuse de
   reception ou une question : le texte final est la seule chose qui remonte. Vu le
   2026-08-20 sur des agents de triage, meme cause possible ici.
+- **Durcir un garde-fou oblige a reparer ce qu'il revele, dans le meme lot.** Un
+  controle rendu plus strict qui laisse derriere lui des violations fait echouer la
+  verification, donc bloque toute livraison — on ne peut pas s'arreter au milieu. Soit
+  tu vas au bout, soit tu ne touches pas au garde-fou. Le 2026-08-20, rendre
+  `i18n:audit` capable de voir les libelles ranges dans une variable en a decouvert 42
+  d'un coup : les traduire faisait partie du travail, pas d'un chantier suivant. Une
+  consigne demandant de s'arreter au-dela d'un certain volume etait fausse sur ce
+  point.

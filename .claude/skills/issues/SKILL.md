@@ -297,19 +297,67 @@ Le commentaire doit demander a l'auteur de verifier chez lui et de repondre. San
 cette demande explicite, le label ne veut rien dire : personne ne sait qu'on attend
 quelque chose.
 
-## Etape 6 — Rapport a Jimmy
+## Etape 6 — Rapport a Jimmy : FORMAT IMPOSE
 
-En fin de traitement, une reponse courte :
+**A chaque fois que tu t'arretes de travailler, tu rends ce rapport.** Pas seulement a
+la fin du run : a chaque pause, meme au milieu. Un point d'etape en prose ou il doit
+deviner s'il a quelque chose a faire est un mauvais rapport, meme s'il est exact.
 
-- ce qui a ete corrige et dans quelle version
-- les issues fermees
-- les issues laissees ouvertes en attente d'infos
-- **les demandes de nouvelle fonctionnalite, avec pour chacune : ce que ca donnerait,
-  ce que ca touche, le cout, et ta recommandation.** C'est la seule partie ou il a
-  quelque chose a decider.
-- **ce qui a ete corrige dans le skill ou les agents pendant le run**, en une ligne
-  par regle ajoutee. S'il n'y a rien, ne rien inventer — mais si quelque chose s'est
-  mal passe et que rien n'a bouge, c'est que l'etape 4bis a ete sautee.
+Les cinq blocs ci-dessous, dans cet ORDRE, en sautant ceux qui sont vides — sauf le
+premier et le dernier, jamais omis.
+
+### 1. Ce que j'attends de toi
+
+En premier, toujours. Une liste numerotee de decisions ou de reponses, chacune
+formulee pour qu'un mot suffise a y repondre. Pour une decision, ta recommandation
+avec elle.
+
+**S'il n'y a rien, ecris-le franchement : « Rien de ton cote. »** C'est une
+information, pas un blanc a combler.
+
+### 2. Termine
+
+Tableau. Une ligne par chose finie, avec ce qui a ete livre et ou.
+
+| Issue / sujet | Ce qui a ete fait | Version |
+|---|---|---|
+
+### 3. En cours
+
+Tableau des agents qui travaillent en ce moment. S'il n'y en a aucun, dis-le : il doit
+savoir si ca continue de bouger tout seul ou si tout est arrete.
+
+| Agent | Sujet | Depuis |
+|---|---|---|
+
+### 4. En attente de quelqu'un d'autre
+
+Les issues ou la balle est chez l'auteur, avec la date de fermeture automatique.
+
+| Issue | On attend quoi | Ferme le |
+|---|---|---|
+
+### 5. Etat de la session
+
+Une seule ligne, explicite, parmi :
+
+- **Termine** — plus rien ne tourne, plus rien ne m'attend, tu peux fermer.
+- **En cours** — des agents travaillent, je reviens avec la suite sans que tu fasses
+  rien.
+- **Bloque** — je ne peux pas avancer avant tes reponses du bloc 1.
+
+Puis, s'il y a lieu, une derniere ligne : ce qui a ete corrige dans le skill ou les
+agents pendant le run, une ligne par regle. Ne rien inventer s'il n'y a rien — mais si
+quelque chose s'est mal passe et que rien n'a bouge, c'est que l'etape 4bis a ete
+sautee.
+
+### Ce qui est interdit dans un rapport
+
+- Enterrer une question au milieu d'un paragraphe : elle va dans le bloc 1 ou nulle
+  part.
+- Laisser croire que quelque chose avance quand tout est arrete, ou l'inverse.
+- Annoncer une version comme livree avant que `latest.json` reponde 200.
+- Un pave. Les tableaux existent pour qu'il lise en dix secondes.
 
 ## Repondre a l'auteur
 
