@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.33.2] — 2026-08-20
+
 ### Fixed
 
 - L'interface ne se fige plus par à-coups. Toutes les cinq secondes, le rafraîchissement
