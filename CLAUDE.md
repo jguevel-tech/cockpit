@@ -713,9 +713,22 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
   macOS termine seul -> tous les utilisateurs Linux casses). D'ou `timeout-minutes` sur le job
   (120) et sur l'etape apt (15), l'arret du service, `-o DPkg::Lock::Timeout=120` et trois
   essais. Ne pas retirer ces plafonds : c'est ce qui transforme un blocage en echec rapide.
-- **`Resource not accessible by integration` a la CREATION de la release** : incident
-  transitoire de l'API GitHub (constate sur la v0.24.0 ; la v0.25.0 a reussi avec le meme
-  token juste apres). REGLE : si une version PLUS RECENTE est deja publiee, NE JAMAIS rerun
+- **`Resource not accessible by integration` a la CREATION de la release** : le jeton n'a pas
+  le droit d'ecrire. **Verifier d'abord le reglage du depot** :
+  `gh api repos/jguevel-tech/cockpit/actions/permissions/workflow` doit rendre
+  `default_workflow_permissions: "write"`. Constate le 2026-08-20 sur la v0.33.0 : il etait
+  passe en `read`, les builds reussissaient (AppImage et app.tar.gz signes) et seule la
+  creation de release echouait.
+  **UNE RELANCE NE SERT A RIEN dans ce cas** : les permissions du jeton sont fixees a la
+  CREATION du run, donc `gh run rerun` rejoue avec l'ancien jeton, meme apres avoir corrige le
+  reglage. Il faut un run NEUF, c'est-a-dire un nouveau tag. Deux relances ont ete perdues a
+  croire au diagnostic « incident transitoire » ci-dessous.
+  Ce diagnostic-la existe aussi (constate sur la v0.24.0 ; la v0.25.0 a reussi avec le meme
+  token juste apres) mais il ne doit venir qu'en SECOND, apres avoir verifie le reglage.
+  Quand le tag est perdu : laisser le tag orphelin, et **remettre ses notes sous
+  `[Unreleased]`** avant de tagger la version suivante — sinon le correctif est livre sans
+  figurer dans les notes que le logiciel affiche.
+  REGLE : si une version PLUS RECENTE est deja publiee, NE JAMAIS rerun
   le vieux tag — sa release deviendrait "latest" (GitHub classe par date de creation) et
   servirait un latest.json plus vieux aux utilisateurs. Le contenu du tag rate part de toute
   facon dans la version suivante (le code est cumulatif) ; on laisse le tag orphelin.
