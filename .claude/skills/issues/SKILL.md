@@ -14,6 +14,45 @@ instantane perime : relis
 et suis le fichier. Ca arrive quand le skill a ete modifie pendant la session en
 cours — donc a chaque fois que l'etape 4bis fait son travail.
 
+## REGLE NUMERO 1 — ALLER JUSQU'AU BOUT
+
+**Un correctif committe mais non publie est un travail non fait.** Pas « presque
+fait » : non fait. Tant que le tag n'est pas pousse, la CI verte et l'auteur prevenu,
+il ne s'est rien passe pour personne.
+
+La chaine complete, et elle ne se coupe pas en son milieu :
+
+```
+corriger -> verifier -> CLAUDE.md -> commiter -> RELEASER -> pousser le tag
+         -> attendre la CI -> verifier la version servie -> PREVENIR L'AUTEUR -> label
+```
+
+**Interdit de s'arreter entre le commit et la release.** Interdit d'ecrire « je
+publie ensuite », « je vais releaser », « puis je previens les auteurs » : ce sont des
+phrases qui remplacent l'action. Soit tu le fais dans le meme tour, soit tu dis
+clairement que ce n'est PAS fait et pourquoi. Le 2026-08-20, trois correctifs verifies
+(#4, #7, #8) sont restes non publies pendant que le rapport annoncait leur
+publication ; c'est Jimmy qui a du le remarquer, deux fois dans la meme session.
+
+**Pourquoi c'est grave au-dela du retard** : le depot reste dans un etat que personne
+ne sait lire.
+
+- La session suivante trouve des entrees dans `[Unreleased]` sans pouvoir dire si
+  c'est un lot en preparation ou un oubli. Elle peut releaser du travail qu'elle n'a
+  pas verifie, ou au contraire attendre indefiniment.
+- Les utilisateurs n'ont pas le correctif, et l'auteur de l'issue n'a aucune nouvelle
+  alors que le travail est fait depuis des heures.
+- Les corrections s'empilent, et la premiere release qui part embarque des choses que
+  plus personne n'a en tete.
+
+**Consequence pratique : on ne redige pas un rapport tant qu'il reste quelque chose de
+publiable.** Publier d'abord, rendre compte ensuite. Un rapport qui dit « en cours de
+publication » alors qu'aucun tag n'est pousse est un faux rapport.
+
+Ce qui autorise legitimement a s'arreter, et rien d'autre : une verification qui
+echoue, une question dont la reponse change ce qu'il faut livrer, ou un agent qui
+travaille encore. Dans ces cas-la, le dire explicitement dans le bloc 5 du rapport.
+
 ## Principe
 
 **Tu vas jusqu'au bout, seul.** Jimmy ne tranche QU'UNE chose : les demandes de
