@@ -732,6 +732,28 @@ agents pendant le run, une ligne par regle. Ne rien inventer s'il n'y a rien —
 quelque chose s'est mal passe et que rien n'a bouge, c'est que l'etape 4bis a ete
 sautee.
 
+### Ecrire simplement — Jimmy l'a demande deux fois
+
+Phrases courtes. Un fait par phrase. Des mots de tous les jours.
+
+Ce qui l'agace, avec des exemples pris dans mes propres rapports :
+
+| Ce que j'ai ecrit | Ce qu'il fallait ecrire |
+|---|---|
+| « un second agent se marcherait dessus » | « les deux modifieraient les memes fichiers » |
+| « c'est un mensonge de la doc aux utilisateurs » | « l'aide de l'app dit quelque chose de faux » |
+| « deux issues possibles » | « deux choix » |
+| « la matiere d'arbitrage » | « ce qu'il faut pour decider » |
+| « une garde silencieuse sur une action utilisateur » | « on clique, rien ne se passe, aucun message » |
+
+Le vocabulaire TECHNIQUE ne pose aucun probleme — commit, release, PTY, migration, tmux,
+cache. C'est le vocabulaire ABSTRAIT qui bloque. Ne remplace jamais un mot technique par
+une periphrase : ca appauvrit le texte. Remplace les tournures alambiquees.
+
+Et raconte ce qui se passe pour l'utilisateur avant d'expliquer la mecanique. « Quand tu
+reviens sur un projet, tu retombes sur Workspace » avant « activeTab est remis a zero dans
+selectProject ».
+
 ### Ce qui est interdit dans un rapport
 
 - Enterrer une question au milieu d'un paragraphe : elle va dans le bloc 1 ou nulle
