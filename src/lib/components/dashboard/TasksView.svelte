@@ -9,6 +9,7 @@
   import { notify } from "../../stores/toast";
   import { dueLabel, dueUrgency } from "../../utils/due";
   import InlineEdit from "../ui/InlineEdit.svelte";
+  import TodoText from "../todos/TodoText.svelte";
   import type { Todo } from "../../types";
   import { trad, tradN } from "../../i18n";
 
@@ -232,12 +233,7 @@
                 onCancel={cancelEditTodo}
               />
             {:else}
-              <button
-                class="todo-text-btn"
-                onclick={(e) => { e.stopPropagation(); startEditTodo(todo); }}
-                ondragstart={(e) => e.preventDefault()}
-                title={$trad("common.clickToEdit")}
-              >{todo.text}</button>
+              <TodoText texte={todo.text} dense sansGlisser onEdit={() => startEditTodo(todo)} />
             {/if}
             {#if todo.due_date}
               <span class="due-badge {dueUrgency(todo.due_date)}" title={$trad("tasks.due", { date: todo.due_date })}>
@@ -324,18 +320,6 @@
     width: 8px; height: 8px;
     border-radius: 50%;
     background: var(--success);
-  }
-  .todo-text-btn {
-    flex: 1; min-width: 0;
-    background: none; border: 1px solid transparent;
-    padding: 0.1rem 0.3rem; margin: -0.1rem -0.3rem;
-    text-align: left; color: inherit; cursor: text;
-    border-radius: 4px; font-size: inherit; font-family: inherit; line-height: 1.4;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .todo-text-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--border-color);
   }
   .due-badge {
     flex-shrink: 0; border: 1px solid var(--border-color); border-radius: 10px;

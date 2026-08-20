@@ -191,9 +191,10 @@ export const en: Catalog = {
   "appearance.chooseImage": "Choose an image",
   "note.linkUrlPrompt": "Link address:",
   "note.openHint": "Ctrl+click to open links",
-  "note.linkRefused": "Link not opened: only http, https and mailto addresses are allowed.",
-  "note.linkInvalid": "Unreadable link: {href}",
-  "note.linkIncomplete": "Link not opened: the address is incomplete. A full address is required, for example https://example.com or mailto:name@example.com.",
+  // Opening a link: shared by notes and task text (utils/liens.ts)
+  "link.refused": "Link not opened: only http, https and mailto addresses are allowed.",
+  "link.invalid": "Unreadable link: {href}",
+  "link.incomplete": "Link not opened: the address is incomplete. A full address is required, for example https://example.com or mailto:name@example.com.",
   "note.bold": "Bold",
   "note.italic": "Italic",
   "note.strike": "Strikethrough",

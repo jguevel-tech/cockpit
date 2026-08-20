@@ -472,7 +472,10 @@ ai-workforce/
 │   │   │   └── reorderable.ts      # Action Svelte DnD de reordonnancement (classes globales components.css)
 │   │   ├── utils/
 │   │   │   ├── reorder.ts          # reorder(list, from, to, pos) + groupBy(list, keyFn)
-│   │   │   └── format.ts           # formatBytes
+│   │   │   ├── format.ts           # formatBytes
+│   │   │   ├── due.ts              # libelle et urgence d'une echeance de tache
+│   │   │   ├── adresses.ts         # analyserLien + SCHEMAS_OUVRABLES (PUR : teste sous node)
+│   │   │   └── liens.ts            # ouvrirLien : ouverture systeme + messages de refus
 │   │   ├── stores/                 # Stores Svelte reactifs
 │   │   │   ├── projects.ts         # Liste projets, alimente par event status_update
 │   │   │   ├── recording.ts        # Statut pipeline reunion (event recording_status)
@@ -505,7 +508,8 @@ ai-workforce/
 │   │   │   │   ├── PluginsTab.svelte     # Marketplace agents par projet
 │   │   │   │   └── SettingsTab.svelte    # Parametres projet + URLs + override prompt resume
 │   │   │   ├── todos/
-│   │   │   │   └── TodoList.svelte       # CRUD + checkbox (use:reorderable + InlineEdit)
+│   │   │   │   ├── TodoList.svelte       # CRUD + checkbox (use:reorderable + InlineEdit)
+│   │   │   │   └── TodoText.svelte       # Texte d'une tache : PARTAGE par TodoList et TasksView
 │   │   │   ├── urls/
 │   │   │   │   └── UrlList.svelte        # CRUD liens rapides
 │   │   │   ├── notes/
@@ -1408,7 +1412,10 @@ Le backend (`system/metrics.rs`) collecte :
   MEME chose.** `NoteEditor` autorisait `mailto:` que `open_url` refusait, et validait l'URL
   RESOLUE contre une base bidon tout en envoyant le href BRUT : `[x](www.ex.com)` passait le
   controle puis se faisait rejeter par le backend, avec un message technique a l'ecran. Deux
-  gardes qui ne s'accordent pas fabriquent des erreurs sur des liens legitimes.
+  gardes qui ne s'accordent pas fabriquent des erreurs sur des liens legitimes. Depuis le
+  2026-08-20 il n'y a plus qu'UN endroit cote frontend : `SCHEMAS_OUVRABLES` et `analyserLien`
+  dans `utils/adresses.ts`, l'ouverture et les messages dans `utils/liens.ts` (`ouvrirLien`).
+  Tout nouvel endroit qui ouvre un lien passe par la — ne pas recopier la liste.
 - **Un debounce qui repart a chaque frappe n'expire JAMAIS pendant une frappe continue.**
   L'editeur de fichiers recalculait la couche coloree Shiki 120 ms apres la DERNIERE touche :
   a 80 ms par touche (rythme de dactylo ordinaire), 0 caractere sur 33 s'affichait pendant la

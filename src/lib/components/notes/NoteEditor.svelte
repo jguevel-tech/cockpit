@@ -9,8 +9,7 @@
   import { toggleReadingMode, readingMode } from "../../stores/ui";
   import type { NoteFile } from "../../types";
   import { trad, translate } from "../../i18n";
-  import { openUrl } from "../../api/workspace";
-  import { signalerErreur } from "../../stores/errors";
+  import { ouvrirLien } from "../../utils/liens";
 
   let {
     file,
@@ -109,57 +108,18 @@
   ///
   /// Ctrl+clic et non clic simple : la zone est un editeur, un clic doit pouvoir placer le
   /// curseur pour corriger le texte d'un lien. C'est aussi le geste deja utilise ailleurs
-  /// dans Cockpit (terminal, onglet Fichiers) et dans les editeurs en general.
+  /// dans Cockpit (terminal, onglet Fichiers, texte d'une tache) et dans les editeurs en
+  /// general.
+  ///
+  /// Le tri de l'adresse et les messages de refus vivent dans utils/liens.ts : le texte
+  /// d'une tache ouvre ses liens par le meme chemin.
   async function onEditorClick(e: MouseEvent) {
     if (!(e.ctrlKey || e.metaKey)) return;
     const lien = (e.target as HTMLElement | null)?.closest("a");
     const href = lien?.getAttribute("href");
     if (!href) return;
     e.preventDefault();
-
-    // Une note peut contenir n'importe quoi (collage, import) : on n'ouvre que des adresses
-    // ABSOLUES a schema sans danger. Un refus est DIT, jamais silencieux.
-    const cible = analyserLien(href);
-    if (cible === "incomplet") {
-      notify(translate("note.linkIncomplete"), "info", 5000, { report: false });
-      return;
-    }
-    if (cible === "illisible") {
-      notify(translate("note.linkInvalid", { href }), "error", 4000, { scope: "notes.lien" });
-      return;
-    }
-    if (!["http:", "https:", "mailto:"].includes(cible.protocol)) {
-      notify(translate("note.linkRefused"), "info", 5000, { report: false });
-      return;
-    }
-    try {
-      // L'adresse ABSOLUE, pas le href brut : c'est la seule que le systeme sait ouvrir.
-      await openUrl(cible.href);
-    } catch (err) {
-      signalerErreur("notes.ouvrirLien", String(err));
-      notify(String(err), "error", 4000, { report: false });
-    }
-  }
-
-  /// Trie un href de note en trois cas : adresse absolue, lien incomplet (relatif ou sans
-  /// schema), href illisible.
-  ///
-  /// La distinction compte parce que le message affiche en depend. Resoudre le href contre une
-  /// base bidon (`new URL(href, "http://note.invalid")`) faisait passer `[x](www.ex.com)` et
-  /// `[x](../doc.md)` pour des liens http valides : la liste blanche les acceptait, puis le
-  /// backend refusait le href brut et l'utilisateur recevait une erreur technique.
-  function analyserLien(href: string): URL | "incomplet" | "illisible" {
-    try {
-      return new URL(href);
-    } catch {
-      // Pas absolu. Silence VOLONTAIRE : le cas est traite juste en dessous, pas avale.
-    }
-    try {
-      new URL(href, "http://note.invalid");
-      return "incomplet";
-    } catch {
-      return "illisible";
-    }
+    await ouvrirLien(href, "notes.ouvrirLien");
   }
 
   /// Selection courante, seulement si elle se trouve DANS la zone d'edition.

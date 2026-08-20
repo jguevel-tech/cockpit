@@ -7,6 +7,7 @@
   import { reorder, type DropPosition } from "../../utils/reorder";
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
+  import TodoText from "./TodoText.svelte";
   import { trad } from "../../i18n";
 
   let { project }: { project: string } = $props();
@@ -95,11 +96,7 @@
             onCancel={() => (editingId = null)}
           />
         {:else}
-          <button
-            class="text-btn"
-            onclick={() => (editingId = todo.id)}
-            title={$trad("common.clickToEdit")}
-          >{todo.text}</button>
+          <TodoText texte={todo.text} done={todo.done} onEdit={() => (editingId = todo.id)} />
         {/if}
         {#if editingDueId === todo.id}
           <!-- svelte-ignore a11y_autofocus -->
@@ -187,14 +184,6 @@
     font-weight: bold;
     line-height: 1;
   }
-  .text-btn {
-    flex: 1; background: none; border: 1px solid transparent; padding: 0.15rem 0.3rem;
-    text-align: left; color: var(--text-primary); cursor: text;
-    border-radius: 4px; font-size: inherit; font-family: inherit;
-    min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  }
-  .text-btn:hover { background: var(--bg-tertiary); border-color: var(--border-color); }
-  li.done .text-btn { text-decoration: line-through; color: var(--text-muted); }
   .del { background: none; border: none; cursor: pointer; color: var(--error); font-size: 1.1rem; padding: 0; opacity: 0; flex-shrink: 0; }
   li:hover .del { opacity: 1; }
   /* Echeances : badge colore par urgence ; le 📅 n'apparait qu'au survol (comme la croix) */

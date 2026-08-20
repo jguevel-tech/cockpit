@@ -199,9 +199,10 @@ export const fr = {
   "appearance.chooseImage": "Choisir une image",
   "note.linkUrlPrompt": "Adresse du lien :",
   "note.openHint": "Ctrl+clic pour ouvrir les liens",
-  "note.linkRefused": "Lien non ouvert : seules les adresses http, https et mailto sont autorisées.",
-  "note.linkInvalid": "Lien illisible : {href}",
-  "note.linkIncomplete": "Lien non ouvert : l'adresse est incomplète. Il faut une adresse complète, par exemple https://exemple.com ou mailto:nom@exemple.com.",
+  // Ouverture d'un lien : partage par les notes et le texte des taches (utils/liens.ts)
+  "link.refused": "Lien non ouvert : seules les adresses http, https et mailto sont autorisées.",
+  "link.invalid": "Lien illisible : {href}",
+  "link.incomplete": "Lien non ouvert : l'adresse est incomplète. Il faut une adresse complète, par exemple https://exemple.com ou mailto:nom@exemple.com.",
   "note.bold": "Gras",
   "note.italic": "Italique",
   "note.strike": "Barré",
