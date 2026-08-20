@@ -245,6 +245,16 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - **Un bug croise en chemin se corrige**, meme si personne ne l'a signale : on est dans
   le fichier, on vient de le comprendre, c'est maintenant qu'il coute le moins cher.
   L'objectif est zero bug, pas « la demande est traitee ».
+- **NE JAMAIS TOUCHER A LA CONFIGURATION GITHUB DU DEPOT.** Reglages Actions, permissions du
+  token, protections de branche, visibilite, collaborateurs : c'est a Jimmy, pas a l'IA. Ce qui
+  reste autorise et qui suffit largement : pousser des commits et des tags, creer et lire des
+  releases, gerer les secrets, poser des labels, commenter et fermer des issues, relancer un job.
+  Contexte du 2026-08-20 : les permissions Actions du depot se sont retrouvees en lecture seule
+  entre la v0.32.1 et la v0.33.0, ce qui a casse la creation de release
+  (« Resource not accessible by integration » sur les deux plateformes, y compris a la relance).
+  Symptome a reconnaitre vite la prochaine fois :
+  `gh api repos/jguevel-tech/cockpit/actions/permissions/workflow` doit rendre
+  `default_workflow_permissions: "write"`. Le remettre demande l'accord de Jimmy.
 - **LE TEMPS DE REALISATION N'ENTRE JAMAIS EN LIGNE DE COMPTE.** Ni dans une
   recommandation, ni dans un arbitrage, ni comme argument pour reduire un perimetre. Ne
   jamais ecrire « cout petit/moyen/gros », « deux semaines », « c'est plus rapide », ni
