@@ -284,6 +284,21 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.reading")}</p>
+        <div class="demo">
+          <div class="d-tabs">
+            <span class="d-section">{$trad("notes.title")}</span>
+            <span class="d-spring"></span>
+            <span class="d-btn small"><b>B</b></span>
+            <span class="d-btn small"><i>I</i></span>
+            <span class="d-btn small primary">▸◂ {$trad("notes.reading")}</span>
+          </div>
+          <div class="d-note">{$trad("docs.tasks.readingDemo")}</div>
+          <div class="d-row"><span class="kbd">{$trad("docs.shortcuts.keyEscape")}</span> <span class="d-muted">{$trad("docs.tasks.readingBack")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.meetings")}</p>
         <p>{$trad("docs.tasks.transcript")}</p>
         <div class="demo">

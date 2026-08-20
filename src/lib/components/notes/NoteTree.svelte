@@ -5,6 +5,8 @@
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import NoteEditor from "./NoteEditor.svelte";
+  import ReadingToggle from "./ReadingToggle.svelte";
+  import { readingMode } from "../../stores/ui";
   import { onMount } from "svelte";
   import { trad } from "../../i18n";
 
@@ -12,6 +14,7 @@
 
   let tree: NoteTreeType = $state({ folders: [], files: [] });
   let selectedFile: NoteFile | null = $state(null);
+  let notesEl: HTMLDivElement | undefined = $state(undefined);
 
   onMount(() => loadTree());
 
@@ -228,6 +231,15 @@
     cleanDragState();
   }
 
+  /// Echap quitte le mode lecture quand AUCUNE note n'est ouverte. Le cas ou une note est
+  /// ouverte appartient a NoteEditor : lui seul sait conserver la position de lecture, et les
+  /// deux branches sont exclusives ({#if selectedFile}), donc aucun risque de double bascule.
+  function onEchap(e: KeyboardEvent) {
+    if (e.key !== "Escape" || selectedFile || !$readingMode) return;
+    if (!notesEl || !(e.target instanceof Node) || !notesEl.contains(e.target)) return;
+    readingMode.set(false);
+  }
+
   function cleanDragState() {
     dragItem = null;
     folderDropTarget = null;
@@ -237,8 +249,13 @@
   }
 </script>
 
-<div class="notes">
-  <div class="tree-panel">
+<svelte:window onkeydown={onEchap} />
+
+<div class="notes" bind:this={notesEl}>
+  <!-- Mode lecture : l'arborescence est MASQUEE, pas demontee — elle garde ainsi sa position
+       de defilement et un renommage en cours. Le retour se fait par le bouton reste dans
+       l'en-tete de la note (ou par celui de l'etat vide, plus bas). -->
+  <div class="tree-panel" class:replie={$readingMode}>
     <div class="tree-header">
       <h3>{$trad("notes.title")}</h3>
       <button class="sm-btn" onclick={addFolder} title={$trad("notes.newFolder")}>📁+</button>
@@ -359,13 +376,19 @@
   {#if selectedFile}
     <NoteEditor file={selectedFile} onRename={(name) => renameFile(selectedFile!.id, name)} />
   {:else}
-    <div class="editor-panel empty-editor">{$trad("notes.selectFile")}</div>
+    <div class="editor-panel empty-editor">
+      <p>{$readingMode ? $trad("notes.readingNoFile") : $trad("notes.selectFile")}</p>
+      {#if $readingMode}
+        <ReadingToggle />
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
   .notes { display: flex; gap: 1rem; height: 100%; min-height: 400px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; }
   .tree-panel { width: 200px; min-width: 200px; overflow-y: auto; border-right: 1px solid var(--border-color); padding-right: 0.75rem; }
+  .tree-panel.replie { display: none; }
   .tree-header { display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.5rem; }
   .tree-header h3 { flex: 1; margin: 0; font-size: 0.95rem; }
   .sm-btn { background: none; border: none; cursor: pointer; font-size: 0.8rem; padding: 0.1rem 0.3rem; color: var(--text-secondary); }
@@ -398,5 +421,9 @@
   .root-files.root-drop-active { outline: 2px dashed var(--accent); outline-offset: -2px; }
 
   .editor-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  .empty-editor { display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .empty-editor {
+    display: flex; flex-direction: column; gap: 0.75rem;
+    align-items: center; justify-content: center; color: var(--text-muted);
+  }
+  .empty-editor p { margin: 0; }
 </style>

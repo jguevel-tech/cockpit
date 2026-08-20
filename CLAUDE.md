@@ -172,22 +172,26 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - SQL : valeurs toujours en parametres `?`, jamais interpolees (les noms de tables/colonnes
   en `format!()` doivent etre des constantes hardcodees)
 - **Un controle cliquable ecrit autrement qu'avec un vrai `<button>`** (pas de `<div onclick>`,
-  pas de `<span role="button">`). Voir la regle « Tout controle doit rester visible » ci-dessous :
-  c'est le selecteur `button` qui garantit sa visibilite sur une image de fond. Un `div` y echappe
-  silencieusement.
+  pas de `<span role="button">`) : clavier, focus et classes partagees (`.btn`, `.icon-btn`)
+  en dependent. ATTENTION, la justification longtemps ecrite ici — « le selecteur `button` de
+  la couche has-wallpaper lui donne un fond » — est FAUSSE : cette couche n'existe pas (voir
+  « Tout controle doit rester visible » ci-dessous).
 - Retirer le `!important` de la couche `html.has-wallpaper` de `components.css` : il est
-  delibere et documente sur place.
+  delibere et documente sur place (il rend leur fond natif aux input checkbox/radio/range/color,
+  c'est le seul `!important` de la couche).
 
 **Tout controle doit rester visible, y compris sur une image de fond** :
 - Le mode image de fond rend les surfaces translucides. Un bouton sans fond propre — et c'est le
   cas de la majorite dans ce projet (58 `background: none` dans 25 composants) — devient alors
   du texte flottant sur une photo, illisible.
-- Une couche d'override dans `components.css` (`html.has-wallpaper:root button...`) donne
-  automatiquement un fond a **tout** `<button>`, `<select>` et `<summary>`. Rien a faire en
-  ecrivant un nouveau composant, A CONDITION d'utiliser un vrai element interactif.
-- Sont exclus de l'override, volontairement : `.primary`, `.danger`, `.active` (ils portent deja
-  une couleur porteuse de sens), `.logo-btn`, les `input` de type checkbox/radio/range/color, et
-  tout le `.term-container`.
+- **Il n'y a PAS d'override global qui donne un fond a tout `<button>`.** La ligne qui
+  l'affirmait ici etait fausse : la tentative a existe, elle est ABANDONNEE et documentee sur
+  place (bloc 2 de `components.css`) — elle peignait aussi les boutons deja poses sur une
+  surface claire, d'ou des pastilles grises partout. Ne pas la reintroduire.
+- La lisibilite se traite donc au niveau des CONTENEURS : `html.has-wallpaper` pose un fond sur
+  `nav`, `.tab-content`, `.system`, `.project-bar`, `.stack`. Un bouton sans fond propre est
+  lisible parce que ce qui l'entoure en a un. Un controle place HORS de ces conteneurs doit
+  porter son propre fond (`.btn` en a un, `.icon-btn` non).
 - **Un nouveau CONTENEUR structurel** (barre d'onglets, panneau lateral, en-tete de section) doit
   etre ajoute a la liste des conteneurs A FOND TRANSLUCIDE de `components.css` (plus de flou
   depuis le 2026-08-15, voir Lisibilite). C'est l'oubli qui a rendu la sidebar illisible en
@@ -506,7 +510,8 @@ ai-workforce/
 │   │   │   │   └── UrlList.svelte        # CRUD liens rapides
 │   │   │   ├── notes/
 │   │   │   │   ├── NoteTree.svelte       # Arborescence (DnD local : move inter-dossiers)
-│   │   │   │   └── NoteEditor.svelte     # Editeur WYSIWYG (contenteditable + toolbar + autosave 1s)
+│   │   │   │   ├── NoteEditor.svelte     # Editeur WYSIWYG (contenteditable + toolbar + autosave 1s)
+│   │   │   │   └── ReadingToggle.svelte  # Bouton du mode lecture (en-tete de note + etat vide)
 │   │   │   ├── system/
 │   │   │   │   ├── SystemMonitor.svelte  # Vue systeme complete (barres + processus)
 │   │   │   │   └── ProcessList.svelte    # Top CPU / Top memoire
@@ -569,7 +574,10 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
 
 En-tete : nom renommable (double-clic), description, bouton ⏺ Enregistrer (reunions), liens rapides.
 
-- **Workspace** : Notes a gauche (flex: 2, arborescence + editeur WYSIWYG) + Todos a droite (flex: 1)
+- **Workspace** : Notes a gauche (flex: 2, arborescence + editeur WYSIWYG) + Todos a droite
+  (flex: 1). **Mode lecture** (bouton ▸◂ Lecture dans l'en-tete de la note, store `readingMode`) :
+  les DEUX colonnes se replient d'un coup et le compte rendu prend toute la zone, borne a 70rem
+  et centre. Echap en sort aussi
 - **Docker** : start/stop/restart, dependances ("depend de" / "requis par"), tableau des conteneurs
 - **Terminal** : multi-terminaux persistants (voir section dediee plus bas)
 - **Fichiers** : arbre lazy gitignore-aware + viewer Shiki (numeros de ligne, stats, copie du
@@ -587,6 +595,14 @@ En-tete : nom renommable (double-clic), description, bouton ⏺ Enregistrer (reu
 - Toolbar : Gras, Italique, Barre, H1/H2/H3, Listes, Citation, Code, Lien
 - Conversion HTML -> Markdown via `turndown` a la sauvegarde
 - Auto-save avec debounce 1s
+- **Mode lecture** (`notes/ReadingToggle.svelte`, store `readingMode` de `stores/ui.ts`) : replie
+  l'arborescence ET la colonne des taches, borne le texte a 70rem et le centre. Les deux colonnes
+  sont MASQUEES (`display: none`), pas demontees : elles gardent leur defilement, une tache a
+  moitie saisie survit a l'aller-retour et il n'y a aucun rechargement. Le bouton est
+  dans l'en-tete de la note — le seul endroit toujours visible dans les deux etats — et se
+  REPETE dans l'etat vide « aucune note ouverte », sinon un mode lecture active sans note serait
+  un cul-de-sac. La bascule conserve le paragraphe en haut de la vue et le curseur de saisie
+  (`basculerLecture` dans NoteEditor)
 
 ### Monitoring systeme
 
@@ -1085,11 +1101,12 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 | `systemMetrics` | `stores/system.ts` | Metriques systeme courantes |
 | `cpuHistory` | `stores/system.ts` | Historique CPU (60 points FIFO) |
 | `memoryHistory` | `stores/system.ts` | Historique memoire (60 points FIFO) |
-| `activeView` | `stores/ui.ts` | Vue top-niveau (dashboard/project/settings/system/agents) |
+| `activeView` | `stores/ui.ts` | Vue top-niveau (dashboard/project/settings/system/docs) — plus de vue `agents`, elle est encastree dans les parametres |
 | `selectedProject` | `stores/ui.ts` | Projet selectionne (utilise quand activeView === "project") |
 | `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/plugins/settings). MEMORISE PAR PROJET (map en memoire) : revenir sur un projet retrouve son onglet. Une navigation intentionnelle vers un onglet precis reste prioritaire et devient la nouvelle memoire |
 | `dashboardView` | `stores/ui.ts` | Sous-vue du tableau de bord (tasks/monitoring/terminals/containers) |
 | `pendingTerminalId` | `stores/ui.ts` | Session terminal a activer a l'arrivee sur l'onglet Terminal |
+| `readingMode` | `stores/ui.ts` | Mode lecture de l'onglet Workspace (replie notes + taches), persiste localStorage `cockpit-notes-reading` |
 | `theme` | `stores/appearance.ts` | Palette active (identifiant), persiste localStorage |
 | `themeBase` | `stores/appearance.ts` | Base derivee "dark" ou "light" — a consommer pour xterm et Shiki |
 | `wallpaper` | `stores/appearance.ts` | Data URL de l image de fond, ou null (fichier cote Rust) |
@@ -1273,6 +1290,16 @@ Le backend (`system/metrics.rs`) collecte :
   (aucune fenetre visible), UNE PAGE FRAICHE PAR SCENARIO (les styles injectes persistent).
   L'outil Read affiche les PNG : comparaison a l'oeil, preuve en images. C'est ce banc qui a
   identifie le bug n°3 ci-dessus et invalide deux fausses pistes en 10 minutes.
+  Deux details qui coutent du temps quand on les redecouvre :
+  - **`Gtk.OffscreenWindow` + `Gdk.pixbuf_get_from_surface` NE REND JAMAIS** sous Xvfb (banc du
+    2026-08-20 : trois minutes sans capture, tue au timeout). Utiliser une `Gtk.Window` normale
+    et `Gdk.pixbuf_get_from_window`, avec `WEBKIT_DISABLE_DMABUF_RENDERER=1` et un
+    `GLib.timeout_add` de secours qui quitte la boucle.
+  - le banc sert aussi a VERIFIER un controle sur image de fond sans lancer l'app : une page
+    statique qui charge les vrais `styles/{global,theme,components}.css` en `<link>`, `<html
+    class="dark has-wallpaper">`, un `.wallpaper` a degrades croises, et le composant recopie.
+    C'est comme ca qu'a ete choisi le glyphe du bouton Lecture (les fleches `⇤⇥` sont illisibles
+    a 0,78rem, les triangles `▸◂` non) — trente secondes par variante.
 - **L'AppImage embarque des bibliotheques de sa machine de construction, et ca casse chez
   les autres** : linuxdeploy y met la `libwayland-client` du runner (22.04 -> 1.20). Sur une
   distro plus recente, le pilote graphique du systeme (Mesa 25+, lui jamais embarque) se
@@ -1289,6 +1316,14 @@ Le backend (`system/metrics.rs`) collecte :
 - **Le shell Claude tourne DANS un terminal Cockpit** : il herite des fuites AppImage
   (PYTHONHOME casse python3, LD_LIBRARY_PATH casse curl). Prefixer les outils sensibles par
   `env -u PYTHONHOME -u PYTHONPATH -u LD_LIBRARY_PATH ...`.
+- **Changer la LARGEUR d'une zone de texte deplace la lecture** : les retours a la ligne ne
+  tombent plus au meme endroit, donc conserver `scrollTop` ne ramene pas sur le meme paragraphe
+  (l'ecart grandit avec la longueur de la note). Toute bascule de ce genre — mode lecture,
+  panneau qu'on replie, colonne qu'on cache — doit reperer un BLOC visible et sa distance au
+  bord haut, puis le remettre a la meme place apres `await tick()` (voir `repereDeLecture` /
+  `restaurerRepere` dans NoteEditor.svelte). Meme chose pour le curseur de saisie : le clic sur
+  le bouton fait perdre le focus du contenteditable, il faut cloner le `Range` avant et le
+  reposer apres.
 - **Commandes de fond (run_in_background) : chemins ABSOLUS uniquement.** Le cwd du shell varie
   d'un appel a l'autre (`cd src-tauri` a echoue car le shell y etait deja) et un `&&` casse en
   tete fait rater TOUTES les etapes suivantes en silence. Toujours relire le log de sortie

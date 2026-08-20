@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { marked } from "marked";
   import TurndownService from "turndown";
   import { saveNoteFile } from "../../api/storage";
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
+  import ReadingToggle from "./ReadingToggle.svelte";
+  import { toggleReadingMode, readingMode } from "../../stores/ui";
   import type { NoteFile } from "../../types";
   import { trad, translate } from "../../i18n";
   import { openUrl } from "../../api/workspace";
@@ -64,6 +66,8 @@
 
   let markdownContent = $state("");
   let editorEl: HTMLDivElement | undefined = $state(undefined);
+  /// Panneau entier (en-tete + zone d'edition) : sert a savoir si un Echap vient d'ici.
+  let panneauEl: HTMLDivElement | undefined = $state(undefined);
   let renaming = $state(false);
   /// Ctrl enfonce : les liens deviennent cliquables et le curseur le montre.
   let ctrlEnfonce = $state(false);
@@ -181,6 +185,58 @@
     const p = document.createElement("p");
     p.appendChild(document.createElement("br"));
     return p;
+  }
+
+  /// Bloc en haut de la zone visible, et sa distance au bord haut.
+  ///
+  /// Le mode lecture change la LARGEUR du texte, donc ses retours a la ligne : garder
+  /// `scrollTop` tel quel ne ramene pas sur le meme paragraphe, et l'ecart grandit avec la
+  /// longueur de la note. On repere un bloc et on le remet exactement ou il etait.
+  function repereDeLecture(): { bloc: HTMLElement; decalage: number } | null {
+    if (!editorEl) return null;
+    const hautVue = editorEl.getBoundingClientRect().top;
+    for (const bloc of Array.from(editorEl.children) as HTMLElement[]) {
+      const r = bloc.getBoundingClientRect();
+      if (r.bottom > hautVue) return { bloc, decalage: r.top - hautVue };
+    }
+    return null;
+  }
+
+  function restaurerRepere(repere: { bloc: HTMLElement; decalage: number } | null) {
+    if (!repere || !editorEl) return;
+    const hautVue = editorEl.getBoundingClientRect().top;
+    editorEl.scrollTop += repere.bloc.getBoundingClientRect().top - hautVue - repere.decalage;
+  }
+
+  /// Echap quitte le mode lecture, comme il referme le reste de l'application.
+  ///
+  /// Restreint aux touches frappees DANS le panneau de la note : la palette Ctrl+K et le
+  /// panneau de notifications se ferment aussi sur Echap sans arreter la propagation, et
+  /// vivent dans <body> (use:portal). Sans cette garde, un seul Echap fermerait la palette ET
+  /// deplierait les colonnes.
+  function onEchap(e: KeyboardEvent) {
+    if (e.key !== "Escape" || !$readingMode) return;
+    if (!panneauEl || !(e.target instanceof Node) || !panneauEl.contains(e.target)) return;
+    basculerLecture();
+  }
+
+  /// Bascule le mode lecture SANS faire bouger le sol : meme paragraphe en haut de la vue,
+  /// meme curseur de saisie qu'avant si l'utilisateur etait en train d'ecrire.
+  async function basculerLecture() {
+    const repere = repereDeLecture();
+    const sel = selectionDansEditeur();
+    const selection = sel ? sel.getRangeAt(0).cloneRange() : null;
+    const avaitFocus = document.activeElement === editorEl;
+
+    toggleReadingMode();
+    await tick();
+
+    // Le focus d'abord (il peut deplacer le defilement vers le caret), le repere ensuite.
+    if (avaitFocus) {
+      editorEl?.focus();
+      if (selection) poserSelection(selection);
+    }
+    restaurerRepere(repere);
   }
 
   function poserSelection(r: Range) {
@@ -531,12 +587,12 @@
 </script>
 
 <svelte:window
-  onkeydown={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = true; }}
+  onkeydown={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = true; onEchap(e); }}
   onkeyup={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = false; }}
   onblur={() => (ctrlEnfonce = false)}
 />
 
-<div class="editor-panel">
+<div class="editor-panel" class:lecture={$readingMode} bind:this={panneauEl}>
   <div class="editor-header">
     {#if renaming}
       <InlineEdit
@@ -569,6 +625,9 @@
       <button class="tb" onclick={basculerBlocDeCode} title={$trad("note.codeBlock")}>&lt;/&gt;</button>
       <button class="tb" onclick={() => { const url = prompt($trad("note.linkUrlPrompt")); if (url) format("createLink", url); }} title={$trad("note.link")}>🔗</button>
     </div>
+    <!-- Le bouton reste a la MEME place dans les deux etats : c'est ce qui garantit qu'on
+         retrouve le chemin du retour la ou on a replie. -->
+    <ReadingToggle onToggle={basculerLecture} />
   </div>
 
   <!-- Zone d'edition : elle est deja focalisable et editable au clavier (contenteditable).
@@ -590,6 +649,11 @@
 
 <style>
   .editor-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  /* Mode lecture : le compte rendu prend toute la zone, mais la colonne de texte reste
+     bornee et CENTREE — c'est la demande (« le texte au milieu tres lisible »), et des
+     lignes de 200 caracteres se lisent moins bien que le panneau d'origine. Sur une
+     fenetre etroite la borne ne mord pas : le texte occupe simplement tout l'espace. */
+  .editor-panel.lecture { max-width: 70rem; margin: 0 auto; width: 100%; }
   /* Les liens ne deviennent cliquables qu'avec Ctrl : le curseur le montre au survol.
      `:global` est obligatoire — le contenu vient de `innerHTML`, donc Svelte ne voit pas
      ces balises et eliminerait la regle. */

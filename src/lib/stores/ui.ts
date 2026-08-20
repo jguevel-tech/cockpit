@@ -1,6 +1,8 @@
 import { writable } from "svelte/store";
 import { setWebviewZoom } from "../api/system";
 
+const READING_KEY = "cockpit-notes-reading";
+
 /// Vue top-niveau unique : une seule source de verite pour la navigation.
 /// Ajouter une vue = ajouter une entree ici + un case dans MainPanel.
 export type ActiveView = "dashboard" | "project" | "settings" | "system" | "docs";
@@ -24,6 +26,23 @@ export const pendingTerminalId = writable<number | null>(null);
 export const pendingFilePath = writable<string | null>(null);
 // Sous-vue active du tableau de bord
 export const dashboardView = writable<"tasks" | "monitoring" | "terminals" | "containers">("tasks");
+
+// --- Mode lecture de l'onglet Workspace ---
+
+/// Replie d'un coup l'arborescence des notes (gauche) ET la colonne des taches (droite) pour
+/// donner toute la largeur au compte rendu. Global et non par projet : c'est une preference de
+/// confort de lecture, elle n'a pas de raison de changer d'un projet a l'autre.
+export const readingMode = writable<boolean>(
+  typeof window !== "undefined" && localStorage.getItem(READING_KEY) === "1",
+);
+
+readingMode.subscribe((on) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(READING_KEY, on ? "1" : "0");
+});
+
+export const toggleReadingMode = () => readingMode.update((on) => !on);
+
 // Le theme a demenage dans stores/appearance.ts : ce n'est plus un booleen sombre/clair mais
 // une palette parmi plusieurs, accompagnee d'un accent personnalisable et d'une image de fond.
 // Consommer `theme` (identifiant de palette) ou `themeBase` ("dark" | "light") depuis la.

@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Notes : un bouton **▸◂ Lecture** dans l'en-tête de la note replie d'un coup la liste des
+  notes et la colonne des tâches. Le compte rendu occupe alors toute la zone, centré et borné
+  pour rester lisible. Le même bouton (ou Échap) ramène les deux colonnes, et l'endroit où on
+  lisait — comme le curseur de saisie — est conservé dans les deux sens. Le choix est retenu
+  d'une session à l'autre.
+
 ## [0.33.2] — 2026-08-20
 
 ### Fixed
