@@ -237,6 +237,11 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   pas pour l'utilisateur.
 - Nouvelle commande Tauri -> wrapper type dans `src/lib/api/`, types partages dans
   `src/lib/types/index.ts` en snake_case (aligne sur les structs Rust Serialize)
+- **Une commande Tauri qui LANCE UN PROCESS EXTERNE (tmux, git, docker...) s'ecrit
+  `async fn`.** Une commande `fn` s'execute EN LIGNE dans la boucle principale GTK et gele
+  toute l'interface pendant son travail (voir Pieges connus). Restent `fn` celles qui ne
+  touchent que la base ou un champ en memoire. Un `async fn` qui prend
+  `tauri::State<'_, _>` DOIT rendre un `Result` — contrainte du macro, pas un choix.
 - Svelte 5 runes uniquement : `$state`/`$derived`/`$props` + callback props
   (pas de createEventDispatcher, pas de stores locaux inutiles)
 - Commandes externes (git, docker, tmux...) : args en tableau via Command, jamais `sh -c` interpole
@@ -336,7 +341,7 @@ npx tauri build --no-bundle
 # Build frontend seul
 npm run build
 
-# Tests Rust (85 tests)
+# Tests Rust (147 tests)
 cd src-tauri && cargo test
 
 # Verification types frontend (0 erreur attendu)
@@ -839,6 +844,7 @@ SQLite stockee dans `~/.local/share/com.cockpit.dev/data.db` (ou via `COCKPIT_DB
 | `terminals` | Terminaux persistants (project, name, tmux_name) |
 | `command_history` | Historique de commandes (command PRIMARY KEY, project, ts — upsert) |
 | `claude_session_names` | Noms personnalises des sessions Claude Code (session_id, name) |
+| `project_commands` | Commandes rapides par projet (label, command, position) |
 
 La colonne `summary_prompt` (nullable) sur `projects` surcharge le prompt global de resume par projet.
 
@@ -982,8 +988,18 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 - **Liens** : addon web-links, Ctrl+clic ouvre l'URL (http/https) dans le navigateur via open_url.
 - **Detection agents IA** : logo Claude dans la sidebar/dashboard quand un CLI LLM tourne dans la
   session (claude, codex, gemini, aider... — constante LLM_COMMANDS dans terminal/mod.rs, detection
-  pane_current_command + arbre de process pour les CLIs node), point gris sinon. Store terminals
-  rafraichi toutes les 5 s.
+  pane_current_command + descente de l'arbre de process pour les CLIs node), point gris sinon.
+  Store terminals rafraichi toutes les 5 s. La descente se fait par
+  `/proc/<pid>/task/<tid>/children`, PAS par un `ps -e` global (voir Pieges connus) : toutes
+  les taches, pas seulement le thread principal, parce qu'un node fork depuis un thread de
+  travail.
+- **Sortie du PTY = 2 threads, lecteur puis emetteur** (terminal/mod.rs, `lire_pty` et
+  `pomper`) : le lecteur vide le PTY dans une file FIFO unique, l'emetteur en sort tout ce
+  qui s'y trouve et l'emet en UN evenement. Le regroupement se fait donc de lui-meme sous
+  debit, sans horloge : au repos l'emetteur attend sur une condition et l'echo d'une touche
+  part immediatement. `PTY_GROUP_WAIT` (2 ms) ne s'applique qu'au-dela de
+  `PTY_GROUP_THRESHOLD` (8 Ko) — volume qu'une frappe n'atteint jamais. NE PAS monter cette
+  fenetre « pour mieux regrouper » : ce serait payer en latence percue.
 - **Frappe = xterm brut** : `onData` -> `queueWrite` (PTY) directement, AUCUNE surcouche sur le chemin
   de frappe. L'autosuggestion, le Ctrl+R overlay et le bandeau ⚡ ont ete RETIRES le 10/07/2026.
 - **BUG ACCENTS (fix racine, NE PAS RETIRER)** : ibus (module de saisie GTK d'Ubuntu) route les touches
@@ -1121,6 +1137,49 @@ Le backend (`system/metrics.rs`) collecte :
   ré-embarque pas toujours les assets : c'est la recompilation de la crate qui les fige.
 - **Ordre des invoke Tauri** : des `invoke` rapproches peuvent s'executer dans le desordre ->
   toute ecriture PTY passe par une file par terminal cote frontend (ioQueues).
+- **UNE COMMANDE TAURI SANS `async` TOURNE SUR LA BOUCLE PRINCIPALE GTK ET GELE TOUT.**
+  Piege de CONCEPTION, invisible a la lecture : le macro `#[tauri::command]` sur un `fn`
+  (sans `async`) produit un contexte d'execution bloquant, et la commande s'execute en ligne
+  dans le gestionnaire IPC de wry — lequel est un signal GTK. Pendant tout son travail,
+  l'interface ne repeint plus et les evenements `terminal_output` ne sont plus livres.
+  Constate le 2026-08-20 sur `list_all_terminals`, appelee toutes les 5 s par le magasin
+  `terminals` : 50 ms a vide, et jusqu'a 1 s quand des agents tournaient — donc une interface
+  figee une seconde toutes les cinq. Mesure : chronometrage de chaque commande externe du
+  poll (`tmux list-sessions` 3,5 ms, `tmux list-panes -a` 3,8 ms, `ps -e -o pid=,ppid=,args=`
+  47,6 ms sur 1074 process). A faire : toute commande qui lance un process externe est
+  `async fn` ; et un `async fn` avec `tauri::State<'_, _>` doit rendre un `Result`.
+- **Enumerer tous les process de la machine pour en regarder trois** : la detection des
+  agents LLM lancait `ps -e -o pid=,ppid=,args=` a chaque passe, des qu'une commande de
+  premier plan n'etait pas un nom de LLM — c'est-a-dire toujours, puisque argv mentait sur
+  4 sessions sur 9. Remplace par une descente de l'arbre depuis les seuls panes tmux
+  (`/proc/<pid>/task/<tid>/children`), avec sortie des qu'un LLM est trouve. Mesure du
+  2026-08-20, meme resultat de detection verifie session par session : 56,5 ms -> 4,0 ms de
+  mediane, dont 3,3 ms de `tmux list-panes` — le cout du parcours lui-meme est de ~0,3 ms,
+  et il depend du nombre de terminaux, plus de celui des process de la machine. `sysinfo`
+  aurait evite le fork mais pas l'enumeration complete : ce n'etait pas le probleme.
+- **Un evenement Tauri v2 est du JavaScript construit puis evalue, pas un canal binaire** :
+  `emit` fabrique une source `(function () { ... fn({event, payload: <charge>}) })()` et
+  l'evalue dans le webview (tauri-2.11.0, `event/mod.rs::emit_js_script` et
+  `webview/mod.rs`). Donc 8 Ko d'octets = ~11 Ko de source JS + un saut vers le WebProcess,
+  et une rafale de terminal en produisait des milliers. Mesures du 2026-08-20 : 1,9 Mo a
+  travers un vrai PTY partait en 2547 evenements (3 apres regroupement) ; cote webview,
+  evaluer la meme quantite d'octets en 240 scripts coute 11,2 ms contre 2,3 ms en 15 (banc
+  WebKitGTK 2.52 offscreen, python3+gi). A faire : regrouper AVANT d'emettre — mais par
+  contre-pression (un thread lecteur, un thread emetteur, une file), jamais par une horloge
+  qui retiendrait l'echo des touches.
+- **`Uint8Array.from(atob(s), cb)` appelle `cb` une fois PAR CARACTERE** : 75,2 ms pour
+  decoder 1,96 Mo, contre 2,8 ms avec `atob` puis une boucle `for` nue qui remplit un
+  `Uint8Array` prealloue (mesure du 2026-08-20, node). Sur le chemin de la sortie terminal
+  c'est le thread qui dessine qui paie. La version « elegante » est 27 fois plus lente.
+- **Le cout d'une commande tmux, c'est le fork+exec, pas le travail** : les 41 commandes
+  d'`apply_server_options` prenaient 167 ms en 41 appels et 9,1 ms enchainees par `;` dans un
+  seul appel (mesure du 2026-08-20, tmux 3.4, serveur vivant). MAIS **une chaine tmux
+  S'ARRETE a la premiere erreur et ne rapporte que celle-la** : dans
+  `set @a 1 ; set bidon on ; set @b 2`, `@b` n'est jamais pose et rien ne le dit. Un
+  `unbind MouseDown2Pane` saute ainsi ramenerait le double collage sans laisser de trace.
+  D'ou le repli : si la chaine echoue, on rejoue les commandes une par une pour appliquer
+  celles qui passent et nommer celles qui echouent. Un argument valant exactement `";"`
+  serait pris pour un separateur — un test verrouille la liste.
 - **Ctrl+lettre sous WebKitGTK** : emet aussi un keypress ; n'intercepter que le keydown laisse
   xterm envoyer le caractere de controle au shell. Bloquer tous les types d'events + listener en
   phase capture sur le conteneur.
@@ -1144,9 +1203,10 @@ Le backend (`system/metrics.rs`) collecte :
 - **Un xterm NEUF, lui, exige toujours un client frais** (sequence d'init complete : ecran
   alternatif, modes souris, redraw) — c'est le cas au premier attach d'une session, et c'est
   pourquoi le pool conserve le xterm d'origine : il a deja recu l'init de son client. Le
-  retour "replay" d'attach_terminal reste ignore (course replay/live -> ecran dechire).
-  init_command passe par `tmux send-keys` vers la SESSION. Historique molette = copy-mode
-  tmux (history-limit 10000).
+  `attach_terminal` ne rend plus rien a rejouer : le tampon de replay a ete SUPPRIME le
+  2026-08-20 (plus personne ne le lisait depuis le pool de xterm, et il recopiait 100 Ko a
+  chaque lecture du PTY). init_command passe par `tmux send-keys` vers la SESSION.
+  Historique molette = copy-mode tmux (history-limit 10000).
 - **DOUBLE COLLAGE AU CLIC MOLETTE : `preventDefault` sur l'evenement `paste` NE SERT A RIEN.**
   Le symptome est revenu deux fois, avec deux causes DIFFERENTES (abonnements onData empiles la
   premiere fois, puis celle-ci) : ne jamais supposer laquelle, mesurer.

@@ -696,9 +696,20 @@ async fn set_project_summary_prompt(project: String, prompt: Option<String>, sta
 }
 
 // --- Tauri Commands: Terminaux integres ---
+//
+// `async fn` N'EST PAS DECORATIF ICI. Une commande declaree `fn` (sans async) est executee
+// EN LIGNE par le gestionnaire IPC de wry, qui est un signal GTK : elle tourne donc sur la
+// boucle principale et gele toute l'interface — y compris la livraison de la sortie des
+// terminaux — le temps de son execution. Mesure du 2026-08-20 : `list_all_terminals`, appelee
+// toutes les 5 s par le magasin `terminals`, prenait 50 ms a vide et jusqu'a 1 s sous la
+// charge d'agents en cours. Regle : toute commande qui LANCE UN PROCESS EXTERNE (tmux, git,
+// docker...) ou qui fait des entrees-sorties bornees par autre chose que la memoire est
+// `async fn`. Restent `fn` celles qui ne touchent que la base ou un champ en memoire, ainsi
+// que `write_terminal` : c'est le chemin de frappe, il ne fait aucun fork et un aller-retour
+// vers le runtime asynchrone lui ajouterait de la latence pour rien.
 
 #[tauri::command]
-fn create_terminal(
+async fn create_terminal(
     app: tauri::AppHandle,
     project: String,
     cwd: String,
@@ -716,17 +727,17 @@ fn write_terminal(id: i64, data: String, state: tauri::State<'_, AppState>) -> R
 }
 
 #[tauri::command]
-fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.terminals.resize(&state.db, id, cols, rows)
 }
 
 #[tauri::command]
-fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.terminals.close(&state.db, id)
 }
 
 #[tauri::command]
-fn attach_terminal(
+async fn attach_terminal(
     app: tauri::AppHandle,
     id: i64,
     cols: u16,
@@ -747,13 +758,18 @@ fn rename_terminal(id: i64, name: String, state: tauri::State<'_, AppState>) -> 
 }
 
 #[tauri::command]
-fn list_terminals(project: String, state: tauri::State<'_, AppState>) -> Vec<terminal::TerminalInfo> {
-    state.terminals.list(&state.db, Some(&project))
+async fn list_terminals(
+    project: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<terminal::TerminalInfo>, String> {
+    Ok(state.terminals.list(&state.db, Some(&project)))
 }
 
 #[tauri::command]
-fn list_all_terminals(state: tauri::State<'_, AppState>) -> Vec<terminal::TerminalInfo> {
-    state.terminals.list(&state.db, None)
+async fn list_all_terminals(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<terminal::TerminalInfo>, String> {
+    Ok(state.terminals.list(&state.db, None))
 }
 
 /// Presse-papier systeme. Instance arboard gardee en vie : sous X11 le contenu
@@ -784,7 +800,7 @@ fn get_clipboard() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn terminal_copy_selection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn terminal_copy_selection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.terminals.copy_selection(&state.db, id)
 }
 
@@ -811,12 +827,14 @@ fn record_command(project: String, command: String, state: tauri::State<'_, AppS
 }
 
 #[tauri::command]
-fn terminal_alt_screen(id: i64, state: tauri::State<'_, AppState>) -> bool {
-    state.terminals.inner_alternate(&state.db, id)
+async fn terminal_alt_screen(id: i64, state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    // Un `async fn` avec `State<'_, _>` DOIT rendre un Result (contrainte du macro Tauri) ;
+    // l'erreur est ici impossible, la sonde repond simplement faux si tmux ne repond pas.
+    Ok(state.terminals.inner_alternate(&state.db, id))
 }
 
 #[tauri::command]
-fn terminal_search(id: i64, action: String, query: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn terminal_search(id: i64, action: String, query: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.terminals.search(&state.db, id, &action, &query)
 }
 

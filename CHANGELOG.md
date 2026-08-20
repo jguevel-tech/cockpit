@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- L'interface ne se fige plus par à-coups. Toutes les cinq secondes, le rafraîchissement
+  de la liste des terminaux gelait toute la fenêtre — jusqu'à une seconde entière quand des
+  agents tournaient, c'est-à-dire précisément quand on s'en sert. Frappe, affichage et
+  défilement restent fluides pendant ce rafraîchissement.
+- Terminal : les grosses sorties (compilation, log, `cat` d'un gros fichier) s'affichent
+  beaucoup plus vite et sans saccade. La frappe garde exactement la même réactivité.
+- Le démarrage de l'application est plus rapide de ~150 ms.
+
 ## [0.33.1] — 2026-08-20
 
 ### Fixed

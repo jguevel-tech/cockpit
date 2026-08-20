@@ -3,9 +3,11 @@
 //! Le serveur tmux survit a la fermeture de l'app : au redemarrage, Cockpit
 //! recharge les terminaux depuis SQLite et se rattache aux sessions vivantes.
 //!
-//! Attach = 1 process `tmux attach` dans un PTY + 1 thread lecteur + buffer de
-//! replay. Les events IPC (`terminal_output`, base64) ne partent que si une UI
-//! est attachee.
+//! Attach = 1 process `tmux attach` dans un PTY + 1 thread lecteur + 1 thread emetteur
+//! qui regroupe. Les events IPC (`terminal_output`, base64) ne partent que si une UI est
+//! attachee. Il n'y a PLUS de buffer de replay : il n'etait plus lu par personne depuis
+//! que le frontend garde ses xterm dans un pool, et il recopiait 100 Ko a chaque lecture
+//! du PTY.
 
 pub mod history;
 
@@ -16,27 +18,52 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 
-const REPLAY_BUFFER_MAX: usize = 200 * 1024;
 const TMUX_SOCKET: &str = "cockpit";
+
+/// Taille du tampon de lecture du PTY. Ne change RIEN a la latence : `read()` rend la main
+/// des qu'UN octet est disponible, l'echo d'une touche part donc toujours seul. Mais sur une
+/// rafale, chaque lecture devient un evenement de moins — banc du 2026-08-20 sur une rafale
+/// de 1,9 Mo a travers un vrai PTY : 2547 evenements en 8 Ko, 3 avec ce tampon et le
+/// regroupement de `pomper`.
+const PTY_READ_BUF: usize = 64 * 1024;
+
+/// Au-dela de ce volume en attente, on considere qu'une RAFALE est en cours et on laisse
+/// `PTY_GROUP_WAIT` d'accumulation avant d'emettre. En dessous, emission immediate.
+///
+/// 8 Ko d'un coup ne peuvent pas etre de la frappe : l'echo d'une touche fait quelques
+/// octets, un redraw de prompt quelques centaines. Le seuil ne se declenche donc jamais
+/// sur le chemin de frappe, dont la latence reste inchangee.
+const PTY_GROUP_THRESHOLD: usize = 8 * 1024;
+
+/// Fenetre d'accumulation en rafale. 2 ms : un huitieme d'image a 60 Hz, donc invisible,
+/// et assez pour agreger plusieurs lectures. NE PAS monter a 20-50 ms « pour mieux
+/// regrouper » : ce serait payer en latence percue ce qu'on gagne en nombre d'evenements.
+const PTY_GROUP_WAIT: std::time::Duration = std::time::Duration::from_millis(2);
 
 #[derive(Default)]
 pub struct TerminalState {
     live: Mutex<HashMap<i64, LiveAttach>>,
 }
 
-struct SharedBuffer {
-    data: Vec<u8>,
+/// File d'attente entre le thread lecteur du PTY et le thread qui emet vers le webview.
+/// UN seul tampon FIFO : l'ordre des octets est strict par construction.
+struct FileSortie {
+    en_attente: Vec<u8>,
+    /// Une UI est attachee : sinon on VIDE quand meme le PTY (sans quoi tmux se bloquerait)
+    /// mais on ne pousse rien vers le webview.
     attached: bool,
+    /// Le PTY est ferme : l'emetteur finit d'ecouler la file puis s'arrete.
+    fini: bool,
 }
 
 struct LiveAttach {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
-    shared: Arc<Mutex<SharedBuffer>>,
+    shared: Arc<(Mutex<FileSortie>, Condvar)>,
     alive: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -365,10 +392,95 @@ fn args_are_llm(args: &str) -> bool {
     false
 }
 
+/// Vue des process, juste ce qu'il faut pour reconnaitre un CLI LLM sous un shell tmux.
+///
+/// NE PAS revenir a une enumeration globale (`ps -e`, `sysinfo::refresh_processes`) : cette
+/// detection tourne toutes les 5 s pour la sidebar, et les deux lisent les ~1000 process de
+/// la machine pour en regarder une poignee. Mesure du 2026-08-20 (1074 process, charge 0,6) :
+/// `ps -e -o pid=,ppid=,args=` = 47 ms par passe, et jusqu'a 1 s sous la charge d'agents qui
+/// tournent — le cas d'usage meme de Cockpit. Descendre l'arbre des seuls panes tmux avec
+/// sortie des qu'un LLM est trouve : 0,35 ms, 9 process lus au lieu de 1074.
+#[cfg(target_os = "linux")]
+struct ArbreProcess;
+
+#[cfg(target_os = "linux")]
+impl ArbreProcess {
+    fn nouveau() -> Self {
+        Self
+    }
+
+    /// Enfants directs, via `/proc/<pid>/task/<tid>/children`.
+    ///
+    /// On parcourt TOUTES les taches et pas seulement le thread principal : un enfant est
+    /// rattache au thread qui l'a cree, et un `node` (donc claude, codex...) fork depuis un
+    /// thread de travail. Ne garder que `task/<pid>` rendait ces descendants invisibles.
+    fn enfants(&self, pid: u32) -> Vec<u32> {
+        let Ok(taches) = std::fs::read_dir(format!("/proc/{}/task", pid)) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for tache in taches.flatten() {
+            // Un process peut mourir en cours de lecture : son absence n'est pas une panne.
+            if let Ok(liste) = std::fs::read_to_string(tache.path().join("children")) {
+                out.extend(liste.split_whitespace().filter_map(|p| p.parse::<u32>().ok()));
+            }
+        }
+        out
+    }
+
+    fn est_llm(&self, pid: u32) -> bool {
+        // /proc/<pid>/cmdline : arguments separes par des NUL. Meme process disparu = pas
+        // une panne, on repond simplement « pas un LLM ».
+        let ligne = std::fs::read(format!("/proc/{}/cmdline", pid))
+            .map(|brut| String::from_utf8_lossy(&brut).replace('\0', " "))
+            .unwrap_or_default();
+        args_are_llm(ligne.trim()) || exe_is_llm(pid)
+    }
+}
+
+/// Sans `/proc` (macOS), il n'y a pas de moyen de descendre l'arbre a la demande : on
+/// construit la table complete une fois par passe, avec sysinfo (deja une dependance)
+/// plutot qu'en analysant la sortie texte de `ps`.
+#[cfg(not(target_os = "linux"))]
+struct ArbreProcess {
+    enfants: HashMap<u32, Vec<u32>>,
+    ligne: HashMap<u32, String>,
+}
+
+#[cfg(not(target_os = "linux"))]
+impl ArbreProcess {
+    fn nouveau() -> Self {
+        use sysinfo::{ProcessRefreshKind, RefreshKind, System};
+        let sys = System::new_with_specifics(
+            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+        );
+        let mut enfants: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut ligne: HashMap<u32, String> = HashMap::new();
+        for (pid, process) in sys.processes() {
+            let pid = pid.as_u32();
+            if let Some(parent) = process.parent() {
+                enfants.entry(parent.as_u32()).or_default().push(pid);
+            }
+            ligne.insert(pid, process.cmd().join(" "));
+        }
+        Self { enfants, ligne }
+    }
+
+    fn enfants(&self, pid: u32) -> Vec<u32> {
+        self.enfants.get(&pid).cloned().unwrap_or_default()
+    }
+
+    fn est_llm(&self, pid: u32) -> bool {
+        self.ligne.get(&pid).is_some_and(|l| args_are_llm(l)) || exe_is_llm(pid)
+    }
+}
+
 /// Sessions tmux du socket cockpit dans lesquelles un CLI LLM tourne.
 /// 1) `pane_current_command` (process au premier plan) couvre les binaires natifs ;
-/// 2) sinon on inspecte les descendants du shell (un seul `ps` pour tout le monde)
-///    pour attraper les CLIs lances via node/wrapper.
+/// 2) sinon on descend les descendants du shell pour attraper les CLIs lances via
+///    node/wrapper — et parce qu'argv mentait sur 4 sessions sur 9 a la mesure du
+///    2026-08-20 (elles annoncaient `cockpit`), ce second passage est le cas NORMAL,
+///    pas l'exception. D'ou l'importance qu'il soit bon marche.
 fn tmux_llm_sessions() -> HashSet<String> {
     let mut result = HashSet::new();
 
@@ -396,40 +508,21 @@ fn tmux_llm_sessions() -> HashSet<String> {
         return result;
     }
 
-    // Arbre de process complet en un seul appel
-    let Ok(ps) = std::process::Command::new("ps")
-        .args(["-e", "-o", "pid=,ppid=,args="])
-        .output()
-    else {
-        return result;
-    };
-    let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
-    let mut args_of: HashMap<u32, String> = HashMap::new();
-    for line in String::from_utf8_lossy(&ps.stdout).lines() {
-        let mut parts = line.split_whitespace();
-        let (Some(pid), Some(ppid)) = (
-            parts.next().and_then(|p| p.parse::<u32>().ok()),
-            parts.next().and_then(|p| p.parse::<u32>().ok()),
-        ) else {
-            continue;
-        };
-        let args: String = parts.collect::<Vec<_>>().join(" ");
-        children.entry(ppid).or_default().push(pid);
-        args_of.insert(pid, args);
-    }
-
+    let arbre = ArbreProcess::nouveau();
     for (session, root) in need_tree {
+        let mut vus: HashSet<u32> = HashSet::new();
         let mut stack = vec![root];
         while let Some(pid) = stack.pop() {
-            if args_of.get(&pid).map(|a| args_are_llm(a)).unwrap_or(false)
-                || exe_is_llm(pid)
-            {
+            // Un cycle est impossible dans un arbre de process, mais un pid reutilise
+            // pendant le parcours suffirait a boucler : on ne visite chacun qu'une fois.
+            if !vus.insert(pid) {
+                continue;
+            }
+            if arbre.est_llm(pid) {
                 result.insert(session.clone());
-                break;
+                break; // trouve : inutile de descendre plus loin, c'est ce qui rend la passe gratuite
             }
-            if let Some(kids) = children.get(&pid) {
-                stack.extend(kids);
-            }
+            stack.extend(arbre.enfants(pid));
         }
     }
     result
@@ -508,6 +601,33 @@ fn tmux_conf_path(app: &AppHandle) -> Option<PathBuf> {
     Some(path)
 }
 
+/// Options a (re)poser sur un serveur tmux DEJA en route. Sortie en const pour que le
+/// test qui verrouille l'enchainement puisse les relire.
+const OPTIONS_SERVEUR: &[&[&str]] = &[
+    ["set", "-s", "set-clipboard", "on"].as_slice(),
+    ["set", "-sa", "terminal-features", ",xterm*:clipboard:RGB:strikethrough:usstyle"].as_slice(),
+    ["set", "-g", "mode-style", "bg=#4f7cff,fg=#ffffff"].as_slice(),
+    // PAS de ["set","-g","window-size","manual"] ici non plus : l'option plante tmux 3.4
+    // (voir la conf generee). Le dimensionnement passe par resize-window avant l'attach.
+    // La selection reste affichee au relachement ; copie a la demande
+    ["bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
+    ["bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
+    // Ctrl+C copie QUAND une selection est active (sinon SIGINT normal)
+    ["bind", "-T", "copy-mode", "C-c", "send", "-X",
+     "copy-pipe-and-cancel", "tmux load-buffer -w -"].as_slice(),
+    ["bind", "-T", "copy-mode-vi", "C-c", "send", "-X",
+     "copy-pipe-and-cancel", "tmux load-buffer -w -"].as_slice(),
+    ["bind", "-T", "copy-mode", "Escape", "send", "-X", "cancel"].as_slice(),
+    ["bind", "-T", "copy-mode-vi", "Escape", "send", "-X", "cancel"].as_slice(),
+    // Pas de menus contextuels tmux au clic droit
+    // Le collage du clic molette est fait par Cockpit (meme chemin que « Coller »
+    // du clic droit) : laisser tmux coller de son cote donnait deux collages.
+    ["unbind", "-n", "MouseDown2Pane"].as_slice(),
+    ["unbind", "-n", "MouseDown3Pane"].as_slice(),
+    ["unbind", "-n", "M-MouseDown3Pane"].as_slice(),
+    ["unbind", "-n", "MouseDrag3Pane"].as_slice(),
+];
+
 /// La conf n'est lue qu'au DEMARRAGE du serveur tmux — or il survit a l'app
 /// (c'est le but). On applique donc aussi les options au serveur deja en route.
 ///
@@ -525,57 +645,71 @@ pub fn apply_server_options(app: &AppHandle) {
     if tmux_alive_sessions().is_none_or(|sessions| sessions.is_empty()) {
         return;
     }
-    let mut echecs: Vec<String> = Vec::new();
-    for args in [
-        ["set", "-s", "set-clipboard", "on"].as_slice(),
-        ["set", "-sa", "terminal-features", ",xterm*:clipboard:RGB:strikethrough:usstyle"].as_slice(),
-        ["set", "-g", "mode-style", "bg=#4f7cff,fg=#ffffff"].as_slice(),
-        // PAS de ["set","-g","window-size","manual"] ici non plus : l'option plante tmux 3.4
-        // (voir la conf generee). Le dimensionnement passe par resize-window avant l'attach.
-        // La selection reste affichee au relachement ; copie a la demande
-        ["bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
-        ["bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send", "-X", "stop-selection"].as_slice(),
-        // Ctrl+C copie QUAND une selection est active (sinon SIGINT normal)
-        ["bind", "-T", "copy-mode", "C-c", "send", "-X",
-         "copy-pipe-and-cancel", "tmux load-buffer -w -"].as_slice(),
-        ["bind", "-T", "copy-mode-vi", "C-c", "send", "-X",
-         "copy-pipe-and-cancel", "tmux load-buffer -w -"].as_slice(),
-        ["bind", "-T", "copy-mode", "Escape", "send", "-X", "cancel"].as_slice(),
-        ["bind", "-T", "copy-mode-vi", "Escape", "send", "-X", "cancel"].as_slice(),
-        // Pas de menus contextuels tmux au clic droit
-        // Le collage du clic molette est fait par Cockpit (meme chemin que « Coller »
-        // du clic droit) : laisser tmux coller de son cote donnait deux collages.
-        ["unbind", "-n", "MouseDown2Pane"].as_slice(),
-        ["unbind", "-n", "MouseDown3Pane"].as_slice(),
-        ["unbind", "-n", "M-MouseDown3Pane"].as_slice(),
-        ["unbind", "-n", "MouseDrag3Pane"].as_slice(),
-    ] {
-        releve(&mut echecs, args);
-    }
+    let mut commandes: Vec<&[&str]> = OPTIONS_SERVEUR.to_vec();
 
-    // Un serveur DEJA vivant a pu etre demarre par une version qui fuyait l'environnement
-    // AppImage : on marque ces variables pour retrait, les prochains shells naitront propres.
-    // (Les shells existants gardent leur environnement, c'est inevitable.)
-    for var in APPIMAGE_LEAKED_VARS {
-        releve(&mut echecs, &["set-environment", "-g", "-r", var]);
-    }
+    let retraits: Vec<[&str; 4]> = APPIMAGE_LEAKED_VARS
+        .iter()
+        .map(|var| ["set-environment", "-g", "-r", *var])
+        .collect();
+    commandes.extend(retraits.iter().map(|a| a.as_slice()));
+
+    // Un seul tmux pour les 41 commandes, separees par `;`. Le cout etait le fork+exec, pas
+    // le travail : 41 appels = 167 ms, la meme chaine en un appel = 9,1 ms (mesure du
+    // 2026-08-20 sur tmux 3.4). C'est 157 ms rendus a chaque demarrage.
+    let echecs = match applique_en_chaine(&commandes) {
+        Ok(()) => Vec::new(),
+        // La chaine s'ARRETE a la premiere erreur et ne rapporte que celle-la (verifie sur
+        // tmux 3.4 : dans `set @a 1 ; set bidon on ; set @b 2`, @b n'est jamais pose). On ne
+        // peut donc pas se contenter de journaliser le message de la chaine : les commandes
+        // suivantes seraient silencieusement sautees, et un `unbind MouseDown2Pane` saute
+        // ramene le double collage sans laisser de trace. On rejoue donc une par une — 167 ms
+        // dans ce cas, mais c'est un cas de panne, ou l'on veut justement le detail complet.
+        Err(_) => commandes.iter().filter_map(|args| releve(args)).collect(),
+    };
 
     if !echecs.is_empty() {
         journaliser(app, "terminal.optionsTmux", &echecs.join(" | "));
     }
 }
 
-/// Lance une commande tmux et note son echec au lieu de le perdre.
-/// `unbind` d'une touche deja non liee sort en 0 (mesure sur tmux 3.4) : pas de faux positif.
-fn releve(echecs: &mut Vec<String>, args: &[&str]) {
-    let rendu = |detail: String| format!("tmux {} : {}", args.join(" "), detail);
-    match tmux_cmd(args).output() {
-        Ok(out) if out.status.success() => {}
+/// Enchaine des commandes tmux dans UN seul appel, `;` en argument autonome entre chacune.
+/// `Err(message)` des que tmux rend un code non nul — sans dire laquelle a echoue, voir
+/// l'appelant.
+fn applique_en_chaine(commandes: &[&[&str]]) -> Result<(), String> {
+    let args = chaine_args(commandes);
+    match tmux_cmd(&args).output() {
+        Ok(out) if out.status.success() => Ok(()),
         Ok(out) => {
             let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            echecs.push(rendu(if err.is_empty() { out.status.to_string() } else { err }));
+            Err(if err.is_empty() { out.status.to_string() } else { err })
         }
-        Err(e) => echecs.push(rendu(e.to_string())),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Aplatit des commandes tmux en une seule ligne d'arguments, `;` autonome entre chacune.
+fn chaine_args<'a>(commandes: &[&'a [&'a str]]) -> Vec<&'a str> {
+    let mut args: Vec<&str> = Vec::new();
+    for (i, cmd) in commandes.iter().enumerate() {
+        if i > 0 {
+            args.push(";");
+        }
+        args.extend_from_slice(cmd);
+    }
+    args
+}
+
+/// Lance UNE commande tmux et rend son echec au lieu de le perdre.
+/// `unbind` d'une touche deja non liee sort en 0 (mesure sur tmux 3.4) : pas de faux positif.
+fn releve(args: &[&str]) -> Option<String> {
+    let rendu = |detail: String| format!("tmux {} : {}", args.join(" "), detail);
+    match tmux_cmd(args).output() {
+        Ok(out) if out.status.success() => None,
+        Ok(out) => {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            Some(rendu(if err.is_empty() { out.status.to_string() } else { err }))
+        }
+        Err(e) => Some(rendu(e.to_string())),
     }
 }
 
@@ -586,6 +720,80 @@ fn journaliser(app: &AppHandle, scope: &str, message: &str) {
     if let Ok(dir) = app.path().app_data_dir() {
         let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         crate::report::append_log(&dir, &crate::report::format_log_line(&horodatage, scope, message));
+    }
+}
+
+/// Boucle du thread lecteur : du PTY vers la file, et rien d'autre. Elle ne construit ni
+/// base64 ni evenement — c'est ce qui lui permet de continuer a vider le PTY pendant que
+/// l'emetteur travaille, et donc de regrouper.
+fn lire_pty(reader: &mut (impl Read + ?Sized), shared: &(Mutex<FileSortie>, Condvar)) {
+    let (file, signal) = shared;
+    let mut chunk = vec![0u8; PTY_READ_BUF];
+    loop {
+        match reader.read(&mut chunk) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => {
+                let mut guard = file.lock().unwrap();
+                // Detache : on VIDE quand meme le PTY (sinon tmux se bloquerait sur son
+                // ecriture) mais on ne garde rien — personne n'attend ces octets.
+                if guard.attached {
+                    guard.en_attente.extend_from_slice(&chunk[..n]);
+                }
+                drop(guard);
+                signal.notify_one();
+            }
+        }
+    }
+}
+
+/// Thread emetteur : pousse vers le webview tout ce que le lecteur du PTY a empile.
+fn emettre_sortie(shared: &(Mutex<FileSortie>, Condvar), app: &AppHandle, id: i64) {
+    pomper(shared, |octets| {
+        let _ = app.emit("terminal_output", OutputPayload { id, data: b64(octets) });
+    });
+}
+
+/// Coeur de l'emetteur, isole de Tauri pour etre mesurable et testable.
+///
+/// POURQUOI REGROUPER : Tauri v2 ne livre pas un evenement par un canal binaire, il
+/// CONSTRUIT une source JavaScript avec la charge inseree dedans et l'evalue dans le
+/// webview (tauri-2.11.0, `event/mod.rs::emit_js_script`). Chaque evenement coute donc un
+/// saut vers le WebProcess et une evaluation de script — 8 Ko d'octets font ~11 Ko de
+/// source. Mesures du 2026-08-20 : une rafale de 1,9 Mo a travers un vrai PTY partait en
+/// 2547 evenements, elle en fait 3 avec ce regroupement ; et cote webview (banc WebKitGTK
+/// 2.52 offscreen), evaluer la meme quantite d'octets en 240 scripts coute 11,2 ms contre
+/// 2,3 ms en 15.
+///
+/// POURQUOI LA LATENCE NE BOUGE PAS : au repos, ce thread attend sur la condition ; l'echo
+/// d'une touche le reveille et part immediatement. L'attente de `PTY_GROUP_WAIT` ne se
+/// declenche qu'au-dela de `PTY_GROUP_THRESHOLD`, volume qu'une frappe n'atteint jamais.
+fn pomper(shared: &(Mutex<FileSortie>, Condvar), mut emettre: impl FnMut(&[u8])) {
+    let (file, signal) = shared;
+    loop {
+        let lot = {
+            let mut guard = file.lock().unwrap();
+            while guard.en_attente.is_empty() {
+                if guard.fini {
+                    return;
+                }
+                guard = signal.wait(guard).unwrap();
+            }
+            if guard.en_attente.len() >= PTY_GROUP_THRESHOLD && !guard.fini {
+                // Rafale : on rend le lock quelques millisecondes pour que le lecteur
+                // continue d'empiler, et on repart avec un lot plus gros.
+                drop(guard);
+                std::thread::sleep(PTY_GROUP_WAIT);
+                guard = file.lock().unwrap();
+            }
+            // Un seul tampon, un seul preneur : l'ordre des octets ne peut pas s'inverser.
+            std::mem::take(&mut guard.en_attente)
+        };
+        // detach() vide la file : le lot peut etre vide au reveil, et un evenement vide
+        // ferait un aller-retour vers le webview pour rien.
+        if lot.is_empty() {
+            continue;
+        }
+        emettre(&lot);
     }
 }
 
@@ -741,7 +949,10 @@ impl TerminalState {
         // attached=true DES LA NAISSANCE : les toutes premieres sequences du
         // client tmux (ecran alternatif, activation souris, redraw) doivent
         // atteindre xterm, sinon la molette et l'affichage initial sont casses.
-        let shared = Arc::new(Mutex::new(SharedBuffer { data: Vec::new(), attached: true }));
+        let shared = Arc::new((
+            Mutex::new(FileSortie { en_attente: Vec::new(), attached: true, fini: false }),
+            Condvar::new(),
+        ));
         let alive = Arc::new(std::sync::atomic::AtomicBool::new(true));
 
         {
@@ -751,27 +962,29 @@ impl TerminalState {
             let db = db.clone();
             let tmux_name = tmux_name.to_string();
             std::thread::spawn(move || {
-                let mut chunk = [0u8; 8192];
-                loop {
-                    match reader.read(&mut chunk) {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => {
-                            let mut guard = shared.lock().unwrap();
-                            guard.data.extend_from_slice(&chunk[..n]);
-                            if guard.data.len() > REPLAY_BUFFER_MAX {
-                                let excess = guard.data.len() - REPLAY_BUFFER_MAX / 2;
-                                guard.data.drain(..excess);
-                            }
-                            if guard.attached {
-                                // Sous le lock : ordre garanti vis-a-vis d'attach()
-                                let _ = app.emit(
-                                    "terminal_output",
-                                    OutputPayload { id, data: b64(&chunk[..n]) },
-                                );
-                            }
-                        }
-                    }
+                // Un thread emetteur separe, plutot qu'un emit dans la boucle de lecture :
+                // pendant qu'il construit et evalue la source JS de l'evenement, le lecteur
+                // continue a empiler. Le regroupement se fait donc TOUT SEUL sous debit,
+                // et sur un terminal au repos l'emetteur est deja en attente sur la
+                // condition : l'echo d'une touche part sans delai ajoute.
+                let emetteur = {
+                    let shared = shared.clone();
+                    let app = app.clone();
+                    std::thread::spawn(move || emettre_sortie(&shared, &app, id))
+                };
+
+                lire_pty(&mut reader, &shared);
+
+                // Le PTY est ferme : on laisse l'emetteur ecouler ce qui reste AVANT
+                // d'annoncer la fin, sinon `terminal_exit` doublerait les derniers octets
+                // de sortie et l'utilisateur perdrait la fin de l'affichage.
+                {
+                    let (file, signal) = &*shared;
+                    file.lock().unwrap().fini = true;
+                    signal.notify_one();
                 }
+                let _ = emetteur.join();
+
                 alive.store(false, std::sync::atomic::Ordering::SeqCst);
                 // Il n'y a plus de kill volontaire a taire ici : depuis le revirement du
                 // 2026-08-13 (pool persistant), attach() REUTILISE un client vivant au lieu
@@ -866,7 +1079,12 @@ impl TerminalState {
     pub fn detach(&self, id: i64) {
         let live = self.live.lock().unwrap();
         if let Some(l) = live.get(&id) {
-            l.shared.lock().unwrap().attached = false;
+            let (file, _) = &*l.shared;
+            let mut guard = file.lock().unwrap();
+            guard.attached = false;
+            // Ce qui n'est pas encore parti ne servira plus a personne : le xterm de ce
+            // terminal ne l'attend plus. On evite de garder un tampon en memoire.
+            guard.en_attente.clear();
         }
     }
 
@@ -1125,5 +1343,170 @@ mod tests {
         assert!(!args_are_llm("tail -f claude.log"));
         assert!(!args_are_llm("node server.js"));
         assert!(!args_are_llm(""));
+    }
+
+    /// L'enchainement des options tmux repose sur un `;` ARGUMENT AUTONOME. Un argument qui
+    /// vaudrait exactement ";" serait pris pour un separateur et couperait la commande en
+    /// deux — silencieusement. Le test verrouille la liste.
+    #[test]
+    fn aucun_argument_point_virgule_dans_les_options_serveur() {
+        for cmd in super::OPTIONS_SERVEUR {
+            assert!(
+                !cmd.contains(&";"),
+                "la commande {:?} contient un ';' : incompatible avec l'enchainement",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn chaine_args_separe_les_commandes_par_un_point_virgule() {
+        let a: &[&str] = &["set", "-s", "x", "on"];
+        let b: &[&str] = &["unbind", "-n", "MouseDown2Pane"];
+        assert_eq!(
+            super::chaine_args(&[a, b]),
+            vec!["set", "-s", "x", "on", ";", "unbind", "-n", "MouseDown2Pane"]
+        );
+        // Une seule commande : aucun separateur parasite.
+        assert_eq!(super::chaine_args(&[a]), vec!["set", "-s", "x", "on"]);
+        assert!(super::chaine_args(&[]).is_empty());
+    }
+
+    fn file_vide() -> std::sync::Arc<(std::sync::Mutex<super::FileSortie>, std::sync::Condvar)> {
+        std::sync::Arc::new((
+            std::sync::Mutex::new(super::FileSortie {
+                en_attente: Vec::new(),
+                attached: true,
+                fini: false,
+            }),
+            std::sync::Condvar::new(),
+        ))
+    }
+
+    fn empiler(
+        partage: &std::sync::Arc<(std::sync::Mutex<super::FileSortie>, std::sync::Condvar)>,
+        octets: &[u8],
+    ) {
+        let (file, signal) = &**partage;
+        file.lock().unwrap().en_attente.extend_from_slice(octets);
+        signal.notify_one();
+    }
+
+    fn terminer(partage: &std::sync::Arc<(std::sync::Mutex<super::FileSortie>, std::sync::Condvar)>) {
+        let (file, signal) = &**partage;
+        file.lock().unwrap().fini = true;
+        signal.notify_one();
+    }
+
+    /// L'invariant qui compte : pas un octet perdu, pas un octet interverti. Un terminal
+    /// qui recoit ses octets dans le desordre affiche n'importe quoi.
+    #[test]
+    fn le_regroupement_conserve_tous_les_octets_dans_l_ordre() {
+        let partage = file_vide();
+        let attendu: Vec<u8> = (0..200u32).flat_map(|i| vec![(i % 251) as u8; 8192]).collect();
+
+        let producteur = {
+            let partage = partage.clone();
+            let attendu = attendu.clone();
+            std::thread::spawn(move || {
+                for morceau in attendu.chunks(8192) {
+                    empiler(&partage, morceau);
+                }
+                terminer(&partage);
+            })
+        };
+
+        let mut recu: Vec<u8> = Vec::new();
+        let mut lots = 0usize;
+        super::pomper(&partage, |octets| {
+            lots += 1;
+            recu.extend_from_slice(octets);
+        });
+        producteur.join().unwrap();
+
+        assert_eq!(recu, attendu, "octets perdus ou desordonnes");
+        assert!(lots >= 1 && lots <= 200, "lots={}", lots);
+    }
+
+    /// Ce qui est DEJA empile part en un seul evenement : c'est tout l'objet du
+    /// regroupement (240 evenements Tauri pour une rafale de 1,96 Mo avant ce correctif).
+    #[test]
+    fn ce_qui_est_deja_empile_part_en_un_seul_lot() {
+        let partage = file_vide();
+        for _ in 0..20 {
+            empiler(&partage, &[7u8; 8192]);
+        }
+        terminer(&partage);
+
+        let mut lots: Vec<usize> = Vec::new();
+        super::pomper(&partage, |octets| lots.push(octets.len()));
+        assert_eq!(lots, vec![20 * 8192]);
+    }
+
+    /// Le chemin de frappe : ce qui est petit ne doit PAS etre retenu en attendant la
+    /// suite. Le producteur ne pousse le second octet qu'une fois le premier recu : si
+    /// l'emetteur attendait d'avoir « assez » de matiere, le test se bloquerait.
+    #[test]
+    fn un_echo_de_touche_part_seul_sans_attendre_la_suite() {
+        let partage = file_vide();
+        let (recu_tx, recu_rx) = std::sync::mpsc::channel::<()>();
+
+        let producteur = {
+            let partage = partage.clone();
+            std::thread::spawn(move || {
+                empiler(&partage, b"a");
+                recu_rx.recv().unwrap();
+                empiler(&partage, b"b");
+                recu_rx.recv().unwrap();
+                terminer(&partage);
+            })
+        };
+
+        let mut lots: Vec<Vec<u8>> = Vec::new();
+        super::pomper(&partage, |octets| {
+            lots.push(octets.to_vec());
+            let _ = recu_tx.send(());
+        });
+        producteur.join().unwrap();
+
+        assert_eq!(lots, vec![b"a".to_vec(), b"b".to_vec()]);
+    }
+
+    /// Le chemin complet, avec un VRAI PTY : `lire_pty` puis `pomper`. C'est ce test qui
+    /// garantit qu'un regroupement mal ecrit ne perd ni n'intervertit rien — la sortie d'un
+    /// terminal desordonnee est indetectable a la relecture du code.
+    #[test]
+    fn le_chemin_pty_complet_rend_les_octets_intacts() {
+        use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+
+        let attendu = "cockpit".repeat(6000); // ~42 Ko, plusieurs lectures et un regroupement
+        let pty = native_pty_system();
+        let pair = pty
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .unwrap();
+        let mut cmd = CommandBuilder::new("printf");
+        cmd.arg("%s");
+        cmd.arg(&attendu);
+        let mut child = pair.slave.spawn_command(cmd).unwrap();
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader().unwrap();
+
+        let partage = file_vide();
+        let lecteur = {
+            let partage = partage.clone();
+            std::thread::spawn(move || {
+                super::lire_pty(&mut reader, &partage);
+                terminer(&partage);
+            })
+        };
+
+        let mut recu: Vec<u8> = Vec::new();
+        super::pomper(&partage, |octets| recu.extend_from_slice(octets));
+        lecteur.join().unwrap();
+        let _ = child.wait();
+
+        // Le PTY est en mode « cooked » : il traduit chaque \n en \r\n. `printf %s` n'en
+        // emet aucun, la comparaison est donc directe.
+        assert_eq!(String::from_utf8_lossy(&recu), attendu);
     }
 }

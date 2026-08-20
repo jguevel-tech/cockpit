@@ -77,8 +77,15 @@
     entry.dataSub = entry.term.onData(envoyer);
   }
 
+  /// Decodage base64 de la sortie du PTY. La boucle `for` n'est PAS une coquetterie :
+  /// `Uint8Array.from(atob(data), cb)` appelle la fonction de transformation une fois par
+  /// caractere, et ce code tourne sur le thread qui dessine. Mesure du 2026-08-20 sur une
+  /// rafale reelle (1,96 Mo) : 75,2 ms contre 2,8 ms ici. NE PAS « simplifier ».
   function b64ToBytes(data: string): Uint8Array {
-    return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    const texte = atob(data);
+    const octets = new Uint8Array(texte.length);
+    for (let i = 0; i < texte.length; i++) octets[i] = texte.charCodeAt(i);
+    return octets;
   }
 
   // Listeners GLOBAUX, enregistres une fois pour la vie de l'app : la sortie doit continuer
