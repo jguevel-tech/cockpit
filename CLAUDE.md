@@ -387,7 +387,7 @@ ai-workforce/
 │       │   ├── db.rs               # Init SQLite, WAL mode, migrations
 │       │   ├── import.rs           # Import ancienne DB Go (transactionnel)
 │       │   ├── projects.rs         # CRUD projets + PROJECT_SCOPED_TABLES + rename auto-reparant
-│       │   ├── project_folders.rs  # Dossiers hierarchiques de projets
+│       │   ├── project_folders.rs  # Dossiers de projets (UN SEUL niveau : ni parent_id, ni recursion)
 │       │   ├── notes.rs            # Notes simples + arborescence dossiers/fichiers
 │       │   ├── todos.rs            # CRUD todos + reorder + pending cross-projet
 │       │   ├── urls.rs             # CRUD URLs
@@ -787,7 +787,7 @@ SQLite stockee dans `~/.local/share/com.cockpit.dev/data.db` (ou via `COCKPIT_DB
 | Table | Contenu |
 |-------|---------|
 | `projects` | Projets Docker (name, path, compose_file, description, depends_on JSON, position, folder_id, summary_prompt) |
-| `project_folders` | Dossiers hierarchiques de projets |
+| `project_folders` | Dossiers de projets, UN SEUL niveau (id, name, position — pas de parent_id) |
 | `notes` | Note simple par projet (une seule par projet) |
 | `note_folders` | Dossiers de notes hierarchiques (parent_id nullable, cascade delete) |
 | `note_files` | Fichiers de notes dans les dossiers (content Markdown, cascade delete) |
@@ -1019,7 +1019,7 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 | `memoryHistory` | `stores/system.ts` | Historique memoire (60 points FIFO) |
 | `activeView` | `stores/ui.ts` | Vue top-niveau (dashboard/project/settings/system/agents) |
 | `selectedProject` | `stores/ui.ts` | Projet selectionne (utilise quand activeView === "project") |
-| `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/plugins/settings) |
+| `activeTab` | `stores/ui.ts` | Onglet actif (workspace/docker/terminal/files/git/plugins/settings). MEMORISE PAR PROJET (map en memoire) : revenir sur un projet retrouve son onglet. Une navigation intentionnelle vers un onglet precis reste prioritaire et devient la nouvelle memoire |
 | `dashboardView` | `stores/ui.ts` | Sous-vue du tableau de bord (tasks/monitoring/terminals/containers) |
 | `pendingTerminalId` | `stores/ui.ts` | Session terminal a activer a l'arrivee sur l'onglet Terminal |
 | `theme` | `stores/appearance.ts` | Palette active (identifiant), persiste localStorage |
@@ -1151,6 +1151,38 @@ Le backend (`system/metrics.rs`) collecte :
   d'un appel a l'autre (`cd src-tauri` a echoue car le shell y etait deja) et un `&&` casse en
   tete fait rater TOUTES les etapes suivantes en silence. Toujours relire le log de sortie
   reel avant d'annoncer un succes — la notification de fin ne prouve rien.
+- **`npm run i18n:audit` a annonce 0 pendant longtemps avec 42 libelles francais en dur dans
+  l'interface.** Ses regles ne voyaient que des formes tres etroites : la chaine devait etre
+  COLLEE a la parenthese de `notify(` (un ternaire lui echappait), la classe `[^"{}]+` des
+  attributs excluait les accolades pour ignorer les valeurs dynamiques — donc ecartait aussi
+  toute phrase CONTENANT une interpolation, c'est-a-dire les phrases redigees — et un libelle
+  range dans une variable (`treeError = "Chemin du projet inconnu"`) echappait a tout, la forme
+  habituelle des messages d'erreur d'un composant. Corrige le 2026-08-20 : les regles balayent
+  l'expression entiere et en extraient les chaines, avec quatre filtres pour ne pas hurler
+  partout. **Un audit vert ne prouve pas qu'il regarde au bon endroit : pour le verifier,
+  injecter une chaine en dur de chaque forme et voir si elle est signalee.**
+- **Un contenteditable ne garantit AUCUNE position de curseur apres son dernier bloc.** Mesure
+  au banc WebKitGTK : avec un `<pre>` en dernier, ni la fleche bas, ni la fleche droite, ni un
+  clic au ras du bas, ni meme un `Range.setStartAfter()` force n'en sortent — il n'y a rien
+  apres, donc rien a viser. Et `Entree` dans un `<pre>` CLONE le bloc au lieu d'ouvrir un
+  paragraphe. C'est l'origine du blocage de l'issue #5 : l'editeur de notes garantit desormais
+  un paragraphe final apres tout bloc (`pre`/`blockquote`/liste). Attention, le rendu Markdown
+  laisse un saut de ligne apres le dernier bloc : le prendre pour le dernier noeud fait sauter
+  la garde. Contre-preuve utile : `formatBlock "p"` depuis l'INTERIEUR du bloc desenveloppe
+  correctement — la sortie existe, il faut juste l'exposer.
+- **Un `<pre>` sans enfant `<code>` n'est pas du code pour turndown** : sa regle lit
+  `node.firstChild.textContent`, donc le bloc repartait en simple paragraphe a la sauvegarde et
+  les lignes se recollaient. Du code perdu en silence dans les notes. Une regle maison couvre
+  les deux formes depuis le 2026-08-20, y compris pour les notes deja enregistrees.
+- **Une liste blanche de schemas d'URL cote frontend ET une garde cote Rust doivent dire la
+  MEME chose.** `NoteEditor` autorisait `mailto:` que `open_url` refusait, et validait l'URL
+  RESOLUE contre une base bidon tout en envoyant le href BRUT : `[x](www.ex.com)` passait le
+  controle puis se faisait rejeter par le backend, avec un message technique a l'ecran. Deux
+  gardes qui ne s'accordent pas fabriquent des erreurs sur des liens legitimes.
+- **`scripts/release.mjs` doit bumper `Cargo.lock` en meme temps que `Cargo.toml`.** Sans ca le
+  commit taggue se contredisait (lock en retard d'une version) et le premier `cargo build`
+  suivant reecrivait le fichier : arbre sale, donc release suivante REFUSEE jusqu'a un commit
+  manuel. Corrige le 2026-08-20, la substitution ne cible que le bloc de notre crate.
 
 ## Conventions
 

@@ -228,6 +228,14 @@ Si un agent n'arrive pas a reproduire ce qu'un agent de triage avait classe
 `bug-confirme`, l'issue redescend en `bug-non-reproduit` : on ne patche pas a
 l'aveugle.
 
+**Le `CLAUDE.md` du projet doit rester exact.** Il se met a jour dans le meme commit que
+le correctif, jamais « plus tard » : une ligne perimee coute plus cher qu'une ligne
+absente, parce qu'on la croit. Ca vaut pour les tableaux (stores, commandes, tables,
+events, onglets), pour les comportements decrits, et pour toute affirmation qu'on
+decouvre fausse — meme sans rapport avec la tache en cours. Ce qui a coute cher a
+comprendre va dans « Pieges connus », avec le critere : quelqu'un qui arrive demain sur
+ce fichier perdrait-il le meme temps ?
+
 **Les defauts trouves en chemin font partie du lot.** Un triage qui ouvre un fichier
 en trouve souvent plus que l'issue n'en demandait : un bug voisin, une chaine non
 traduite, un garde-fou qui ne garde rien. Ca ne se met pas de cote au motif que

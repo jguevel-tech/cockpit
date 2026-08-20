@@ -71,6 +71,37 @@ que tu ajoutes ou modifies quelque chose de visible, verifie ces points :
 En cas de doute entre deux facons de faire, choisis celle qui demande le moins de gestes
 a l'utilisateur, et dis dans ton rendu ce que tu as ecarte.
 
+## Le CLAUDE.md se met a jour DANS le meme commit
+
+Le `CLAUDE.md` du projet est la memoire de travail de tous ceux qui passent apres toi.
+Il n'a de valeur que s'il est exact : une ligne perimee coute plus cher qu'une ligne
+absente, parce qu'on la croit.
+
+Donc, a chaque fois que ton correctif touche quelque chose qu'il decrit, tu le mets a
+jour dans le MEME commit — pas plus tard, pas dans un ticket de doc :
+
+- **un store, une commande Tauri, une table, un event, un onglet** : les tableaux du
+  `CLAUDE.md` les listent, ils doivent rester justes ;
+- **un comportement decrit** : si tu le changes, la phrase change avec lui ;
+- **une affirmation que tu decouvres FAUSSE** : corrige-la meme si elle n'a rien a voir
+  avec ta tache. Exemple reel : `project_folders` y etait donne pour « hierarchique »
+  alors que la table n'a ni `parent_id` ni equivalent — c'est cette ligne qui a fait
+  croire a un bug la ou il n'y avait qu'une fonctionnalite absente.
+
+## Ce qui a coute cher a comprendre va dans « Pieges connus »
+
+Si tu as passe du temps a comprendre un comportement non evident — surtout WebKitGTK,
+tmux, xterm, l'AppImage — ecris-le dans la section « Pieges connus » du `CLAUDE.md`.
+Le critere est simple : **est-ce que quelqu'un qui arrive sur ce fichier demain
+perdrait le meme temps ?** Si oui, ca s'ecrit.
+
+Ce qui s'ecrit : le comportement constate, comment il a ete mesure, et ce qu'il faut
+faire (ou ne pas faire) en consequence. Ce qui ne s'ecrit pas : le recit de ta seance de
+debogage.
+
+Et si le correctif tient a quelque chose qui a l'air inutile ou absurde, marque-le
+`NE PAS RETIRER` sur place avec la raison — sinon quelqu'un le « simplifiera ».
+
 ## Ce que tu croises en chemin : tu le corriges
 
 L'objectif du projet est zero bug et du code maintenable, pas « l'issue est fermee ».
