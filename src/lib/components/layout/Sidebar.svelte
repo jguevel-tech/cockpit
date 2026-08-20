@@ -231,6 +231,45 @@
   function onNewFolderKeydown(e: KeyboardEvent) { if (e.key === "Enter") addFolder(); if (e.key === "Escape") creatingFolder = false; }
 </script>
 
+<!-- Une seule definition de la ligne projet : la racine et les dossiers rendaient le meme
+     balisage en double, et toute retouche devait etre faite deux fois.
+     `liste` est une fonction, pas un tableau : le handler de depot la lisait au moment du
+     drop, la garder paresseuse conserve exactement ce comportement. -->
+{#snippet ligneProjet(proj: Project, liste: () => Project[])}
+  <li
+    draggable="true"
+    ondragstart={(e) => onProjectDragStart(e, proj.name)}
+    ondragover={(e) => onProjectDragOver(e, proj.name)}
+    ondragleave={onProjectDragLeave}
+    ondrop={(e) => onProjectDrop(e, liste())}
+    ondragend={onProjectDragEnd}
+    class:drag-over-top={dropTarget?.name === proj.name && dropTarget?.pos === "before"}
+    class:drag-over-bottom={dropTarget?.name === proj.name && dropTarget?.pos === "after"}
+  >
+    <button
+      class="project-item"
+      class:active={$selectedProject === proj.name}
+      onclick={() => selectProject(proj.name)}
+    >
+      <div class="project-main">
+        <span class="state-dot" style="background:{getColor(proj.state)}"></span>
+        <div class="project-info">
+          <span class="project-name">{proj.name}</span>
+          {#if proj.description}
+            <span class="project-desc">{proj.description}</span>
+          {/if}
+        </div>
+      </div>
+      <div class="project-meta">
+        <span class="project-state">{proj.state}</span>
+        {#if proj.containers.length > 0}
+          <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
+        {/if}
+      </div>
+    </button>
+  </li>
+{/snippet}
+
 <aside>
   {#if $terminals.length > 0}
     <div class="sidebar-header terminals-header">
@@ -325,38 +364,7 @@
         {#if !collapsedIds.has(folder.id)}
           <ul class="folder-projects">
             {#each getFolderProjects(folder.id) as proj}
-              <li
-                draggable="true"
-                ondragstart={(e) => onProjectDragStart(e, proj.name)}
-                ondragover={(e) => onProjectDragOver(e, proj.name)}
-                ondragleave={onProjectDragLeave}
-                ondrop={(e) => onProjectDrop(e, getFolderProjects(folder.id))}
-                ondragend={onProjectDragEnd}
-                class:drag-over-top={dropTarget?.name === proj.name && dropTarget?.pos === "before"}
-                class:drag-over-bottom={dropTarget?.name === proj.name && dropTarget?.pos === "after"}
-              >
-                <button
-                  class="project-item"
-                  class:active={$selectedProject === proj.name}
-                  onclick={() => selectProject(proj.name)}
-                >
-                  <div class="project-main">
-                    <span class="state-dot" style="background:{getColor(proj.state)}"></span>
-                    <div class="project-info">
-                      <span class="project-name">{proj.name}</span>
-                      {#if proj.description}
-                        <span class="project-desc">{proj.description}</span>
-                      {/if}
-                    </div>
-                  </div>
-                  <div class="project-meta">
-                    <span class="project-state">{proj.state}</span>
-                    {#if proj.containers.length > 0}
-                      <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
-                    {/if}
-                  </div>
-                </button>
-              </li>
+              {@render ligneProjet(proj, () => getFolderProjects(folder.id))}
             {/each}
           </ul>
         {/if}
@@ -366,38 +374,7 @@
     <!-- Root projects (no folder) -->
     <div class="root-drop-zone" role="list" ondragover={onFolderDragOver} ondrop={(e) => onFolderDrop(e, null)}>
       {#each rootProjects as proj}
-        <li
-          draggable="true"
-          ondragstart={(e) => onProjectDragStart(e, proj.name)}
-          ondragover={(e) => onProjectDragOver(e, proj.name)}
-          ondragleave={onProjectDragLeave}
-          ondrop={(e) => onProjectDrop(e, rootProjects)}
-          ondragend={onProjectDragEnd}
-          class:drag-over-top={dropTarget?.name === proj.name && dropTarget?.pos === "before"}
-          class:drag-over-bottom={dropTarget?.name === proj.name && dropTarget?.pos === "after"}
-        >
-          <button
-            class="project-item"
-            class:active={$selectedProject === proj.name}
-            onclick={() => selectProject(proj.name)}
-          >
-            <div class="project-main">
-              <span class="state-dot" style="background:{getColor(proj.state)}"></span>
-              <div class="project-info">
-                <span class="project-name">{proj.name}</span>
-                {#if proj.description}
-                  <span class="project-desc">{proj.description}</span>
-                {/if}
-              </div>
-            </div>
-            <div class="project-meta">
-              <span class="project-state">{proj.state}</span>
-              {#if proj.containers.length > 0}
-                <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
-              {/if}
-            </div>
-          </button>
-        </li>
+        {@render ligneProjet(proj, () => rootProjects)}
       {/each}
     </div>
 
