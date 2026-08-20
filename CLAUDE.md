@@ -322,7 +322,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 Dependances systeme runtime : `pw-record`/PipeWire (enregistrement reunions), `git` (onglet Git),
 CLI `claude` (connexion abonnement + sessions). `tmux` n'en est PLUS une : un tmux statique
 (musl, construit par `scripts/build-tmux-static.sh` dans un conteneur Alpine, checksum epingle)
-est embarque comme ressource de l'AppImage. Resolution au demarrage (terminal/setup_bundled_tmux) :
+est embarque comme ressource de l'AppImage. Resolution au demarrage (terminal/tmux.rs, `setup_bundled_tmux`) :
 1) binaire deja deploye dans `<app_data>/bin/tmux` (les sessions vivantes tournent dessus, on s'y
 tient), 2) tmux systeme, 3) deploiement du binaire embarque — COPIE hors du montage AppImage,
 car le montage disparait a la fermeture alors que le serveur tmux doit survivre. Le remplacement
@@ -441,8 +441,12 @@ ai-workforce/
 │       │   ├── transcribe.rs       # OpenAI whisper-1 (chunks 10 min), fusion dialogue Moi/Eux (3 tests)
 │       │   └── summarize.rs        # OpenAI chat completions, prompt systeme editable
 │       ├── terminal/
-│       │   ├── mod.rs              # Terminaux persistants : sessions tmux, client attach frais en PTY,
-│       │   │                       #   detection agents LLM (flag llm), copie OSC 52
+│       │   ├── mod.rs              # Racine : re-exports + `terminaux()`, LE seul endroit qui choisit
+│       │   │                       #   l'implementation (une ligne a changer a la bascule)
+│       │   ├── interface.rs        # Trait `Terminaux` : ce que Cockpit demande a un serveur de
+│       │   │                       #   terminaux, sans une ligne de tmux (12 operations)
+│       │   ├── tmux.rs             # Implementation tmux : sessions ckpt_*, clients attaches en
+│       │   │                       #   permanence, detection agents LLM (flag llm), copie OSC 52
 │       │   └── history.rs          # Historique commandes (DB + zsh/bash history fusionnes, recherche)
 │       ├── workspace/
 │       │   ├── mod.rs              # Explorateur fichiers : listing gitignore-aware, lecture/ECRITURE, find_symbol
@@ -974,9 +978,15 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 ### Terminaux integres
 - `create_terminal` (init_command via tmux send-keys), `write_terminal`, `resize_terminal`, `close_terminal`
-- `attach_terminal` (tue l'ancien client tmux et en respawn un frais, events des le 1er octet),
-  `detach_terminal`, `rename_terminal`
-- `list_terminals`, `list_all_terminals` (avec flag `llm` : un agent IA tourne dans la session), `terminal_alt_screen`
+- `attach_terminal` (REUTILISE le client tmux vivant, n'en respawn un que s'il est mort — voir la
+  doctrine du pool dans Pieges connus ; rend une chaine TOUJOURS VIDE, conservee pour ne pas
+  toucher au contrat IPC), `rename_terminal`
+- `detach_terminal` et `terminal_alt_screen` : **plus aucun appelant cote frontend** (verifie le
+  2026-08-20 — les wrappers `detachTerminal` / `terminalAltScreen` existent dans
+  `api/workspace.ts` et personne ne les importe). Le premier est mort depuis le pool de xterm,
+  le second depuis que la molette est laissee au copy-mode. Ne pas batir dessus : ils partent
+  avec tmux.
+- `list_terminals`, `list_all_terminals` (avec flag `llm` : un agent IA tourne dans la session)
 - `set_clipboard` / `get_clipboard` (presse-papier systeme via arboard, instance gardee en vie),
   `terminal_copy_selection` (copie la selection copy-mode tmux — clic droit > Copier)
 - `list_claude_sessions`, `rename_claude_session`
@@ -1022,6 +1032,15 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 ## Onglets Terminal / Fichiers / Git (vue projet)
 
+**Cote Rust, le terminal passe par un trait, pas par tmux.** `terminal/interface.rs` decrit les
+12 operations que Cockpit demande a un serveur de terminaux (preparer, creer, ecrire,
+redimensionner, fermer, attacher, detacher, renommer, lister, ecran alternatif, chercher, copier
+la selection) ; `terminal/tmux.rs` est l'implementation actuelle ; `terminal/mod.rs` la choisit
+en UNE ligne (`terminaux()`), et `AppState.terminals` est un `Box<dyn Terminaux>`. Regle :
+**rien de specifique a tmux ne remonte dans `interface.rs` ni dans `lib.rs`** — c'est ce qui
+permettra de remplacer l'implementation sans toucher aux commandes Tauri
+(`docs/portabilite/plan-terminaux.md`, etape A faite le 2026-08-20).
+
 - **Terminal** : multi-terminaux par projet, renommables (double-clic sur l'onglet, clic droit dans
   la sidebar), PERSISTANTS : chaque terminal est une session tmux `ckpt_<id>` sur un socket dedie
   (`tmux -L cockpit`, isole du tmux perso). Conf geree par Cockpit (`<app_data>/tmux.conf`, reecrite
@@ -1053,13 +1072,13 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
   pas celle qu'on croit.
 - **Liens** : addon web-links, Ctrl+clic ouvre l'URL (http/https) dans le navigateur via open_url.
 - **Detection agents IA** : logo Claude dans la sidebar/dashboard quand un CLI LLM tourne dans la
-  session (claude, codex, gemini, aider... — constante LLM_COMMANDS dans terminal/mod.rs, detection
+  session (claude, codex, gemini, aider... — constante LLM_COMMANDS dans terminal/tmux.rs, detection
   pane_current_command + descente de l'arbre de process pour les CLIs node), point gris sinon.
   Store terminals rafraichi toutes les 5 s. La descente se fait par
   `/proc/<pid>/task/<tid>/children`, PAS par un `ps -e` global (voir Pieges connus) : toutes
   les taches, pas seulement le thread principal, parce qu'un node fork depuis un thread de
   travail.
-- **Sortie du PTY = 2 threads, lecteur puis emetteur** (terminal/mod.rs, `lire_pty` et
+- **Sortie du PTY = 2 threads, lecteur puis emetteur** (terminal/tmux.rs, `lire_pty` et
   `pomper`) : le lecteur vide le PTY dans une file FIFO unique, l'emetteur en sort tout ce
   qui s'y trouve et l'emet en UN evenement. Le regroupement se fait donc de lui-meme sous
   debit, sans horloge : au repos l'emetteur attend sur une condition et l'echo d'une touche
@@ -1332,7 +1351,7 @@ Le backend (`system/metrics.rs`) collecte :
   gauche d'un conteneur large, et un simple shell coupait ses lignes trop tot (issue #14,
   deuxieme symptome).
   Deux maillons expliquent l'absence de correction, et les DEUX sont voulus ailleurs :
-  - `attach()` (terminal/mod.rs) REUTILISE un client tmux vivant et rend la main aussitot : les
+  - `attacher()` (terminal/tmux.rs) REUTILISE un client tmux vivant et rend la main aussitot : les
     `cols`/`rows` passes a `attach_terminal` sont alors IGNORES. Or le client cree par
     `create_terminal` est vivant, donc l'arrivee sur l'onglet ne recadre rien.
   - `attachExisting` (TerminalTab) pre-renseigne `lastSentSize` avec la taille mesuree AVANT

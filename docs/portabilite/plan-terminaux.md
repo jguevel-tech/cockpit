@@ -23,15 +23,47 @@ de cette taille avance sans jamais livrer une application à moitié fonctionnel
 
 ### A. Sortir l'interface (tmux reste derrière)
 
-Un trait Rust `Terminaux` : créer, attacher, écrire, redimensionner, fermer, lister,
-sélectionner, chercher. L'implémentation tmux actuelle passe derrière, sans changer un
-seul comportement.
+**État : FAITE le 2026-08-20.**
 
-Valeur propre de cette étape, indépendamment de la suite : elle **prouve** que l'interface
-dont Cockpit a besoin est petite, et elle la fige **avant** qu'on écrive le service. Sans
-ça, le service serait dessiné à l'image de tmux — donc avec ses défauts.
+Le trait est dans `src-tauri/src/terminal/interface.rs`, l'implémentation tmux dans
+`terminal/tmux.rs` (l'ancien `terminal/mod.rs`, renommé), et `terminal/mod.rs` ne fait plus
+que choisir l'implémentation : `terminaux() -> Box<dyn Terminaux>`. `AppState.terminals` est
+un `Box<dyn Terminaux>`, donc **aucune commande Tauri ne connaît plus tmux**. Aucun
+comportement observable n'a changé : mêmes signatures IPC, mêmes retours, même ordre des
+appels au démarrage.
 
-**État : à faire.**
+Ce que l'écriture du trait a appris — c'est ça qui sert à l'étape B :
+
+**Les 12 opérations, et lesquelles n'existent que parce que tmux existe**
+
+| Opération | Verdict |
+|---|---|
+| `preparer` | Besoin réel, mais **un seul** : réconcilier ce que le serveur tient et ce que la base dit. Aujourd'hui elle fait trois choses, dont deux purement tmux (déployer un binaire, reposer 41 options sur un serveur déjà vivant). |
+| `creer`, `ecrire`, `redimensionner`, `fermer`, `renommer`, `lister` | Besoins réels, sans discussion. |
+| `attacher` | Besoin réel. **Ne rend plus rien** : le « replay » que rendait tmux était ignoré par le frontend depuis le pool de xterm. La notion n'est pas dans l'interface, elle ne doit pas revenir. |
+| `chercher` | Besoin réel. Le motif est une **sous-chaîne littérale**, pas une regex : c'est une recherche d'utilisateur. |
+| `copier_selection` | Besoin réel, mais payé en cinq maillons parce que la sélection appartient à tmux. Chez nous : un appel. |
+| `detacher` | **Contournement, et code mort.** Aucun appelant côté frontend depuis la doctrine du pool (2026-08-13). |
+| `ecran_alternatif` | **Contournement pur, et code mort aussi.** Il existe parce que le client tmux met toujours le terminal hôte en écran alternatif ; le service le saura en mémoire. |
+
+`list_terminals` et `list_all_terminals` sont **une seule** opération (`lister` avec un filtre
+projet optionnel) : la douzième commande Tauri n'est pas une douzième opération.
+
+**Ce qui résiste, et qu'il faut trancher à l'étape B**
+
+1. **`&Database` traverse 9 opérations sur 12.** C'est la trace la plus visible de tmux dans
+   l'interface : l'identité d'un terminal (`id` → nom de session) vit en SQLite, donc presque
+   chaque appel relit la base juste pour savoir à qui parler. Un service qui tient ses propres
+   métadonnées n'en aurait besoin que pour `lister` (et encore : nom d'onglet et projet). À
+   décider explicitement — soit le service devient la source de vérité et le trait perd ce
+   paramètre, soit la base la reste et on l'assume.
+2. **`AppHandle` traverse `creer`, `attacher` et `preparer`.** Celle-là est un vrai besoin — la
+   sortie remonte au webview par un événement Tauri — mais elle attache l'interface à Tauri.
+   Si le service tourne dans un autre processus, la sortie arrivera par le socket et c'est
+   l'app qui ré-émettra : le trait pourra alors prendre un canal plutôt qu'un `AppHandle`.
+3. **Deux commandes Tauri mortes** (`detach_terminal`, `terminal_alt_screen`) : elles sont
+   restées, puisque l'étape A ne change rien de visible. À supprimer à l'étape C, avec leurs
+   wrappers `api/workspace.ts` — et surtout à ne pas réimplémenter dans le service.
 
 ### B. Écrire le service, sans le brancher
 
@@ -58,9 +90,15 @@ Trois choses à décider dès le départ, parce qu'on ne revient pas en arrière
 
 ### C. Brancher, puis supprimer tmux
 
-Basculer l'implémentation derrière le trait, vérifier que tout marche, puis **retirer
-vraiment** le code devenu inutile :
+Basculer l'implémentation derrière le trait — c'est une ligne, `terminaux()` dans
+`terminal/mod.rs` — vérifier que tout marche, puis **retirer vraiment** le code devenu
+inutile :
 
+- `src-tauri/src/terminal/tmux.rs` en entier (tout ce qui est propre à tmux y est enfermé
+  depuis l'étape A)
+- les commandes `detach_terminal` et `terminal_alt_screen`, leurs wrappers dans
+  `src/lib/api/workspace.ts`, et les opérations correspondantes du trait : elles n'ont aucun
+  appelant
 - `TMUX_CONF` et sa génération
 - `apply_server_options` et ses 41 commandes
 - `absence_definitive` et l'analyse des messages de tmux

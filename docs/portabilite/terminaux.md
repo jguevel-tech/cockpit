@@ -638,6 +638,10 @@ Précautions prises :
 
 ### Fichiers du projet concernés
 
+*(Depuis l'étape A du chantier, le 2026-08-20, `terminal/mod.rs` a été renommé en
+`terminal/tmux.rs` et le trait vit dans `terminal/interface.rs` : les numéros de ligne
+ci-dessous datent de l'analyse.)*
+
 - `src-tauri/src/terminal/mod.rs` — `list()`, `apply_server_options()` (l. 524),
   `tmux_llm_sessions()` (l. 372), `absence_definitive()` (l. 289), `attach()` (l. 800),
   `spawn_attach()` (l. 671), `TMUX_CONF` (l. 475), `REPLAY_BUFFER_MAX` (l. 22).

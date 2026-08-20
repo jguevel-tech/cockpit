@@ -29,7 +29,9 @@ pub struct AppState {
     pub orchestrator: Arc<Orchestrator>,
     pub collector: Arc<Mutex<Collector>>,
     pub recorder: recorder::RecorderState,
-    pub terminals: terminal::TerminalState,
+    /// Serveur de terminaux, VU PAR LE TRAIT `Terminaux` : les commandes ci-dessous ne
+    /// connaissent pas tmux. L'implementation se choisit dans `terminal::terminaux()`.
+    pub terminals: Box<dyn terminal::Terminaux>,
     pub claude_login: claude_auth::ClaudeLoginState,
     pub lsp: Arc<lsp::LspState>,
 }
@@ -430,8 +432,8 @@ async fn delete_db_project(id: i64, state: tauri::State<'_, AppState>) -> Result
 
     // Tue les sessions tmux vivantes du projet (leurs lignes DB partent avec le projet)
     if let Some(name) = &name {
-        for t in state.terminals.list(&state.db, Some(name)) {
-            let _ = state.terminals.close(&state.db, t.id);
+        for t in state.terminals.lister(&state.db, Some(name)) {
+            let _ = state.terminals.fermer(&state.db, t.id);
         }
     }
 
@@ -724,22 +726,30 @@ async fn create_terminal(
     init_command: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<i64, String> {
-    state.terminals.create(app, &state.db, project, cwd, cols, rows, init_command)
+    let demande = terminal::Creation {
+        projet: project,
+        dossier: cwd,
+        taille: terminal::Taille { colonnes: cols, lignes: rows },
+        commande_initiale: init_command,
+    };
+    state.terminals.creer(app, &state.db, demande)
 }
 
 #[tauri::command]
 fn write_terminal(id: i64, data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.write(id, &data)
+    state.terminals.ecrire(id, &data)
 }
 
 #[tauri::command]
 async fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.resize(&state.db, id, cols, rows)
+    state
+        .terminals
+        .redimensionner(&state.db, id, terminal::Taille { colonnes: cols, lignes: rows })
 }
 
 #[tauri::command]
 async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.close(&state.db, id)
+    state.terminals.fermer(&state.db, id)
 }
 
 #[tauri::command]
@@ -750,17 +760,22 @@ async fn attach_terminal(
     rows: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    state.terminals.attach(app, &state.db, id, cols, rows)
+    state
+        .terminals
+        .attacher(app, &state.db, id, terminal::Taille { colonnes: cols, lignes: rows })?;
+    // Retour vide conserve pour ne pas toucher au contrat IPC : il portait un « replay »
+    // que le frontend ignore depuis le pool de xterm, et le trait ne le porte plus.
+    Ok(String::new())
 }
 
 #[tauri::command]
 fn detach_terminal(id: i64, state: tauri::State<'_, AppState>) {
-    state.terminals.detach(id)
+    state.terminals.detacher(id)
 }
 
 #[tauri::command]
 fn rename_terminal(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.rename(&state.db, id, &name)
+    state.terminals.renommer(&state.db, id, &name)
 }
 
 #[tauri::command]
@@ -768,14 +783,14 @@ async fn list_terminals(
     project: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<terminal::TerminalInfo>, String> {
-    Ok(state.terminals.list(&state.db, Some(&project)))
+    Ok(state.terminals.lister(&state.db, Some(&project)))
 }
 
 #[tauri::command]
 async fn list_all_terminals(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<terminal::TerminalInfo>, String> {
-    Ok(state.terminals.list(&state.db, None))
+    Ok(state.terminals.lister(&state.db, None))
 }
 
 /// Presse-papier systeme. Instance arboard gardee en vie : sous X11 le contenu
@@ -807,7 +822,7 @@ fn get_clipboard() -> Result<String, String> {
 
 #[tauri::command]
 async fn terminal_copy_selection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.copy_selection(&state.db, id)
+    state.terminals.copier_selection(&state.db, id)
 }
 
 #[tauri::command]
@@ -836,12 +851,13 @@ fn record_command(project: String, command: String, state: tauri::State<'_, AppS
 async fn terminal_alt_screen(id: i64, state: tauri::State<'_, AppState>) -> Result<bool, String> {
     // Un `async fn` avec `State<'_, _>` DOIT rendre un Result (contrainte du macro Tauri) ;
     // l'erreur est ici impossible, la sonde repond simplement faux si tmux ne repond pas.
-    Ok(state.terminals.inner_alternate(&state.db, id))
+    Ok(state.terminals.ecran_alternatif(&state.db, id))
 }
 
 #[tauri::command]
 async fn terminal_search(id: i64, action: String, query: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.search(&state.db, id, &action, &query)
+    let action = terminal::ActionRecherche::depuis_texte(&action)?;
+    state.terminals.chercher(&state.db, id, action, &query)
 }
 
 // --- Tauri Commands: Connexion Claude Code (abonnement) ---
@@ -1440,16 +1456,11 @@ pub fn run() {
             // Enregistrements restes en plein pipeline a la fermeture -> erreur (retry possible)
             let _ = db.fail_stale_recordings();
 
-            // Resout le binaire tmux (systeme, deja deploye, ou embarque dans l'AppImage)
-            // AVANT toute commande tmux — purge_dead et apply_server_options en dependent.
-            terminal::setup_bundled_tmux(app.handle());
-
-            // Terminaux dont la session tmux n'existe plus (reboot...) -> purge
-            terminal::TerminalState::purge_dead(&db);
-
-            // Options presse-papier/style sur le serveur tmux deja en route
-            // (la conf n'est relue qu'a la creation du serveur)
-            terminal::apply_server_options(app.handle());
+            // Serveur de terminaux : mise en route (reconciliation avec la base, et tout
+            // ce que l'implementation courante exige de son cote) avant toute autre
+            // operation. Ce qui est propre a tmux vit dans terminal/tmux.rs, pas ici.
+            let terminaux = terminal::terminaux();
+            terminaux.preparer(app.handle(), &db);
 
             // Import initial de la cle API depuis secrets.json (depose manuellement)
             if db.get_setting("openai_api_key").filter(|k| !k.is_empty()).is_none() {
@@ -1495,7 +1506,7 @@ pub fn run() {
                 orchestrator: orchestrator.clone(),
                 collector,
                 recorder: recorder::RecorderState::default(),
-                terminals: terminal::TerminalState::default(),
+                terminals: terminaux,
                 claude_login: claude_auth::ClaudeLoginState::default(),
                 lsp: Arc::new(lsp::LspState::default()),
             });

@@ -282,7 +282,7 @@
   /// hypothese qu'on aurait autrement "corrigee" a tort.
   ///
   /// tmux ne perd rien : les capacites qu'il tirait de ces sondages sont declarees
-  /// explicitement dans `terminal-features` (conf generee, terminal/mod.rs).
+  /// explicitement dans `terminal-features` (conf generee, terminal/tmux.rs).
   ///
   /// Les evenements de focus (`ESC[I` / `ESC[O`) sont AUSSI filtres — revirement documente.
   /// Une premiere version les laissait passer (« ils sont destines a l'application »). Or
@@ -602,7 +602,7 @@
     // comme « Coller » du menu clic droit — meme fonction, meme source. Trois
     // comportements se disputent ce clic, il n'en reste qu'un :
     //  - tmux colle de lui-meme sur MouseDown2Pane (`paste-buffer -p`, binding par
-    //    defaut de sa table root) : desactive dans notre conf (terminal/mod.rs) ;
+    //    defaut de sa table root) : desactive dans notre conf (terminal/tmux.rs) ;
     //  - le WebView colle, lui aussi, dans le textarea cache d'xterm : annule ici ;
     //  - notre propre collage, le seul qui reste.
     //
