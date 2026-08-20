@@ -259,7 +259,32 @@ chose s'est mal passe est un skill qui reproduira la meme erreur.
 
 **Ne pas demander la permission de corriger le skill.** C'est de l'outillage interne.
 
-## Etape 5 — Une seule release, puis les reponses
+## Regle de cadence : FINIR CE QUI EST COMMENCE
+
+**On ne s'ouvre pas un nouveau chantier tant que ceux en cours ne sont pas termines.**
+Un sujet termine, c'est : corrige, verifie, commite, publie, auteur prevenu, label pose.
+Tant qu'il manque une de ces etapes, le sujet n'est pas fini et il passe AVANT toute
+nouvelle issue.
+
+Le travers a eviter, constate le 2026-08-20 : neuf issues ouvertes de front, des
+corrections verifiees mais pas publiees, des questions posees mais pas relancees, et un
+agent lance sur un dixieme sujet pendant que rien n'aboutissait. Beaucoup de mouvement,
+rien de livre.
+
+Ce que ca veut dire concretement :
+
+- **Le triage peut rester groupe** : il est en lecture seule et donne la vue d'ensemble
+  necessaire pour ordonner le travail. C'est apres qu'il faut de la discipline.
+- **La release peut grouper plusieurs sujets termines** — ce n'est pas la cadence de
+  publication qui est en cause, c'est le fait de laisser des sujets en plan.
+- **Avant de lancer un agent sur une nouvelle issue, regarde ce qui traine** : une
+  correction non publiee, un auteur non prevenu, un rapport non rendu. On termine, puis
+  on ouvre.
+- Un sujet vraiment bloque (il attend une reponse de Jimmy ou d'un auteur) ne compte pas
+  comme en cours : il est en attente, il figure dans le rapport, et il ne bloque pas la
+  suite.
+
+## Etape 5 — Release, puis les reponses
 
 Quand toutes les corrections sont commitees :
 
