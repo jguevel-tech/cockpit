@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-08-20
+
 ### Added
 
 - Éditeur de notes : bouton **¶** pour revenir au texte normal. Un titre, une citation, un
