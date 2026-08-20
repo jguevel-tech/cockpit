@@ -20,6 +20,42 @@
 
   const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
 
+  /// Texte d'un bloc, les `<br>` comptes comme de vrais sauts de ligne.
+  function texteDeBloc(node: Node): string {
+    let texte = "";
+    for (const enfant of Array.from(node.childNodes)) {
+      if (enfant.nodeType === Node.TEXT_NODE) texte += enfant.nodeValue ?? "";
+      else if (enfant.nodeName === "BR") texte += "\n";
+      else texte += texteDeBloc(enfant);
+    }
+    return texte;
+  }
+
+  /// Tout `<pre>` redevient un bloc de code Markdown, avec ou sans enfant `<code>`.
+  ///
+  /// La regle d'origine de turndown lit `node.firstChild.textContent` : elle ignore donc un
+  /// `<pre>` NU (celui que posait le bouton) et perd les `<br>` que WebKit intercale quand on
+  /// met plusieurs lignes en bloc de code. Dans les deux cas le bloc repartait en simple
+  /// paragraphe a la sauvegarde — du code perdu en silence.
+  turndown.addRule("blocDeCode", {
+    filter: "pre",
+    replacement: (_contenu, node) => {
+      const texte = texteDeBloc(node).replace(/\n+$/, "");
+      const langue = (node.querySelector("code")?.className.match(/language-(\S+)/) ?? ["", ""])[1];
+      // La cloture doit etre plus longue que la plus longue suite d'accents graves du contenu.
+      const plusLongue = (texte.match(/`+/g) ?? []).reduce((max, suite) => Math.max(max, suite.length), 0);
+      const cloture = "`".repeat(Math.max(3, plusLongue + 1));
+      return `\n\n${cloture}${langue}\n${texte}\n${cloture}\n\n`;
+    },
+  });
+
+  /// Blocs qui, en dernier dans la note, n'offrent AUCUNE position de caret apres eux.
+  ///
+  /// Mesure dans le WebKitGTK de Tauri : sous un tel bloc final, ni la fleche bas, ni la fleche
+  /// droite, ni un clic au ras du bas, ni meme un `Range` force apres le bloc ne sortent de la —
+  /// il n'y a rien apres lui, donc rien a viser. La note etait verrouillee.
+  const BLOCS_TERMINAUX = ["PRE", "BLOCKQUOTE", "UL", "OL", "TABLE"];
+
   let markdownContent = $state("");
   let editorEl: HTMLDivElement | undefined = $state(undefined);
   let renaming = $state(false);
@@ -43,7 +79,10 @@
     markdownContent = f.content || "";
     dirty = false;
     requestAnimationFrame(() => {
-      if (editorEl) editorEl.innerHTML = marked.parse(markdownContent) as string;
+      if (!editorEl) return;
+      editorEl.innerHTML = marked.parse(markdownContent) as string;
+      // Pas de `dirty` ici : un paragraphe vide en fin de note ne produit aucun Markdown.
+      garantirParagrapheFinal();
     });
   }
 
@@ -113,8 +152,233 @@
     }
   }
 
+  /// Selection courante, seulement si elle se trouve DANS la zone d'edition.
+  function selectionDansEditeur(): Selection | null {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorEl) return null;
+    return editorEl.contains(sel.anchorNode) ? sel : null;
+  }
+
+  /// Le bloc de code qui contient le caret, ou null.
+  function blocDeCodeCourant(): HTMLElement | null {
+    const sel = selectionDansEditeur();
+    if (!sel) return null;
+    let n: Node | null = sel.anchorNode;
+    while (n && n !== editorEl) {
+      if (n.nodeName === "PRE") return n as HTMLElement;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
+  function paragrapheVide(): HTMLParagraphElement {
+    const p = document.createElement("p");
+    p.appendChild(document.createElement("br"));
+    return p;
+  }
+
+  function poserSelection(r: Range) {
+    const sel = document.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(r);
+  }
+
+  /// La note finit TOUJOURS par un paragraphe. C'est la cible de caret qui manquait sous un bloc
+  /// final : sans elle, un bloc de code en fin de note enfermait la saisie (issue #5).
+  function garantirParagrapheFinal() {
+    if (!editorEl) return;
+    // Le rendu Markdown laisse un saut de ligne apres le dernier bloc. Ce n'est pas une cible de
+    // caret, et le prendre pour le dernier noeud faisait sauter la garde : mesure au banc, la
+    // note restait verrouillee des qu'elle etait RELUE depuis le Markdown — donc pour toujours.
+    let dernier = editorEl.lastChild;
+    while (dernier && dernier.nodeType === Node.TEXT_NODE && !dernier.nodeValue?.trim()) {
+      dernier = dernier.previousSibling;
+    }
+    if (!dernier || dernier.nodeType !== Node.ELEMENT_NODE) return;
+    if (!BLOCS_TERMINAUX.includes(dernier.nodeName)) return;
+    editorEl.appendChild(paragrapheVide());
+  }
+
+  /// Position du caret dans `bloc`, comptee en caracteres.
+  function decalageCaret(bloc: HTMLElement): number {
+    const sel = selectionDansEditeur();
+    if (!sel) return 0;
+    const courant = sel.getRangeAt(0);
+    const r = document.createRange();
+    r.selectNodeContents(bloc);
+    r.setEnd(courant.endContainer, courant.endOffset);
+    return r.toString().length;
+  }
+
+  /// Repose le caret a `position` caracteres du debut de `bloc`.
+  ///
+  /// Necessaire parce qu'envelopper le contenu dans un `<code>` le REPARENTE : mesure au banc,
+  /// le caret retombait alors au tout debut du bloc et la frappe s'inserait avant le texte.
+  function poserCaret(bloc: HTMLElement, position: number) {
+    const r = document.createRange();
+    const marche = document.createTreeWalker(bloc, NodeFilter.SHOW_TEXT);
+    let vus = 0;
+    while (marche.nextNode()) {
+      const texte = marche.currentNode as Text;
+      if (vus + texte.length >= position) {
+        r.setStart(texte, position - vus);
+        r.collapse(true);
+        poserSelection(r);
+        return;
+      }
+      vus += texte.length;
+    }
+    r.selectNodeContents(bloc);
+    r.collapse(false);
+    poserSelection(r);
+  }
+
+  /// Un `<pre>` sans enfant `<code>` n'est pas du code pour Markdown : on enveloppe toujours.
+  function envelopperDansCode(pre: HTMLElement) {
+    const position = decalageCaret(pre);
+    let code = pre.querySelector("code");
+    if (!code) {
+      code = document.createElement("code");
+      while (pre.firstChild) code.appendChild(pre.firstChild);
+      pre.appendChild(code);
+    }
+    // WebKit separe par des `<br>` les lignes qu'il regroupe dans le bloc. Dans du code un saut
+    // de ligne s'ecrit "\n", sinon les lignes se recollent a la sauvegarde.
+    for (const br of Array.from(code.querySelectorAll("br"))) {
+      br.replaceWith(document.createTextNode("\n"));
+    }
+    if (!code.firstChild) code.appendChild(document.createElement("br"));
+    poserCaret(pre, position);
+  }
+
+  /// Defait un bloc de code : chaque ligne redevient un paragraphe.
+  function ramenerEnParagraphes(pre: HTMLElement) {
+    const lignes = texteDeBloc(pre).replace(/\n+$/, "").split("\n");
+    const morceaux = document.createDocumentFragment();
+    let dernier: HTMLParagraphElement | null = null;
+    for (const ligne of lignes) {
+      const p = document.createElement("p");
+      if (ligne) p.appendChild(document.createTextNode(ligne));
+      else p.appendChild(document.createElement("br"));
+      morceaux.appendChild(p);
+      dernier = p;
+    }
+    pre.replaceWith(morceaux);
+    if (!dernier) return;
+    const r = document.createRange();
+    r.selectNodeContents(dernier);
+    r.collapse(false);
+    poserSelection(r);
+  }
+
+  /// Place le caret apres `bloc`, dans un paragraphe ou ecrire.
+  function sortirDuBloc(bloc: HTMLElement) {
+    // La garde a peut-etre deja mis un paragraphe vide juste apres : on s'y place plutot que
+    // d'en empiler un second.
+    const suivant = bloc.nextElementSibling;
+    let cible: HTMLElement;
+    if (suivant && suivant.nodeName === "P" && !suivant.textContent) {
+      cible = suivant as HTMLElement;
+    } else {
+      cible = paragrapheVide();
+      bloc.parentNode?.insertBefore(cible, bloc.nextSibling);
+    }
+    const r = document.createRange();
+    r.setStart(cible, 0);
+    r.collapse(true);
+    poserSelection(r);
+  }
+
+  /// Entree DANS un bloc de code = un saut de ligne.
+  ///
+  /// WebKit, lui, CLONE le bloc a chaque Entree : la seule facon d'ecrire « en dessous »
+  /// produisait encore du code, et ainsi de suite sans fin.
+  function insererSaut(bloc: HTMLElement) {
+    const sel = selectionDansEditeur();
+    if (!sel) return;
+    const r = sel.getRangeAt(0);
+    r.deleteContents();
+    const saut = document.createTextNode("\n");
+    r.insertNode(saut);
+    // Un "\n" en toute derniere position n'est pas rendu : sans ce `<br>` la nouvelle ligne
+    // resterait invisible et le caret semblerait ne pas avoir bouge.
+    const apres = document.createRange();
+    apres.selectNodeContents(bloc);
+    apres.setStartAfter(saut);
+    if (apres.toString().length === 0) {
+      saut.parentNode?.insertBefore(document.createElement("br"), saut.nextSibling);
+    }
+    const place = document.createRange();
+    place.setStartAfter(saut);
+    place.collapse(true);
+    poserSelection(place);
+  }
+
+  /// Le caret est-il en fin de bloc, sur une ligne vide ? C'est le geste de sortie : une premiere
+  /// Entree ouvre la ligne vide, la suivante quitte le bloc.
+  function finDeBlocSurLigneVide(bloc: HTMLElement): boolean {
+    const sel = selectionDansEditeur();
+    if (!sel) return false;
+    const courant = sel.getRangeAt(0);
+    const apres = document.createRange();
+    apres.selectNodeContents(bloc);
+    apres.setStart(courant.endContainer, courant.endOffset);
+    if (apres.toString().length > 0) return false;
+    const avant = document.createRange();
+    avant.selectNodeContents(bloc);
+    avant.setEnd(courant.endContainer, courant.endOffset);
+    return avant.toString().endsWith("\n");
+  }
+
+  /// Retire la ligne vide qu'on vient de quitter, sinon le bloc en garderait une a chaque sortie.
+  function retirerLigneVideFinale(bloc: HTMLElement) {
+    const contenu = bloc.querySelector("code") ?? bloc;
+    // `Range.insertNode` coupe le noeud texte et laisse un morceau VIDE derriere lui : sans
+    // l'ignorer, on cherchait le `<br>` de rendu au mauvais endroit et la ligne vide restait.
+    let dernier: ChildNode | null = contenu.lastChild;
+    while (dernier && dernier.nodeType === Node.TEXT_NODE && dernier.nodeValue === "") {
+      const precedent = dernier.previousSibling;
+      dernier.remove();
+      dernier = precedent;
+    }
+    if (dernier && dernier.nodeName === "BR") {
+      const precedent = dernier.previousSibling;
+      dernier.remove();
+      dernier = precedent;
+    }
+    if (dernier?.nodeType === Node.TEXT_NODE && dernier.nodeValue?.endsWith("\n")) {
+      (dernier as Text).deleteData((dernier as Text).length - 1, 1);
+    }
+  }
+
+  /// Entree dans un bloc de code : saut de ligne, ou sortie du bloc.
+  ///
+  /// Sans ce handler, WebKit clonait le bloc a chaque Entree et aucun geste n'en sortait : sous un
+  /// bloc de code en fin de note, plus rien ne pouvait s'ecrire (issue #5).
+  function onEditorKeydown(e: KeyboardEvent) {
+    if (e.key !== "Enter") return;
+    const bloc = blocDeCodeCourant();
+    if (!bloc) return;
+    e.preventDefault();
+
+    if (e.ctrlKey || e.metaKey) {
+      sortirDuBloc(bloc);
+    } else if (!texteDeBloc(bloc).trim()) {
+      // Bloc de code vide : Entree n'a rien a y garder, elle le retire.
+      sortirDuBloc(bloc);
+      bloc.remove();
+    } else if (finDeBlocSurLigneVide(bloc)) {
+      retirerLigneVideFinale(bloc);
+      sortirDuBloc(bloc);
+    } else {
+      insererSaut(bloc);
+    }
+    onEditorInput();
+  }
+
   function onEditorInput() {
     if (!editorEl) return;
+    garantirParagrapheFinal();
     markdownContent = turndown.turndown(editorEl.innerHTML);
     dirty = true;
     scheduleSave();
@@ -125,14 +389,45 @@
     saveTimer = setTimeout(() => { flush(); }, 1000);
   }
 
+  /// Un bouton de la barre d'outils n'agit que sur une position de caret dans la note. Sans
+  /// caret, `execCommand` ne fait rien du tout : on le DIT au lieu de rester inerte.
+  function caretPret(): boolean {
+    if (selectionDansEditeur()) return true;
+    editorEl?.focus();
+    if (selectionDansEditeur()) return true;
+    notify(translate("note.placeCaret"), "info", 4000, { report: false });
+    return false;
+  }
+
   function format(cmd: string, value: string = "") {
+    if (!caretPret()) return;
     document.execCommand(cmd, false, value);
     editorEl?.focus();
     onEditorInput();
   }
 
   function insertHeading(level: number) {
+    if (!caretPret()) return;
     document.execCommand("formatBlock", false, `h${level}`);
+    editorEl?.focus();
+    onEditorInput();
+  }
+
+  /// Bouton `</>` : met le bloc courant en code, ou le defait s'il en est deja un.
+  ///
+  /// Une BASCULE et non un aller simple : une fois le bloc pose, aucun geste ne le retirait —
+  /// Backspace mange son contenu caractere par caractere sans jamais desenvelopper, donc la
+  /// seule sortie etait de vider toute la note (issue #5).
+  function basculerBlocDeCode() {
+    if (!caretPret()) return;
+    const bloc = blocDeCodeCourant();
+    if (bloc) {
+      ramenerEnParagraphes(bloc);
+    } else {
+      document.execCommand("formatBlock", false, "pre");
+      const pre = blocDeCodeCourant();
+      if (pre) envelopperDansCode(pre);
+    }
     editorEl?.focus();
     onEditorInput();
   }
@@ -173,7 +468,7 @@
       <button class="tb" onclick={() => format("insertOrderedList")} title={$trad("note.orderedList")}>1.</button>
       <button class="tb" onclick={() => format("formatBlock", "blockquote")} title={$trad("note.quote")}>❝</button>
       <span class="tb-sep"></span>
-      <button class="tb" onclick={() => format("formatBlock", "pre")} title={$trad("note.codeBlock")}>&lt;/&gt;</button>
+      <button class="tb" onclick={basculerBlocDeCode} title={$trad("note.codeBlock")}>&lt;/&gt;</button>
       <button class="tb" onclick={() => { const url = prompt($trad("note.linkUrlPrompt")); if (url) format("createLink", url); }} title={$trad("note.link")}>🔗</button>
     </div>
   </div>
@@ -190,6 +485,7 @@
     contenteditable="true"
     title={$trad("note.openHint")}
     oninput={onEditorInput}
+    onkeydown={onEditorKeydown}
     onclick={onEditorClick}
   ></div>
 </div>

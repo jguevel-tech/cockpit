@@ -14,6 +14,12 @@ le script de release.
 
 ### Fixed
 
+- Éditeur de notes : un bloc de code en fin de note ne bloque plus la saisie. On en sort en
+  appuyant deux fois sur Entrée (ou Ctrl+Entrée), le bouton `</>` le défait quand le curseur
+  est dedans, et une note finit toujours par une ligne où écrire. Entrée à l'intérieur d'un
+  bloc ajoute désormais une ligne de code au lieu d'ouvrir un deuxième bloc.
+- Éditeur de notes : un bloc de code n'est plus perdu à l'enregistrement. Il repartait en
+  simple paragraphe, et les blocs de plusieurs lignes voyaient leurs lignes se recoller.
 - Notes : le Ctrl+clic sur une adresse mail ouvre le client mail au lieu d'afficher une
   erreur. Un lien incomplet (`www.exemple.com`, `../doc.md`) explique maintenant qu'il
   manque une adresse complète, au lieu de remonter un message technique.

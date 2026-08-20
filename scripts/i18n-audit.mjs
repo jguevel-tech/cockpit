@@ -32,7 +32,8 @@ const ALLOW = new Set(["px", "ms", "fr", "en", "id", "px)", "%", "OK",
   // commandes et termes de recherche. Elles illustrent, elles ne s'affichent pas.
   "Core", "api-gateway", "worker", "mon-projet", "MON-PROJET - 1 ×", "MON-PROJET - 2 ×",
   "COCKPIT - 1", "COCKPIT - 2", "Préprod", "Staging", "Dev", "Tests", "make up",
-  "cargo test", "api", "timeout", "🔍 timeout", "const TIMEOUT = 30_000;", "web-1", "Up", "Français", "English",
+  "cargo test", "api", "timeout", "🔍 timeout", "const TIMEOUT = 30_000;", "const x = 1;",
+  "web-1", "Up", "Français", "English",
   "· src/utils/timeout.ts", "→ cockpit-sauvegarde-2026-08-14.db",
   // Noms propres, entites HTML, exemples de commande et noms de signaux : identiques
   // dans les deux langues, ils n'ont rien a faire dans un catalogue.

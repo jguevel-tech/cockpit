@@ -274,6 +274,14 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.notesCode")}</p>
+        <div class="demo">
+          <div class="d-note">const x = 1;</div>
+          <div class="d-row"><span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span> <span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span> <span class="d-muted">{$trad("docs.tasks.notesCodeOut")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.meetings")}</p>
         <p>{$trad("docs.tasks.transcript")}</p>
         <div class="demo">
@@ -419,6 +427,7 @@
             <tr><td><span class="kbd">Ctrl</span>{$trad("docs.shortcuts.ctrlClick")}</td><td>{$trad("docs.shortcuts.definition")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">S</span></td><td>{$trad("docs.shortcuts.save")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span></td><td>{$trad("docs.shortcuts.commit")}</td></tr>
+            <tr><td><span class="kbd">Ctrl</span><span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span></td><td>{$trad("docs.shortcuts.leaveCodeBlock")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span><span class="kbd">C</span></td><td>{$trad("docs.shortcuts.copy")}</td></tr>
             <tr><td><span class="kbd">Ctrl</span>{$trad("docs.shortcuts.ctrlWheel")}</td><td>{$trad("docs.shortcuts.zoom")}</td></tr>
             <tr><td><span class="kbd">{$trad("docs.shortcuts.keyEscape")}</span></td><td>{$trad("docs.shortcuts.escape")}</td></tr>
