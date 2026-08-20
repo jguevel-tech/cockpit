@@ -31,9 +31,16 @@
     };
   });
 
+  // L'ACTION D'ABORD, LA FERMETURE ENSUITE — NE PAS INVERSER.
+  // Les appelants ecrivent leurs items depuis un `{@const}` tire de l'etat du menu
+  // (`{@const n = treeMenu.node}`). Un `{@const}` est un derive PARESSEUX : fermer d'abord
+  // remet cet etat a null, et l'action lit alors `null.node` — TypeError avalee par le
+  // gestionnaire de clic, action jamais executee, aucun message. C'est ce qui rendait
+  // inertes « Renommer »/« Fermer » des terminaux, « Renommer »/« Supprimer » des dossiers
+  // et TOUT le menu de l'arbre de fichiers (mesure au banc frontend, 2026-08-20).
   function pick(item: MenuItem) {
-    onClose();
     item.action();
+    onClose();
   }
 </script>
 

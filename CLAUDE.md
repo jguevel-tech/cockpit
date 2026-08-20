@@ -1267,6 +1267,19 @@ Le backend (`system/metrics.rs`) collecte :
   n'existe pas, la RECHARGER depuis le backend ; si elle n'existe vraiment plus, le dire et
   vider le magasin. Detail qui compte : quand la cible n'appartient pas a CE projet, ne pas
   vider le magasin — l'onglet du bon projet doit encore pouvoir la prendre.
+- **UN `{@const}` EST UN DERIVE PARESSEUX : le lire depuis une action executee APRES la
+  fermeture du menu leve une TypeError, avalee, et l'action ne se fait jamais.** Les menus
+  contextuels s'ecrivent tous sur le meme moule — `{#if menu}{@const n = menu.node}` puis des
+  items dont l'action lit `n`. `ContextMenu.pick()` appelait `onClose()` AVANT
+  `item.action()` : `menu` repassait a null, le `{@const}` se recalculait a la lecture
+  suivante (donc dans l'action) et cassait sur `null.node`. Resultat : « Renommer »/« Fermer »
+  d'un terminal, « Renommer »/« Supprimer » d'un dossier et TOUT le menu de l'arbre de
+  l'onglet Fichiers ne faisaient rien, sans message. Mesure au banc frontend le 2026-08-20
+  (`Uncaught TypeError: Cannot read properties of null (reading 'node')` capture par un
+  ecouteur `window.onerror`, action non executee ; les memes scenarios passent apres
+  inversion). L'ordre `action() puis onClose()` est marque sur place, NE PAS L'INVERSER. Regle
+  generale : une valeur tiree de l'etat d'un overlay doit etre capturee en PARAMETRE d'une
+  fonction, pas lue paresseusement depuis une fermeture.
 - **Banc frontend : jouer un composant Svelte sans lancer l'application** (2026-08-20). Un
   Chrome sans tete + un FAUX backend Tauri suffisent, et le DOM rendu sert de preuve.
   Recette : un dossier de travail HORS du depot avec `node_modules` symlinke, une

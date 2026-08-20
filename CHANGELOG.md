@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les menus au clic droit font enfin ce qu'ils annoncent. **Renommer** et **Fermer** sur un
+  terminal de la barre latérale, **Renommer** et **Supprimer** sur un dossier de projets, et
+  toutes les entrées du menu de l'arbre de l'onglet Fichiers (nouveau fichier, nouveau
+  dossier, renommer, copier le chemin, corbeille) ne faisaient rien : le menu se refermait et
+  l'action était perdue sans un mot.
+
 ## [0.34.1] — 2026-08-20
 
 ### Fixed
