@@ -5,7 +5,7 @@
   import { notify as notifyGlobal } from "../../stores/toast";
   import type { Terminal as XTerminal } from "@xterm/xterm";
   import type { FitAddon as XFitAddon } from "@xterm/addon-fit";
-  import { trad } from "../../i18n";
+  import { trad, translate } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
 
   /// POOL PERSISTANT — LE COEUR DE L'ARCHITECTURE TERMINAUX (NE PAS RE-LOCALISER).
@@ -35,6 +35,9 @@
   /// colle partait autant de fois vers le PTY. C'est la cause du « collage en double »
   /// signale par un utilisateur — mesure au banc : 1 clic molette, 1 appel de collage,
   /// 3 insertions dans le terminal.
+  ///
+  /// Le meme symptome est revenu depuis, pour une cause TOUTE AUTRE (xterm qui colle de son
+  /// cote, voir createXterm) alors que `brancherEntree` etait intact : ne pas conclure d'ici.
   export type PoolEntry = {
     term: XTerminal;
     fit: XFitAddon;
@@ -164,12 +167,12 @@
       // Un depot est un geste delibere : s'il n'aboutit pas, on dit pourquoi plutot que de
       // ne rien faire (un silence, c'est un bug).
       if (!overTerminal(p.position)) {
-        notifyGlobal("Dépose le fichier sur le terminal pour insérer son chemin.");
+        notifyGlobal(translate("term.dropOnTerminal"));
         return;
       }
       const id = dropTarget?.activeId() ?? null;
       if (id === null) {
-        notifyGlobal("Aucun terminal ouvert : clique sur + pour en ouvrir un.");
+        notifyGlobal(translate("term.pasteNoTerminal"));
         return;
       }
       queueWrite(id, p.paths.map(escapeForShell).join(" ") + " ");
@@ -387,15 +390,23 @@
     entry?.term.focus();
   }
 
+  /// Colle le presse-papier SYSTEME dans le terminal actif. Source unique de tout collage
+  /// Cockpit : clic droit -> « Coller » ET clic molette passent par ici, donc les deux
+  /// collent exactement la meme chose.
   async function pasteClipboard() {
-    if (activeId === null) return;
-    const entry = pool.get(activeId);
-    if (!entry) return;
+    const entry = activeId === null ? undefined : pool.get(activeId);
+    if (!entry) {
+      notify($trad("term.pasteNoTerminal"));
+      return;
+    }
     try {
       const text = await getClipboard();
       // term.paste() passe par onData (bracketed paste) -> chemin d'entree normal
       if (text) entry.term.paste(text);
-    } catch {}
+      else notify($trad("term.pasteEmpty"));
+    } catch (e) {
+      notify(String(e));
+    }
     entry.term.focus();
   }
 
@@ -470,40 +481,58 @@
       ta.addEventListener("compositionend", () => {
         setTimeout(() => { ta.value = ""; }, 0);
       });
-
-      // FIX ESSENTIEL (clic molette) : le clic molette colle le presse-papier, exactement
-      // comme « Coller » du menu clic droit — meme fonction, meme source. Sans cela, trois
-      // comportements se disputaient le clic et l'utilisateur voyait deux collages :
-      //  - tmux colle de lui-meme sur MouseDown2Pane (`paste-buffer -p`, binding par
-      //    defaut de sa table root) : desactive dans notre conf (terminal/mod.rs) ;
-      //  - le WebView colle la selection PRIMARY dans ce textarea cache : annule ici ;
-      //  - notre propre collage, le seul qui reste.
-      // Etabli au banc WebKitGTK (clic milieu simule par XTEST) : preventDefault sur
-      // `mousedown` n'empeche PAS le collage natif, et le reglage GTK
-      // `gtk-enable-primary-paste` est ignore par WebKitGTK ; seule l'annulation de
-      // l'evenement `paste` fonctionne. Le meme banc montre que ce collage natif ne
-      // rejoignait meme pas le PTY : le texte restait dans le textarea, d'ou il pouvait
-      // ressortir a la frappe suivante.
-      // La fenetre de 200 ms restreint l'annulation au clic molette : un Ctrl+V garde son
-      // collage (verifie au banc). NE PAS RETIRER.
-      let middleClickAt = 0;
-      el.addEventListener(
-        "mousedown",
-        (e) => {
-          if ((e as MouseEvent).button !== 1) return;
-          middleClickAt = Date.now();
-          void pasteClipboard();
-        },
-        true,
-      );
-      ta.addEventListener(
-        "paste",
-        (e) => {
-          if (Date.now() - middleClickAt < 200) e.preventDefault();
-        },
-        true,
-      );
     }
+
+    // FIX ESSENTIEL (clic molette) : le clic molette colle le presse-papier, exactement
+    // comme « Coller » du menu clic droit — meme fonction, meme source. Trois
+    // comportements se disputent ce clic, il n'en reste qu'un :
+    //  - tmux colle de lui-meme sur MouseDown2Pane (`paste-buffer -p`, binding par
+    //    defaut de sa table root) : desactive dans notre conf (terminal/mod.rs) ;
+    //  - le WebView colle, lui aussi, dans le textarea cache d'xterm : annule ici ;
+    //  - notre propre collage, le seul qui reste.
+    //
+    // MESURE AU BANC WebKitGTK (clic milieu reel par XTEST, xterm 6.0.0 charge, 2026-08-20) :
+    //  - `preventDefault` sur `mousedown` n'empeche PAS le collage natif, et le reglage GTK
+    //    `gtk-enable-primary-paste` est ignore par WebKitGTK : il faut agir sur l'evenement
+    //    `paste` lui-meme ;
+    //  - `preventDefault` sur cet evenement NE SUFFIT PAS : xterm ne compte pas sur l'action
+    //    par defaut du navigateur, il lit `clipboardData` lui-meme et injecte le texte dans
+    //    le PTY (`handlePasteEvent` -> `triggerDataEvent`). Il pose ce handler sur le
+    //    textarea ET sur `.xterm` pendant `term.open()`, donc AVANT nous : en phase cible,
+    //    l'ordre est celui de l'inscription, et un `preventDefault` pose apres ne defait
+    //    rien. C'est la cause du DEUXIEME collage — un clic molette, deux insertions ;
+    //  - le collage natif du clic molette lit le presse-papier CLIPBOARD (pas la selection
+    //    PRIMARY) : les deux collages portaient donc le MEME texte, invisible a l'oeil.
+    // D'ou : ecoute en CAPTURE sur `el` (l'ancetre), qui passe avant tout ce qu'xterm a pose
+    // plus bas, + `stopImmediatePropagation` pour qu'xterm ne voie jamais l'evenement, +
+    // `preventDefault` pour que le texte n'atterrisse pas dans le textarea cache (d'ou il
+    // ressortirait a la frappe suivante, cf. FIX ACCENTS ci-dessus). NE PAS RETIRER.
+    //
+    // Drapeau d'etat, PAS de fenetre de temps : l'ancienne version comparait `Date.now()` au
+    // mousedown, ce qui melange la cause (« ce collage est celui du clic molette ») avec une
+    // duree qu'aucune mesure ne garantit.
+    let collageNatifAAnnuler = false;
+    el.addEventListener(
+      "mousedown",
+      (e) => {
+        collageNatifAAnnuler = (e as MouseEvent).button === 1;
+        if (collageNatifAAnnuler) void pasteClipboard();
+      },
+      true,
+    );
+    // Filet : si le clic molette n'a produit aucun evenement `paste`, le drapeau ne doit pas
+    // survivre jusqu'a un collage clavier ulterieur.
+    el.addEventListener("keydown", () => { collageNatifAAnnuler = false; }, true);
+    el.addEventListener(
+      "paste",
+      (e) => {
+        if (!collageNatifAAnnuler) return;
+        collageNatifAAnnuler = false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      },
+      true,
+    );
 
     return { term, fit, el };
   }

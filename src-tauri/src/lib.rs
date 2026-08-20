@@ -1425,7 +1425,7 @@ pub fn run() {
 
             // Options presse-papier/style sur le serveur tmux deja en route
             // (la conf n'est relue qu'a la creation du serveur)
-            terminal::apply_server_options();
+            terminal::apply_server_options(app.handle());
 
             // Import initial de la cle API depuis secrets.json (depose manuellement)
             if db.get_setting("openai_api_key").filter(|k| !k.is_empty()).is_none() {

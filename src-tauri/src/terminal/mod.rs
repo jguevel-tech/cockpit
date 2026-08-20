@@ -274,14 +274,27 @@ fn utf8_locale() -> String {
 /// suffisait a perdre un terminal.
 ///
 /// Regle : en cas de doute, on NE DETRUIT RIEN.
+/// tmux dit-il DEFINITIVEMENT qu'il n'y a aucun serveur sur notre socket ?
+///
+/// Distinguer cette reponse d'un echec transitoire est ce qui permet de purger : la
+/// confondre avec « on ne sait pas » laissait des lignes zombies infermables (close()
+/// refusait de supprimer faute de confirmation, purge_dead ne purgait jamais).
+///
+/// tmux 3.4 a DEUX formulations pour la meme realite, mesurees le 2026-08-20 :
+/// - serveur mort mais fichier de socket encore la -> « no server running on <chemin> » ;
+/// - fichier de socket absent -> « error connecting to <chemin> (No such file or directory) ».
+/// Seule la premiere etait reconnue, et c'est la SECONDE qui se produit apres un
+/// redemarrage de la machine (/tmp est vide) : les terminaux de la session precedente
+/// restaient donc affiches sans pouvoir etre fermes.
+fn absence_definitive(stderr: &str) -> bool {
+    stderr.contains("no server running")
+        || (stderr.contains("error connecting to") && stderr.contains("No such file or directory"))
+}
+
 fn tmux_alive_sessions() -> Option<HashSet<String>> {
     let out = tmux_cmd(&["list-sessions", "-F", "#S"]).output().ok()?;
     if !out.status.success() {
-        // « no server running » n'est PAS un echec : c'est une reponse definitive — pas de
-        // serveur, donc zero session. La confondre avec un echec transitoire laissait des
-        // lignes zombies infermables apres une mort du serveur : close() refusait de
-        // supprimer faute de confirmation, et purge_dead ne purgait jamais.
-        if String::from_utf8_lossy(&out.stderr).contains("no server running") {
+        if absence_definitive(&String::from_utf8_lossy(&out.stderr)) {
             return Some(HashSet::new());
         }
         // Tout AUTRE code != 0 (timeout, serveur occupe...) reste un « on ne sait pas ».
@@ -497,7 +510,22 @@ fn tmux_conf_path(app: &AppHandle) -> Option<PathBuf> {
 
 /// La conf n'est lue qu'au DEMARRAGE du serveur tmux — or il survit a l'app
 /// (c'est le but). On applique donc aussi les options au serveur deja en route.
-pub fn apply_server_options() {
+///
+/// Les echecs sont JOURNALISES, jamais avales : `unbind -n MouseDown2Pane` est ce qui
+/// empeche tmux de coller de son cote au clic molette, et un echec silencieux ici
+/// ramene le double collage sans laisser la moindre trace — le symptome a deja ete
+/// rediagnostique de zero deux fois. Rien n'est notifie dans l'interface : l'utilisateur
+/// n'a aucune action a faire, la panne se lit dans <app_data>/logs/cockpit.log.
+///
+/// Aucun serveur en route = rien a appliquer, et surtout rien a signaler : la conf sera
+/// lue a la creation du serveur. Sans cette sortie, chaque premier lancement journalisait
+/// une quinzaine de faux echecs (mesure : sur un socket absent, tmux 3.4 rend 1 pour
+/// TOUTES les commandes).
+pub fn apply_server_options(app: &AppHandle) {
+    if tmux_alive_sessions().is_none_or(|sessions| sessions.is_empty()) {
+        return;
+    }
+    let mut echecs: Vec<String> = Vec::new();
     for args in [
         ["set", "-s", "set-clipboard", "on"].as_slice(),
         ["set", "-sa", "terminal-features", ",xterm*:clipboard:RGB:strikethrough:usstyle"].as_slice(),
@@ -522,14 +550,42 @@ pub fn apply_server_options() {
         ["unbind", "-n", "M-MouseDown3Pane"].as_slice(),
         ["unbind", "-n", "MouseDrag3Pane"].as_slice(),
     ] {
-        let _ = tmux_cmd(args).output();
+        releve(&mut echecs, args);
     }
 
     // Un serveur DEJA vivant a pu etre demarre par une version qui fuyait l'environnement
     // AppImage : on marque ces variables pour retrait, les prochains shells naitront propres.
     // (Les shells existants gardent leur environnement, c'est inevitable.)
     for var in APPIMAGE_LEAKED_VARS {
-        let _ = tmux_cmd(&["set-environment", "-g", "-r", var]).output();
+        releve(&mut echecs, &["set-environment", "-g", "-r", var]);
+    }
+
+    if !echecs.is_empty() {
+        journaliser(app, "terminal.optionsTmux", &echecs.join(" | "));
+    }
+}
+
+/// Lance une commande tmux et note son echec au lieu de le perdre.
+/// `unbind` d'une touche deja non liee sort en 0 (mesure sur tmux 3.4) : pas de faux positif.
+fn releve(echecs: &mut Vec<String>, args: &[&str]) {
+    let rendu = |detail: String| format!("tmux {} : {}", args.join(" "), detail);
+    match tmux_cmd(args).output() {
+        Ok(out) if out.status.success() => {}
+        Ok(out) => {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            echecs.push(rendu(if err.is_empty() { out.status.to_string() } else { err }));
+        }
+        Err(e) => echecs.push(rendu(e.to_string())),
+    }
+}
+
+/// Journal local (toujours ecrit, sans consentement — cf. report/mod.rs). Utilise pour les
+/// pannes qui n'appellent aucune action de l'utilisateur : elles ne doivent pas etre
+/// silencieuses pour autant.
+fn journaliser(app: &AppHandle, scope: &str, message: &str) {
+    if let Ok(dir) = app.path().app_data_dir() {
+        let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        crate::report::append_log(&dir, &crate::report::format_log_line(&horodatage, scope, message));
     }
 }
 
@@ -955,6 +1011,37 @@ impl TerminalState {
 
 #[cfg(test)]
 mod tests {
+    /// Messages RELEVES sur tmux 3.4 le 2026-08-20, pas inventes : les deux disent
+    /// « aucun serveur », et seule la premiere forme etait reconnue.
+    #[test]
+    fn serveur_mort_avec_socket_encore_present_est_une_absence_certaine() {
+        assert!(super::absence_definitive(
+            "no server running on /tmp/tmux-1000/cockpit\n"
+        ));
+    }
+
+    /// Le cas d'apres un redemarrage de la machine : /tmp est vide, donc plus de socket.
+    /// C'est celui qui laissait des terminaux affiches et impossibles a fermer.
+    #[test]
+    fn socket_absent_est_une_absence_certaine() {
+        assert!(super::absence_definitive(
+            "error connecting to /tmp/tmux-1000/cockpit (No such file or directory)\n"
+        ));
+    }
+
+    /// Tout le reste reste un « on ne sait pas » : on ne supprime RIEN sur un doute.
+    #[test]
+    fn les_autres_echecs_ne_valent_pas_absence() {
+        for stderr in [
+            "error connecting to /tmp/tmux-1000/cockpit (Connection refused)",
+            "server exited unexpectedly",
+            "lost server",
+            "",
+        ] {
+            assert!(!super::absence_definitive(stderr), "{stderr:?} ne prouve pas l'absence");
+        }
+    }
+
     #[test]
     fn les_variables_du_montage_appimage_sont_retirees() {
         let (retirer, _) = modifications_environnement(None, &|_| None);

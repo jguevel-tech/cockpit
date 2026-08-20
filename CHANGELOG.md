@@ -12,6 +12,20 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Terminal : le clic molette colle une seule fois. Le presse-papier partait deux fois dans
+  le terminal, avec le même texte : la commande était doublée, ou le début de la seconde
+  copie s'ajoutait à la fin de la première.
+- Terminal : coller quand le presse-papier est vide, ou sans terminal ouvert, le dit au lieu
+  de ne rien faire.
+- Barre latérale : après un redémarrage de la machine, les terminaux de la session précédente
+  restaient affichés sans pouvoir être fermés. Ils disparaissent maintenant au lancement.
+
+### Changed
+
+- Amélioration des journaux techniques.
+
 ## [0.32.1] — 2026-08-20
 
 ### Fixed
