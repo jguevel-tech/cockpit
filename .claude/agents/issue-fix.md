@@ -78,8 +78,15 @@ que tu ajoutes ou modifies quelque chose de visible, verifie ces points :
   l'application au lieu d'y avoir ete collee.
 - **Un etat vide explique quoi faire**, il ne se contente pas d'etre vide.
 - **Verifie sur une image de fond.** Un contraste correct en theme sombre uni ne prouve
-  rien : c'est la regle du projet, et un vrai `<button>` est ce qui garantit la
-  lisibilite.
+  rien. Et n'attends RIEN d'automatique : contrairement a ce que le `CLAUDE.md` a
+  longtemps affirme, **aucune couche ne donne un fond a tout `<button>` sous image de
+  fond** — la tentative a ete abandonnee et le commentaire est reste. Un bouton sans fond
+  propre est du texte pose sur une photo. `.btn` porte un fond, `.icon-btn` non.
+  La lisibilite se joue au niveau des CONTENEURS (`html.has-wallpaper` en habille
+  quelques-uns), donc un controle place ailleurs se verifie a l'oeil, au banc, avec une
+  image chargee.
+  Utiliser un vrai `<button>` reste obligatoire — pour le clavier, le focus et les classes
+  partagees — mais ce n'est pas ce qui le rend visible.
 
 En cas de doute entre deux facons de faire, choisis celle qui demande le moins de gestes
 a l'utilisateur, et dis dans ton rendu ce que tu as ecarte.
