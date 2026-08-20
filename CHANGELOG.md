@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.34.1] — 2026-08-20
+
 ### Fixed
 
 - Les commandes rapides d'un projet (bouton **▶ Cmd**, palette Ctrl+K) et le shell d'un
