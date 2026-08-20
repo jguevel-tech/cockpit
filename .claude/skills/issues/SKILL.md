@@ -102,22 +102,28 @@ d'une regle ne prend plus effet.
 Chaque agent rend la fiche decrite dans sa definition : classe, preuve
 (`fichier:ligne`), cause, correction proposee, cout, langue de l'auteur, doute.
 
-**Prevois une passe de relance : la PLUPART des agents se mettent en attente sans
-rien rendre** (le 2026-08-20, six sur neuf). Ce n'est pas une raison de refaire leur
-travail toi-meme : relance chacun par `SendMessage` en lui redemandant la fiche au
-format, et en lui donnant la question precise qui tranche son classement. Ils ont
-deja lu le code et repondent vite — les fiches obtenues ainsi ont ete les meilleures
-du lot.
+**Le protocole normal est en DEUX temps : l'agent signale qu'il est disponible, puis
+tu lui demandes sa fiche.** Ce n'est pas une panne, c'est ce qui se passe a chaque
+fois — le 2026-08-20, sur neuf agents plus deux remplacants, tous ont annonce leur
+disponibilite sans joindre la fiche. Ne t'en etonne pas et ne refais surtout pas leur
+travail : reponds a chaque notification d'inactivite par une demande de fiche au
+format, avec la question precise qui tranche le classement. Ils ont deja lu le code et
+repondent vite — les fiches obtenues ainsi ont ete les meilleures du lot.
+
+Prevois donc ce va-et-vient dans ton deroule : neuf issues, c'est neuf triages ET neuf
+demandes de fiche.
 
 Profite de la relance pour transmettre ce que les autres fiches ont deja etabli : sur
 ce meme run, savoir que l'aller-retour marked/turndown perd le `<pre>` nu a oriente
 utilement le triage des liens. Les agents ne se parlent pas entre eux, c'est a toi de
 faire circuler.
 
-**Deux relances sans fiche = agent perdu, on le remplace.** Ne le relance pas une
-troisieme fois et ne refais pas son travail toi-meme : lance un agent NEUF sur la meme
-issue, avec un prompt plus resserre (les questions precises a trancher, ce qui est
-deja etabli par les autres fiches). Constate le 2026-08-20 sur l'issue #9.
+**Deux DEMANDES EXPLICITES sans fiche = agent perdu, on le remplace.** Attention a ne
+pas confondre avec le va-et-vient normal ci-dessus : ce qui compte, c'est une demande
+de fiche restee sans reponse, pas une notification d'inactivite. Au deuxieme echec,
+lance un agent NEUF sur la meme issue avec un prompt plus resserre — les questions
+precises a trancher, et ce que les autres fiches ont deja etabli pour qu'il n'ait pas
+a le redemontrer. Constate le 2026-08-20 sur les issues #8 et #9.
 
 `ListAgents` ne sert a rien pour ca : il ne liste que les autres sessions Claude, pas
 tes propres sous-agents. Leur etat ne se connait que par leurs notifications.
