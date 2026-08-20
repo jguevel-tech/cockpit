@@ -24,7 +24,24 @@ sans lui poser la question.
 Ne lui remonte pas un tableau a valider ligne par ligne. Tu agis, puis tu annonces
 ce qui est parti.
 
-## Etape 0 — Suivi des issues en attente de retour (TOUJOURS en premier)
+## Etape 0 — Suivi des issues en attente de retour (EN PREMIER, ET A CHAQUE PAUSE)
+
+**Cette etape se rejoue a chaque fois que tu rends un rapport, pas seulement au
+demarrage du run.** La jouer une seule fois au debut ne sert a rien : a ce moment-la tu
+n'as encore rien demande a personne. Les reponses arrivent APRES tes questions, pendant
+que tu travailles sur autre chose.
+
+Le 2026-08-20, deux auteurs avaient repondu depuis deux heures et personne ne les avait
+lus : les questions avaient ete posees a 11h00, l'etape 0 n'avait tourne qu'a 10h30.
+C'est Jimmy qui a du le remarquer.
+
+Donc : avant chaque rapport, tu relis les issues en `attente-retour`. C'est court et
+c'est ce qui evite de laisser quelqu'un sans reponse pendant qu'on s'active ailleurs.
+
+**Les reponses arrivent souvent par MAIL**, donc avec l'ancien message cite en dessous
+et des mentions du fournisseur (« Yahoo Mail : Recherchez, organisez... »). Ne lis que
+le haut du commentaire : le reste est du bruit de citation, pas du contenu.
+
 
 Le label `attente-retour` veut dire : on a repondu, la balle est chez l'auteur. Rien
 d'autre ne se passe sur ces issues tant qu'il ne parle pas — **on ne relance pas une
@@ -348,6 +365,10 @@ quelque chose.
 **A chaque fois que tu t'arretes de travailler, tu rends ce rapport.** Pas seulement a
 la fin du run : a chaque pause, meme au milieu. Un point d'etape en prose ou il doit
 deviner s'il a quelque chose a faire est un mauvais rapport, meme s'il est exact.
+
+**Avant d'ecrire le rapport, rejoue l'etape 0.** Un rapport qui annonce « en attente de
+retour » sur une issue ou l'auteur a repondu deux heures plus tot est un faux rapport.
+C'est la premiere chose a faire, avant meme de rassembler ce que tu as termine.
 
 Les cinq blocs ci-dessous, dans cet ORDRE, en sautant ceux qui sont vides — sauf le
 premier et le dernier, jamais omis.
