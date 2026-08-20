@@ -179,7 +179,7 @@
       }
       const id = dropTarget?.activeId() ?? null;
       if (id === null) {
-        notifyGlobal(translate("term.pasteNoTerminal"));
+        notifyGlobal(translate("term.noTerminalOpen"));
         return;
       }
       queueWrite(id, p.paths.map(escapeForShell).join(" ") + " ");
@@ -443,7 +443,10 @@
   // Copie la selection : locale xterm (Shift+glisser) en priorite, sinon la
   // selection copy-mode tmux (surlignage bleu). Chemin souris uniquement.
   async function copySelection() {
-    if (activeId === null) return;
+    if (activeId === null) {
+      notify($trad("term.noTerminalOpen"));
+      return;
+    }
     const entry = pool.get(activeId);
     if (entry?.term.hasSelection()) {
       const sel = entry.term.getSelection();
@@ -465,7 +468,7 @@
   async function pasteClipboard() {
     const entry = activeId === null ? undefined : pool.get(activeId);
     if (!entry) {
-      notify($trad("term.pasteNoTerminal"));
+      notify($trad("term.noTerminalOpen"));
       return;
     }
     try {
@@ -670,7 +673,12 @@
   let searchInputEl: HTMLInputElement | undefined = $state();
 
   function openSearch() {
-    if (activeId === null) return;
+    // La recherche est celle du copy-mode tmux : sans terminal actif, il n'y a rien ou
+    // chercher. On le dit plutot que d'avaler le clic (ou le Ctrl+Maj+F).
+    if (activeId === null) {
+      notify($trad("term.noTerminalOpen"));
+      return;
+    }
     searchOpen = true;
     requestAnimationFrame(() => { searchInputEl?.focus(); searchInputEl?.select(); });
   }
@@ -761,10 +769,13 @@
       // reste complet via le copy-mode tmux (history-limit 10000).
       await attachTerminal(id, cols, rows);
     } catch (e) {
-      // Session morte cote tmux : on la retire de la liste
+      // Session morte cote tmux : on retire l'onglet, mais on DIT pourquoi il disparait —
+      // un onglet qui s'evapore sous les yeux de l'utilisateur ressemble a une panne.
       mounted.delete(id);
       disposePoolEntry(id);
       sessions = sessions.filter((s) => s.id !== id);
+      signalerErreur("terminal.attacheExistant", String(e));
+      notify($trad("term.sessionGone"), "error", 4000, { report: false });
       return;
     }
 
@@ -806,9 +817,17 @@
     if (id === null) return;
     const value = renameValue.trim();
     const s = sessions.find((s) => s.id === id);
-    if (!s) return;
+    if (!s) {
+      notify($trad("term.sessionGone"));
+      return;
+    }
+    // Sans ce message l'onglet affichait le nouveau nom alors que la base gardait l'ancien :
+    // le nom revenait au retour sur le projet, sans explication. On remet aussi le nom
+    // precedent, pour que l'onglet dise la verite.
+    const avant = s.name;
     s.name = value;
-    try { await renameTerminal(id, value); } catch {}
+    try { await renameTerminal(id, value); }
+    catch (e) { s.name = avant; notify(String(e)); }
     loadTerminals();
   }
 

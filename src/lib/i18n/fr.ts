@@ -548,7 +548,7 @@ export const fr = {
   "term.dropOnTerminal": "Dépose le fichier sur le terminal pour insérer son chemin.",
   "term.projectNotFound": "Projet introuvable dans la liste — redémarre Cockpit ou vérifie sa configuration.",
   "term.noProjectPath": "Ce projet n'a pas de chemin : renseigne-le dans l'onglet Paramètres du projet.",
-  "term.pasteNoTerminal": "Aucun terminal ouvert : clique sur + pour en ouvrir un.",
+  "term.noTerminalOpen": "Aucun terminal ouvert : clique sur + pour en ouvrir un.",
   "term.pasteEmpty": "Le presse-papier est vide : rien à coller.",
   "term.sessionGone": "Ce terminal n'existe plus : sa session s'est terminée entre-temps.",
   "tab.workspace": "Workspace",

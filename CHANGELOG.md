@@ -20,6 +20,11 @@ le script de release.
   onglet ne s'ouvrait et rien ne l'expliquait : chaque nouvel essai laissait un terminal de
   plus derrière lui. Un clic sur un terminal de la barre latérale ou du tableau de bord ouvre
   lui aussi la bonne session, et si celle-ci s'est terminée entre-temps, c'est écrit à l'écran.
+- Terminal : renommer un onglet ne peut plus faire mentir l'affichage. Quand l'enregistrement
+  du nouveau nom échouait, l'onglet le montrait quand même et l'ancien nom revenait au retour
+  sur le projet, sans un mot. Un onglet retiré parce que sa session tmux avait disparu
+  s'explique aussi, au lieu de s'évaporer, et Copier ou la recherche sans terminal ouvert
+  disent pourquoi il n'y a rien à faire.
 
 ## [0.34.0] — 2026-08-20
 
