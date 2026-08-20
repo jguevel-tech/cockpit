@@ -30,14 +30,34 @@ jobs:
           - os: macos-latest # Apple Silicon (aarch64)
             bundles: app,dmg
     runs-on: ${{ matrix.os }}
+    # Le build Rust a cache froid prend ~80 min ; au-dela c'est un blocage, pas une
+    # lenteur. Sans ce plafond GitHub attend SIX HEURES avant de tuer le job.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
       - name: Dependances systeme Tauri (Linux)
         if: runner.os == 'Linux'
+        # 15 min suffisent largement (~40 s en temps normal). Le plafond est la parce que
+        # cette etape s'est figee SIX HEURES sur la v0.31.0 : `unattended-upgrades` tient le
+        # verrou dpkg au demarrage du runner et apt attend indefiniment. D'ou aussi
+        # `Lock::Timeout` (apt rend la main au lieu d'attendre) et les trois essais.
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          set -eux
+          # Coupe le service qui tient le verrou, sinon on ne fait que l'attendre.
+          sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
+          export DEBIAN_FRONTEND=noninteractive
+          apt_reessai() {
+            for essai in 1 2 3; do
+              if sudo apt-get -o DPkg::Lock::Timeout=120 "$@"; then return 0; fi
+              echo "apt-get $1 : echec (essai $essai), nouvelle tentative dans 15 s"
+              sleep 15
+            done
+            return 1
+          }
+          apt_reessai update
+          apt_reessai install -y --no-install-recommends \
             libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
 
       - uses: actions/setup-node@v4
@@ -142,6 +162,83 @@ jobs:
           # Section du CHANGELOG.md extraite a l'etape precedente : c'est exactement ce
           # texte que les utilisateurs voient dans le modal de mise a jour.
           releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: false
+          # BROUILLON, volontairement. Les deux jobs publient sur la meme release et
+          # tauri-action fusionne `latest.json` plateforme par plateforme : le premier job
+          # a finir exposait donc un `latest.json` SANS l'autre plateforme. Un utilisateur
+          # Linux qui verifiait pendant cette fenetre recevait « None of the fallback
+          # platforms [...] were found » — constate en usage. Le brouillon n'est pas servi
+          # par `releases/latest`, donc personne ne voit un fichier incomplet ; le job
+          # `publier` ci-dessous leve le brouillon quand la version Linux est bien la.
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
+
+  # Leve le brouillon UNE FOIS la version Linux verifiee. Separe du build pour s'executer
+  # meme si le job macOS a echoue (plateforme secondaire) : un echec la-bas ne doit pas
+  # priver les utilisateurs Linux de leur mise a jour.
+  publier:
+    needs: release
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Verifier que la version Linux est publiable, puis lever le brouillon
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Passage par l'API et non par `gh release view` : un brouillon n'est PAS
+          # accessible par son tag (l'API rend 404), il faut le retrouver dans la liste.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases.json
+          python3 - <<'EOF' > /tmp/brouillon.env
+          import json, os, sys
+          tag = os.environ["TAG"]
+          releases = json.load(open("/tmp/releases.json"))
+          cibles = [r for r in releases if r["tag_name"] == tag]
+          if not cibles:
+              sys.exit(f"::error::aucune release pour le tag {tag}")
+          if len(cibles) > 1:
+              sys.exit(f"::error::{len(cibles)} releases portent le tag {tag} — publication manuelle requise")
+          r = cibles[0]
+          noms = sorted(a["name"] for a in r["assets"])
+          print(f"# artefacts : {noms}", file=sys.stderr)
+
+          # Sans AppImage il n'y a rien a livrer a nos utilisateurs : mieux vaut laisser le
+          # brouillon en place qu'annoncer une version qu'ils ne peuvent pas installer.
+          if not any(n.endswith(".AppImage") for n in noms):
+              sys.exit("::error::aucune AppImage : la release reste en brouillon")
+
+          maj = [a for a in r["assets"] if a["name"] == "latest.json"]
+          if not maj:
+              sys.exit("::error::latest.json absent : la release reste en brouillon")
+          print(f"RELEASE_ID={r['id']}")
+          print(f"ASSET_ID={maj[0]['id']}")
+          print(f"DEJA_PUBLIEE={'0' if r['draft'] else '1'}")
+          EOF
+          cat /tmp/brouillon.env >> "$GITHUB_ENV"
+          . /tmp/brouillon.env
+
+          # `latest.json` est ce que lit l'updater : sans entree Linux, l'application affiche
+          # une erreur au lieu d'une mise a jour. C'est le bug qu'on ferme ici.
+          gh api -H "Accept: application/octet-stream" \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" > /tmp/latest.json
+          python3 - <<'EOF'
+          import json, sys
+          d = json.load(open("/tmp/latest.json"))
+          plateformes = sorted(d.get("platforms", {}))
+          print("version:", d.get("version"), "| plateformes:", plateformes)
+          if not any(p.startswith("linux-") for p in plateformes):
+              sys.exit("::error::latest.json sans entree Linux : la release reste en brouillon")
+          EOF
+
+          if [ "$DEJA_PUBLIEE" = "1" ]; then
+            echo "Release $TAG deja publiee, rien a faire."
+          else
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+              -F draft=false -f make_latest=true > /dev/null
+            echo "Release $TAG publiee : les utilisateurs peuvent mettre a jour."
+          fi

@@ -90,6 +90,12 @@ export const fr = {
   "update.upToDate": "Cockpit est à jour",
   "update.nonePending": "Aucune mise à jour en attente — relance la vérification.",
   "update.install": "Mettre à jour",
+  "update.available": "Mise à jour disponible — {from} → {to}",
+  "update.availableShort": "Mise à jour disponible — {version}",
+  "update.notReady": "La nouvelle version n'est pas encore prête pour ton système — réessaie dans quelques minutes.",
+  "update.offline": "Serveur de mises à jour injoignable — vérifie ta connexion.",
+  "update.checkFailed": "Vérification des mises à jour impossible.",
+  "update.installFailed": "Installation de la mise à jour impossible.",
 
   // Alertes systeme
   "alerts.diskFull": "Disque presque plein — {mount}",

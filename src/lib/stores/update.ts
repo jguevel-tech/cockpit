@@ -4,7 +4,8 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
 import { notify } from "./toast";
 import { pushNotice, removeNoticesByPrefix } from "./notifications";
-import { translate } from "../i18n";
+import { translate, type Catalog } from "../i18n";
+import { signalerErreur } from "./errors";
 
 /// Etat du telechargement, pour la barre de progression du modal.
 export type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "installing" | "error";
@@ -50,6 +51,28 @@ const versionReady = getVersion()
     return "";
   });
 
+/**
+ * Cle de message lisible pour une panne de l'updater, `null` si la panne n'en a pas de
+ * particuliere (l'appelant met alors son message par defaut).
+ *
+ * Le plugin renvoie des textes techniques anglais qui n'ont rien a faire sous les yeux d'un
+ * utilisateur. Deux cas valent un message a eux :
+ * - `platforms` sans notre entree : une release existe mais l'artefact de notre systeme n'y
+ *   est pas encore (les jobs de plateformes ne finissent pas en meme temps). Ce n'est pas une
+ *   panne, c'est « repasse dans cinq minutes ».
+ * - reseau injoignable : c'est la connexion, pas le logiciel.
+ *
+ * Une CLE et non un texte : le message reste alors reactif au changement de langue la ou il
+ * est affiche. Le detail technique n'est pas perdu, il part dans le journal.
+ */
+export function cleErreurMaj(brut: string): keyof Catalog | null {
+  if (/platforms` object/.test(brut)) return "update.notReady";
+  if (/error sending request|dns error|timed out|timeout|connection|connect |unreachable|network/i.test(brut)) {
+    return "update.offline";
+  }
+  return null;
+}
+
 /// Interroge la Release GitHub la plus recente. Silencieux par defaut : au demarrage on ne
 /// veut pas d'un toast d'erreur parce que la machine est hors ligne.
 export async function checkForUpdate(opts: { silent?: boolean } = {}) {
@@ -71,8 +94,8 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
         id: `update:${update.version}`,
         kind: "update",
         title: current
-          ? `Mise à jour disponible — ${current} → ${update.version}`
-          : `Mise à jour disponible — ${update.version}`,
+          ? translate("update.available", { from: current, to: update.version })
+          : translate("update.availableShort", { version: update.version }),
         body: update.body ?? undefined,
         createdAt: update.date ?? new Date().toISOString(),
         dismissible: true,
@@ -85,8 +108,16 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
       if (!opts.silent) notify(translate("update.upToDate"), "success");
     }
   } catch (e) {
-    updateState.update((s) => ({ ...s, phase: "idle", error: String(e) }));
-    if (!opts.silent) notify(String(e));
+    const brut = String(e);
+    updateState.update((s) => ({ ...s, phase: "idle", error: brut }));
+    // Journalise le texte brut (c'est lui qui sert au diagnostic) mais n'affiche que le
+    // message lisible — et rien du tout si la verification etait automatique.
+    void signalerErreur("update.check", brut);
+    if (!opts.silent) {
+      notify(translate(cleErreurMaj(brut) ?? "update.checkFailed"), "error", 6000, {
+        report: false,
+      });
+    }
   }
 }
 
@@ -115,8 +146,12 @@ export async function installUpdate() {
     });
     await relaunch();
   } catch (e) {
-    updateState.update((s) => ({ ...s, phase: "error", error: String(e) }));
-    notify(String(e));
+    const brut = String(e);
+    updateState.update((s) => ({ ...s, phase: "error", error: brut }));
+    void signalerErreur("update.install", brut);
+    notify(translate(cleErreurMaj(brut) ?? "update.installFailed"), "error", 6000, {
+      report: false,
+    });
   }
 }
 

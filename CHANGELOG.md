@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **« Vérifier la mise à jour » n'affiche plus d'erreur technique.** Quand une version vient
+  d'être publiée mais que le fichier d'installation de ton système n'est pas encore en ligne,
+  Cockpit le dit en une phrase et t'invite à réessayer. Même chose hors connexion : un message
+  clair au lieu du texte anglais du composant de mise à jour.
+- **Une nouvelle version n'est plus annoncée avant d'être installable.** Elle n'apparaît
+  désormais que lorsque le fichier d'installation de chaque système est effectivement publié.
+- **La notification « Mise à jour disponible » suit la langue choisie** — elle restait en
+  français en anglais.
+
 ## [0.31.0] — 2026-08-19
 
 ### Added

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { marked } from "marked";
   import { notices, markAllRead, dismiss } from "../../stores/notifications";
-  import { checkForUpdate, updateState } from "../../stores/update";
+  import { checkForUpdate, cleErreurMaj, updateState } from "../../stores/update";
   import { notify } from "../../stores/toast";
   import { portal } from "../../actions/portal";
   import { trad } from "../../i18n";
@@ -106,7 +106,9 @@
             {:else if n.kind === "update" && $updateState.phase === "installing"}
               <p class="status">{$trad("notif.installing")}</p>
             {:else if n.kind === "update" && $updateState.error}
-              <p class="status error">{$updateState.error}</p>
+              <p class="status error">
+                {$trad(cleErreurMaj($updateState.error) ?? "update.installFailed")}
+              </p>
             {/if}
           </div>
         </li>

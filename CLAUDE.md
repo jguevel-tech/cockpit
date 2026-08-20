@@ -642,6 +642,28 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
 `cache-on-failure` est actif pour qu'un echec ne reparte pas d'une compilation complete.
 
 **Pieges** :
+- **La release est publiee en BROUILLON, un job `publier` la rend visible a la fin.** Les deux
+  jobs de la matrice publient sur la MEME release et tauri-action fusionne `latest.json`
+  plateforme par plateforme : le premier a finir exposait donc un `latest.json` sans l'autre
+  plateforme, et l'updater de cet OS affichait « None of the fallback platforms [...] were
+  found ». Constate le 2026-08-19 sur la v0.31.0. Le brouillon n'est pas servi par
+  `releases/latest`, donc plus personne ne voit un fichier incomplet. Le job `publier`
+  (`if: always()`, donc il tourne meme si macOS a echoue) verifie la presence de l'AppImage ET
+  d'une entree `linux-*` dans `latest.json` avant de lever le brouillon — sinon il echoue et la
+  release reste invisible. Il passe par l'API et non par `gh release view` : **un brouillon
+  n'est pas accessible par son tag** (l'API rend 404), il faut le chercher dans la liste
+  (tauri-action fait pareil pour retrouver le brouillon de l'autre job).
+- **URGENCE : une release deja publiee mais incomplete se repare sans rien republier** —
+  `gh release edit vX.Y.Z --prerelease --latest=false`. `releases/latest` exclut les
+  preversions, donc l'endpoint retombe aussitot sur la derniere version COMPLETE et les
+  utilisateurs cessent de voir l'erreur (~1 min de propagation CDN). C'est le premier geste a
+  faire, avant meme de diagnostiquer.
+- **Le job Linux peut se figer sur `apt-get`** : `unattended-upgrades` tient le verrou dpkg au
+  demarrage du runner et apt attend indefiniment. Sans plafond, GitHub laisse courir **six
+  heures** avant de tuer le job (v0.31.0 : fige de 15h19 a 21h20, aucune AppImage publiee,
+  macOS termine seul -> tous les utilisateurs Linux casses). D'ou `timeout-minutes` sur le job
+  (120) et sur l'etape apt (15), l'arret du service, `-o DPkg::Lock::Timeout=120` et trois
+  essais. Ne pas retirer ces plafonds : c'est ce qui transforme un blocage en echec rapide.
 - **`Resource not accessible by integration` a la CREATION de la release** : incident
   transitoire de l'API GitHub (constate sur la v0.24.0 ; la v0.25.0 a reussi avec le meme
   token juste apres). REGLE : si une version PLUS RECENTE est deja publiee, NE JAMAIS rerun

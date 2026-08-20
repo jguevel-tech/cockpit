@@ -85,6 +85,12 @@ export const en: Catalog = {
   "update.upToDate": "Cockpit is up to date",
   "update.nonePending": "No pending update — run the check again.",
   "update.install": "Update",
+  "update.available": "Update available — {from} → {to}",
+  "update.availableShort": "Update available — {version}",
+  "update.notReady": "The new version is not ready for your system yet — try again in a few minutes.",
+  "update.offline": "Update server unreachable — check your connection.",
+  "update.checkFailed": "Could not check for updates.",
+  "update.installFailed": "Could not install the update.",
 
   "alerts.diskFull": "Disk almost full — {mount}",
   "alerts.memoryFull": "Memory saturated",
