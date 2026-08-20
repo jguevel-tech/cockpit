@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.31.1] — 2026-08-20
+
 ### Fixed
 
 - **« Vérifier la mise à jour » n'affiche plus d'erreur technique.** Quand une version vient
