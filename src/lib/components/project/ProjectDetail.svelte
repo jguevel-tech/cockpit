@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { activeTab, selectProject, renameProjectTab, pendingTerminalId } from "../../stores/ui";
-  import { projects, loadProjects } from "../../stores/projects";
+  import { activeTab, pendingTerminalId } from "../../stores/ui";
+  import { projects, renommerProjet } from "../../stores/projects";
   import { recordingStatus, lastRecordingEvent } from "../../stores/recording";
   import { getUrls, getProjectCommands, checkUrls } from "../../api/storage";
   import { createTerminal } from "../../api/workspace";
-  import { renameProject } from "../../api/scanner";
   import { startRecording, stopRecording, getFailedRecordings, retryRecording, deleteRecording } from "../../api/recorder";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import type { Url, UrlHealth, Recording, ProjectCommand } from "../../types";
@@ -137,17 +136,11 @@
     renaming = true;
   }
 
+  // Le renommage (controle du nom deja pris, memoire d'onglet, reselection) vit dans
+  // `renommerProjet` : la barre laterale offre le meme geste et doit se comporter pareil.
   async function commitRename(next: string) {
     renaming = false;
-    if (next === name) return;
-    try {
-      await renameProject(name, next);
-      await loadProjects();
-      // Le projet change de nom, pas d'onglet : on transfere sa memoire avant de le
-      // reselectionner, sinon le renommage ramenerait sur Workspace.
-      renameProjectTab(name, next);
-      selectProject(next);
-    } catch (e) { notify(String(e)); }
+    await renommerProjet(name, next);
   }
 
   // Ajouter un onglet = une seule entree ici (+ le type activeTab dans ui.ts)
@@ -172,13 +165,19 @@
         <InlineEdit value={name} onCommit={commitRename} onCancel={() => (renaming = false)} />
       </span>
     {:else}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <h2
-        ondblclick={startRename}
-        title={project?.description
-          ? $trad("project.renameHintWithDescription", { description: project.description })
-          : $trad("project.renameHint")}
-      >{name}</h2>
+      <!-- Le double-clic marchait deja, mais rien ne le signalait : le crayon au survol est
+           l'indice VISIBLE du geste (meme motif que les sessions Claude de l'onglet Terminal),
+           et c'est lui le vrai controle clavier — le h2 n'en est que la cible confortable. -->
+      <span class="title-zone">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <h2
+          ondblclick={startRename}
+          title={project?.description
+            ? $trad("project.renameHintWithDescription", { description: project.description })
+            : $trad("project.renameHint")}
+        >{name}</h2>
+        <button class="title-edit-btn" onclick={startRename} title={$trad("project.renameTitle")}>✎</button>
+      </span>
     {/if}
 
     <div class="tabs">
@@ -255,10 +254,19 @@
     display: flex; align-items: stretch; gap: 1rem; flex-wrap: wrap;
     border-bottom: 1px solid var(--border-color);
   }
+  .title-zone { display: inline-flex; align-items: center; gap: 0.15rem; align-self: center; }
   .project-bar h2 {
-    margin: 0; font-size: 1.05rem; cursor: default; align-self: center;
+    margin: 0; font-size: 1.05rem; cursor: pointer;
     white-space: nowrap; padding-bottom: 2px;
   }
+  .title-zone:hover h2 { text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
+  .title-edit-btn {
+    background: none; border: none; cursor: pointer; padding: 0 0.2rem;
+    color: var(--text-secondary); font-size: 0.8rem; line-height: 1;
+    opacity: 0; transition: opacity 0.12s ease;
+  }
+  .title-zone:hover .title-edit-btn, .title-edit-btn:focus-visible { opacity: 1; }
+  .title-edit-btn:hover { color: var(--accent); }
   .title-edit { display: inline-block; width: 14rem; font-size: 1.05rem; font-weight: 700; align-self: center; }
   .header-actions {
     display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto;

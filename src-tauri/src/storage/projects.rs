@@ -23,6 +23,23 @@ pub struct Project {
     pub created_at: String,
 }
 
+/// Traduit l'echec d'unicite de `projects.name` en message comprehensible.
+///
+/// SQLite rend « UNIQUE constraint failed: projects.name » et ce texte remontait tel quel
+/// jusqu'au toast : un utilisateur qui renommait un projet vers un nom deja pris lisait un
+/// message technique en anglais sans rapport apparent avec son geste (issue #6). Toute
+/// ecriture du nom d'un projet passe par ici. L'interface controle deja le nom AVANT
+/// d'appeler (message traduit) ; ceci est le filet, il couvre les courses et les appels
+/// venus d'ailleurs.
+fn erreur_nom(e: rusqlite::Error, name: &str) -> String {
+    let msg = e.to_string();
+    if msg.contains("UNIQUE constraint failed: projects.name") {
+        format!("un autre projet s'appelle deja « {} »", name)
+    } else {
+        msg
+    }
+}
+
 impl Project {
     pub fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Self> {
         let deps_raw: String = row.get(5)?;
@@ -71,7 +88,7 @@ impl Database {
             "INSERT INTO projects (name, path, compose_file, description, depends_on) VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![name, path, compose_file, description, deps_json],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| erreur_nom(e, name))?;
 
         conn.query_row(
             &format!("SELECT {} FROM projects WHERE name=?1", Project::SELECT_COLS),
@@ -97,7 +114,7 @@ impl Database {
             "UPDATE projects SET name=?1, path=?2, compose_file=?3, description=?4, depends_on=?5 WHERE id=?6",
             rusqlite::params![name, path, compose_file, description, deps_json, id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| erreur_nom(e, name))?;
 
         conn.query_row(
             &format!("SELECT {} FROM projects WHERE id=?1", Project::SELECT_COLS),
@@ -202,7 +219,7 @@ impl Database {
 
         let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
         tx.execute("UPDATE projects SET name=?1 WHERE name=?2", rusqlite::params![new_name, db_old])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| erreur_nom(e, new_name))?;
 
         // Toutes les tables referençant le projet par nom
         for table in PROJECT_SCOPED_TABLES {
@@ -309,5 +326,43 @@ mod tests {
         assert_eq!(projects[0].name, "c");
         assert_eq!(projects[1].name, "a");
         assert_eq!(projects[2].name, "b");
+    }
+
+    /// Renommer vers un nom deja pris doit DIRE ce qui se passe. SQLite rendait
+    /// « UNIQUE constraint failed: projects.name », affiche tel quel a l'utilisateur.
+    #[test]
+    fn test_rename_project_to_existing_name() {
+        let db = test_db();
+        db.create_project("alpha", "/a", "", "", &[]).unwrap();
+        db.create_project("beta", "/b", "", "", &[]).unwrap();
+
+        let err = db.rename_project("alpha", "beta", Some("/a")).unwrap_err();
+        assert!(err.contains("beta"), "le message doit nommer le projet en cause: {}", err);
+        assert!(!err.contains("UNIQUE"), "message SQLite brut remonte: {}", err);
+
+        // Et rien n'a bouge en base.
+        assert_eq!(db.get_project_by_name("alpha").unwrap().path, "/a");
+    }
+
+    #[test]
+    fn test_create_project_with_existing_name() {
+        let db = test_db();
+        db.create_project("alpha", "/a", "", "", &[]).unwrap();
+        let err = db.create_project("alpha", "/autre", "", "", &[]).unwrap_err();
+        assert!(err.contains("alpha"), "le message doit nommer le projet en cause: {}", err);
+        assert!(!err.contains("UNIQUE"), "message SQLite brut remonte: {}", err);
+    }
+
+    #[test]
+    fn test_rename_project_renames_scoped_rows() {
+        let db = test_db();
+        db.create_project("alpha", "/a", "", "", &[]).unwrap();
+        db.create_todo("alpha", "une tache").unwrap();
+
+        db.rename_project("alpha", "omega", Some("/a")).unwrap();
+
+        assert!(db.get_project_by_name("omega").is_ok());
+        assert_eq!(db.get_todos("omega").unwrap().len(), 1);
+        assert_eq!(db.get_todos("alpha").unwrap().len(), 0);
     }
 }

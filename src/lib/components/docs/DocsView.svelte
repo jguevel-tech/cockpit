@@ -61,10 +61,19 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.start.rename")}</p>
+        <div class="demo">
+          <div class="d-row"><span class="d-dot ok"></span> <strong>api-gateway</strong> <span class="d-muted">running</span></div>
+          <div class="d-menu indent"><div>{$trad("common.rename")}</div></div>
+          <div class="d-note">{$trad("docs.start.renameDemo")}</div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{$trad("docs.start.bar")}</p>
         <div class="demo">
           <div class="d-tabs">
-            <strong>mon-projet</strong>
+            <strong>mon-projet</strong> <span class="d-pencil">✎</span>
             <span class="d-tab active">{$trad("tab.workspace")}</span><span class="d-tab">{$trad("tab.docker")}</span><span class="d-tab">{$trad("tab.terminal")}</span><span class="d-tab">{$trad("tab.files")}</span><span class="d-tab">{$trad("tab.git")}</span>
             <span class="d-spring"></span>
             <span class="d-btn small">{$trad("project.runCommand")}</span><span class="d-btn small danger">{$trad("rec.start")}</span>
@@ -560,6 +569,9 @@
   .d-menu div { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.3rem 0.5rem; border-radius: 4px; }
   .d-menu div:hover { background: var(--bg-tertiary); }
   .d-menu .danger { color: var(--error); }
+  .d-menu.indent { margin-left: 1.5rem; }
+  /* Crayon de la maquette : meme discretion que le vrai (visible au survol du titre). */
+  .d-pencil { color: var(--text-muted); font-size: 0.75rem; }
   .d-badge { font-family: var(--font-mono, monospace); font-weight: 700; font-size: 0.75rem; width: 1rem; text-align: center; }
   .d-badge.mod { color: #d29922; }
   .d-badge.new { color: #6e9fff; }

@@ -559,8 +559,8 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
   terminal_exit, apres creation/fermeture/renommage, et toutes les 5 s (suivi du flag llm).
 - Boutons **« + Projet »** et **« + Dossier »** en toutes lettres (une icone seule n'etait pas
   comprise — retour utilisateur 2026-08-14, ne pas revenir aux icones).
-- Dossiers de projets : repliables, renommables (double-clic ou clic droit), supprimables par
-  la **corbeille au survol** de l'en-tete — UNIQUEMENT s'ils sont vides, sinon un message
+- Dossiers de projets : repliables, renommables (double-clic sur le nom ou clic droit),
+  supprimables par la **corbeille au survol** de l'en-tete — UNIQUEMENT s'ils sont vides, sinon un message
   explique combien de projets restent a deplacer (pas de detachement silencieux vers la racine).
 - Liste de tous les projets avec :
   - Dot de couleur selon l'etat (running/starting/stopping/error/stopped)
@@ -568,11 +568,27 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
   - Description (si presente)
   - Nombre de containers (si > 0)
   - Etat textuel
-- Clic pour naviguer vers le projet
+- Clic pour naviguer vers le projet, **double-clic ou clic droit -> Renommer** (meme paire de
+  gestes que les dossiers et les terminaux) et infobulle qui l'annonce. Le menu contextuel d'un
+  projet ne contient QUE Renommer : la suppression cascade sur les notes, taches, URLs et
+  enregistrements du projet, son chemin confirme vit dans Parametres -> Projets, et on ne la met
+  pas a un clic droit de la ligne qu'on vient de renommer.
+- La ligne projet est rendue par UN SEUL snippet (`ligneProjet`) utilise par la racine et par
+  les dossiers : le balisage etait recopie deux fois et toute retouche devait etre faite deux
+  fois.
 
 ### Vue projet (8 onglets)
 
-En-tete : nom renommable (double-clic), description, bouton ⏺ Enregistrer (reunions), liens rapides.
+En-tete : nom renommable (double-clic sur le titre, ou le **crayon ✎** qui apparait au survol —
+c'est lui le vrai `<button>`, le titre n'est que la cible confortable), description, bouton ⏺
+Enregistrer (reunions), liens rapides.
+
+**Le renommage d'un projet passe par `renommerProjet` (stores/projects.ts), pas par
+`renameProject` en direct** : le nom est UNIQUE en base, il faut donc controler la collision
+AVANT (message traduit) sinon SQLite remonte « UNIQUE constraint failed: projects.name » jusqu'au
+toast ; et la memoire d'onglet est indexee par nom, elle doit suivre le renommage. La fonction ne
+reselectionne le projet que s'il etait DEJA affiche — renommer depuis la barre laterale ne doit
+pas emmener ailleurs.
 
 - **Workspace** : Notes a gauche (flex: 2, arborescence + editeur WYSIWYG) + Todos a droite
   (flex: 1). **Mode lecture** (bouton ▸◂ Lecture dans l'en-tete de la note, store `readingMode`) :
@@ -1097,7 +1113,7 @@ Le `{#key $selectedProject}` dans MainPanel force le remount de ProjectDetail qu
 
 | Store | Fichier | Contenu |
 |-------|---------|---------|
-| `projects` | `stores/projects.ts` | Liste projets, reload sur event `status_update` |
+| `projects` | `stores/projects.ts` | Liste projets, reload sur event `status_update`. Porte aussi `renommerProjet()` : SEUL chemin de renommage (controle du nom deja pris, memoire d'onglet, reselection) |
 | `systemMetrics` | `stores/system.ts` | Metriques systeme courantes |
 | `cpuHistory` | `stores/system.ts` | Historique CPU (60 points FIFO) |
 | `memoryHistory` | `stores/system.ts` | Historique memoire (60 points FIFO) |
@@ -1404,6 +1420,13 @@ Le backend (`system/metrics.rs`) collecte :
   police, taille, interligne et padding, donc la substitution ne deplace rien. **Regle generale :
   un rendu asynchrone superpose a une saisie doit avoir un repli synchrone, sinon la saisie est
   invisible.**
+- **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast.** `projects.name` est
+  `UNIQUE` : renommer un projet vers un nom deja pris affichait « UNIQUE constraint failed:
+  projects.name » a l'utilisateur (reproduit par un test sur base en memoire, 2026-08-20). Deux
+  parades, les deux necessaires : l'interface controle la collision AVANT d'appeler, avec un
+  message traduit (`renommerProjet`, et le modal de creation faisait la meme fuite) ; et cote
+  Rust, toute ecriture du nom d'un projet passe par `erreur_nom` (storage/projects.rs) qui
+  nomme la cause. Regle : une contrainte de base n'est jamais un message d'interface.
 - **`scripts/release.mjs` doit bumper `Cargo.lock` en meme temps que `Cargo.toml`.** Sans ca le
   commit taggue se contredisait (lock en retard d'une version) et le premier `cargo build`
   suivant reecrivait le fichier : arbre sale, donc release suivante REFUSEE jusqu'a un commit

@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Renommer un projet se voit enfin.** Clic droit sur un projet dans la barre latérale →
+  **Renommer**, ou double-clic sur son nom : les mêmes gestes que pour un dossier ou un
+  terminal. Dans la barre du projet, un crayon apparaît au survol du titre et le double-clic
+  reste là. Renommer vers un nom déjà pris explique le problème au lieu d'afficher un message
+  technique — à la création d'un projet aussi.
+
 ### Fixed
 
 - Les menus au clic droit font enfin ce qu'ils annoncent. **Renommer** et **Fermer** sur un

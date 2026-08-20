@@ -1,6 +1,6 @@
 <script lang="ts">
   import { addProject } from "../../api/scanner";
-  import { loadProjects } from "../../stores/projects";
+  import { loadProjects, projects } from "../../stores/projects";
   import { selectProject, activeTab, DEFAULT_TAB } from "../../stores/ui";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { portal } from "../../actions/portal";
@@ -57,6 +57,12 @@
     const trimmedName = name.trim();
     if (!trimmedName) {
       error = $trad("project.nameRequired");
+      return;
+    }
+    // Le nom est UNIQUE en base : sans ce controle, SQLite renvoyait
+    // « UNIQUE constraint failed: projects.name » directement dans le modal.
+    if ($projects.some((p) => p.name.toLowerCase() === trimmedName.toLowerCase())) {
+      error = $trad("project.nameTaken", { name: trimmedName });
       return;
     }
 

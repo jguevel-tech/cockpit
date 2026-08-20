@@ -5,7 +5,7 @@
   import { renameTerminal, closeTerminal } from "../../api/workspace";
   import type { TerminalInfo } from "../../types";
   import { reorderProjects, getProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, moveProjectToFolder } from "../../api/scanner";
-  import { loadProjects } from "../../stores/projects";
+  import { loadProjects, renommerProjet } from "../../stores/projects";
   import type { Project, ProjectFolder } from "../../types";
   import CreateProjectModal from "./CreateProjectModal.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
@@ -73,6 +73,22 @@
   async function closeTerminalById(id: number) {
     try { await closeTerminal(id); } catch (e) { notify(String(e)); }
     await loadTerminals();
+  }
+
+  // Renommage d'un projet : meme paire de gestes que les dossiers et les terminaux
+  // (double-clic sur le nom, clic droit -> Renommer). Le renommage marchait depuis
+  // toujours mais nulle part ici : personne ne le trouvait (issue #6).
+  let projContextMenu: { name: string; x: number; y: number } | null = $state(null);
+  let renamingProjectName: string | null = $state(null);
+
+  function openProjContextMenu(e: MouseEvent, name: string) {
+    e.preventDefault();
+    projContextMenu = { name, x: e.clientX, y: e.clientY };
+  }
+
+  async function commitRenameProject(oldName: string, next: string) {
+    renamingProjectName = null;
+    await renommerProjet(oldName, next);
   }
 
   async function loadFolders() {
@@ -246,27 +262,42 @@
     class:drag-over-top={dropTarget?.name === proj.name && dropTarget?.pos === "before"}
     class:drag-over-bottom={dropTarget?.name === proj.name && dropTarget?.pos === "after"}
   >
-    <button
-      class="project-item"
-      class:active={$selectedProject === proj.name}
-      onclick={() => selectProject(proj.name)}
-    >
-      <div class="project-main">
+    {#if renamingProjectName === proj.name}
+      <div class="project-item renaming">
         <span class="state-dot" style="background:{getColor(proj.state)}"></span>
-        <div class="project-info">
-          <span class="project-name">{proj.name}</span>
-          {#if proj.description}
-            <span class="project-desc">{proj.description}</span>
+        <InlineEdit
+          value={proj.name}
+          placeholder={$trad("sidebar.projectNamePlaceholder")}
+          onCommit={(next) => commitRenameProject(proj.name, next)}
+          onCancel={() => (renamingProjectName = null)}
+        />
+      </div>
+    {:else}
+      <button
+        class="project-item"
+        class:active={$selectedProject === proj.name}
+        onclick={() => selectProject(proj.name)}
+        ondblclick={() => (renamingProjectName = proj.name)}
+        oncontextmenu={(e) => openProjContextMenu(e, proj.name)}
+        title={$trad("sidebar.projectHint")}
+      >
+        <div class="project-main">
+          <span class="state-dot" style="background:{getColor(proj.state)}"></span>
+          <div class="project-info">
+            <span class="project-name">{proj.name}</span>
+            {#if proj.description}
+              <span class="project-desc">{proj.description}</span>
+            {/if}
+          </div>
+        </div>
+        <div class="project-meta">
+          <span class="project-state">{proj.state}</span>
+          {#if proj.containers.length > 0}
+            <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
           {/if}
         </div>
-      </div>
-      <div class="project-meta">
-        <span class="project-state">{proj.state}</span>
-        {#if proj.containers.length > 0}
-          <span class="container-count">{$tradN("sidebar.containers", proj.containers.length)}</span>
-        {/if}
-      </div>
-    </button>
+      </button>
+    {/if}
   </li>
 {/snippet}
 
@@ -398,6 +429,18 @@
   />
 {/if}
 
+{#if projContextMenu}
+  {@const pname = projContextMenu.name}
+  <ContextMenu
+    x={projContextMenu.x}
+    y={projContextMenu.y}
+    onClose={() => (projContextMenu = null)}
+    items={[
+      { label: $trad("common.rename"), action: () => (renamingProjectName = pname) },
+    ]}
+  />
+{/if}
+
 {#if contextMenu}
   {@const fid = contextMenu.id}
   <ContextMenu
@@ -516,6 +559,8 @@
     border-bottom: 1px solid var(--border-color);
   }
   .project-item:hover { background: var(--bg-tertiary); }
+  /* Meme boite pendant la saisie : la ligne ne saute pas quand on entre en renommage. */
+  .project-item.renaming { flex-direction: row; align-items: center; gap: 0.5rem; cursor: default; }
   .project-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }
   .project-main { display: flex; align-items: flex-start; gap: 0.5rem; }
   .state-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 0.3rem; }
