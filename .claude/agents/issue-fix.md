@@ -145,6 +145,13 @@ retirer : elles coutent moins cher a lire qu'a re-apprendre.)_
 - **Ton dernier message EST le rendu.** Ne termine jamais ton tour sur un accuse de
   reception ou une question : le texte final est la seule chose qui remonte. Vu le
   2026-08-20 sur des agents de triage, meme cause possible ici.
+- **NE TERMINE JAMAIS TON TOUR AVEC UN ARBRE SALE.** Commiter est la derniere action
+  avant de rendre ton compte rendu, pas une intention. Le 2026-08-20, deux agents de
+  correction sur trois ont laisse leur travail non commite : la release etait bloquee
+  (`release.mjs` refuse un arbre sale), le travail restait invisible, et il a fallu les
+  relancer pour qu'ils finissent. Si tu es interrompu avant d'avoir tout verifie,
+  commite quand meme et dis-le dans ton rendu : un commit imparfait se corrige, du
+  travail non commite se perd.
 - **Durcir un garde-fou oblige a reparer ce qu'il revele, dans le meme lot.** Un
   controle rendu plus strict qui laisse derriere lui des violations fait echouer la
   verification, donc bloque toute livraison — on ne peut pas s'arreter au milieu. Soit

@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG = resolve(ROOT, "package.json");
 const CARGO = resolve(ROOT, "src-tauri/Cargo.toml");
+const LOCK = resolve(ROOT, "src-tauri/Cargo.lock");
 const CHANGELOG = resolve(ROOT, "CHANGELOG.md");
 
 const die = (msg) => {
@@ -108,6 +109,19 @@ const cargoOut = cargo.replace(/^version = "[^"]+"$/m, `version = "${next}"`);
 if (cargoOut === cargo) die("Impossible de mettre a jour la version dans Cargo.toml.");
 writeFileSync(CARGO, cargoOut);
 
+// Cargo.lock porte AUSSI la version de la crate. L'oublier laissait le commit de release
+// en contradiction avec lui-meme (Cargo.toml a la nouvelle version, Cargo.lock a
+// l'ancienne), et surtout le premier `cargo build` suivant reecrivait le lock : arbre
+// sale, donc release suivante refusee jusqu'a ce que quelqu'un commite ce fichier a la
+// main. On cible le bloc de NOTRE crate et lui seul, pas les centaines de dependances.
+const lock = readFileSync(LOCK, "utf8");
+const lockOut = lock.replace(
+  /(\[\[package\]\]\nname = "cockpit"\nversion = )"[^"]+"/,
+  `$1"${next}"`
+);
+if (lockOut === lock) die("Impossible de mettre a jour la version dans Cargo.lock.");
+writeFileSync(LOCK, lockOut);
+
 // [Unreleased] devient la section datee, et une [Unreleased] vide est recreee au-dessus.
 // `[ \t]*` et non `\s*` : `\s` engloberait les sauts de ligne suivants, ce qui collerait
 // le premier `### Added` au titre de version.
@@ -121,7 +135,7 @@ writeFileSync(
 
 // --- 5. Commit + tag (jamais de push) ---
 
-git("add", "package.json", "src-tauri/Cargo.toml", "CHANGELOG.md");
+git("add", "package.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "CHANGELOG.md");
 git("commit", "-m", `Release ${next}`);
 git("tag", "-a", `v${next}`, "-m", `Release ${next}\n\n${notes}`);
 
@@ -130,6 +144,7 @@ console.log(`
 
   package.json      ${next}
   Cargo.toml        ${next}
+  Cargo.lock        ${next}
   CHANGELOG.md      section [${next}] — ${today}
   commit            "Release ${next}"
   tag               v${next}
