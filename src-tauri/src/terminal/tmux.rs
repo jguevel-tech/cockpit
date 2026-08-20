@@ -14,6 +14,8 @@
 //! (`docs/portabilite/plan-terminaux.md`) : tout ce qui est specifique a tmux doit rester
 //! DEDANS, jamais remonter dans `interface.rs` ni dans `lib.rs`.
 
+use super::agents_llm::{est_commande_llm, ArbreProcess};
+use super::environnement;
 use super::interface::{ActionRecherche, Creation, Taille, TerminalInfo, Terminaux};
 use crate::storage::Database;
 use base64::Engine;
@@ -82,79 +84,6 @@ fn b64(data: &[u8]) -> String {
 }
 
 // --- Helpers tmux (socket dedie) ---
-
-/// Variables du runtime AppImage a NE PAS transmettre aux shells.
-///
-/// L'AppImage pose PYTHONHOME/PYTHONPATH/LD_LIBRARY_PATH... pointant dans son montage
-/// /tmp/.mount_cockpi*. Le serveur tmux etant lance par Cockpit, chaque shell les heritait :
-/// `python3` plantait dans TOUS les terminaux Cockpit (« ModuleNotFoundError: encodings »,
-/// constate le 2026-08-13), et LD_LIBRARY_PATH pouvait derregler n'importe quel binaire.
-const APPIMAGE_LEAKED_VARS: &[&str] = &[
-    "PYTHONHOME", "PYTHONPATH", "LD_LIBRARY_PATH", "LD_PRELOAD",
-    "APPDIR", "APPIMAGE", "APPIMAGE_ORIGINAL_APPDIR", "ARGV0", "OWD", "PERLLIB",
-    // Injectees par le hook GTK du bundle (verifiees dans l'AppImage publiee) : elles
-    // designent le montage /tmp/.mount_cockpi*, qui disparait et n'a rien a voir avec
-    // l'environnement de l'utilisateur.
-    "GTK_PATH", "GTK_EXE_PREFIX", "GTK_DATA_PREFIX", "GTK_IM_MODULE_FILE", "GTK_THEME",
-    "GDK_PIXBUF_MODULE_FILE", "GDK_BACKEND",
-    "GIO_MODULE_DIR", "GIO_EXTRA_MODULES", "GSETTINGS_SCHEMA_DIR", "GI_TYPELIB_PATH",
-    "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SYSTEM_PATH_1_0", "GST_PLUGIN_PATH",
-    "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SCANNER", "GST_PLUGIN_SCANNER_1_0",
-    // Notre propre configuration de polices (voir lib.rs) : elle sert au rendu de
-    // l'interface, pas aux programmes lances dans un terminal.
-    "FONTCONFIG_FILE", "FONTCONFIG_PATH",
-];
-
-/// Variables qui sont des LISTES de chemins : on ne les supprime pas — le shell et les
-/// outils en ont besoin — on en retire seulement les entrees situees dans le montage de
-/// l'AppImage.
-const APPIMAGE_PATH_LISTS: &[&str] = &["XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "PATH"];
-
-/// Retire d'une liste `:` les chemins situes sous `appdir`.
-///
-/// Un utilisateur a signale des erreurs de `mise` dans les terminaux de Cockpit : ce genre
-/// d'outil lit XDG_DATA_DIRS et le PATH, et l'AppImage y ajoutait son propre montage. Ce
-/// n'etait donc ni son installation ni un probleme de `mise`.
-fn sans_chemins_appimage(valeur: &str, appdir: &str) -> String {
-    valeur
-        .split(':')
-        .filter(|part| !part.is_empty() && !part.starts_with(appdir))
-        .collect::<Vec<_>>()
-        .join(":")
-}
-
-/// Ce qu'il faut changer a l'environnement avant de lancer une commande destinee a
-/// l'utilisateur (shell, tmux) : les variables a RETIRER, et celles a REDEFINIR.
-///
-/// Rend les deux listes au lieu d'agir directement : l'appelant les applique a sa commande,
-/// et la decision reste testable sans lancer de processus.
-fn modifications_environnement(
-    appdir: Option<&str>,
-    lire: &dyn Fn(&str) -> Option<String>,
-) -> (Vec<&'static str>, Vec<(&'static str, String)>) {
-    let mut retirer: Vec<&'static str> = APPIMAGE_LEAKED_VARS.to_vec();
-    let mut redefinir: Vec<(&'static str, String)> = Vec::new();
-    let Some(appdir) = appdir.filter(|d| !d.is_empty()) else {
-        return (retirer, redefinir);
-    };
-    for var in APPIMAGE_PATH_LISTS {
-        if let Some(valeur) = lire(var) {
-            let propre = sans_chemins_appimage(&valeur, appdir);
-            if propre.is_empty() {
-                retirer.push(var);
-            } else if propre != valeur {
-                redefinir.push((var, propre));
-            }
-        }
-    }
-    (retirer, redefinir)
-}
-
-/// Les memes modifications, calculees depuis l'environnement du processus.
-fn modifications_environnement_courant() -> (Vec<&'static str>, Vec<(&'static str, String)>) {
-    let appdir = std::env::var("APPDIR").ok();
-    modifications_environnement(appdir.as_deref(), &|v| std::env::var(v).ok())
-}
 
 /// Chemin du binaire tmux a utiliser, resolu UNE FOIS par setup_bundled_tmux().
 /// Vide tant que la resolution n'a pas eu lieu -> repli sur le tmux du PATH.
@@ -259,30 +188,11 @@ fn tmux_cmd(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new(tmux_program());
     // -u : force le mode UTF-8 quelle que soit la locale detectee
     cmd.arg("-u").arg("-L").arg(TMUX_SOCKET).args(args);
-    cmd.env("LANG", utf8_locale()).env("LC_ALL", utf8_locale());
+    cmd.env("LANG", environnement::locale_utf8())
+        .env("LC_ALL", environnement::locale_utf8());
     // Le serveur tmux (et donc tous les shells) herite de CET environnement.
-    let (retirer, redefinir) = modifications_environnement_courant();
-    for var in retirer {
-        cmd.env_remove(var);
-    }
-    for (var, valeur) in redefinir {
-        cmd.env(var, valeur);
-    }
+    environnement::appliquer(&mut cmd);
     cmd
-}
-
-/// Locale UTF-8 a imposer aux terminaux : celle de l'utilisateur si elle est
-/// deja en UTF-8, sinon un repli garanti disponible.
-fn utf8_locale() -> String {
-    for var in ["LC_ALL", "LC_CTYPE", "LANG"] {
-        if let Ok(v) = std::env::var(var) {
-            if v.to_lowercase().contains("utf") {
-                return v;
-            }
-        }
-    }
-    // Replis courants (au moins un existe sur toute distro moderne)
-    "C.UTF-8".to_string()
 }
 
 /// Sessions tmux vivantes, ou `None` si on n'a PAS PU le savoir.
@@ -335,140 +245,6 @@ fn tmux_session_is_gone(name: &str) -> bool {
     tmux_alive_sessions().is_some_and(|alive| !alive.contains(name))
 }
 
-/// CLIs d'agents LLM reconnus (basename du binaire ou du script node).
-const LLM_COMMANDS: &[&str] = &[
-    "claude", "codex", "gemini", "aider", "goose", "opencode",
-    "copilot", "cursor-agent", "amp", "qwen", "ollama",
-];
-
-fn basename(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
-}
-
-fn is_llm_command(cmd: &str) -> bool {
-    LLM_COMMANDS.contains(&cmd)
-}
-
-/// Le BINAIRE REEL du process est-il un CLI LLM ? (`/proc/<pid>/exe`)
-///
-/// Necessaire parce que argv[0] peut mentir : constate le 2026-08-14, un claude natif lance
-/// depuis un shell ou trainait la variable APPIMAGE (fuite corrigee en 0.6.7) s'affichait
-/// comme `.../target/release/cockpit -r` dans `ps` ET dans `pane_current_command` — la
-/// detection par nom de commande devenait aveugle. `/proc/exe` pointe, lui, sur le vrai
-/// binaire (`~/.local/share/claude/versions/2.1.231`) : on matche chaque composant du chemin
-/// (le basename est un numero de version, c'est le dossier `claude` qui signe).
-fn exe_is_llm(pid: u32) -> bool {
-    let Ok(exe) = std::fs::read_link(format!("/proc/{}/exe", pid)) else {
-        return false;
-    };
-    exe.components().any(|c| {
-        c.as_os_str()
-            .to_str()
-            .is_some_and(|s| is_llm_command(s.trim_end_matches(".js").trim_end_matches(".mjs")))
-    })
-}
-
-/// Une ligne de commande complete correspond-elle a un CLI LLM ?
-/// Reconnait `claude ...`, `/usr/bin/claude`, mais aussi `node /path/gemini.js`.
-fn args_are_llm(args: &str) -> bool {
-    let mut tokens = args.split_whitespace();
-    let Some(first) = tokens.next() else { return false };
-    let base = basename(first);
-    if is_llm_command(base) {
-        return true;
-    }
-    if matches!(base, "node" | "bun" | "deno" | "python" | "python3") {
-        if let Some(second) = tokens.next() {
-            let script = basename(second);
-            return is_llm_command(script.trim_end_matches(".js").trim_end_matches(".mjs"));
-        }
-    }
-    false
-}
-
-/// Vue des process, juste ce qu'il faut pour reconnaitre un CLI LLM sous un shell tmux.
-///
-/// NE PAS revenir a une enumeration globale (`ps -e`, `sysinfo::refresh_processes`) : cette
-/// detection tourne toutes les 5 s pour la sidebar, et les deux lisent les ~1000 process de
-/// la machine pour en regarder une poignee. Mesure du 2026-08-20 (1074 process, charge 0,6) :
-/// `ps -e -o pid=,ppid=,args=` = 47 ms par passe, et jusqu'a 1 s sous la charge d'agents qui
-/// tournent — le cas d'usage meme de Cockpit. Descendre l'arbre des seuls panes tmux avec
-/// sortie des qu'un LLM est trouve : 0,35 ms, 9 process lus au lieu de 1074.
-#[cfg(target_os = "linux")]
-struct ArbreProcess;
-
-#[cfg(target_os = "linux")]
-impl ArbreProcess {
-    fn nouveau() -> Self {
-        Self
-    }
-
-    /// Enfants directs, via `/proc/<pid>/task/<tid>/children`.
-    ///
-    /// On parcourt TOUTES les taches et pas seulement le thread principal : un enfant est
-    /// rattache au thread qui l'a cree, et un `node` (donc claude, codex...) fork depuis un
-    /// thread de travail. Ne garder que `task/<pid>` rendait ces descendants invisibles.
-    fn enfants(&self, pid: u32) -> Vec<u32> {
-        let Ok(taches) = std::fs::read_dir(format!("/proc/{}/task", pid)) else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        for tache in taches.flatten() {
-            // Un process peut mourir en cours de lecture : son absence n'est pas une panne.
-            if let Ok(liste) = std::fs::read_to_string(tache.path().join("children")) {
-                out.extend(liste.split_whitespace().filter_map(|p| p.parse::<u32>().ok()));
-            }
-        }
-        out
-    }
-
-    fn est_llm(&self, pid: u32) -> bool {
-        // /proc/<pid>/cmdline : arguments separes par des NUL. Meme process disparu = pas
-        // une panne, on repond simplement « pas un LLM ».
-        let ligne = std::fs::read(format!("/proc/{}/cmdline", pid))
-            .map(|brut| String::from_utf8_lossy(&brut).replace('\0', " "))
-            .unwrap_or_default();
-        args_are_llm(ligne.trim()) || exe_is_llm(pid)
-    }
-}
-
-/// Sans `/proc` (macOS), il n'y a pas de moyen de descendre l'arbre a la demande : on
-/// construit la table complete une fois par passe, avec sysinfo (deja une dependance)
-/// plutot qu'en analysant la sortie texte de `ps`.
-#[cfg(not(target_os = "linux"))]
-struct ArbreProcess {
-    enfants: HashMap<u32, Vec<u32>>,
-    ligne: HashMap<u32, String>,
-}
-
-#[cfg(not(target_os = "linux"))]
-impl ArbreProcess {
-    fn nouveau() -> Self {
-        use sysinfo::{ProcessRefreshKind, RefreshKind, System};
-        let sys = System::new_with_specifics(
-            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-        );
-        let mut enfants: HashMap<u32, Vec<u32>> = HashMap::new();
-        let mut ligne: HashMap<u32, String> = HashMap::new();
-        for (pid, process) in sys.processes() {
-            let pid = pid.as_u32();
-            if let Some(parent) = process.parent() {
-                enfants.entry(parent.as_u32()).or_default().push(pid);
-            }
-            ligne.insert(pid, process.cmd().join(" "));
-        }
-        Self { enfants, ligne }
-    }
-
-    fn enfants(&self, pid: u32) -> Vec<u32> {
-        self.enfants.get(&pid).cloned().unwrap_or_default()
-    }
-
-    fn est_llm(&self, pid: u32) -> bool {
-        self.ligne.get(&pid).is_some_and(|l| args_are_llm(l)) || exe_is_llm(pid)
-    }
-}
-
 /// Sessions tmux du socket cockpit dans lesquelles un CLI LLM tourne.
 /// 1) `pane_current_command` (process au premier plan) couvre les binaires natifs ;
 /// 2) sinon on descend les descendants du shell pour attraper les CLIs lances via
@@ -492,7 +268,7 @@ fn tmux_llm_sessions() -> HashSet<String> {
         let (Some(session), Some(pid), Some(cmd)) = (parts.next(), parts.next(), parts.next()) else {
             continue;
         };
-        if is_llm_command(cmd) {
+        if est_commande_llm(cmd) {
             result.insert(session.to_string());
         } else if let Ok(pid) = pid.parse::<u32>() {
             need_tree.push((session.to_string(), pid));
@@ -504,19 +280,8 @@ fn tmux_llm_sessions() -> HashSet<String> {
 
     let arbre = ArbreProcess::nouveau();
     for (session, root) in need_tree {
-        let mut vus: HashSet<u32> = HashSet::new();
-        let mut stack = vec![root];
-        while let Some(pid) = stack.pop() {
-            // Un cycle est impossible dans un arbre de process, mais un pid reutilise
-            // pendant le parcours suffirait a boucler : on ne visite chacun qu'une fois.
-            if !vus.insert(pid) {
-                continue;
-            }
-            if arbre.est_llm(pid) {
-                result.insert(session.clone());
-                break; // trouve : inutile de descendre plus loin, c'est ce qui rend la passe gratuite
-            }
-            stack.extend(arbre.enfants(pid));
+        if arbre.contient_un_llm(root) {
+            result.insert(session);
         }
     }
     result
@@ -641,7 +406,7 @@ fn apply_server_options(app: &AppHandle) {
     }
     let mut commandes: Vec<&[&str]> = OPTIONS_SERVEUR.to_vec();
 
-    let retraits: Vec<[&str; 4]> = APPIMAGE_LEAKED_VARS
+    let retraits: Vec<[&str; 4]> = environnement::VARIABLES_APPIMAGE
         .iter()
         .map(|var| ["set-environment", "-g", "-r", *var])
         .collect();
@@ -856,21 +621,11 @@ impl TerminauxTmux {
         let mut cmd = CommandBuilder::new(program);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
-        // Locale UTF-8 forcee : lance depuis un .desktop, l'app peut heriter d'un
-        // environnement sans LANG -> tmux compte chaque octet UTF-8 comme une
-        // colonne (accents decales). On garantit une locale UTF-8 valide.
-        cmd.env("LANG", utf8_locale());
-        cmd.env("LC_ALL", utf8_locale());
-        // Ce client peut etre celui qui DEMARRE le serveur : meme nettoyage que tmux_cmd,
-        // sinon l'environnement AppImage fuite dans tous les shells (python3 casse, et un
-        // utilisateur a vu `mise` echouer pour la meme raison).
-        let (retirer, redefinir) = modifications_environnement_courant();
-        for var in retirer {
-            cmd.env_remove(var);
-        }
-        for (var, valeur) in redefinir {
-            cmd.env(var, valeur);
-        }
+        // Locale UTF-8 forcee + nettoyage de l'environnement AppImage : ce client peut
+        // etre celui qui DEMARRE le serveur tmux, et sans ca l'environnement du montage
+        // fuite dans tous les shells (python3 casse, et un utilisateur a vu `mise`
+        // echouer pour la meme raison).
+        environnement::appliquer_pty(&mut cmd);
 
         let child = pair
             .slave
@@ -1258,91 +1013,6 @@ mod tests {
         ] {
             assert!(!super::absence_definitive(stderr), "{stderr:?} ne prouve pas l'absence");
         }
-    }
-
-    #[test]
-    fn les_variables_du_montage_appimage_sont_retirees() {
-        let (retirer, _) = modifications_environnement(None, &|_| None);
-        for attendue in ["PYTHONHOME", "LD_LIBRARY_PATH", "GIO_EXTRA_MODULES", "GI_TYPELIB_PATH"] {
-            assert!(retirer.contains(&attendue), "{attendue} devrait etre retiree");
-        }
-    }
-
-    #[test]
-    fn gst_est_retire_car_il_masquait_le_gstreamer_du_systeme() {
-        let (retirer, _) = modifications_environnement(None, &|_| None);
-        assert!(retirer.contains(&"GST_PLUGIN_SYSTEM_PATH_1_0"));
-    }
-
-    #[test]
-    fn les_listes_de_chemins_perdent_seulement_les_entrees_du_montage() {
-        // XDG_DATA_DIRS ne doit PAS disparaitre : le shell et les outils s'en servent.
-        // Seule l'entree pointant dans le montage de l'AppImage s'en va.
-        let lire = |v: &str| match v {
-            "XDG_DATA_DIRS" => Some("/tmp/.mount_ck1/usr/share:/usr/share:/usr/local/share".to_string()),
-            _ => None,
-        };
-        let (_, redefinir) = modifications_environnement(Some("/tmp/.mount_ck1"), &lire);
-        let valeur = redefinir
-            .iter()
-            .find(|(k, _)| *k == "XDG_DATA_DIRS")
-            .map(|(_, v)| v.clone())
-            .expect("XDG_DATA_DIRS devrait etre redefinie");
-        assert_eq!(valeur, "/usr/share:/usr/local/share");
-    }
-
-    #[test]
-    fn une_liste_entierement_dans_le_montage_est_retiree() {
-        let lire = |v: &str| match v {
-            "XDG_CONFIG_DIRS" => Some("/tmp/.mount_ck1/etc/xdg".to_string()),
-            _ => None,
-        };
-        let (retirer, redefinir) = modifications_environnement(Some("/tmp/.mount_ck1"), &lire);
-        assert!(retirer.contains(&"XDG_CONFIG_DIRS"));
-        assert!(redefinir.iter().all(|(k, _)| *k != "XDG_CONFIG_DIRS"));
-    }
-
-    #[test]
-    fn hors_appimage_les_listes_ne_sont_pas_touchees() {
-        let lire = |v: &str| match v {
-            "PATH" => Some("/usr/bin:/bin".to_string()),
-            _ => None,
-        };
-        let (_, redefinir) = modifications_environnement(None, &lire);
-        assert!(redefinir.is_empty(), "{redefinir:?}");
-    }
-
-    #[test]
-    fn le_path_garde_les_entrees_de_l_utilisateur() {
-        // Cas de l'utilisateur dont `mise` echouait : ses raccourcis sont dans son PATH,
-        // il ne faut surtout pas le vider.
-        let lire = |v: &str| match v {
-            "PATH" => Some("/tmp/.mount_ck1/usr/bin:/home/moi/.local/share/mise/shims:/usr/bin".to_string()),
-            _ => None,
-        };
-        let (_, redefinir) = modifications_environnement(Some("/tmp/.mount_ck1"), &lire);
-        let path = redefinir.iter().find(|(k, _)| *k == "PATH").map(|(_, v)| v.clone()).unwrap();
-        assert_eq!(path, "/home/moi/.local/share/mise/shims:/usr/bin");
-    }
-
-    use super::*;
-
-    #[test]
-    fn detects_llm_command_lines() {
-        assert!(args_are_llm("claude --resume abc"));
-        assert!(args_are_llm("/usr/local/bin/claude"));
-        assert!(args_are_llm("node /home/x/.npm/bin/gemini.js chat"));
-        assert!(args_are_llm("python3 /opt/aider serve"));
-        assert!(args_are_llm("codex"));
-    }
-
-    #[test]
-    fn ignores_normal_commands() {
-        assert!(!args_are_llm("zsh"));
-        assert!(!args_are_llm("vim notes-claude.md"));
-        assert!(!args_are_llm("tail -f claude.log"));
-        assert!(!args_are_llm("node server.js"));
-        assert!(!args_are_llm(""));
     }
 
     /// L'enchainement des options tmux repose sur un `;` ARGUMENT AUTONOME. Un argument qui
