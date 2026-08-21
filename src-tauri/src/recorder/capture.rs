@@ -937,9 +937,12 @@ mod tests {
         });
         for piste in [&bilan.micro, &bilan.systeme] {
             println!("{}", piste.resume());
-            // Frequence dominante estimee par comptage des passages par zero : joue un ton
-            // connu (`pw-play` sur un WAV a 440 Hz) et cette ligne doit l'annoncer. C'est
-            // ce qui distingue « des octets sont arrives » de « le son est juste ».
+            // Frequence dominante estimee par comptage des passages par zero : avec un
+            // son connu qui joue a cote, cette ligne doit l'annoncer. C'est ce qui
+            // distingue « des octets sont arrives » de « le son est juste ».
+            // NE RIEN FAIRE ENTENDRE POUR CA : router un ton vers un sink nul et capter
+            // son monitor (recette dans les Pieges connus du CLAUDE.md) — les enceintes
+            // de quelqu'un ne sont pas un banc de test.
             let pcm = std::fs::read(dir.join(piste.role.fichier())).unwrap_or_default();
             let ech: Vec<i16> = pcm
                 .chunks_exact(2)

@@ -1450,9 +1450,24 @@ Le backend (`system/metrics.rs`) collecte :
 - **Verifier l'audio sans lancer l'application** : `cargo test --lib capture_reelle --
   --ignored --nocapture` enregistre 2 s par les vrais appareils et affiche, piste par
   piste, l'appareil retenu, le format natif, la taille obtenue, la crete et la frequence
-  dominante. Jouer un ton connu a cote (`pw-play` sur un WAV a 440 Hz) rend le resultat
-  concluant : « des octets sont arrives » et « le son est juste » ne sont pas la meme
-  chose. Le test est `#[ignore]` parce qu'il demande une carte son, qu'un runner n'a pas.
+  dominante. Un son connu qui joue a cote rend le resultat concluant : « des octets sont
+  arrives » et « le son est juste » ne sont pas la meme chose. Le test est `#[ignore]`
+  parce qu'il demande une carte son, qu'un runner n'a pas.
+- **NE JAMAIS FAIRE SORTIR DE SON DES ENCEINTES POUR TESTER.** C'est la machine de
+  quelqu'un, il travaille dessus, et un ton pur de dix secondes est insupportable. Le
+  2026-08-21, un banc audio en a joue plusieurs fois pendant que Jimmy travaillait. La
+  capture du son systeme se verifie SANS RIEN FAIRE ENTENDRE, par un sink nul :
+  ```bash
+  pactl load-module module-null-sink sink_name=banc \
+    sink_properties=device.description=Banc   # rend aussi banc.monitor
+  pactl set-default-sink banc                 # ce qui joue ne sort plus des enceintes
+  pw-play /tmp/ton.wav &                      # inaudible : le sink n'a pas de materiel
+  # ... capter ici, le monitor du sink par defaut est banc.monitor
+  pactl set-default-sink <sink d'origine>     # A REMETTRE, sinon plus aucun son
+  pactl unload-module module-null-sink
+  ```
+  Si un vrai signal audible est indispensable, c'est l'UTILISATEUR qui lance ce qu'il veut
+  entendre — on ne le decide pas pour lui.
 - **COMPILATION CROISEE WINDOWS : `rustup target add` ne suffit pas, il faut un compilateur C
   croise.** `cargo check --target x86_64-pc-windows-gnu` echoue d'abord sur
   `failed to find tool "x86_64-w64-mingw32-gcc"` — ce n'est pas notre code, c'est

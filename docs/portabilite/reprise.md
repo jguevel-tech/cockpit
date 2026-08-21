@@ -4,8 +4,9 @@
 
 ## En une phrase
 
-Tout est committé sur `main`, **rien n'est publié**, et une seule chose bloque : l'audio des
-réunions. Jimmy a demandé qu'il parte dans la même version que le reste.
+Tout est committé sur `main`, **rien n'est publié**, et plus rien ne bloque : l'audio des
+réunions est fait depuis le 2026-08-21 (commit « Capter l'audio des reunions dans le
+processus »). Le prochain tag emporte tmux + Windows + audio.
 
 ## Ce qui est fini, vérifié, et attend un tag
 
@@ -19,25 +20,28 @@ réunions. Jimmy a demandé qu'il parte dans la même version que le reste.
 Vérifications au 11h35 : `npm run check` 0/0 · `cargo test` 232 verts · `test:front` 12 ·
 `i18n:audit` 0 · compilation Windows 0 erreur.
 
-## Ce qui bloque, et c'est tout
+## L'audio des réunions : fait le 2026-08-21
 
-**L'audio des réunions.** L'agent `audio-1` travaille dessus. Consignes dans
-[audio.md](audio.md), et trois points non négociables :
+Capture `cpal` dans le processus (`recorder/capture.rs` + `recorder/pcm.rs`), plus aucun
+programme externe. Les trois points non négociables ont été tenus :
 
-1. **Sur Linux : host PulseAudio (Rust pur), PAS la feature `pipewire`.** Celle-ci tirerait
-   `libpipewire` dans l'AppImage, ce qui rouvre la famille de pannes de la `libwayland` —
-   l'app qui ne s'ouvre pas chez un testeur sur une autre distribution.
-2. **La frontière du fichier `.raw` ne bouge pas** : `mic.raw` / `system.raw`, s16le mono
-   16 kHz. Tout l'aval (morceaux de 10 min, fusion Moi/Eux, transcription, résumé) reste
-   intact. C'est ce qui garde la décision réversible.
-3. **AUCUN SON AUDIBLE, à aucun volume.** Le banc jouait une sinusoïde 440 Hz dix secondes
-   dans les enceintes de Jimmy, deux fois, pendant qu'il travaillait. C'était une mauvaise
-   consigne de ma part. Si un vrai signal est nécessaire, c'est **Jimmy** qui lance une
-   musique quand il veut.
+1. **Host PulseAudio (Rust pur) sous Linux, pas la feature `pipewire`.** Vérifié au banc
+   avant de s'engager : le nom en `.monitor` tient, mesures dans [audio.md](audio.md).
+   Une chose que l'étude avait ratée : cpal dépend d'`alsa-sys` **sans condition** sous
+   Linux, donc `libasound2-dev` au build (ajouté à `release.yml`) et `libasound.so.2`
+   embarquée dans l'AppImage. C'est la seule bibliothèque C ajoutée ; la feature
+   `pipewire` en aurait mis une de plus par-dessus.
+2. **La frontière du fichier `.raw` n'a pas bougé** : `mic.raw` / `system.raw`, s16le mono
+   16 kHz à l'octet près. Tout l'aval est intact, la décision reste réversible.
+3. **Le son audible a été joué quand même, deux fois, avant que cette consigne existe.**
+   Elle a été écrite pendant que l'agent audio travaillait, donc elle ne lui est jamais
+   parvenue. Elle est désormais dans les « Pièges connus » du `CLAUDE.md`, avec la recette
+   du sink nul qui permet de tout vérifier **sans rien faire entendre**.
 
-macOS : sans certificat Apple — décision prise, pas de certificat — la capture du son système
-rendra du silence. Ce qu'on attend là-bas est seulement que ce cas soit **dit** au lieu de
-finir en « aucune parole détectée », qui envoie chercher au mauvais endroit.
+macOS : sans certificat Apple — décision prise, pas de certificat — la capture rendra du
+silence. Ce cas est maintenant **dit** (`mute_track`, et le pipeline s'arrête avant Whisper)
+au lieu de finir en « aucune parole détectée », qui envoyait chercher au mauvais endroit.
+Rien n'y a été vérifié : pas de machine.
 
 ## Ce qui reste après ça
 
