@@ -424,7 +424,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   le thread principal, parce qu'un node fork depuis un thread de travail.
 - **Un evenement Tauri est du JavaScript construit puis evalue**, pas un canal binaire : 8 Ko
   d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement avant
-  emission — par contre-pression, jamais par une horloge qui retiendrait l'echo des touches.
+  emission, par contre-pression et jamais par une horloge.
 - **`Uint8Array.from(atob(s), cb)` appelle le callback une fois PAR CARACTERE** : 75 ms pour
   2 Mo contre 2,8 ms avec une boucle nue sur un tableau prealloue.
 - **Un projet en base doit TOUJOURS apparaitre dans l'interface** : l'ancienne liste ne rendait
@@ -457,6 +457,10 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Du code d'apparence portable peut etre mort a moitie** : une lecture de `/proc` sans `#[cfg]`
   compile partout et rend toujours faux ailleurs, sans erreur ni trace. Chercher les chemins et
   separateurs en dur avant de conclure qu'un module est portable.
+- **Sous macOS, `/var` est un lien vers `/private/var`** : un chemin construit a la main et le
+  meme chemin rendu par un outil (git, ici) ne sont pas la MEME chaine, et l'un des deux
+  s'affichera a l'utilisateur. Resoudre le chemin avant de le rendre, sinon on montre autre
+  chose que ce que la liste affichera juste apres.
 - **Sockets** : sous Unix le nom est limite a ~108 octets et l'erreur ne le dit pas (le service
   demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est PAS un
   fichier mais un tuyau nomme. Le code de production le savait, les essais non — un helper d'essai
@@ -572,20 +576,19 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 ### Outillage local
 
 - **Codes de sortie** : ne jamais lire le statut derriere un pipe, c'est celui du dernier maillon.
-  Rediriger vers un fichier puis tester, sinon on annonce des succes inexistants.
+  Rediriger vers un fichier puis tester. **Commandes de fond : chemins ABSOLUS uniquement**, le
+  repertoire courant varie d'un appel a l'autre — et toujours relire le log reel, la notification
+  de fin ne prouve rien.
 - **Le proxy `rtk` reformate `ls`, `ps` et les comptages de `grep`**, et sur certains chemins il
-  rend VIDE — on croit un dossier vide alors qu'il est plein. Passer par `rtk proxy` des que la
-  sortie compte.
-- **Commandes de fond : chemins ABSOLUS uniquement**, le repertoire courant varie d'un appel a
-  l'autre. Toujours relire le log reel : la notification de fin ne prouve rien.
+  rend VIDE — on croit un dossier vide alors qu'il est plein. Passer par `rtk proxy`.
 - **Registre npm** : la config globale de la machine pointe sur un registre prive, et celle du
   projet la surcharge vers le registre public — **ne pas la retirer**, sinon la CI echoue et un
   nom d'hote interne fuite dans un repo public. Verrou a regenerer : supprimer les modules AVANT.
 - **`npx tauri` peut resoudre un AUTRE paquet** ici : utiliser le binaire local quand la commande
   echoue sur un argument que la doc donne pour valide.
-- **Jimmy ne lance PAS de build local** — il teste depuis la version publiee. Ne jamais lui
-  demander de reproduire sur un binaire local ; une instrumentation de diagnostic doit etre
-  PUBLIEE, et retiree des la cause tranchee. Le build local reste obligatoire pour l'IA.
+- **Jimmy ne lance PAS de build local** — il teste depuis la version publiee. Une instrumentation
+  de diagnostic doit donc etre PUBLIEE, puis retiree des la cause tranchee. Le build local reste
+  obligatoire pour l'IA.
 
 ## Conventions
 

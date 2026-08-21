@@ -134,7 +134,14 @@ pub async fn ajouter(repo: &str, branche: &str, creer: bool) -> Result<String, S
         args.push(branche);
     }
     run_git_strict(repo, &args).await?;
-    Ok(chemin)
+    // Le chemin RESOLU, et pas celui qu'on a construit : sous macOS `/var` est un lien vers
+    // `/private/var`, donc git rend le second et notre liste aussi. Rendre le premier ferait
+    // afficher a l'utilisateur un chemin different de celui qu'il verra dans la liste juste
+    // apres. Si la resolution echoue, on garde ce qu'on avait — mieux vaut un chemin
+    // approximatif que pas de reponse.
+    Ok(std::fs::canonicalize(&dossier)
+        .map(|c| c.to_string_lossy().to_string())
+        .unwrap_or(chemin))
 }
 
 /// Retire un worktree. `force` accepte d'abandonner des modifications non validees.

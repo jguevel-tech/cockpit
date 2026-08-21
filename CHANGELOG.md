@@ -12,8 +12,6 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.42.0] — 2026-08-21
-
 ### Added
 
 - **Worktrees git.** Un worktree est un second dossier de travail sur le même dépôt, sur une
@@ -22,7 +20,6 @@ le script de release.
   créer un (le bouton dit s'il va créer la branche ou réutiliser une existante), **▶** ouvre un
   terminal directement dedans, **🗑** le supprime. Ils sont rangés à côté du projet, dans
   `<ton-projet>.worktrees/`, et le chemin complet est toujours affiché.
-
 
 ## [0.41.4] — 2026-08-21
 
