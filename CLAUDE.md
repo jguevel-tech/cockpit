@@ -1561,6 +1561,15 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **`cmd.exe` REAFFICHE SON INVITE ET SON TITRE A CHAQUE TOUCHE.** L'essai qui verifie que
+  l'echo d'une touche part tel quel mesurait la taille du premier lot recu apres avoir tape
+  un caractere. Sous Windows ce lot faisait **87 octets** : ce n'etait pas l'echo, c'etait
+  `C:\Users\...\Temp>` suivi d'une sequence de titre de fenetre. L'essai concluait donc que
+  l'echo d'une touche etait gros.
+  Le correctif n'est pas une garde de plateforme mais une VRAIE correction de l'essai : on
+  vide ce que le shell a dit en demarrant (attente du silence) AVANT de taper. La meme course
+  existait sous Unix, simplement plus etroite — un essai qui depend de ce que le shell a fini
+  d'ecrire doit toujours attendre le calme d'abord.
 - **RETIRER UN FILTRE MAISON FAIT ENTRER CE QU'IL CACHAIT AUSSI.** En 0.38 les six points de
   montage ecrits en dur ont ete supprimes, a raison : ils ne matchaient rien sous Windows et
   laissaient tomber le volume des fichiers de l'utilisateur sous macOS. Effet non prevu : notre

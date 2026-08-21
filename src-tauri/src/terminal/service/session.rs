@@ -843,6 +843,13 @@ mod tests {
             recu.recv_timeout(std::time::Duration::from_secs(5)),
             Ok(Pousse::Redessin { .. })
         ));
+        // Vider ce que le shell a dit en demarrant — son invite, et sous Windows le titre de
+        // fenetre par-dessus. Sans ca on mesure l'invite au lieu de l'echo : `cmd.exe`
+        // reaffiche `C:\Users\...\Temp>` plus une sequence de titre, soit 87 octets, et
+        // l'essai concluait que l'echo d'une touche etait gros (constate sur le runner
+        // Windows de la v0.41.1). Attendre le silence est aussi plus juste sous Unix, ou la
+        // meme course existait, simplement plus etroite.
+        while recu.recv_timeout(std::time::Duration::from_millis(300)).is_ok() {}
         s.ecrire(b"x").unwrap();
         let suite = recu.recv_timeout(std::time::Duration::from_secs(5)).expect("echo");
         match suite {

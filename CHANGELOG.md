@@ -12,15 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.41.1] — 2026-08-21
-
 ### Fixed
 
 - **L'alerte « disque presque plein » ne se déclenche plus sur Cockpit lui-même.** Sous Linux,
   l'AppImage se monte comme un disque en lecture seule, rempli à 100 % par nature : la cloche
   annonçait donc un disque saturé à chaque lancement. Ce montage n'apparaît plus dans le
   monitoring non plus — il n'y a rien à y libérer.
-
 
 ## [0.41.0] — 2026-08-21
 
