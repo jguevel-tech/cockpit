@@ -363,17 +363,17 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   mesure « l'echo d'une touche » doit attendre le SILENCE du shell avant de taper. Et il ne
   connait ni `printf`, ni `cat`, ni `;` comme separateur — cinq essais a shell POSIX portent
   donc une garde de plateforme. Ne PAS inventer d'equivalent sans machine pour l'essayer.
-- **Un essai qui guette le resultat d'une commande trouve d'abord ce qu'il vient de TAPER** : le
-  PTY renvoie l'echo avant execution, donc le marqueur doit etre construit par le shell. Et
-  **l'ecran alternatif se lit dans la grille du SERVICE**, jamais dans xterm.
+- **Un essai qui guette une commande trouve d'abord ce qu'il vient de TAPER** : le PTY renvoie
+  l'echo avant execution, le marqueur doit etre construit par le shell. Et **l'ecran alternatif
+  se lit dans la grille du SERVICE**, jamais dans xterm.
 - **Reponses du terminal dans `onData`** : focus in/out et reponses DA/CPR/DCS/OSC arrivent par le
   meme canal que les frappes — a filtrer. Et **Ctrl+lettre sous WebKitGTK** emet aussi un
   keypress : n'intercepter que le keydown laisse xterm envoyer le caractere de controle.
 - **Une TUI lancee a la creation se dessine a la taille du PTY, et personne ne la redimensionne
   apres.** Creer un terminal a une taille arbitraire est donc definitif : d'ou `addTerminal`
   comme seul createur.
-- **Une liste chargee au montage n'est pas une source de verite** : avant de conclure qu'une cible
-  n'existe pas, la RECHARGER depuis le backend.
+- **Une liste chargee au montage n'est pas une source de verite** : recharger avant de conclure
+  qu'une cible n'existe pas.
 - **alacritty_terminal cache trois etats** dont un redessin a besoin (region de defilement,
   titre, jeu de caracteres) : on les suit avec un ESPION, un second analyseur qui n'implemente
   que ces operations. Ne pas envelopper `Term` — 85 methodes a reexpedier, et une faute
