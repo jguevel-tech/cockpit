@@ -107,7 +107,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 
 ## Regles non negociables (a lire AVANT de coder)
 
-**Definition de "fini"** — une modification n'est livrable que si ces 8 points passent :
+**Definition de "fini"** — une modification n'est livrable que si ces 7 points passent :
 1. `npm run check` -> 0 erreur, 0 warning (c'est l'etat actuel, le maintenir)
 2. `cd src-tauri && cargo test` -> tous verts (241 au 2026-08-21). `cargo check --all-targets`
    -> 0 avertissement, sinon la CI le refusera de toute facon
@@ -123,13 +123,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
    « Compilation croisee Windows » dans les Pieges connus.
 6. `npm run test:front` -> tous verts (les modules purs du frontend, testes sous node, rien
    a installer)
-7. **`gh workflow run essais.yml` -> vert sur les TROIS systemes**, des que le changement
-   touche quoi que ce soit qui depende du systeme (terminaux, chemins, processus, audio,
-   disques). Il joue les memes verifications sur `ubuntu-22.04`, `macos-latest` et
-   `windows-latest`, construit l'installeur Windows, et **ne publie rien**. Voir « Le banc
-   d'essai » ci-dessous : il existe parce que trois versions de suite sont parties incompletes
-   pour un essai qui ne tombait que sur une autre machine.
-8. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
+7. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
    `## [Unreleased]`**, dans la bonne section (Added / Changed / Fixed / Removed). Ce texte
    n'est pas de la doc interne : il est affiche dans le logiciel ET sert de notes de version
    dans le modal de mise a jour. Une refonte interne sans effet visible n'a rien a y faire.
@@ -836,7 +830,7 @@ je prend les maj et je test apres »). Consequences :
   acceptable : elle n'ecrit que dans `/tmp/cockpit-debug.log`. La retirer des la cause tranchee.
 - Le build local reste obligatoire pour l'IA (3e point de la definition de "fini"), simplement
   il ne sert pas de moyen de test pour lui.
-Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 8 points de la definition
+Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 7 points de la definition
 de "fini" ne passent pas, et annoncer apres coup ce qui est parti et en quelle version.
 Seule exception encore soumise a accord : reecrire un historique deja pousse.
 
@@ -852,16 +846,24 @@ les verifications avant de builder, donc un commit casse ne peut pas etre publie
 branche ne ferait que ce travail en double. Ne pas la reintroduire — decision de Jimmy, prise
 deux fois.
 
-**LE BANC D'ESSAI — pourquoi il existe, et quand il est obligatoire.** Trois versions de suite
-(0.38.0, 0.39.0, 0.40.0) sont parties INCOMPLETES parce qu'un essai ne tombait que sur une
-machine qu'on n'a pas ici. On ne l'apprenait qu'apres le tag, donc apres publication, et chaque
-tentative coutait une version aux utilisateurs. `essais.yml` donne la meme reponse avant,
-gratuitement, autant de fois qu'il faut.
-- **Linux EST dans sa matrice**, et ce n'est pas de la redondance avec le poste de travail : le
-  runner a deux coeurs et un disque lent, et ca change le comportement. La v0.41.2 a echoue LA
-  apres avoir passe macOS et Windows.
-- Le lancer des que le changement touche les terminaux, les chemins, les processus, l'audio, les
-  disques — c'est-a-dire tout ce qui depend du systeme.
+**ON TAGUE DIRECTEMENT. `essais.yml` N'EST PAS UNE ETAPE OBLIGATOIRE.** Jimmy l'a tranche le
+2026-08-21 : « tu va pas me faire des essais sur les 3 system a chaque fois, je veux qu'on
+revienne au workflow d'avant ou tu fait une release directement ». Le raisonnement tient, et
+mon garde-fou etait une sur-correction :
+- **`release.yml` verifie DEJA les trois systemes** avant de construire quoi que ce soit. Un
+  commit casse ne peut pas etre publie, quelle que soit la plateforme qui coince.
+- **Un numero de version ne coute rien.** Sur les trois versions « brulees » du 2026-08-21,
+  DEUX n'ont jamais ete visibles — le job `publier` ne leve pas le brouillon sans AppImage
+  Linux — et les deux autres ont ete repliees en une minute. Cout reel pour les utilisateurs :
+  zero.
+- Le seul geste a garder par reflexe est celui d'urgence : si une release sort incomplete,
+  `gh release edit vX.Y.Z --prerelease --latest=false`, AVANT de diagnostiquer.
+
+`essais.yml` reste dans le depot et ne coute rien tant qu'on ne le lance pas. Il sert quand on
+veut la reponse SANS taguer — typiquement en refaisant un mecanisme central, ou apres plusieurs
+echecs de suite sur la meme plateforme. Ce n'est pas la routine.
+- **Linux est dans sa matrice** : le runner a deux coeurs et un disque lent, et ca change le
+  comportement — la v0.41.2 a echoue la apres avoir passe macOS et Windows.
 - Ne PAS mettre de `continue-on-error` sur une etape de build : le premier atelier Windows est
   passe « vert » avec une erreur de signature dedans, ce qui a masque ce qu'on venait mesurer.
 
