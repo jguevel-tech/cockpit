@@ -213,12 +213,12 @@ savoir ce qui existe :
   reprises en un clic.
 - **Fichiers** : arbre gitignore-aware, coloration ~30 langages, edition en place, corbeille
   systeme, recherche dans le fichier et le projet, aller a la definition (LSP).
-- **Git** : status, diff colore, staging par fichier, commit, push, pull en fast-forward
-  uniquement, branches, historique avec diff, et **worktrees** — un second dossier de travail
-  par branche, pour faire tourner plusieurs agents en parallele. Ils sont crees dans un dossier
-  FRERE du projet (`<projet>.worktrees/<branche>`) et jamais dedans : un worktree dans le depot
-  serait vu par l'onglet Fichiers, par les recherches et par git comme du contenu non suivi. Le
-  chemin est toujours affiche : rien n'apparait sur le disque de quelqu'un sans qu'il sache ou.
+- **Git** : status, diff colore, staging par fichier, commit, push, pull en avance rapide
+  seulement, branches, historique, et **worktrees** — un second dossier de travail par branche,
+  pour faire tourner plusieurs agents en parallele. Crees dans un dossier FRERE du projet
+  (`<projet>.worktrees/<branche>`) et jamais dedans : un worktree dans le depot serait vu par
+  l'onglet Fichiers, par les recherches et par git comme du contenu non suivi. Le chemin est
+  toujours affiche : rien n'apparait sur le disque de quelqu'un sans qu'il sache ou.
 - **Conteneurs** : Compose dans le bon ordre (tri topologique, cycles detectes), logs et shell
   par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
 - **Palette et commandes rapides** : Ctrl+K, et commandes par projet lancees par ▶ Cmd.
@@ -592,11 +592,9 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - Nouvelle table liee a un projet -> `PROJECT_SCOPED_TABLES`.
 - Avant de coder un modal, un rename inline, un menu contextuel, un DnD de liste ou un toast ->
   `components/ui/`, `actions/reorderable.ts`, `stores/toast.ts`.
-- Erreurs d'interface : jamais de `catch` muet. `confirm()` natif accepte pour une action
-  destructive.
-- Styles : tokens de `theme.css` uniquement, classes partagees dans `components.css`.
-- Nouvelle commande Tauri -> wrapper type dans `src/lib/api/`, types partages en snake_case
-  (alignes sur les structs Rust).
+- Erreurs d'interface : jamais de `catch` muet ; `confirm()` natif accepte pour une action
+  destructive. Styles : tokens de `theme.css` uniquement, classes partagees dans
+  `components.css`. Navigation inter-projet : forcer le remontage des composants.
+- Nouvelle commande Tauri -> wrapper type dans `src/lib/api/`, types partages en snake_case.
 - Nouvelle fonctionnalite visible -> l'illustrer dans la DOC INTEGREE (peu de texte, des
   maquettes ; « les gens ne lisent pas »). Une fonctionnalite absente de la doc n'existe pas.
-- Navigation inter-projet : forcer le remontage des composants.
