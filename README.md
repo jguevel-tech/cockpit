@@ -43,8 +43,6 @@ longer works** — Apple removed that shortcut in macOS 15. Two cases:
 Updates afterwards need none of this: the in-app updater downloads them itself, and macOS only
 quarantines what comes from a browser.
 
-Persistent terminals need `brew install tmux`; the app tells you if it's missing.
-
 > **Updates happen inside the app** on both platforms. When a new version ships, a bell appears in
 > the header: one click shows what changed and installs it. You won't need to download anything again.
 
@@ -66,8 +64,8 @@ chmod +x Cockpit_*_amd64.AppImage
 
 ### Requirements
 
-None. Cockpit runs as-is — a project is just a name and a folder — and `tmux` **ships inside the
-Linux build**, so persistent terminals work out of the box.
+None. Cockpit runs as-is — a project is just a name and a folder, and **persistent terminals are
+built in**: Cockpit runs its own terminal service, with nothing to install.
 
 Individual features lean on the tool they concern, and stay quietly inactive (or tell you exactly
 what's missing) when it is absent:
@@ -88,9 +86,9 @@ with visual examples rather than prose.
 
 ### Persistent terminals
 
-Every terminal is a `tmux` session on a dedicated socket: close the app and your processes keep
-running — you pick them back up instantly on the next launch. Search the scrollback
-(`Ctrl`+`Shift`+`F`) with native highlighting and a match counter. The Claude logo marks sessions
+Cockpit runs its own terminal service, in a process that outlives the window: close the app and
+your shells keep running — screen and scrollback included — and you pick them back up on the next
+launch. Search the scrollback (`Ctrl`+`Shift`+`F`) with highlighting and a match counter. The Claude logo marks sessions
 where an AI agent is working, and your project's Claude Code conversations are listed and resumable
 in one click.
 
@@ -204,7 +202,7 @@ src/                  Svelte 5 (runes) + TypeScript frontend
   styles/             Theme tokens and shared classes
 
 src-tauri/src/        Rust backend
-  terminal/           tmux sessions, scrollback search, command history
+  terminal/           Terminal service (shells, screen, search), command history
   workspace/          File browser, project search, file management, Claude sessions
   storage/            SQLite: projects, notes, todos, commands, settings, backup
   gitdiff/            Git status, diff and log parsing

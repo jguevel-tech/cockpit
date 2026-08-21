@@ -25,7 +25,7 @@ echo "rendu au demarrage : $(rendu)" >> /sortie/verdict.txt
 python3 /recette/pilote.py "clic:130,120" "attendre:3" "clic:527,85" "attendre:12" > /dev/null
 import -window root /sortie/B-terminal.png
 echo "rendu apres ouverture du terminal : $(rendu)" >> /sortie/verdict.txt
-tmux -L cockpit list-sessions >> /sortie/verdict.txt 2>&1 || echo "(aucune session)" >> /sortie/verdict.txt
+sqlite3 /sortie/data.db "select id,project,name from terminals;" >> /sortie/verdict.txt 2>&1 || echo "(aucune session)" >> /sortie/verdict.txt
 # Emoji produit par le shell
 python3 /recette/pilote.py "clic:700,300" "attendre:1" "taper:printf '\\xF0\\x9F\\x90\\xB3\\n'" "touche:Return" "attendre:8" > /dev/null
 import -window root /sortie/C-emoji.png

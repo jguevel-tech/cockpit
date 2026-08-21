@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libwayland-client0 libwayland-server0 libwayland-cursor0 libwayland-egl1 \
       pulseaudio pulseaudio-utils \
       pipewire pipewire-bin \
-      tmux python3 python3-gi ca-certificates procps \
+      python3 python3-gi ca-certificates procps \
   && rm -rf /var/lib/apt/lists/*
 
 # Un utilisateur non root : PulseAudio refuse de tourner en root.

@@ -211,17 +211,23 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_project_commands_project ON project_commands(project);",
         )?;
 
-        // Migration: terminaux persistants (sessions tmux)
+        // Migration: terminaux persistants. La ligne ne porte que ce qui doit survivre a un
+        // redemarrage de la machine — le projet et le nom d'onglet ; l'etat vivant appartient
+        // au service de terminaux, qui ne survit pas au redemarrage.
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS terminals (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 project    TEXT NOT NULL,
                 name       TEXT NOT NULL DEFAULT '',
-                tmux_name  TEXT NOT NULL DEFAULT '',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_terminals_project ON terminals(project);",
         )?;
+
+        // Migration: le nom de session tmux n'existe plus (chantier des terminaux, aout 2026).
+        // Tolere : sur un SQLite anterieur a 3.35 le DROP COLUMN echoue, et la colonne reste
+        // avec sa valeur par defaut — plus personne ne la lit ni ne l'ecrit.
+        let _ = conn.execute("ALTER TABLE terminals DROP COLUMN tmux_name", []);
 
         // Migration: historique de commandes (autosuggestion + Ctrl+R)
         conn.execute_batch(

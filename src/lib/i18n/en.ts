@@ -394,7 +394,7 @@ export const en: Catalog = {
   "docs.term.heading": ">_ Terminals",
   "docs.term.persistent": "<strong>Persistent</strong>: close Cockpit, restart — your terminals and whatever runs inside them are still there.",
   "docs.term.persistentDemo": "👉 double-click the tab to rename · the name also shows in the sidebar",
-  "docs.term.search": "<strong>History search</strong>: 🔍 or <span class=\"kbd\">Ctrl</span><span class=\"kbd\">Shift</span><span class=\"kbd\">F</span>, Enter searches upwards, with highlighting and a counter in the terminal.",
+  "docs.term.search": "<strong>History search</strong>: 🔍 or <span class=\"kbd\">Ctrl</span><span class=\"kbd\">Shift</span><span class=\"kbd\">F</span>, Enter searches upwards. The match is highlighted in the terminal, the counter sits next to the field.",
   "docs.term.copy": "<strong>Copy / paste</strong>: select with the mouse then <span class=\"kbd\">Ctrl</span><span class=\"kbd\">C</span>, or right-click → Copy / Paste. <strong>Middle click</strong> = paste. <span class=\"kbd\">Shift</span>+drag to select inside vim/claude.",
   "docs.term.copyDemo": "← blue selection",
   "docs.term.drop": "<strong>Drag and drop a file</strong>: drop an image (or any file) onto the terminal and its path is typed at the prompt — handy to hand a screenshot to Claude without typing the path.",

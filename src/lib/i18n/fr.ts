@@ -402,7 +402,7 @@ export const fr = {
   "docs.term.heading": ">_ Terminaux",
   "docs.term.persistent": "<strong>Persistants</strong> : ferme Cockpit, redémarre — tes terminaux et ce qui tourne dedans sont toujours là.",
   "docs.term.persistentDemo": "👉 double-clic sur l'onglet = renommer · le nom apparaît aussi dans la barre latérale",
-  "docs.term.search": "<strong>Recherche dans l'historique</strong> : 🔍 ou <span class=\"kbd\">Ctrl</span><span class=\"kbd\">Maj</span><span class=\"kbd\">F</span>, Entrée cherche vers le haut, surlignage et compteur dans le terminal.",
+  "docs.term.search": "<strong>Recherche dans l'historique</strong> : 🔍 ou <span class=\"kbd\">Ctrl</span><span class=\"kbd\">Maj</span><span class=\"kbd\">F</span>, Entrée cherche vers le haut. L'occurrence est surlignée dans le terminal, le compteur s'affiche à côté du champ.",
   "docs.term.copy": "<strong>Copier / coller</strong> : sélection à la souris puis <span class=\"kbd\">Ctrl</span><span class=\"kbd\">C</span>, ou clic droit → Copier / Coller. <strong>Clic molette</strong> = coller. <span class=\"kbd\">Maj</span>+glisser pour sélectionner dans vim/claude.",
   "docs.term.copyDemo": "← sélection bleue",
   "docs.term.drop": "<strong>Glisser-déposer un fichier</strong> : lâche une image (ou n'importe quel fichier) sur le terminal, son chemin s'écrit à l'invite — de quoi donner une capture d'écran à Claude sans taper le chemin.",

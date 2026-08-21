@@ -54,7 +54,6 @@
       <li>{$trad("consent.distro")} : {fiche.distro}</li>
       <li>{$trad("consent.audio")} : {fiche.audio_server}</li>
       <li>pw-record : {fiche.pw_record || "—"}</li>
-      <li>tmux : {fiche.tmux || "—"}</li>
       <li>{$trad("consent.packaging")} : {fiche.packaging}</li>
     </ul>
   {/if}

@@ -43,7 +43,6 @@ pub struct MachineInfo {
     /// l'information qui manquait pour comprendre l'echec d'un enregistrement.
     pub audio_server: String,
     pub pw_record: String,
-    pub tmux: String,
     /// "appimage" ou "binaire" : les fuites d'environnement de l'AppImage ont deja
     /// explique des pannes absentes du binaire nu.
     pub packaging: String,
@@ -100,10 +99,6 @@ pub fn transport_acceptable_avec(url: &str, http_autorise: bool) -> bool {
         return hote == "localhost" || hote == "127.0.0.1" || hote == "::1";
     }
     false
-}
-
-fn premiere_ligne(texte: &str) -> String {
-    texte.lines().next().unwrap_or("").trim().to_string()
 }
 
 /// Version de pw-record.
@@ -189,7 +184,6 @@ pub fn machine_info() -> &'static MachineInfo {
         ),
         audio_server: audio_server_from_pactl(&sortie_commande("pactl", &["info"])),
         pw_record: pw_record_version(&sortie_commande("pw-record", &["--version"])),
-        tmux: premiere_ligne(&sortie_commande("tmux", &["-V"])),
         packaging: if std::env::var_os("APPDIR").is_some() {
             "appimage".to_string()
         } else {
@@ -262,7 +256,6 @@ pub fn build_payload(
                 "distro": info.distro,
                 "audio": info.audio_server,
                 "pw_record": info.pw_record,
-                "tmux": info.tmux,
                 "packaging": info.packaging,
                 "utilisateur": utilisateur,
             }
@@ -389,7 +382,6 @@ mod tests {
             distro: "Ubuntu 22.04".into(),
             audio_server: "pulseaudio".into(),
             pw_record: "0.3.48".into(),
-            tmux: "tmux 3.2a".into(),
             packaging: "appimage".into(),
         };
         let long = "x".repeat(5000);
@@ -405,7 +397,6 @@ mod tests {
             distro: "Ubuntu 22.04".into(),
             audio_server: "pulseaudio".into(),
             pw_record: "0.3.48".into(),
-            tmux: "tmux 3.2a".into(),
             packaging: "appimage".into(),
         };
         let payload = build_payload("site", "recorder.start", "no node available", &info, "gilles");

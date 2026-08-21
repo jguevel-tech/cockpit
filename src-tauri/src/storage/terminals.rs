@@ -1,23 +1,24 @@
 use super::db::Database;
 use serde::{Deserialize, Serialize};
 
+/// Ce qui, d'un terminal, doit survivre a un redemarrage de la machine : son projet et son
+/// nom d'onglet. Tout le reste (le shell, l'ecran, la taille) appartient au service de
+/// terminaux, qui ne survit pas au redemarrage — voir `terminal/adaptateur.rs`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalRow {
     pub id: i64,
     pub project: String,
     pub name: String,
-    pub tmux_name: String,
 }
 
 impl TerminalRow {
-    const SELECT_COLS: &'static str = "id, project, name, tmux_name";
+    const SELECT_COLS: &'static str = "id, project, name";
 
     pub fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Self> {
         Ok(Self {
             id: row.get(0)?,
             project: row.get(1)?,
             name: row.get(2)?,
-            tmux_name: row.get(3)?,
         })
     }
 }
@@ -44,17 +45,11 @@ impl Database {
         };
         let name = format!("{}{}", prefix, next);
         conn.execute(
-            "INSERT INTO terminals (project, name, tmux_name) VALUES (?1, ?2, '')",
+            "INSERT INTO terminals (project, name) VALUES (?1, ?2)",
             [project, &name],
         )
         .map_err(|e| e.to_string())?;
         let id = conn.last_insert_rowid();
-        let tmux_name = format!("ckpt_{}", id);
-        conn.execute(
-            "UPDATE terminals SET tmux_name=?1 WHERE id=?2",
-            rusqlite::params![tmux_name, id],
-        )
-        .map_err(|e| e.to_string())?;
         conn.query_row(
             &format!("SELECT {} FROM terminals WHERE id=?1", TerminalRow::SELECT_COLS),
             [id],
@@ -122,7 +117,7 @@ mod tests {
     fn test_terminal_rows_lifecycle() {
         let db = Database::new(":memory:").unwrap();
         let t = db.create_terminal_row("proj").unwrap();
-        assert_eq!(t.tmux_name, format!("ckpt_{}", t.id));
+        assert!(t.id > 0);
 
         db.rename_terminal_row(t.id, "logs api").unwrap();
         assert_eq!(db.get_terminal_row(t.id).unwrap().name, "logs api");

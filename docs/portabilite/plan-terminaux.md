@@ -214,26 +214,27 @@ bascule est l'étape C.
    (`COCKPIT_DB`) d'avoir son propre service — le garde-fou que tmux payait par une
    exception en dur dans `purge_dead`.
 
-**Ce qui part sur le socket : pas le flux brut**
+**Ce qui part sur le socket** *(corrigé à l'étape C — lire la suite avant de s'appuyer
+dessus)*
 
-C'est le point le plus important pour l'étape C. Ce qui est petit part tel quel et tout de
-suite (l'écho d'une touche) ; ce qui dépasse quatre octets par cellule d'écran est REMPLACÉ
-par un redessin. Mesure : `seq 1 200000`, soit ~1,3 Mo écrits par le shell, fait **94 octets**
-sur le socket.
-
-Le prix, à assumer à l'étape C : **les lignes qui défilent pendant une rafale n'arrivent
-jamais au xterm du frontend**. Elles ne sont pas perdues (le service garde l'historique) mais
-la molette devra les demander au service (`Redessiner` avec historique) au lieu de compter
-sur le tampon d'xterm. tmux avait exactement la même propriété — il jetait 53 % des octets.
+L'intention de B2 était : ce qui est petit part tel quel et tout de suite (l'écho d'une
+touche) ; ce qui dépasse quatre octets par cellule d'écran est REMPLACÉ par un redessin. Le
+« **94 octets** pour `seq 1 200000` » annoncé ici **ne mesurait rien** : l'essai attendait
+« 200000 » à l'écran, chaîne que la ligne tapée contient déjà, donc il repartait avant que le
+shell ait écrit un octet et ne voyait que le redessin de l'attache. Le vrai chiffre était
+**1,49 Mo en 16 461 envois** — le regroupement ne se déclenchait jamais, parce qu'un shell
+écrit au fil de l'eau et que le lecteur du PTY est plus rapide que lui. Corrigé à l'étape C
+(déclencheur sur le rythme + seuil de lot) : **99 envois** pour la même rafale, et le flux
+brut EST transmis, ce qui remplit le tampon de défilement d'xterm et rend la molette gratuite.
 
 **Les deux chiffres**
 
 | Ce qu'on mesure | Notre service | tmux |
 |---|---|---|
-| Latence ajoutée par frappe (aller-retour complet moins PTY nu) | **0,034 ms** | 0,4 ms |
-| Dépôt d'une frappe sur le socket (ce que paie la commande Tauri) | 3,8 µs | — |
-| Aller-retour complet touche → écho affiché | 41 µs | — |
-| Volume transmis pour ~1,3 Mo de sortie shell | **94 octets** | ~47 % des octets |
+| Latence ajoutée par frappe (aller-retour complet moins PTY nu) | **0,024 à 0,062 ms** | 0,4 ms |
+| Dépôt d'une frappe sur le socket (ce que paie la commande Tauri) | 2,4 à 4,2 µs | — |
+| Aller-retour complet touche → écho affiché | 30 à 69 µs | — |
+| Envois pour ~1,3 Mo de sortie shell | **99 à 158** (16 461 avant l'étape C) | 3 pour 1,9 Mo, en jetant 53 % des octets |
 
 Mesures du 2026-08-21 sur cette machine, médiane sur 200 frappes (`cargo test -- --nocapture`,
 essai `la_latence_de_frappe_reste_sous_celle_de_tmux`). Le chemin de frappe ne passe ni par
@@ -296,53 +297,93 @@ réelle.
 
 ### C. Brancher, puis supprimer tmux
 
-Basculer l'implémentation derrière le trait — c'est une ligne, `terminaux()` dans
-`terminal/mod.rs` — vérifier que tout marche, puis **retirer vraiment** le code devenu
-inutile :
+**État : FAITE le 2026-08-21.** En deux commits : le branchement, puis la suppression.
 
-- `src-tauri/src/terminal/tmux.rs` en entier (tout ce qui est propre à tmux y est enfermé
-  depuis l'étape A ; ce qui ne l'est pas en est sorti à l'étape B2 —
-  `terminal/environnement.rs` et `terminal/agents_llm.rs` RESTENT, le service s'en sert)
-- les commandes `detach_terminal` et `terminal_alt_screen`, leurs wrappers dans
-  `src/lib/api/workspace.ts`, et les opérations correspondantes du trait : elles n'ont aucun
-  appelant
-- `TMUX_CONF` et sa génération
-- `apply_server_options` et ses 41 commandes
-- `absence_definitive` et l'analyse des messages de tmux
-- `refresh_deployed_tmux`, `setup_bundled_tmux`, `copy_executable`
-- `scripts/build-tmux-static.sh`, la ressource de l'AppImage, l'étape de cache en CI
-- le repli `brew install tmux` du README
-- toutes les mentions de tmux dans `CLAUDE.md` (section terminaux, pièges connus,
-  dépendances système)
+`terminal/adaptateur.rs` implémente le trait `Terminaux` par-dessus `service::Client` :
+c'est lui que `terminaux()` rend, lui qui lance le service au démarrage
+(`lancement::demarrer`), et lui qui traduit les poussées du service en événements Tauri
+(`Sortie`/`Redessin` → `terminal_output`, `Fini` → `terminal_exit`, `PressePapier` →
+presse-papier système, `Panne` → journal). tmux a disparu du dépôt : `terminal/tmux.rs`,
+`scripts/build-tmux-static.sh`, la ressource de l'AppImage, l'étape de cache en CI, la
+colonne `tmux_name`, le champ `tmux` de la fiche machine, et les mentions du README et du
+`CLAUDE.md`.
 
-Le jour de la bascule : rien de spécial à prévoir. On ouvre un terminal, on lance
-`claude`, on reprend une conversation — tout se comporte comme avant. Les conversations
-Claude sont des fichiers dans `~/.claude/projects/`, elles n'ont jamais rien eu à voir
-avec tmux. Ce qui tournait au moment de la mise à jour est perdu, une fois : une phrase
-dans les notes de version suffit.
+**Ce qui a été décidé en branchant, et qui n'était pas dans le plan**
 
-**État : à faire.**
+1. **`attacher` est un NO-OP quand le terminal est déjà branché.** Le frontend l'appelle à
+   chaque retour sur un onglet ; re-brancher demanderait un redessin complet, donc un
+   clignotement et un retour en bas du défilement à chaque aller-retour. L'adaptateur tient
+   la liste des terminaux branchés (`attaches`).
+2. **Un redessin porte l'écran ET l'historique.** Il commence par une remise à plat (RIS),
+   qui vide le tampon de défilement du terminal d'arrivée : sans l'historique, revenir sur
+   un onglet ferait perdre ce que la molette remontait. Conséquence heureuse : xterm est un
+   miroir exact de la grille du service, donc la recherche peut désigner une ligne par son
+   indice et le frontend la surligne lui-même.
+3. **La molette n'a rien à demander au service.** Le point 3 de « ce qui reste pour l'étape
+   C » (faire venir l'historique à chaque cran) n'a pas lieu d'être : le flux brut EST
+   transmis, en gros lots, donc le tampon d'xterm se remplit tout seul. Seul un débit
+   insoutenable (> 256 Ko par fenêtre de 8 ms, soit 32 Mo/s) est remplacé par un redessin,
+   et l'historique complet est renvoyé dès que le calme revient.
+4. **`copier_selection` et `chercher` ont changé de camp.** La sélection appartient à xterm
+   (qui tient tout l'historique), donc `terminal_copy_selection` et l'opération du trait
+   sont partis : le frontend copie ce qu'il a. La recherche, elle, RESTE côté service — lui
+   seul recolle les lignes enroulées — mais rend une position que le frontend surligne
+   (`registerDecoration`, qui exige `allowProposedApi: true`).
+5. **Une base choisie à la main (`COCKPIT_DB`) obtient automatiquement son propre socket.**
+   Sinon la réconciliation du démarrage voit les terminaux de l'installation normale comme
+   des sessions orphelines et les tue — c'est le scénario qui coûtait des sessions du temps
+   de tmux, où il fallait une exception en dur dans la purge.
+6. **Sous AppImage le service est relancé depuis `$APPIMAGE`**, pas depuis
+   `current_exe()` : le montage `/tmp/.mount_*` disparaît à la fermeture de l'application,
+   et le service doit lui survivre.
+
+**Deux bugs trouvés en vérifiant**
+
+- **Le regroupement de la sortie ne s'est jamais déclenché.** Il attendait 8 Ko en attente,
+  or un shell écrit au fil de l'eau et le lecteur du PTY est plus rapide que lui : chaque
+  lecture rend ~85 octets. `seq 1 200000` partait en **16 461 envois**, donc autant
+  d'événements Tauri. Le déclencheur est désormais le RYTHME (la suite attendait déjà)
+  doublé d'un seuil de lot (2 Ko), pour le cas d'une machine chargée où le shell produit par
+  à-coups : **99 envois** pour la même rafale. Le « 94 octets sur le socket » annoncé en B2
+  ne mesurait rien : l'essai attendait « 200000 » à l'écran, chaîne que la ligne tapée
+  contient déjà, donc il repartait avant que le shell ait écrit un octet.
+- **Le surlignage de la recherche exigeait `allowProposedApi`** : `registerDecoration` lève
+  une exception sans ce drapeau, et la barre affichait « You must set the allowProposedApi
+  option to true » au premier essai sur le binaire.
 
 ## Ce qu'il faut reprendre, sans rien perdre
 
-Liste de contrôle. Chaque ligne existe aujourd'hui grâce à tmux et doit continuer de
-marcher — c'est ce qui décide si le chantier est fini.
+Liste de contrôle, passée **sur le binaire construit** le 2026-08-21 : Xvfb, base et service
+à part (`COCKPIT_DB`), clics et frappes réels injectés par XTEST, captures d'écran relues.
+C'est elle qui décide si le chantier est fini.
 
-| Fonctionnalité | Où c'est visible |
+| Fonctionnalité | Résultat |
 |---|---|
-| Le shell survit à la fermeture de l'app | on rouvre Cockpit, le terminal est là |
-| Historique de défilement (molette) | 10 000 lignes aujourd'hui |
-| Sélection à la souris, qui reste affichée au relâchement | Ctrl+C copie ensuite |
-| Copie vers le presse-papier système | clic droit → Copier |
-| Recherche dans le terminal | la loupe de la barre d'onglets |
-| Applications plein écran (`claude`, `vim`, `htop`, `k9s`) | elles doivent occuper tout le conteneur |
-| Détection d'un agent IA dans la session | le logo Claude dans la barre latérale |
-| Commande lancée à l'ouverture | bouton ▶ Cmd, shell de conteneur, palette |
-| Redimensionnement quand la fenêtre change | pas de texte coupé |
-| Zoom (Ctrl+molette) | la police change, le contenu se recadre |
-| Accents et touches mortes | le correctif `GTK_IM_MODULE` reste, il est côté GTK |
-| Plusieurs terminaux par projet, renommables | les onglets |
-| Purge des sessions disparues au démarrage | pas de terminal fantôme |
+| Le shell survit à la fermeture de l'app | **OK** — application tuée, service intact ; à la réouverture, l'écran est celui qu'on avait laissé, historique compris |
+| Historique de défilement (molette) | **OK** — 10 000 lignes dans xterm, molette native, ascenseur visible ; le service en garde autant et les renvoie à chaque redessin |
+| Sélection à la souris, qui reste affichée au relâchement | **OK** — glisser souris, la sélection reste, Ctrl+C copie (sans sélection, Ctrl+C envoie bien SIGINT : `^C` à l'écran) |
+| Copie vers le presse-papier système | **OK** — texte relu depuis un AUTRE processus (Gtk.Clipboard sur le même display) : « 300 » |
+| Recherche dans le terminal | **OK** — « aiguille-rare » trouvé dans l'historique, compteur « 1/1 », occurrence centrée et surlignée en couleur d'accent |
+| Applications plein écran (`claude`, `vim`, `htop`, `k9s`) | **OK** — htop occupe tout le conteneur (jauges, couleurs, F1-F10) et le quitter rend l'écran principal intact ; `claude` idem |
+| Détection d'un agent IA dans la session | **OK** — le logo Claude s'allume dans la barre latérale, et s'éteint quand l'agent s'arrête ; la racine est le PID du shell, que le service connaît |
+| Commande lancée à l'ouverture | **OK** — « + Nouvelle session claude » ouvre un terminal et y tape `claude` tout seul |
+| Redimensionnement quand la fenêtre change | **OK** — vérifié par le zoom (mêmes appels) : le contenu se reflue, rien n'est coupé |
+| Zoom (Ctrl+molette) | **OK** — 115 % → 138 % → 123 %, la police suit et le terminal se recadre |
+| Accents et touches mortes | **OK** — `echo éçàèune êî` tapé touche par touche (touches directes ET touches mortes `^`+e, `¨`+i) ressort intact, sans doublon ni espace parasite |
+| Plusieurs terminaux par projet, renommables | **OK** — deux onglets, renommage par clic droit dans la barre latérale (« logs api ») ; le double-clic sur l'onglet n'a pas pu être exercé au banc (le double-clic synthétique n'est pas reconnu comme tel), le chemin est le même appel `rename_terminal` |
+| Purge des sessions disparues au démarrage | **OK** — service tué, application relancée : la ligne sans session disparaît de la base et la barre latérale ne montre rien |
+
+Trois choses vérifiées en plus, parce qu'elles cassent au même endroit : le collage (clic
+droit → Coller ET clic molette, **une seule** insertion, texte posé par un autre processus),
+la fermeture d'un onglet (ligne supprimée en base) et `exit` dans le shell (« [processus
+terminé] », onglet barré, ligne supprimée).
+
+**Limite du banc, à savoir avant de s'inquiéter** : sous un X sans gestionnaire de
+presse-papier, arboard ne se relit pas lui-même — `get_clipboard` rend une chaîne vide juste
+après un `set_clipboard` du même processus, et « Coller » dit « le presse-papier est vide ».
+Le collage marche dès que le contenu vient d'ailleurs (vérifié), et sur un vrai bureau le
+gestionnaire de presse-papier prend la propriété de la sélection. Ce n'est pas une régression
+du chantier : ce chemin (`set_clipboard`/`get_clipboard`, arboard) n'a pas été touché.
 
 ## La performance, mesurée avant de commencer
 

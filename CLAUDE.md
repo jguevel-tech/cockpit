@@ -313,7 +313,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 | Largeur des caracteres | unicode-width 0.2 | compter les colonnes d'un CJK/emoji comme l'emulateur les compte |
 | Tuyau app <-> service de terminaux | interprocess 2.4 | socket de domaine Unix et tuyau nomme Windows derriere la meme interface (sans `async`) |
 | Appels Unix du service | libc 0.2 (cible `cfg(unix)`) | `geteuid` (refuser un socket qui n'est pas le notre) et `setsid` (detacher le service) |
-| Persistance terminaux | tmux >= 3 | socket dedie `-L cockpit` ; statique 3.5a EMBARQUE dans l'AppImage |
+| Persistance terminaux | notre propre service | `terminal/service/`, le meme binaire lance avec `--service-terminaux` ; aucun programme externe |
 | Scan fichiers | ignore 0.4 | walker gitignore-aware (celui de ripgrep) |
 | Dates | chrono 0.4 | titres de notes reunion |
 | Terminal frontend | @xterm/xterm | + addon-fit + addon-webgl + addon-web-links (Ctrl+clic) |
@@ -324,13 +324,11 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 | HTML -> Markdown | turndown | (frontend, pour editeur WYSIWYG) |
 
 Dependances systeme runtime : `pw-record`/PipeWire (enregistrement reunions), `git` (onglet Git),
-CLI `claude` (connexion abonnement + sessions). `tmux` n'en est PLUS une : un tmux statique
-(musl, construit par `scripts/build-tmux-static.sh` dans un conteneur Alpine, checksum epingle)
-est embarque comme ressource de l'AppImage. Resolution au demarrage (terminal/tmux.rs, `setup_bundled_tmux`) :
-1) binaire deja deploye dans `<app_data>/bin/tmux` (les sessions vivantes tournent dessus, on s'y
-tient), 2) tmux systeme, 3) deploiement du binaire embarque — COPIE hors du montage AppImage,
-car le montage disparait a la fermeture alors que le serveur tmux doit survivre. Le remplacement
-du binaire deploye n'a lieu que si AUCUN serveur ne tourne (protocol version mismatch sinon).
+CLI `claude` (connexion abonnement + sessions). **Les terminaux n'en ont AUCUNE** : Cockpit tient
+lui-meme les shells (`terminal/service/`), il n'y a plus rien a installer ni a embarquer dans
+l'AppImage. `tmux` etait cette dependance jusqu'a la v0.38 ; il ne reste rien de lui dans le code,
+et les sessions `ckpt_*` qu'un ancien Cockpit a laissees tournent toujours de leur cote
+(`tmux -L cockpit attach` pour les retrouver, `kill-server` pour les arreter).
 
 ## Commandes
 
@@ -457,24 +455,23 @@ ai-workforce/
 │       │   └── summarize.rs        # OpenAI chat completions, prompt systeme editable
 │       ├── terminal/
 │       │   ├── mod.rs              # Racine : re-exports + `terminaux()`, LE seul endroit qui choisit
-│       │   │                       #   l'implementation (une ligne a changer a la bascule)
+│       │   │                       #   l'implementation
 │       │   ├── interface.rs        # Trait `Terminaux` : ce que Cockpit demande a un serveur de
-│       │   │                       #   terminaux, sans une ligne de tmux (12 operations)
-│       │   ├── tmux.rs             # Implementation tmux : sessions ckpt_*, clients attaches en
-│       │   │                       #   permanence, copie OSC 52 (disparait a l'etape C)
+│       │   │                       #   terminaux (9 operations), et rien de plus
+│       │   ├── adaptateur.rs       # L'implementation : le trait par-dessus le socket du service,
+│       │   │                       #   + lancement du service, + poussees -> evenements Tauri
 │       │   ├── environnement.rs    # Nettoyage de l'environnement AppImage + locale UTF-8 posee sur
-│       │   │                       #   tout shell lance par Cockpit (tmux ET service maison)
+│       │   │                       #   tout shell lance par Cockpit
 │       │   ├── agents_llm.rs       # Reconnaitre un agent IA sous un shell (flag llm de la sidebar)
-│       │   ├── ecran/              # Emulateur maison (etape B1 du chantier) — se teste SEUL,
-│       │   │   │                   #   aucun appelant encore
+│       │   ├── ecran/              # Emulateur maison : la grille, et les octets qui la redessinent
 │       │   │   ├── mod.rs          # `Ecran` : avale les octets du shell, tient l'etat, ramasse
 │       │   │   │                   #   les reponses a renvoyer ; `Espion` pour ce que Term cache
 │       │   │   ├── etat.rs         # `EtatEcran` : photo comparable, JUGE du test d'aller-retour
 │       │   │   ├── redessin.rs     # Etat -> octets ANSI qui le refabriquent a l'identique
 │       │   │   ├── texte.rs        # Lire l'ecran comme du texte : recherche, extraction d'une region
 │       │   │   └── tests.rs        # Aller-retour : etats fabriques + octets au hasard + traces
-│       │   ├── service/            # Service de terminaux maison (etape B2) — TOURNE mais l'app ne
-│       │   │   │                   #   s'en sert pas encore, la bascule est l'etape C
+│       │   ├── service/            # LE serveur de terminaux : les shells vivent ici, dans un
+│       │   │   │                   #   processus qui survit a la fermeture de l'application
 │       │   │   ├── mod.rs          # Reconciliation base <-> service (fonction pure, testee)
 │       │   │   ├── protocole.rs    # Messages, cadrage, et la poignee de main VERSIONNEE
 │       │   │   ├── tuyau.rs        # Chemin du socket, dossier 0700, refus d'un autre utilisateur
@@ -949,7 +946,7 @@ SQLite stockee dans `~/.local/share/com.cockpit.dev/data.db` (ou via `COCKPIT_DB
 | `urls` | Liens rapides par projet (label, url, position) |
 | `settings` | Cle/valeur globales (openai_api_key, summary_prompt, summary_model) |
 | `recordings` | Enregistrements de reunions (project, started_at, duration_secs, state, error, dir) |
-| `terminals` | Terminaux persistants (project, name ; `tmux_name` est une colonne HERITEE, plus lue par personne) |
+| `terminals` | Terminaux persistants (project, name) — l'etat vivant, lui, appartient au service |
 | `command_history` | Historique de commandes (command PRIMARY KEY, project, ts — upsert) |
 | `claude_session_names` | Noms personnalises des sessions Claude Code (session_id, name) |
 | `project_commands` | Commandes rapides par projet (label, command, position) |

@@ -405,7 +405,6 @@ export interface MachineReport {
   /** Serveur audio reellement actif : "pipewire", "pulseaudio" ou "aucun". */
   audio_server: string;
   pw_record: string;
-  tmux: string;
   /** "appimage" ou "binaire". */
   packaging: string;
 }

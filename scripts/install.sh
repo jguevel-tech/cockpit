@@ -50,9 +50,9 @@ else
   die "curl ou wget est requis."
 fi
 
-# tmux et git ne sont pas necessaires a l'installation, mais Cockpit s'en sert au quotidien.
+# git n'est pas necessaire a l'installation, mais Cockpit s'en sert au quotidien.
 MISSING=""
-for cmd in tmux git; do
+for cmd in git; do
   command -v "$cmd" >/dev/null 2>&1 || MISSING="$MISSING $cmd"
 done
 
@@ -124,7 +124,7 @@ esac
 
 if [ -n "$MISSING" ]; then
   printf '%sDependances manquantes pour certaines fonctions :%s%s\n' "$BOLD" "$MISSING" "$RESET"
-  printf '%s  tmux -> terminaux persistants   git -> onglet Git%s\n' "$DIM" "$RESET"
+  printf '%s  git -> onglet Git%s\n' "$DIM" "$RESET"
   printf '%s  sudo apt install%s%s\n\n' "$DIM" "$MISSING" "$RESET"
 fi
 
