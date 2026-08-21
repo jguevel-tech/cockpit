@@ -381,7 +381,7 @@ npx tauri build --no-bundle
 # Build frontend seul
 npm run build
 
-# Tests Rust (172 tests)
+# Tests Rust (239 tests)
 cd src-tauri && cargo test
 
 # Tests frontend des modules PURS (node strip-types, aucune dependance a installer)
@@ -684,7 +684,7 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
   les dossiers : le balisage etait recopie deux fois et toute retouche devait etre faite deux
   fois.
 
-### Vue projet (8 onglets)
+### Vue projet (7 onglets)
 
 En-tete : nom renommable (double-clic sur le titre, ou le **crayon ✎** qui apparait au survol —
 c'est lui le vrai `<button>`, le titre n'est que la cible confortable), description, bouton ⏺

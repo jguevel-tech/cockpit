@@ -96,6 +96,13 @@ what's missing) when it is absent:
 Press the **`i` button** in the header: the built-in, illustrated guide covers everything below
 with visual examples rather than prose.
 
+### Projects and navigation
+
+A project is a name and a folder — nothing else is required. Group them in folders, **nested as
+deep as you like**, reorder or move anything by dragging it, and rename projects, folders and
+terminals with a double-click. Each project remembers the tab you left it on. `Ctrl`+`K` jumps
+anywhere.
+
 ### Persistent terminals
 
 Cockpit runs its own terminal service, in a process that outlives the window: close the app and
@@ -140,8 +147,18 @@ each in a fresh terminal.
 
 Per-project todos with **due dates** — the notification bell warns you when something is due, and
 the alert clears itself once the task is done. Tree-organised Markdown notes with a WYSIWYG editor
-and autosave. Meeting recording (Linux, Windows) captures mic + system audio, transcribes, and drops a
-summary note in the project automatically.
+and autosave — plus a **reading mode** that folds both side columns away and centres the text.
+
+Meeting recording captures mic + system audio, transcribes it, and drops a summary note in the
+project automatically. It needs nothing installed on Linux and Windows. On macOS the system-audio
+tap requires a signed app, so the tracks come out silent — Cockpit says so instead of claiming it
+heard nothing.
+
+### Claude Code agents
+
+A marketplace of agents, per project (**Plugins** tab) and globally (Settings → Agents): browse,
+install, and keep them up to date. Sign in with your Claude subscription from the settings — no
+API key to paste.
 
 ### Monitoring & alerts
 
@@ -197,8 +214,11 @@ On macOS, Xcode Command Line Tools are enough.
 |---|---|
 | `npx tauri dev` | development with hot reload |
 | `npm run check` | frontend type checking |
+| `npm run test:front` | tests for the pure frontend modules (plain Node, nothing to install) |
+| `npm run i18n:audit` | fails while any displayed string is still hardcoded |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | Rust tests |
 | `npx tauri build --no-bundle` | development binary |
+| `gh workflow run essais.yml` | runs the whole suite on macOS **and** Windows, and builds the Windows installer — without publishing anything |
 
 > Always build with `npx tauri build`, never `cargo build --release` alone: without the Tauri CLI's
 > environment variables the binary comes out in development mode and looks for a Vite server on
@@ -214,14 +234,21 @@ src/                  Svelte 5 (runes) + TypeScript frontend
   styles/             Theme tokens and shared classes
 
 src-tauri/src/        Rust backend
-  terminal/           Terminal service (shells, screen, search), command history
+  terminal/           Terminal service (shells, screen emulator, search), command history
   workspace/          File browser, project search, file management, Claude sessions
   storage/            SQLite: projects, notes, todos, commands, settings, backup
   gitdiff/            Git status, diff and log parsing
   docker/             Compose orchestration, dependency graph, containers, logs
+  recorder/           Meeting capture (in-process), transcription, summary
+  chemins.rs          Home and data directories — never a hardcoded path
+  commande.rs         Every external command goes through it (no console flash on Windows)
   urlhealth.rs        Quick-link up/down checks
-  lsp/  recorder/  system/  agents/  appearance/
+  lsp/  system/  agents/  appearance/  claude_auth/  scanner/  report/  plugin/
 ```
+
+The terminal service is a **second process**: the same binary launched with
+`--service-terminaux`, detached so it outlives the window. It talks to the app over a Unix socket
+(a named pipe on Windows) with its own versioned protocol.
 
 Frontend and backend talk exclusively over Tauri's IPC: `invoke` for calls, events for real-time
 updates. No HTTP server, no WebSocket. Releases ship from a Linux + macOS + Windows CI matrix that
@@ -236,16 +263,24 @@ Project conventions — non-negotiable rules, known pitfalls, release process �
 
 Issues and pull requests are welcome.
 
-A change is ready when these three commands pass:
+A change is ready when all of these pass:
 
 ```sh
 npm run check                                   # 0 errors, 0 warnings
+npm run test:front                              # all green
+npm run i18n:audit                              # no hardcoded displayed string
 cargo test --manifest-path src-tauri/Cargo.toml # all green
 npx tauri build --no-bundle                     # compiles
 ```
 
-And when it is recorded in [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]`, if a user can
-notice it.
+Every displayed string lives in **both** catalogues (`src/lib/i18n/fr.ts`, then `en.ts`) — French
+is the reference, and a feature shipped in one language only is unfinished.
+
+If your change touches anything platform-dependent, run `gh workflow run essais.yml`: it exercises
+macOS and Windows without publishing anything. A test that only fails there used to be discovered
+after tagging, which cost users a version each time.
+
+And record it in [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]`, if a user can notice it.
 
 ## License
 
