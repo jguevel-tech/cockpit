@@ -1488,7 +1488,13 @@ Le backend (`system/metrics.rs`) collecte :
     mingw-w64-x86-64-dev mingw-w64-common` (51 Mo), `dpkg-deb -x` chacun dans un prefixe a soi,
     puis `PATH=<prefixe>/usr/bin:$PATH`,
     `CC_x86_64_pc_windows_gnu=<prefixe>/usr/bin/x86_64-w64-mingw32-gcc-13-win32` et
-    `AR_x86_64_pc_windows_gnu=<prefixe>/usr/bin/x86_64-w64-mingw32-ar`. Sans ces variables,
+    `AR_x86_64_pc_windows_gnu=<prefixe>/usr/bin/x86_64-w64-mingw32-ar`. **Ajouter aussi un
+    lien `x86_64-w64-mingw32-gcc` (nom court) vers le binaire `-13-win32`** : `windres`
+    l'appelle sous ce nom-la, par `sh`, pour pre-traiter le `resource.rc` de `tauri-winres`.
+    Sans le lien, le script de construction de NOTRE crate panique sur
+    « x86_64-w64-mingw32-windres: echec du pre-traitement » — et l'etape ne se declenche que
+    quand `tauri.conf.json` a change (donc apres un bump de version), ce qui la fait passer
+    pour une regression du portage. Sans ces variables,
     `ring` et `libsqlite3-sys` echouent AVANT que notre crate soit analysee — le check rend
     alors 2 erreurs qui n'ont rien a voir avec notre code, et on croit a tort que le portage
     est casse.
@@ -1518,6 +1524,48 @@ Le backend (`system/metrics.rs`) collecte :
     Sans droits administrateur, meme recette que mingw (`apt-get download`, `dpkg-deb -x`
     dans un prefixe) puis `PKG_CONFIG_PATH=<prefixe>/usr/lib/x86_64-linux-gnu/pkgconfig` et
     `PKG_CONFIG_SYSROOT_DIR=<prefixe>`.
+- **WINDOWS COMPILE ET NE MARCHE PAS — ce que le premier vrai run a dit (v0.38.0,
+  2026-08-21).** La compilation croisee rendait 0 erreur et 0 avertissement, et le runner
+  `windows-latest` a fait tomber **treize** essais. Ce que ca prouve : `--all-targets`
+  n'exerce RIEN, il compile. Les constats, du plus grave au moins :
+  - **Ecrire dans le PTY echoue** : « The operation completed successfully. (os error 0) »
+    sur `session.ecrire`, et « The handle is invalid. (os error 6) » a la creation d'une
+    session. C'est le coeur du produit : sans ca, pas de terminal. Cause non trouvee, et
+    elle ne se trouvera pas en lisant — il faut une machine.
+  - **Un socket local n'est PAS un fichier sous Windows** : c'est un tuyau nomme, dans
+    l'espace `\\.\pipe\`, absent du systeme de fichiers. `interprocess` refuse un chemin de
+    fichier avec « not a named pipe path ». Le code de PRODUCTION le savait
+    (`tuyau::chemin`), les ESSAIS non : ils fabriquaient un `.sock` dans un dossier
+    temporaire. Corrige. A retenir : un helper d'essai qui construit un chemin est un
+    endroit ou la portabilite se perd sans que rien ne le signale.
+  - **Cinq essais tapent dans le shell** (`printf`, `cat`, `for i in $(seq …)`) : `cmd.exe`
+    n'en connait aucun. Ils portent `#[cfg(unix)]`.
+  - `le shell ne meurt pas` : la fin d'un process n'a pas la meme semantique.
+  - Un `assert_eq!` de `workspace` tombe : separateurs de chemin.
+  - **DECISION : Windows est SORTI de la matrice de `release.yml`** et a son propre
+    `windows.yml` sur `workflow_dispatch`, qui produit un installeur en ARTEFACT sans rien
+    publier. Deux raisons, aucune n'est le temps : un installeur dont les terminaux sont
+    morts est pire que pas d'installeur ; et une matrice qui echoue a chaque release rend
+    invisible le jour ou c'est une vraie regression (exactement la lecon de la v0.32.0).
+    Le remettre dans `release.yml` demande d'ajouter `windows-` a `PLATEFORMES_ATTENDUES`
+    du job `publier`, sinon son absence redevient silencieuse.
+- **LE REGROUPEMENT DE LA SORTIE NE DOIT PAS SE DECIDER SUR « IL A FALLU ATTENDRE ».** La
+  regle a d'abord dit : « si la suite attendait deja quand on est revenu, c'est une rafale »
+  (`!a_attendu`, `terminal/service/session.rs`). Ca ne mesure pas le debit, ca mesure lequel
+  de deux threads va plus vite — vrai sous Linux, FAUX sous macOS, ou chaque reveil trouvait
+  ~295 octets et repartait aussitot : **3 047 envois pour 0,9 Mo** sur le runner de la
+  v0.38.0. Et le meme defaut expliquait un second symptome qui n'avait pas l'air lie : un
+  emetteur qui part 3 047 fois draine trop lentement, donc la fermeture de la session jetait
+  ~400 Ko jamais transmis (l'essai le voyait comme « la rafale n'a pas ete transmise »).
+  La regle est desormais **la cadence de nos propres envois** (« le lot precedent est-il parti
+  il y a moins de 8 ms »), ce qui ne depend d'aucun ordonnancement. Gain sous Linux au
+  passage : 19 a 21 envois pour 1,5 Mo, contre 99 a 158 avant.
+  **Piege paye en chemin** : la cadence SEULE prend une frappe rapide pour une rafale —
+  l'essai de latence enchaine 200 allers-retours, donc en cadence soutenue par construction,
+  et le surcout du service est passe de 0,06 ms a **8,5 ms**, soit precisement la surcouche
+  que ce projet interdit sur le chemin de frappe. D'ou la seconde condition, `TAILLE_ECHO`
+  (64 octets) : ce qui arrive en cadence n'est groupe que si le lot est plus gros que l'echo
+  d'une touche. Ne pas monter cette valeur « pour mieux regrouper ».
 - **UN SIGNAL POSIX COMPILE SOUS WINDOWS ET RATE A L'EXECUTION.** `sysinfo::Signal::Term`
   existe sur toutes les plateformes ; c'est sa CONVERSION qui rend `None` sous Windows
   (`windows/mod.rs`, branche `_ => None`), ou seul `Signal::Kill` est accepte et applique par

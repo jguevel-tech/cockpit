@@ -62,16 +62,23 @@ impl Drop for Banc {
     }
 }
 
-/// Un dossier et un chemin de socket propres a cet essai.
+/// Un dossier et un chemin de tuyau propres a cet essai.
+///
+/// Le dossier sert au menage ; le TUYAU, lui, ne vit pas forcement dedans. Sous Windows un
+/// socket local est un tuyau nomme : il se nomme dans l'espace `\\.\pipe\` et n'existe pas
+/// dans le systeme de fichiers. Un chemin de fichier y est refuse par `interprocess` avec
+/// « not a named pipe path » — deux essais tombaient dessus sur le runner de la v0.38.0.
+/// Le code de production le savait deja (`tuyau::chemin`), les essais non.
 fn emplacement(quoi: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     static SUIVANT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let numero = SUIVANT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let dossier = std::env::temp_dir().join(format!(
-        "cockpit-essai-{quoi}-{}-{numero}",
-        std::process::id()
-    ));
+    let nom = format!("cockpit-essai-{quoi}-{}-{numero}", std::process::id());
+    let dossier = std::env::temp_dir().join(&nom);
     let _ = std::fs::create_dir_all(&dossier);
+    #[cfg(unix)]
     let chemin = dossier.join("terminaux.sock");
+    #[cfg(windows)]
+    let chemin = std::path::PathBuf::from(format!(r"\\.\pipe\{nom}"));
     (dossier, chemin)
 }
 

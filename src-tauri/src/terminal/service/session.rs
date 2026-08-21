@@ -55,6 +55,19 @@ const FENETRE_RAFALE: std::time::Duration = std::time::Duration::from_millis(8);
 /// dessous d'un ecran.
 const SEUIL_LOT: usize = 2 * 1024;
 
+/// Au-dela de ce volume, un lot n'est plus l'echo d'une frappe.
+///
+/// Sert a distinguer les deux choses qui arrivent en cadence soutenue : une rafale de
+/// sortie, et une frappe rapide (ou une touche maintenue). L'echo d'une touche fait
+/// quelques octets — le caractere rendu par le terminal, parfois double par le programme
+/// qui le relit. Un lot de rafale fait au moins quelques dizaines d'octets : 85 en moyenne
+/// sous Linux, ~295 sur le runner macOS. 64 octets passe entre les deux avec de la marge
+/// des deux cotes.
+///
+/// NE PAS monter cette valeur pour « mieux regrouper » : ce qui la depasse et arrive en
+/// cadence prend jusqu'a 8 ms de retard, et une frappe ne doit jamais en prendre.
+const TAILLE_ECHO: usize = 64;
+
 /// Volume d'un seul lot au-dela duquel on renonce a transmettre et on redessine.
 ///
 /// 256 Ko dans une fenetre de 8 ms, c'est 32 Mo/s : aucun affichage humain ne suit, le
@@ -458,20 +471,45 @@ fn lire_pty(lecteur: &mut (impl Read + ?Sized), session: &Session) {
 /// webview. Le seuil de volume ne pouvait pas voir la rafale ; le rythme, si.
 ///
 /// La regle appliquee, en deux moities :
-/// 1. **si le lot precedent etait a peine parti que la suite attendait deja**, c'est une
-///    rafale — on laisse `FENETRE_RAFALE` se remplir ;
-/// 2. **ou si ce qui attend depasse deja `SEUIL_LOT`**, meme apres attente : sur une
-///    machine chargee le shell produit par a-coups, et la premiere moitie seule croit voir
-///    des echos la ou il y a une rafale au ralenti.
+/// 1. **si le lot precedent est parti il y a moins de `FENETRE_RAFALE` ET que ce qui
+///    attend depasse `TAILLE_ECHO`**, c'est une rafale — on laisse la fenetre se remplir
+///    au lieu d'envoyer des miettes. Les deux conditions comptent : une frappe rapide,
+///    elle aussi, tient une cadence soutenue, et elle ne doit jamais attendre. C'est la
+///    TAILLE du lot qui les separe (un echo fait quelques octets) ;
+/// 2. **ou si ce qui attend depasse deja `SEUIL_LOT`** : sur une machine chargee le shell
+///    produit par a-coups, et la premiere moitie seule croit voir des echos la ou il y a
+///    une rafale au ralenti.
 ///
 /// Ce qui reste hors des deux : l'echo d'une touche, quelques octets arrives apres un
 /// silence. Il part sans delai, et c'est la seule chose qui compte pour la latence.
+///
+/// ## Pourquoi on mesure la CADENCE et non « il a fallu attendre »
+///
+/// La premiere moitie a d'abord ete ecrite « si la suite attendait deja quand on est
+/// revenu » (`!a_attendu`). Ca marche seulement quand le lecteur du PTY va plus vite que
+/// l'emetteur — vrai sous Linux, FAUX sous macOS, ou chaque reveil trouvait environ 295
+/// octets et repartait aussitot : la rafale n'etait jamais reconnue. Mesure du runner
+/// macOS de la v0.38.0 : **3 047 envois** pour 0,9 Mo, la ou Linux en fait quelques
+/// dizaines. Et le meme defaut expliquait la deuxieme moitie du symptome : un emetteur qui
+/// part 3 047 fois draine trop lentement, donc la fermeture de la session jetait ~400 Ko
+/// jamais transmis.
+///
+/// « Le lot precedent est-il parti il y a moins de 8 ms » ne depend, lui, ni du systeme ni
+/// de l'ordonnancement de deux threads : c'est le debit reel de nos propres envois. NE PAS
+/// revenir a `!a_attendu` — il ne mesure pas ce qu'il a l'air de mesurer.
+///
+/// Piege paye au passage : la cadence SEULE prend une frappe rapide pour une rafale. L'essai
+/// de latence fait 200 allers-retours a la suite, donc en cadence soutenue par construction,
+/// et le surcout du service est passe de 0,06 ms a 8,5 ms — soit exactement la surcouche que
+/// ce projet interdit sur le chemin de frappe. D'ou `TAILLE_ECHO`.
 fn emettre(session: &Session) {
     let (tampon, signal) = &*session.partage;
+    // Quand le lot precedent est parti. `None` tant qu'on n'a rien envoye : le premier lot
+    // ne doit pas etre retenu.
+    let mut derniere_emission: Option<std::time::Instant> = None;
     loop {
         let (pousse, abonne) = {
             let mut t = tampon.lock().unwrap_or_else(|e| e.into_inner());
-            let mut a_attendu = false;
             loop {
                 if t.abonne.is_none() {
                     // Personne n'ecoute : on garde l'ecran a jour (le lecteur s'en charge)
@@ -489,9 +527,11 @@ fn emettre(session: &Session) {
                     break;
                 }
                 t = signal.wait(t).unwrap_or_else(|e| e.into_inner());
-                a_attendu = true;
             }
-            let rafale = !a_attendu || t.en_attente.len() >= SEUIL_LOT;
+            let cadence_soutenue =
+                derniere_emission.is_some_and(|parti| parti.elapsed() < FENETRE_RAFALE);
+            let rafale = t.en_attente.len() >= SEUIL_LOT
+                || (cadence_soutenue && t.en_attente.len() > TAILLE_ECHO);
             if rafale && !t.redessin_du && !t.fini {
                 // Rafale : on rend le verrou pour que le lecteur continue d'avaler, et on
                 // repart avec un lot entier au lieu de quelques dizaines d'octets.
@@ -528,6 +568,7 @@ fn emettre(session: &Session) {
                 (Pousse::Redessin { id: session.id, octets: t.ecran.redessiner() }, abonne)
             }
         };
+        derniere_emission = Some(std::time::Instant::now());
         if !abonne.pousser(pousse) {
             session.detacher_si(abonne.numero());
         }
@@ -646,6 +687,12 @@ mod tests {
         // CE QUI COMPTE EST LE NOMBRE D'ENVOIS, pas le volume : chaque envoi devient un
         // evenement Tauri, c'est-a-dire une source JavaScript construite et evaluee dans le
         // webview. Sans regroupement, cette rafale en faisait 16 461 (mesure du 2026-08-21).
+        //
+        // Ordres de grandeur mesures, pour situer un chiffre qu'on relirait ici un jour :
+        // 19 a 21 envois depuis que la rafale se reconnait a la CADENCE de nos envois ; 99
+        // a 158 avec la regle precedente ; 3 047 sur le runner macOS, ou cette regle ne se
+        // declenchait jamais. La borne reste large expres — un runner lent etale la meme
+        // rafale sur plus de fenetres de 8 ms, et ce n'est pas un defaut.
         assert!(
             envois < 600,
             "{envois} envois pour ~1,3 Mo : le regroupement ne fait plus son travail"

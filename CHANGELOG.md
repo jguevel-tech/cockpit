@@ -12,6 +12,22 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Les grosses sorties de terminal repartent en gros paquets.** Une commande qui écrit des
+  milliers de lignes était renvoyée à l'interface en morceaux minuscules — jusqu'à 3 000
+  envois pour un mégaoctet sur macOS, là où il en faut quelques dizaines. Résultat :
+  affichage saccadé, et la fin de la sortie pouvait même être perdue quand on fermait le
+  terminal juste après. La règle qui reconnaît une rafale ne dépend plus de la vitesse
+  relative de deux fils d'exécution, donc elle se comporte pareil sur les trois systèmes.
+  Sous Linux aussi c'est cinq fois moins d'envois qu'avant.
+
+### Changed
+
+- **L'installeur Windows annoncé en 0.38.0 n'est pas publié.** Tout le code se compile pour
+  Windows, mais les terminaux n'y fonctionnent pas encore : écrire dans la console échoue.
+  Un installeur dont les terminaux sont morts n'aurait servi personne. Le travail continue.
+
 ## [0.38.0] — 2026-08-21
 
 ### Added
