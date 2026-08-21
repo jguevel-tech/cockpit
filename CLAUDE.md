@@ -54,27 +54,34 @@ ces etapes.
 explicite de Jimmy le 2026-08-13 (« c'est relou que je doive te demander tout le temps »).
 
 **Une fonctionnalite = une release.** Ce qui est fini part ; on n'accumule pas dans
-`[Unreleased]`. Plusieurs fonctionnalites dans une meme version, c'est bon quand elles sont
-finies ensemble. Ce qu'il faut eviter, c'est l'inverse.
+`[Unreleased]`. Plusieurs fonctionnalites ensemble, c'est bon si elles sont finies ensemble.
 
-**Niveau de version — a trancher, pas a demander** : seulement `Fixed` -> `patch` ; au moins un
-`Added` ou `Changed` visible -> `minor` ; un `Removed` ou une rupture -> `minor` en 0.x,
-`major` a partir de 1.0.0 (SemVer autorise tout en 0.y.z, et une 1.0.0 annoncerait une
-stabilite que le projet n'a pas). `scripts/release.mjs` refuse les incoherences. En cas de
-doute, prendre le plus haut.
+**Niveau — a trancher, pas a demander** : seulement `Fixed` -> `patch` ; au moins un `Added` ou
+`Changed` visible -> `minor` ; un `Removed` ou une rupture -> `minor` en 0.x, `major` des 1.0.0
+(SemVer autorise tout en 0.y.z, et une 1.0.0 annoncerait une stabilite que le projet n'a pas).
+Le script refuse les incoherences ; en cas de doute, prendre le plus haut.
 
 **`package.json` est la source unique de la version**, et seul le script y touche.
+
+**AUCUN SAUT DE VERSION. Les numeros publies se suivent.** Demande de Jimmy le 2026-08-21 :
+« ca fait franchement pas pro » de voir 0.41.4 puis 0.43.0. Donc quand un tag echoue AVANT
+d'avoir rien publie, on ne passe pas au numero suivant : on **supprime le tag**, on ramene les
+fichiers de version a la derniere version PUBLIEE, on corrige, et on retague le MEME numero.
+Supprimer un tag qui ne porte aucune release est sans danger — personne ne l'a jamais vu.
+En revanche, un numero DEJA servi aux utilisateurs est definitif : on ne le reutilise jamais, et
+le trou qu'il laisse reste (0.40, 0.41.1 et 0.41.2 sont des trous de ce genre, geles).
 
 **CE QUI NE SE RELEASE PAS** : un commit qui ne touche que `CLAUDE.md`, `.claude/`, `docs/`,
 `README.md` ou `.github/workflows/` ne donne ni entree de changelog, ni version. C'est notre
 outillage, pas le produit.
 
 **Messages de commit** : titre a l'imperatif, puis un corps qui explique POURQUOI (le diff dit
-deja quoi) et ce qui a ete verifie. **JAMAIS de `Co-Authored-By: Claude` ni aucune mention
-d'IA** — le harnais l'ajoute par defaut, il faut activement l'omettre.
+deja quoi) et ce qui a ete verifie. **JAMAIS de `Co-Authored-By: Claude` ni aucune mention d'IA**
+— le harnais l'ajoute par defaut, il faut activement l'omettre. Les passer par un FICHIER
+(`commit -F`) : des accents graves dans un `-m` sont evalues par le shell et mangent le message.
 
 **Outils** : `gh` est authentifie sur `jguevel-tech`. L'IA lit les logs de CI, diagnostique un
-build rate, gere secrets et releases seule — sans jamais demander a Jimmy de copier des logs.
+build rate, gere secrets et releases seule, sans demander a Jimmy de copier des logs.
 
 ## Definition de « fini »
 
@@ -354,9 +361,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   connait ni `printf`, ni `cat`, ni `;` comme separateur — cinq essais a shell POSIX portent
   donc une garde de plateforme. Ne PAS inventer d'equivalent sans machine pour l'essayer.
 - **Un essai qui guette le resultat d'une commande trouve d'abord ce qu'il vient de TAPER** : le
-  PTY renvoie l'echo avant execution, donc le marqueur doit etre construit par le shell.
-- **L'ecran alternatif se lit dans la grille du SERVICE**, jamais dans xterm : c'est lui qui emule
-  et il renvoie un redessin a chaque bascule.
+  PTY renvoie l'echo avant execution, donc le marqueur doit etre construit par le shell. Et
+  **l'ecran alternatif se lit dans la grille du SERVICE**, jamais dans xterm.
 - **Reponses du terminal dans `onData`** : focus in/out et reponses DA/CPR/DCS/OSC arrivent par le
   meme canal que les frappes — a filtrer. Et **Ctrl+lettre sous WebKitGTK** emet aussi un
   keypress : n'intercepter que le keydown laisse xterm envoyer le caractere de controle.
@@ -401,8 +407,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   sans enfant `code` n'est pas du code pour turndown : le contenu repartait en paragraphe, du
   code perdu en silence.
 - **Une liste blanche de schemas d'URL doit dire la MEME chose des deux cotes**, d'ou un seul
-  endroit cote frontend. L'autolink ne repere que ce qui est ouvrable TEL QUEL et rogne la
-  ponctuation finale, en gardant les parentheses appariees.
+  endroit cote frontend. L'autolink ne repere que ce qui est ouvrable TEL QUEL.
 - **Un lien ne peut pas etre imbrique dans un `<button>`** : les adresses dans un texte de tache
   sont des `span data-href`, triees par `closest`. Ce n'est pas une violation de la regle du
   vrai bouton — consequence assumee : pas de chemin clavier pour ouvrir l'adresse.
@@ -410,8 +415,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   glisser un enfant demarre aussi le glisser du parent et deux retours visuels s'allument.
   Mettre les gestionnaires sur l'EN-TETE, pas sur le bloc qui contient la branche.
 - **Un module frontend teste sous node ne doit RIEN importer de l'application** : node resout les
-  imports autrement que Vite, d'ou la coupe entre le module PUR et celui qui touche toasts et IPC.
-  Les essais vivent dans `scripts/`, pas sous `src/` (que `tsconfig` inclut).
+  imports autrement que Vite. Les essais vivent dans `scripts/`, pas sous `src/`.
 
 ### Backend et systeme
 
@@ -428,8 +432,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **`Uint8Array.from(atob(s), cb)` appelle le callback une fois PAR CARACTERE** : 75 ms pour
   2 Mo contre 2,8 ms avec une boucle nue sur un tableau prealloue.
 - **Un projet en base doit TOUJOURS apparaitre dans l'interface** : l'ancienne liste ne rendait
-  que l'intersection base ∩ orchestrateur, donc un ajout rate en silence rendait le projet
-  invisible. Et l'adoption d'un projet dont les conteneurs tournent se fait A TOUT MOMENT.
+  que l'intersection base ∩ orchestrateur, donc un ajout rate en silence le rendait invisible.
 - **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast** : un nom de projet deja pris
   affichait « UNIQUE constraint failed ». Deux parades necessaires : l'interface controle avant
   d'appeler, avec un message traduit ; et cote Rust une fonction qui NOMME la cause. Une
@@ -455,8 +458,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   Quand une bibliotheque expose un enum commun a trois systemes, chercher la table de conversion
   de CHAQUE plateforme.
 - **Du code d'apparence portable peut etre mort a moitie** : une lecture de `/proc` sans `#[cfg]`
-  compile partout et rend toujours faux ailleurs, sans erreur ni trace. Chercher les chemins et
-  separateurs en dur avant de conclure qu'un module est portable.
+  compile partout et rend toujours faux ailleurs, sans erreur. Chercher les chemins en dur.
 - **Sous macOS, `/var` est un lien vers `/private/var`** : un chemin construit a la main et le
   meme chemin rendu par un outil (git) ne sont pas la MEME chaine. Resoudre avant de rendre,
   sinon on montre autre chose que ce que la liste affichera juste apres.
@@ -514,8 +516,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   Windows a fait tomber treize essais alors que la compilation croisee rendait 0 avertissement.
   Et garder un essai laisse son outillage inutilise ailleurs : chaque import, banc ou `impl Drop`
   devient un avertissement sur la cible ou l'essai n'existe plus.
-- **`cargo test` en local demande `libasound2-dev`** : sans lui aucun essai ne tourne. Meme
-  recette sans droits que mingw.
+- **`cargo test` en local demande `libasound2-dev`** : sans lui aucun essai ne tourne.
 - **ON TAGUE DIRECTEMENT, et si la CI plante on corrige et on relance.** `release.yml` verifie
   deja les trois systemes avant de construire, donc un commit casse ne peut pas etre publie ; et
   un numero de version ne coute rien. Ne PAS reintroduire d'etape de verification en CI avant le
@@ -552,8 +553,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Toujours verifier apres publication** que le manifeste repond 200 et contient les trois
   plateformes. Un 404 dans les deux premieres minutes est la propagation, pas un incident.
 - **L'updater Linux ne remplace qu'une AppImage** : pour essayer le flux reel, lancer l'AppImage.
-- **Le changelog est embarque au build**, donc toujours celui de la version installee. Et perdre
-  la cle privee de signature = plus aucune mise a jour possible pour les installes.
+- **Le changelog est embarque au build**, donc toujours celui de la version installee. Perdre la
+  cle de signature = plus aucune mise a jour possible pour les installes.
 - **`scripts/release.mjs` bump aussi le verrou de dependances Rust** : sans ca le commit taggue
   se contredisait et le premier build suivant salissait l'arbre, ce qui bloquait la release
   d'apres.
@@ -574,16 +575,15 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 
 ### Outillage local
 
-- **Codes de sortie** : ne jamais lire le statut derriere un pipe, c'est celui du dernier maillon ;
-  rediriger vers un fichier puis tester. **Commandes de fond : chemins ABSOLUS**, le repertoire
-  courant varie d'un appel a l'autre — et relire le log reel, la notification de fin ne prouve rien.
+- **Codes de sortie** : jamais derriere un pipe, c'est celui du dernier maillon — rediriger puis
+  tester. **Commandes de fond : chemins ABSOLUS**, et relire le log reel : la fin ne prouve rien.
 - **Le proxy `rtk` reformate `ls`, `ps` et les comptages de `grep`**, et rend parfois VIDE : on
   croit un dossier vide alors qu'il est plein. Passer par `rtk proxy`. Et **`npx tauri` peut
   resoudre un AUTRE paquet** ici : utiliser le binaire local quand la commande echoue sur un
   argument que la doc donne pour valide.
-- **Registre npm** : la config globale de la machine pointe sur un registre prive, et celle du
-  projet la surcharge vers le registre public — **ne pas la retirer**, sinon la CI echoue et un
-  nom d'hote interne fuite dans un repo public. Verrou a regenerer : supprimer les modules AVANT.
+- **Registre npm** : la config globale pointe sur un registre prive, celle du projet la surcharge
+  vers le public — **ne pas la retirer**, sinon la CI echoue et un nom d'hote interne fuite dans
+  un repo public. Verrou npm a regenerer : supprimer les modules AVANT.
 - **Jimmy ne lance PAS de build local** — il teste depuis la version publiee. Une instrumentation
   de diagnostic doit donc etre PUBLIEE, puis retiree des la cause tranchee.
 
