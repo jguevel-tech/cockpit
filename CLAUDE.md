@@ -458,9 +458,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   compile partout et rend toujours faux ailleurs, sans erreur ni trace. Chercher les chemins et
   separateurs en dur avant de conclure qu'un module est portable.
 - **Sous macOS, `/var` est un lien vers `/private/var`** : un chemin construit a la main et le
-  meme chemin rendu par un outil (git, ici) ne sont pas la MEME chaine, et l'un des deux
-  s'affichera a l'utilisateur. Resoudre le chemin avant de le rendre, sinon on montre autre
-  chose que ce que la liste affichera juste apres.
+  meme chemin rendu par un outil (git) ne sont pas la MEME chaine. Resoudre avant de rendre,
+  sinon on montre autre chose que ce que la liste affichera juste apres.
 - **Sockets** : sous Unix le nom est limite a ~108 octets et l'erreur ne le dit pas (le service
   demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est PAS un
   fichier mais un tuyau nomme. Le code de production le savait, les essais non — un helper d'essai
@@ -575,20 +574,18 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 
 ### Outillage local
 
-- **Codes de sortie** : ne jamais lire le statut derriere un pipe, c'est celui du dernier maillon.
-  Rediriger vers un fichier puis tester. **Commandes de fond : chemins ABSOLUS uniquement**, le
-  repertoire courant varie d'un appel a l'autre — et toujours relire le log reel, la notification
-  de fin ne prouve rien.
-- **Le proxy `rtk` reformate `ls`, `ps` et les comptages de `grep`**, et sur certains chemins il
-  rend VIDE — on croit un dossier vide alors qu'il est plein. Passer par `rtk proxy`.
+- **Codes de sortie** : ne jamais lire le statut derriere un pipe, c'est celui du dernier maillon ;
+  rediriger vers un fichier puis tester. **Commandes de fond : chemins ABSOLUS**, le repertoire
+  courant varie d'un appel a l'autre — et relire le log reel, la notification de fin ne prouve rien.
+- **Le proxy `rtk` reformate `ls`, `ps` et les comptages de `grep`**, et rend parfois VIDE : on
+  croit un dossier vide alors qu'il est plein. Passer par `rtk proxy`. Et **`npx tauri` peut
+  resoudre un AUTRE paquet** ici : utiliser le binaire local quand la commande echoue sur un
+  argument que la doc donne pour valide.
 - **Registre npm** : la config globale de la machine pointe sur un registre prive, et celle du
   projet la surcharge vers le registre public — **ne pas la retirer**, sinon la CI echoue et un
   nom d'hote interne fuite dans un repo public. Verrou a regenerer : supprimer les modules AVANT.
-- **`npx tauri` peut resoudre un AUTRE paquet** ici : utiliser le binaire local quand la commande
-  echoue sur un argument que la doc donne pour valide.
 - **Jimmy ne lance PAS de build local** — il teste depuis la version publiee. Une instrumentation
-  de diagnostic doit donc etre PUBLIEE, puis retiree des la cause tranchee. Le build local reste
-  obligatoire pour l'IA.
+  de diagnostic doit donc etre PUBLIEE, puis retiree des la cause tranchee.
 
 ## Conventions
 
