@@ -68,6 +68,13 @@ const SEUIL_LOT: usize = 2 * 1024;
 /// cadence prend jusqu'a 8 ms de retard, et une frappe ne doit jamais en prendre.
 const TAILLE_ECHO: usize = 64;
 
+/// Combien de temps on attend qu'un shell tue rende vraiment la main.
+///
+/// La fermeture se CONSTATE (voir `Session::fermer`) : ce delai est la seule chose qui
+/// distingue « c'est parti » de « ca ne part pas ». Il ne cadence rien — un shell tue rend
+/// la main en quelques millisecondes — il ne sert qu'a ne pas attendre indefiniment.
+const DELAI_FERMETURE: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Volume d'un seul lot au-dela duquel on renonce a transmettre et on redessine.
 ///
 /// C'est un PLAFOND DE MEMOIRE — ce qu'on accepte de garder pour un frontend — et non un
@@ -396,29 +403,49 @@ impl Session {
         self.pid.is_some_and(|pid| arbre.contient_un_llm(pid))
     }
 
-    /// Tue le shell. Le thread lecteur constate la fin et previent l'application.
+    /// Tue le shell, et rend la main quand il est VRAIMENT parti.
     ///
-    /// **Un shell deja termine n'est pas une erreur de fermeture.** C'est meme le cas le plus
-    /// banal : on tape `exit`, puis on ferme l'onglet. Or le thread lecteur ramasse le shell
-    /// mort (`enfant.wait()`), ce qui REND LE HANDLE INUTILISABLE, et le `kill` qui arrive
-    /// apres echoue. Sous Windows ca donne « The handle is invalid. (os error 6) » ou meme
-    /// « The operation completed successfully. (os error 0) » quand rien n'a pose le code
-    /// d'erreur ; sous Unix, un `ESRCH`. Dans les deux cas l'utilisateur voyait une erreur
-    /// pour un geste qui a parfaitement fonctionne.
+    /// ## Pourquoi on ne croit pas le code de retour de `kill()`
     ///
-    /// `vivant` tranche sans ambiguite : le lecteur le passe a faux AVANT d'appeler `wait`,
-    /// donc si le handle a ete rendu, `vivant` est deja faux. Une erreur alors que le shell
-    /// est encore vivant, elle, reste une vraie erreur et remonte.
+    /// `portable-pty` 0.9.0 a le test inverse dans `WinChildKiller::kill`
+    /// (`src/win/mod.rs`) :
     ///
-    /// Constate sur le runner Windows le 2026-08-21, en trois essais qui echouaient tous sur
-    /// `fermer()` — et le meme defaut existait sous Linux, dans une fenetre plus etroite.
+    /// ```text
+    /// let res = unsafe { TerminateProcess(...) };
+    /// let err = IoError::last_os_error();
+    /// if res != 0 { Err(err) } else { Ok(()) }
+    /// ```
+    ///
+    /// `TerminateProcess` rend NON-ZERO en cas de succes. Donc un kill qui a marche remonte
+    /// `Err(last_os_error())` — soit « The operation completed successfully. (os error 0) »
+    /// quand rien n'a pose de code, soit une erreur PERIMEE d'un appel anterieur du meme
+    /// thread, d'ou des « The handle is invalid. (os error 6) » incomprehensibles. Et un kill
+    /// qui a echoue remonte `Ok(())`. Le code de retour ne veut donc rien dire du tout sous
+    /// Windows. (`WinChild::kill` avale le sien par `.ok()` ; c'est le killer CLONE, celui
+    /// qu'on utilise, qui le propage.)
+    ///
+    /// ## Ce qu'on fait a la place
+    ///
+    /// On constate. `fermer` veut dire « le shell est parti », c'est donc ca qu'on verifie :
+    /// le thread lecteur passe `vivant` a faux des que le PTY rend la fin de fichier. Une
+    /// seule regle pour les trois systemes, et elle ne depend d'aucune bibliotheque.
+    ///
+    /// Cas ordinaire couvert au passage : un shell DEJA termine (on tape `exit`, puis on
+    /// ferme l'onglet). `vivant` est deja faux, on rend `Ok` sans rien attendre — avant, ce
+    /// geste parfaitement normal remontait une erreur a l'utilisateur.
     pub fn fermer(&self) -> Result<(), String> {
-        let mut tueur = self.tueur.lock().map_err(|_| "terminal deja ferme")?;
-        match tueur.kill() {
-            Ok(()) => Ok(()),
-            Err(_) if !self.vivant() => Ok(()),
-            Err(e) => Err(e.to_string()),
+        self.tueur.lock().map_err(|_| "terminal deja ferme")?.kill().ok();
+        let debut = std::time::Instant::now();
+        while self.vivant() && debut.elapsed() < DELAI_FERMETURE {
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        if self.vivant() {
+            return Err(format!(
+                "le shell n'a pas rendu la main en {} s",
+                DELAI_FERMETURE.as_secs()
+            ));
+        }
+        Ok(())
     }
 }
 

@@ -1561,19 +1561,26 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
-- **FERMER CE QUI EST DEJA MORT N'EST PAS UNE ERREUR — et le contraire se voit d'abord sous
-  Windows.** `Session::fermer` appelait `kill()` et remontait l'echec tel quel. Or le thread
-  lecteur ramasse le shell mort (`enfant.wait()`), ce qui rend le handle inutilisable : le
-  `kill` d'apres echoue. Sous Windows, « The handle is invalid. (os error 6) », ou meme
-  « The operation completed successfully. (os error 0) » quand rien n'a pose le code d'erreur ;
-  sous Unix un `ESRCH`, dans une fenetre plus etroite mais bien reelle. L'utilisateur tapait
-  `exit`, fermait l'onglet, et recevait une erreur pour un geste qui avait marche.
-  Le discriminant est `vivant`, que le lecteur passe a faux AVANT d'appeler `wait` : une
-  erreur de `kill` alors que le shell est mort est benigne, une erreur alors qu'il vit est une
-  vraie erreur. Trois essais du runner Windows echouaient tous sur `fermer()` — et le premier
-  diagnostic, « ecrire dans le PTY echoue », etait FAUX : les numeros de ligne pointaient tous
-  la meme colonne 20, celle du `.unwrap()` de `s.fermer()`. **Lire la ligne exacte avant de
-  nommer l'operation en cause.**
+- **`ChildKiller::kill()` DE `portable-pty` 0.9.0 REND `Err` QUAND IL REUSSIT, SOUS WINDOWS.**
+  Le test est inverse dans `WinChildKiller::kill` (`src/win/mod.rs`) :
+  `let res = TerminateProcess(...); if res != 0 { Err(last_os_error()) } else { Ok(()) }` —
+  or `TerminateProcess` rend NON-ZERO en cas de succes. Donc un kill qui a marche remonte
+  « The operation completed successfully. (os error 0) » (rien n'a pose de code) ou une erreur
+  PERIMEE d'un appel anterieur du meme thread, d'ou des « The handle is invalid. (os error 6) »
+  incomprehensibles ; et un kill qui a echoue remonte `Ok(())`. `WinChild::kill` avale le sien
+  par `.ok()`, c'est le killer CLONE — celui qu'on utilise — qui le propage.
+  D'ou la regle : **`Session::fermer` CONSTATE au lieu de croire le code de retour.** Le thread
+  lecteur passe `vivant` a faux des que le PTY rend la fin de fichier ; c'est ca qu'on attend
+  (`DELAI_FERMETURE`, 2 s). Une seule regle pour les trois systemes, qui ne depend d'aucune
+  bibliotheque. Cas ordinaire couvert au passage : un shell DEJA termine (`exit` puis fermeture
+  de l'onglet) rendait une erreur a l'utilisateur pour un geste qui avait parfaitement marche.
+  Deux lecons de methode, payees toutes les deux :
+  - **lire la ligne exacte avant de nommer l'operation en cause.** Le premier diagnostic
+    ecrit ici etait « ecrire dans le PTY echoue » — faux. Les numeros pointaient tous la meme
+    colonne 20, celle du `.unwrap()` de `s.fermer()`. Ce faux diagnostic a fait sortir Windows
+    de la matrice de release pour rien.
+  - **quand une bibliotheque rend une erreur qui n'a pas de sens, aller lire sa source** : elle
+    est dans `~/.cargo/registry/src/`, et ici la reponse tenait en cinq lignes.
 - **UN GROS LOT NE VEUT PAS DIRE UN DEBIT INGERABLE.** `VOLUME_INSOUTENABLE`
   (`terminal/service/session.rs`) valait 256 Ko, justifie par « 256 Ko dans une fenetre de
   8 ms, c'est 32 Mo/s, aucun affichage humain ne suit ». Le raisonnement est faux : un gros

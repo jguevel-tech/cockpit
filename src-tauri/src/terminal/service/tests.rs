@@ -747,14 +747,31 @@ fn lancer_le_service_ne_laisse_pas_de_zombie() {
     );
 }
 
-/// Les enfants de CE processus restes a l'etat zombie.
+/// Les enfants zombies de CE processus QUI N'ONT JAMAIS `exec` — donc les intermediaires
+/// de fork perdus, et rien d'autre.
 ///
-/// `/proc/<pid>/stat` plutot qu'un `ps` : pas de processus externe, et l'etat comme le
-/// parent se lisent dans le meme fichier. Le champ `comm` peut contenir des espaces et des
+/// Le filtre sur le nom est ce qui rend la mesure utilisable : les essais voisins lancent de
+/// vrais shells, et un shell qui vient de mourir passe par l'etat `Z` une fraction de seconde
+/// avant que son thread lecteur ne le ramasse. Les compter tous ferait echouer cet essai au
+/// hasard de l'ordonnancement — c'est arrive des le premier passage en parallele. Un shell
+/// porte son propre nom (`zsh`, `sh`, `cmd`) ; l'intermediaire du double fork, lui, porte
+/// LE NOTRE, precisement parce qu'il n'a jamais `exec`.
+///
+/// `/proc/<pid>/stat` plutot qu'un `ps` : pas de processus externe, et l'etat, le parent et
+/// le nom se lisent dans le meme fichier. Le champ `comm` peut contenir des espaces et des
 /// parentheses, d'ou la lecture APRES la derniere parenthese fermante.
 #[cfg(target_os = "linux")]
 fn zombies_de_ce_processus() -> Vec<i32> {
+    fn nom_et_reste(stat: &str) -> Option<(String, Vec<&str>)> {
+        let debut = stat.find('(')?;
+        let fin = stat.rfind(')')?;
+        let nom = stat.get(debut + 1..fin)?.to_string();
+        Some((nom, stat.get(fin + 1..)?.split_whitespace().collect()))
+    }
+
     let moi = std::process::id().to_string();
+    let Ok(mon_stat) = std::fs::read_to_string("/proc/self/stat") else { return Vec::new() };
+    let Some((mon_nom, _)) = nom_et_reste(&mon_stat) else { return Vec::new() };
     let Ok(entrees) = std::fs::read_dir("/proc") else { return Vec::new() };
     entrees
         .flatten()
@@ -763,9 +780,10 @@ fn zombies_de_ce_processus() -> Vec<i32> {
             let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
                 return false;
             };
-            let Some((_, reste)) = stat.rsplit_once(')') else { return false };
-            let champs: Vec<&str> = reste.split_whitespace().collect();
-            champs.first() == Some(&"Z") && champs.get(1) == Some(&moi.as_str())
+            let Some((nom, champs)) = nom_et_reste(&stat) else { return false };
+            nom == mon_nom
+                && champs.first() == Some(&"Z")
+                && champs.get(1) == Some(&moi.as_str())
         })
         .collect()
 }
