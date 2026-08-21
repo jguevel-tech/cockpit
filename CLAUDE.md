@@ -213,22 +213,20 @@ build rate, gere secrets et releases seule, sans demander a Jimmy de copier des 
 Le detail vit dans le code et dans la doc integree (bouton « i » du Header). Liste courte, pour
 savoir ce qui existe :
 
-- **Projets** : un nom et un dossier. Dossiers imbriques sans limite, glisser-deposer, renommage
-  au double-clic, memoire d'onglet.
 - **Terminaux persistants** : service a nous qui survit a la fermeture, ecran et historique
   compris. Recherche dans l'historique, logo Claude quand un agent tourne, sessions Claude Code
   reprises en un clic.
 - **Fichiers** : arbre gitignore-aware, coloration ~30 langages, edition en place, corbeille
   systeme, recherche dans le fichier et le projet, aller a la definition (LSP).
 - **Git** : status, diff colore, staging par fichier, commit, push, pull en avance rapide
-  seulement, branches, historique, et **worktrees** — un second dossier de travail par branche,
-  pour faire tourner plusieurs agents en parallele. Crees dans un dossier FRERE du projet
-  (`<projet>.worktrees/<branche>`) et jamais dedans : un worktree dans le depot serait vu par
-  l'onglet Fichiers, par les recherches et par git comme du contenu non suivi. Le chemin est
-  toujours affiche : rien n'apparait sur le disque de quelqu'un sans qu'il sache ou.
+  seulement, branches, historique, et **worktrees** — un dossier de travail par branche, pour
+  faire tourner plusieurs agents en parallele. Ranges dans `<projet>.worktrees/`, a COTE du depot
+  et jamais dedans (sinon l'onglet Fichiers et git les verraient), chemin toujours affiche.
 - **Conteneurs** : Compose dans le bon ordre (tri topologique, cycles detectes), logs et shell
   par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
-- **Palette et commandes rapides** : Ctrl+K, et commandes par projet lancees par ▶ Cmd.
+- **Projets** : un nom et un dossier. Dossiers imbriques sans limite, glisser-deposer, renommage
+  au double-clic, memoire d'onglet. Ctrl+K va partout, et les commandes par projet se lancent
+  depuis ▶ Cmd.
 - **Taches, notes, reunions** : todos avec echeances ; notes Markdown arborescentes en WYSIWYG
   avec mode lecture ; enregistrement micro + son systeme, transcrit et resume en note.
 - **Monitoring et alertes** : CPU, memoire, disques, processus ; la cloche previent pour un
@@ -426,10 +424,10 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   racine de chaque session : 56,5 ms -> 4,0 ms. La descente passe par les taches, pas seulement
   le thread principal, parce qu'un node fork depuis un thread de travail.
 - **Un evenement Tauri est du JavaScript construit puis evalue**, pas un canal binaire : 8 Ko
-  d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement avant
-  emission, par contre-pression et jamais par une horloge.
-- **`Uint8Array.from(atob(s), cb)` appelle le callback une fois PAR CARACTERE** : 75 ms pour
-  2 Mo contre 2,8 ms avec une boucle nue sur un tableau prealloue.
+  d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement, par
+  contre-pression et jamais par une horloge.
+- **`Uint8Array.from(atob(s), cb)` appelle le callback une fois PAR CARACTERE** : 75 ms pour 2 Mo
+  contre 2,8 ms avec une boucle nue sur un tableau prealloue.
 - **Un projet en base doit TOUJOURS apparaitre dans l'interface** : l'ancienne liste ne rendait
   que l'intersection base ∩ orchestrateur, donc un ajout rate en silence le rendait invisible.
 - **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast** : un nom de projet deja pris
