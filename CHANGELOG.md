@@ -14,44 +14,13 @@ le script de release.
 
 ## [0.41.0] — 2026-08-21
 
-### Fixed
-
-- **Une grosse sortie de terminal n'est plus perdue.** Une commande qui écrit beaucoup — un
-  `seq`, un log de build — voyait la plus grande partie de son texte disparaître : on
-  remontait à la molette et on ne le retrouvait pas. Sur macOS, sur 1,3 Mo affichés, il n'en
-  restait que 368 Ko.
-- **Fermer un terminal dont le programme s'est déjà arrêté ne signale plus d'erreur.** On tape
-  `exit`, on ferme l'onglet, et une notification d'erreur s'affichait — alors que la
-  fermeture avait parfaitement fonctionné.
-- **Les chemins de fichiers du projet s'écrivent toujours avec des `/`.** Sous Windows ils
-  sortaient avec des antislashs, ce qui cassait l'arbre de l'onglet Fichiers : un dossier ne
-  se dépliait plus, et le nom affiché devenait le chemin entier.
-- **L'affichage du terminal ne saccade plus quand une commande écrit beaucoup.** Sur macOS,
-  le texte arrivait à l'écran par tout petits morceaux, et la fin pouvait même manquer si on
-  fermait le terminal juste après. Sous Linux, l'affichage est aussi nettement plus fluide
-  qu'avant.
-
-### Added
-
-- **Cockpit s'installe maintenant sur Windows.** Un installeur `.exe` est publié à chaque
-  version, à côté de l'AppImage Linux et du `.dmg` macOS. Terminaux persistants, fichiers,
-  Git, notes et enregistrement de réunions y marchent sans rien installer d'autre. C'est la
-  toute première version Windows : la suite de tests y passe en entier, mais personne ne s'en
-  est encore servi une journée. Si quelque chose ne va pas, ouvrir une issue est ce qui
-  aidera le plus.
-
-
-## [0.38.0] — 2026-08-21
-
-### Added
-
-- **Cockpit s'installe maintenant sur Windows.** Un installeur `.exe` est publié à chaque
-  version, à côté de l'AppImage Linux et du `.dmg` macOS. C'est la toute première version
-  Windows : elle n'a pas encore été essayée sur une vraie machine, donc si quelque chose ne
-  va pas, ouvrir une issue est ce qui aidera le plus.
-
 ### Changed
 
+- **En installant cette version, tu perds tes terminaux ouverts — une seule fois.** Cockpit
+  ne s'appuie plus sur tmux pour les garder en vie : il s'en occupe lui-même, donc les
+  terminaux d'avant ne sont pas repris. Ils tournent encore en fond si tu en as besoin :
+  `tmux -L cockpit attach` les retrouve, `tmux -L cockpit kill-server` les arrête pour de
+  bon. Après cette mise à jour, fermer Cockpit ne fait plus rien perdre.
 - **Les terminaux ne dépendent plus de tmux.** Cockpit tient désormais lui-même les shells,
   dans un service à lui qui survit à la fermeture de l'application : on rouvre Cockpit, les
   terminaux sont là où on les avait laissés, écran et historique compris. Ils répondent plus
@@ -61,9 +30,6 @@ le script de release.
   celle en cours dans la couleur d'accent, au lieu du compteur discret que tmux dessinait
   dans un coin. **Ctrl+C** copie la sélection quand il y en a une affichée, et interrompt
   sinon — comme avant, mais c'est désormais Cockpit qui s'en charge.
-- **À cette mise à jour, ce qui tournait dans les terminaux est perdu, une fois.** Les
-  anciennes sessions tmux, elles, continuent de tourner en fond : `tmux -L cockpit attach`
-  permet de les retrouver, et `tmux -L cockpit kill-server` de les arrêter pour de bon.
 - Le monitoring système affiche désormais **tous les disques locaux**, et plus seulement six
   points de montage écrits en dur : un disque monté sur `/mnt/data` ou `/srv` était invisible
   sans aucune explication.
@@ -86,6 +52,32 @@ le script de release.
   entièrement muettes, et Cockpit le **dit** désormais au lieu d'annoncer qu'aucune parole
   n'a été détectée.
 - Amélioration des journaux techniques.
+
+### Added
+
+- **Cockpit s'installe maintenant sur Windows.** Un installeur `.exe` est publié à chaque
+  version, à côté de l'AppImage Linux et du `.dmg` macOS. Terminaux persistants, fichiers,
+  Git, notes et enregistrement de réunions y marchent sans rien installer d'autre. C'est la
+  toute première version Windows : la suite de tests y passe en entier, mais personne ne s'en
+  est encore servi une journée. Si quelque chose ne va pas, ouvrir une issue est ce qui
+  aidera le plus.
+
+### Fixed
+
+- **Une grosse sortie de terminal n'est plus perdue.** Une commande qui écrit beaucoup — un
+  `seq`, un log de build — voyait la plus grande partie de son texte disparaître : on
+  remontait à la molette et on ne le retrouvait pas. Sur macOS, sur 1,3 Mo affichés, il n'en
+  restait que 368 Ko.
+- **Fermer un terminal dont le programme s'est déjà arrêté ne signale plus d'erreur.** On tape
+  `exit`, on ferme l'onglet, et une notification d'erreur s'affichait — alors que la
+  fermeture avait parfaitement fonctionné.
+- **Les chemins de fichiers du projet s'écrivent toujours avec des `/`.** Sous Windows ils
+  sortaient avec des antislashs, ce qui cassait l'arbre de l'onglet Fichiers : un dossier ne
+  se dépliait plus, et le nom affiché devenait le chemin entier.
+- **L'affichage du terminal ne saccade plus quand une commande écrit beaucoup.** Sur macOS,
+  le texte arrivait à l'écran par tout petits morceaux, et la fin pouvait même manquer si on
+  fermait le terminal juste après. Sous Linux, l'affichage est aussi nettement plus fluide
+  qu'avant.
 
 ## [0.37.1] — 2026-08-20
 
