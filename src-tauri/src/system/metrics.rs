@@ -84,6 +84,26 @@ pub struct Collector {
     cpu_cores: usize,
 }
 
+/// Systemes de fichiers qui sont des IMAGES montees, jamais des disques.
+///
+/// Une image est en lecture seule et pleine a 100 % par construction : il n'y a rien a y
+/// liberer, donc « disque presque plein » n'a aucun sens. Et le cas le plus visible, c'est
+/// NOUS : une AppImage se monte elle-meme en squashfs sur `/tmp/.mount_cockpit*`, donc la
+/// cloche annoncait « /tmp/.mount_cockpiXXXX : 100 % utilises, 0,0 Go libres » a chaque
+/// lancement. Signale par le premier utilisateur de la 0.41.0. Les montages snap et une ISO
+/// montee a la main sont dans le meme cas.
+///
+/// On filtre sur le TYPE, pas sur le chemin. Un chemin ecrit en dur est precisement ce qui
+/// rendait la liste des disques VIDE sous Windows et macOS avant la 0.38 (voir le
+/// commentaire de `collect_disks`) : le type, lui, veut dire la meme chose partout.
+const IMAGES_MONTEES: [&str; 4] = ["squashfs", "iso9660", "erofs", "cramfs"];
+
+fn est_une_image_montee(systeme_de_fichiers: &std::ffi::OsStr) -> bool {
+    systeme_de_fichiers
+        .to_str()
+        .is_some_and(|nom| IMAGES_MONTEES.contains(&nom.to_ascii_lowercase().as_str()))
+}
+
 impl Collector {
     pub fn new() -> Self {
         // Minimal init: only CPU info (for model/cores), no processes
@@ -189,6 +209,7 @@ impl Collector {
         // sous Linux : un disque monte sur `/mnt/data` ou `/srv` apparait enfin.
         self.disks
             .iter()
+            .filter(|d| !est_une_image_montee(d.file_system()))
             .map(|d| {
                 let total = d.total_space();
                 let free = d.available_space();
@@ -284,6 +305,25 @@ fn read_zfs_arc_size() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// L'AppImage se monte ELLE-MEME en squashfs : sans ce filtre, la cloche annoncait
+    /// « /tmp/.mount_cockpiXXXX : 100 % utilises » a chaque lancement.
+    #[test]
+    fn une_image_montee_n_est_pas_un_disque() {
+        for nom in ["squashfs", "iso9660", "erofs", "cramfs", "SquashFS"] {
+            assert!(est_une_image_montee(std::ffi::OsStr::new(nom)), "{nom}");
+        }
+    }
+
+    /// Ceux-la doivent passer : c'est sur eux que « disque presque plein » a un sens. `ntfs`
+    /// et `apfs` comptent autant qu'`ext4` — le filtre d'avant la 0.38 etait une liste de
+    /// chemins Unix, et il vidait la liste ailleurs que sous Linux.
+    #[test]
+    fn un_vrai_disque_reste_un_disque() {
+        for nom in ["ext4", "btrfs", "xfs", "zfs", "ntfs", "apfs", "exfat", "vfat"] {
+            assert!(!est_une_image_montee(std::ffi::OsStr::new(nom)), "{nom}");
+        }
+    }
 
     /// Les quatre lignes attendues sont lues, et les kilo-octets convertis en octets.
     #[test]

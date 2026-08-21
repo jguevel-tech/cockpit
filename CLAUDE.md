@@ -1561,6 +1561,17 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **RETIRER UN FILTRE MAISON FAIT ENTRER CE QU'IL CACHAIT AUSSI.** En 0.38 les six points de
+  montage ecrits en dur ont ete supprimes, a raison : ils ne matchaient rien sous Windows et
+  laissaient tomber le volume des fichiers de l'utilisateur sous macOS. Effet non prevu : notre
+  PROPRE AppImage est reapparue dans la liste des disques. Elle se monte en `squashfs` sur
+  `/tmp/.mount_cockpitXXXX`, en lecture seule, donc pleine a 100 % par construction — et la
+  cloche annoncait « disque presque plein » a chaque lancement. Signale par le premier
+  utilisateur de la 0.41.0.
+  Le filtre remis est sur le TYPE de systeme de fichiers (`IMAGES_MONTEES` : squashfs, iso9660,
+  erofs, cramfs), pas sur le chemin : un type veut dire la meme chose sur les trois systemes,
+  un chemin non — c'est toute la lecon du filtre precedent. Critere a retenir pour juger :
+  peut-on LIBERER de la place dessus ? Sur une image montee, non, donc l'alerte n'a pas de sens.
 - **UN NOMBRE D'ENVOIS N'EST PAS UN INVARIANT : C'EST UNE MESURE DE LA VITESSE DE LA MACHINE.**
   L'essai de rafale bornait le nombre d'envois (`envois < 600`). Or un lot part au plus toutes
   les 8 ms, donc le nombre suit la DUREE de la rafale : quelques dizaines ici (`seq 1 200000`
