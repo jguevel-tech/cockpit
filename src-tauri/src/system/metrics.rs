@@ -76,6 +76,8 @@ pub struct DiskMetrics {
 pub struct Collector {
     sys: System,
     disks: Disks,
+    /// Rafraichie en meme temps que la liste des disques.
+    lecture_seule: std::collections::HashSet<String>,
     disk_refresh_counter: u8,
     /// Static system info cached once
     hostname: String,
@@ -84,24 +86,99 @@ pub struct Collector {
     cpu_cores: usize,
 }
 
-/// Systemes de fichiers qui sont des IMAGES montees, jamais des disques.
+/// Systemes de fichiers qui sont des images montees, quel que soit le systeme.
 ///
-/// Une image est en lecture seule et pleine a 100 % par construction : il n'y a rien a y
-/// liberer, donc « disque presque plein » n'a aucun sens. Et le cas le plus visible, c'est
-/// NOUS : une AppImage se monte elle-meme en squashfs sur `/tmp/.mount_cockpit*`, donc la
-/// cloche annoncait « /tmp/.mount_cockpiXXXX : 100 % utilises, 0,0 Go libres » a chaque
-/// lancement. Signale par le premier utilisateur de la 0.41.0. Les montages snap et une ISO
-/// montee a la main sont dans le meme cas.
-///
-/// On filtre sur le TYPE, pas sur le chemin. Un chemin ecrit en dur est precisement ce qui
-/// rendait la liste des disques VIDE sous Windows et macOS avant la 0.38 (voir le
-/// commentaire de `collect_disks`) : le type, lui, veut dire la meme chose partout.
+/// Complement du critere principal (voir `montages_en_lecture_seule`) : ces types-la sont en
+/// lecture seule par nature, et cette liste vaut aussi la ou `/proc/mounts` n'existe pas.
 const IMAGES_MONTEES: [&str; 4] = ["squashfs", "iso9660", "erofs", "cramfs"];
 
 fn est_une_image_montee(systeme_de_fichiers: &std::ffi::OsStr) -> bool {
     systeme_de_fichiers
         .to_str()
         .is_some_and(|nom| IMAGES_MONTEES.contains(&nom.to_ascii_lowercase().as_str()))
+}
+
+/// Les points de montage montes en LECTURE SEULE. Vide la ou `/proc/mounts` n'existe pas.
+///
+/// C'est LE critere qui decide si une entree est un disque : peut-on y liberer de la place ?
+/// Sur un montage en lecture seule, non — donc « disque presque plein » n'a aucun sens, et
+/// l'entree n'a rien a faire dans le monitoring non plus.
+///
+/// Le cas qui l'a impose est le NOTRE. Une AppImage se monte elle-meme, pleine a 100 % par
+/// construction, et la cloche annoncait « /tmp/.mount_cockpiXXXX : 100 % utilises » a chaque
+/// lancement. Une premiere tentative a filtre le TYPE `squashfs` : ca ne marche pas, et c'est
+/// une lecon a garder. Une AppImage se monte par FUSE, donc le type reel est
+/// **`fuse.cockpit`** — le sous-type porte le nom du programme, pas celui du format. Mesure
+/// sur la machine, ligne brute de `/proc/mounts` :
+///
+/// ```text
+/// cockpit /tmp/.mount_cockpiOLFNpL fuse.cockpit ro,nosuid,nodev,relatime,... 0 0
+/// ```
+///
+/// Le type n'etait donc pas devinable : il fallait lire. L'option `ro`, elle, est explicite.
+///
+/// `sysinfo` 0.30 n'expose pas cette information (`is_read_only` n'existe qu'a partir de
+/// 0.31), d'ou la lecture directe. Les points de montage y sont echappes a la mode fstab
+/// (`\040` pour une espace) : il faut les desechapper pour les comparer a ce que rend
+/// `sysinfo`.
+fn montages_en_lecture_seule() -> std::collections::HashSet<String> {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(brut) = std::fs::read_to_string("/proc/mounts") else {
+            return std::collections::HashSet::new();
+        };
+        lire_montages_en_lecture_seule(&brut)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        std::collections::HashSet::new()
+    }
+}
+
+/// La partie PURE de la lecture ci-dessus, pour qu'elle soit testable sans machine.
+///
+/// `#[cfg]` comme son appelant : ailleurs elle serait du code mort, et le projet exige zero
+/// avertissement.
+#[cfg(target_os = "linux")]
+fn lire_montages_en_lecture_seule(brut: &str) -> std::collections::HashSet<String> {
+    brut.lines()
+        .filter_map(|ligne| {
+            let mut champs = ligne.split(' ');
+            let _peripherique = champs.next()?;
+            let point = champs.next()?;
+            let _type = champs.next()?;
+            let options = champs.next()?;
+            // `ro` est une option a part entiere, pas un prefixe : `rootcontext=...` ne doit
+            // pas compter, et `relatime` non plus.
+            options
+                .split(',')
+                .any(|o| o == "ro")
+                .then(|| desechapper_montage(point))
+        })
+        .collect()
+}
+
+/// Desechappe un point de montage de `/proc/mounts` (echappement octal a la mode fstab).
+#[cfg(target_os = "linux")]
+fn desechapper_montage(brut: &str) -> String {
+    let mut sortie = String::with_capacity(brut.len());
+    let octets = brut.as_bytes();
+    let mut i = 0;
+    while i < octets.len() {
+        if octets[i] == b'\\' && i + 3 < octets.len() {
+            if let Some(valeur) = std::str::from_utf8(&octets[i + 1..i + 4])
+                .ok()
+                .and_then(|chiffres| u8::from_str_radix(chiffres, 8).ok())
+            {
+                sortie.push(valeur as char);
+                i += 4;
+                continue;
+            }
+        }
+        sortie.push(octets[i] as char);
+        i += 1;
+    }
+    sortie
 }
 
 impl Collector {
@@ -122,6 +199,7 @@ impl Collector {
         Self {
             sys,
             disks: Disks::new_with_refreshed_list(),
+            lecture_seule: montages_en_lecture_seule(),
             disk_refresh_counter: 0,
             hostname: System::host_name().unwrap_or_default(),
             os_version: System::long_os_version().unwrap_or_default(),
@@ -197,6 +275,7 @@ impl Collector {
         if self.disk_refresh_counter >= 10 {
             self.disk_refresh_counter = 0;
             self.disks = Disks::new_with_refreshed_list();
+            self.lecture_seule = montages_en_lecture_seule();
         }
 
         // PAS de filtre maison sur les points de montage. Les six chemins Unix qui etaient
@@ -209,7 +288,12 @@ impl Collector {
         // sous Linux : un disque monte sur `/mnt/data` ou `/srv` apparait enfin.
         self.disks
             .iter()
-            .filter(|d| !est_une_image_montee(d.file_system()))
+            .filter(|d| {
+                // Un montage ou l'on ne peut RIEN liberer n'est pas un disque : ni dans la
+                // liste, ni dans l'alerte. Le cas d'ecole est notre propre AppImage.
+                !est_une_image_montee(d.file_system())
+                    && !self.lecture_seule.contains(&*d.mount_point().to_string_lossy())
+            })
             .map(|d| {
                 let total = d.total_space();
                 let free = d.available_space();
@@ -306,8 +390,67 @@ fn read_zfs_arc_size() -> u64 {
 mod tests {
     use super::*;
 
-    /// L'AppImage se monte ELLE-MEME en squashfs : sans ce filtre, la cloche annoncait
-    /// « /tmp/.mount_cockpiXXXX : 100 % utilises » a chaque lancement.
+    /// De bout en bout, sur la machine qui fait tourner l'essai : AUCUN disque rendu ne doit
+    /// etre un montage en lecture seule. Quand une AppImage tourne, cet essai voit le vrai
+    /// `/tmp/.mount_*` et echouerait si le filtre etait mal branche — ce que les essais sur
+    /// texte ne peuvent pas dire.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn aucun_disque_rendu_n_est_en_lecture_seule() {
+        let mut collecteur = super::Collector::new();
+        let mesures = collecteur.collect();
+        let seules = super::montages_en_lecture_seule();
+        for disque in &mesures.disks {
+            assert!(
+                !seules.contains(&disque.mount),
+                "{} est monte en lecture seule et ne devrait pas etre rendu comme un disque",
+                disque.mount
+            );
+        }
+    }
+
+    /// La ligne EXACTE relevee sur la machine de Jimmy le 2026-08-21. Le type est
+    /// `fuse.cockpit` et non `squashfs` : c'est ce qui a fait echouer la premiere tentative
+    /// de correctif, qui filtrait le type. L'option `ro`, elle, est la.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn le_montage_d_une_appimage_est_vu_en_lecture_seule() {
+        let brut = "\
+cockpit /tmp/.mount_cockpiOLFNpL fuse.cockpit ro,nosuid,nodev,relatime,user_id=1000,group_id=1000 0 0
+/dev/nvme0n1p2 / ext4 rw,relatime 0 0
+/dev/nvme0n1p1 /boot/efi vfat rw,relatime,fmask=0077 0 0
+/dev/sr0 /media/cdrom iso9660 ro,nosuid,nodev,relatime,uid=1000 0 0
+tmpfs /dev/shm tmpfs rw,nosuid,nodev 0 0
+";
+        let seules = lire_montages_en_lecture_seule(brut);
+        assert!(seules.contains("/tmp/.mount_cockpiOLFNpL"), "{seules:?}");
+        assert!(seules.contains("/media/cdrom"), "{seules:?}");
+        // Les disques ou l'on peut ecrire ne doivent PAS y etre : sinon on les ferait
+        // disparaitre du monitoring, ce qui est le bug d'avant la 0.38 a l'envers.
+        assert!(!seules.contains("/"), "{seules:?}");
+        assert!(!seules.contains("/boot/efi"), "{seules:?}");
+        assert_eq!(seules.len(), 2, "{seules:?}");
+    }
+
+    /// `rootcontext=...` commence par « ro » sans etre l'option `ro`, et `relatime` aussi.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn ro_est_une_option_entiere_pas_un_prefixe() {
+        let brut = "x /donnees ext4 rw,relatime,rootcontext=system_u:object_r:t 0 0\n";
+        assert!(lire_montages_en_lecture_seule(brut).is_empty());
+    }
+
+    /// Un point de montage avec une espace est echappe en `\040` dans `/proc/mounts`, alors
+    /// que `sysinfo` rend l'espace : sans desechappement, la comparaison ne trouve rien.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn un_point_de_montage_avec_une_espace_est_desechappe() {
+        let brut = "x /media/mon\\040disque iso9660 ro 0 0\n";
+        let seules = lire_montages_en_lecture_seule(brut);
+        assert!(seules.contains("/media/mon disque"), "{seules:?}");
+    }
+
+    /// Garde de repli, utile la ou `/proc/mounts` n'existe pas.
     #[test]
     fn une_image_montee_n_est_pas_un_disque() {
         for nom in ["squashfs", "iso9660", "erofs", "cramfs", "SquashFS"] {

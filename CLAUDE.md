@@ -1642,6 +1642,24 @@ Le backend (`system/metrics.rs`) collecte :
   vide ce que le shell a dit en demarrant (attente du silence) AVANT de taper. La meme course
   existait sous Unix, simplement plus etroite — un essai qui depend de ce que le shell a fini
   d'ecrire doit toujours attendre le calme d'abord.
+- **UNE APPIMAGE SE MONTE EN `fuse.<nom-du-programme>`, PAS EN `squashfs`.** Deux versions ont
+  ete depensees a corriger la fausse alerte « disque presque plein » parce que le premier
+  correctif filtrait le TYPE `squashfs`, suppose de memoire. Le type reel, lu dans
+  `/proc/mounts` sur la machine :
+  `cockpit /tmp/.mount_cockpiOLFNpL fuse.cockpit ro,nosuid,nodev,relatime,... 0 0`
+  Une AppImage de type 2 monte son image par FUSE, et le sous-type porte le nom du PROGRAMME,
+  pas celui du format. Ce n'etait pas devinable — un `grep /proc/mounts` le disait en une
+  seconde, et je ne l'ai pas fait.
+  **La lecon depasse ce cas** : le projet ecrit noir sur blanc « reproduire et instrumenter
+  AVANT de patcher », et un nom de systeme de fichiers est exactement le genre de detail qu'on
+  croit connaitre. Quand un correctif porte sur une valeur que le systeme fournit, LA LIRE.
+  Le critere retenu, lui, ne depend d'aucune convention de nommage : le montage est-il en
+  LECTURE SEULE (option `ro`) ? Si oui, il n'y a rien a y liberer, donc ni alerte ni ligne
+  dans le monitoring. `sysinfo` 0.30 ne l'expose pas (`is_read_only` arrive en 0.31), d'ou la
+  lecture directe de `/proc/mounts` — avec desechappement des points de montage
+  (`\040` pour une espace), sinon la comparaison avec ce que rend `sysinfo` ne trouve rien.
+  Et l'essai de bout en bout a ete VERIFIE CAPABLE D'ECHOUER : filtre retire, il tombe en
+  nommant `/tmp/.mount_cockpikkChgB`.
 - **RETIRER UN FILTRE MAISON FAIT ENTRER CE QU'IL CACHAIT AUSSI.** En 0.38 les six points de
   montage ecrits en dur ont ete supprimes, a raison : ils ne matchaient rien sous Windows et
   laissaient tomber le volume des fichiers de l'utilisateur sous macOS. Effet non prevu : notre

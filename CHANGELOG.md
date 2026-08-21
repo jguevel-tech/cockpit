@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **L'alerte « disque presque plein » ne se déclenche plus sur Cockpit lui-même.** La
+  correction de la version précédente ne marchait pas : elle cherchait le mauvais indice.
+  Cockpit écarte maintenant tout emplacement où il n'y a rien à libérer, parce qu'on ne peut
+  pas y écrire.
+
+
 ## [0.41.3] — 2026-08-21
 
 ### Fixed
