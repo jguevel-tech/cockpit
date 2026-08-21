@@ -468,19 +468,17 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   a retirer l'entree. On relit donc la liste et on rend l'entree que l'outil y met. Corollaire
   pour les essais : ne jamais comparer un chemin a une chaine ecrite en dur — comparer le NOM.
 - **Sockets** : sous Unix le nom est limite a ~108 octets et l'erreur ne le dit pas (le service
-  demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est pas un
-  fichier mais un tuyau nomme. Un helper d'essai qui construit un chemin perd la portabilite sans
-  que rien ne le signale.
+  demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est pas
+  un fichier mais un tuyau nomme, ce qu'un helper d'essai oublie en silence.
 - **Les zombies portant notre nom ne viennent PAS de nous** : mesure a zero sur dix releves, et un
   essai verrouille la propriete. Ils viennent du fork intermediaire de `g_spawn` (GLib), dont
   WebKit se sert. Benin — ne pas chercher dans notre code, et ne pas « corriger » par un ramassage
   global qui volerait les enfants de tokio et de GLib. A savoir aussi : un processus detache n'est
   pas adopte par le pid 1 sur un bureau moderne (`systemd --user` recupere les orphelins), donc la
   bonne assertion est « le parent n'est plus celui qui a lance ».
-- **Un essai qui lance un VRAI processus doit l'arreter dans un `Drop`**, pas a la fin du corps :
-  un `assert!` rate laisse sinon un service et ses shells tourner, invisibles. Et ne compter que
-  les zombies portant NOTRE nom : les shells voisins passent par cet etat une fraction de
-  seconde.
+- **Un essai qui lance un VRAI processus doit l'arreter dans un `Drop`** : un `assert!` rate
+  laisse sinon un service et ses shells tourner, invisibles. Et ne compter que les zombies
+  portant NOTRE nom : les shells voisins passent par cet etat une fraction de seconde.
 - **Un nombre d'envois n'est pas un invariant, c'est une mesure de la vitesse de la machine** :
   un lot part au plus toutes les 8 ms, donc le compte suit la DUREE. Borner ce que la
   fonctionnalite GARANTIT (ici la taille moyenne d'un envoi), jamais ce que la machine se trouve
