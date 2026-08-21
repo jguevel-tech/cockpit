@@ -57,6 +57,15 @@ jobs:
       # main. macOS est deja livre par `release.yml`.
       - name: Construction de l'installeur Windows
         if: runner.os == 'Windows'
+        # La cle de signature est NECESSAIRE meme ici : `tauri.conf.json` porte la cle
+        # PUBLIQUE de l'updater, donc la CLI reclame la privee et echoue apres avoir produit
+        # l'installeur (« A public key has been found, but no private key »). Sans ces deux
+        # variables, le banc rend rouge un essai qui a pourtant tout reussi — c'est arrive au
+        # premier passage, et ca fait chercher un probleme la ou il n'y en a pas.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # La cle a ete generee sans mot de passe, mais la variable doit exister.
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: npx tauri build -b nsis
 
       - name: Recuperer l'installeur Windows

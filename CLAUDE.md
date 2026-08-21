@@ -1561,6 +1561,15 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **UN BANC QUI CONSTRUIT UN BUNDLE A BESOIN DE LA CLE DE SIGNATURE.** `tauri.conf.json`
+  porte la cle PUBLIQUE de l'updater : la CLI reclame donc la privee et echoue APRES avoir
+  produit l'installeur (« A public key has been found, but no private key »). Le banc rendait
+  rouge un essai qui avait tout reussi — tests verts, `Cockpit_x.y.z_x64-setup.exe` bien la —
+  et ca fait chercher un probleme la ou il n'y en a pas. `essais.yml` passe donc
+  `TAURI_SIGNING_PRIVATE_KEY` comme `release.yml`. A ne pas confondre avec le build LOCAL, ou
+  cet echec est voulu (d'ou `--no-bundle` en local).
+  Corollaire de methode : un `continue-on-error` sur une etape de build MASQUE ce genre de
+  chose. Le premier atelier Windows est passe « vert » avec cette meme erreur dedans.
 - **UN CHEMIN QUI TRAVERSE L'IPC EST UN IDENTIFIANT : IL S'ECRIT AVEC DES `/`.** Toutes les
   fonctions de `workspace/` rendaient leur chemin relatif par `to_string_lossy()`, donc avec le
   separateur du systeme. Sous Windows, `src\notes.md` — et le frontend, lui, DECOUPE et RECOLLE
