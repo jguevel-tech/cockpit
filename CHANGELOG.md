@@ -23,6 +23,9 @@ le script de release.
 - **Fermer un terminal dont le programme s'est déjà arrêté ne signale plus d'erreur.** On tape
   `exit`, on ferme l'onglet, et une notification d'erreur s'affichait — alors que la
   fermeture avait parfaitement fonctionné.
+- **La fin d'un terminal est maintenant détectée par le programme lui-même**, et non par son
+  tuyau de sortie. Le résultat est le même sur Linux et macOS ; c'est ce qui rend la chose
+  possible sur Windows, où le tuyau reste ouvert après l'arrêt du programme.
 - **Les grosses sorties de terminal repartent en gros paquets.** Une commande qui écrit des
   milliers de lignes était renvoyée à l'interface en morceaux minuscules — jusqu'à 3 000
   envois pour un mégaoctet sur macOS, là où il en faut quelques dizaines. Résultat :

@@ -75,6 +75,13 @@ const TAILLE_ECHO: usize = 64;
 /// la main en quelques millisecondes — il ne sert qu'a ne pas attendre indefiniment.
 const DELAI_FERMETURE: std::time::Duration = std::time::Duration::from_secs(2);
 
+/// Ce qu'on laisse au thread lecteur pour finir d'avaler la sortie avant de fermer le PTY.
+///
+/// Sous Unix il a deja fini (la mort du shell lui a donne sa fin de fichier) et ce delai ne
+/// change rien. Sous Windows c'est la fermeture qui le debloque, et fermer trop tot lui
+/// couperait les derniers octets ecrits par le programme qui s'arrete.
+const GRACE_DE_LECTURE: std::time::Duration = std::time::Duration::from_millis(300);
+
 /// Volume d'un seul lot au-dela duquel on renonce a transmettre et on redessine.
 ///
 /// C'est un PLAFOND DE MEMOIRE — ce qu'on accepte de garder pour un frontend — et non un
@@ -142,7 +149,9 @@ pub struct Session {
     pub id: i64,
     /// Verrou PROPRE au chemin de frappe : jamais pris par le lecteur ni par l'emetteur.
     ecrivain: Mutex<Box<dyn Write + Send>>,
-    maitre: Mutex<Box<dyn MasterPty + Send>>,
+    /// `None` des que le shell est mort : le relacher FERME le pseudo-terminal, ce qui est
+    /// la seule facon de debloquer le lecteur sous Windows (voir `guetter_la_fin`).
+    maitre: Mutex<Option<Box<dyn MasterPty + Send>>>,
     tueur: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     /// Pid du shell : c'est la racine de l'arbre ou l'on cherche un agent IA.
     pid: Option<u32>,
@@ -218,13 +227,24 @@ impl Session {
         let session = Arc::new(Self {
             id,
             ecrivain: Mutex::new(ecrivain),
-            maitre: Mutex::new(paire.master),
+            maitre: Mutex::new(Some(paire.master)),
             tueur: Mutex::new(tueur),
             pid,
             vivant: Arc::new(AtomicBool::new(true)),
             partage: Arc::clone(&partage),
             taille: Mutex::new(taille),
         });
+
+        {
+            let session_guetteur = Arc::clone(&session);
+            std::thread::spawn(move || {
+                let mut enfant = enfant;
+                // Bloque jusqu'a la mort du shell, et le RAMASSE du meme coup : sans ca il
+                // resterait zombie tant que le service tourne, et le service tourne des jours.
+                let _ = enfant.wait();
+                session_guetteur.guetter_la_fin();
+            });
+        }
 
         {
             let session_lecteur = Arc::clone(&session);
@@ -243,10 +263,6 @@ impl Session {
                 // L'emetteur finit d'ecouler ce qui reste AVANT que la fin soit annoncee,
                 // sinon les derniers octets affiches sont perdus.
                 let _ = emetteur.join();
-                // Le shell est mort : on le ramasse, sinon il reste zombie tant que le
-                // service tourne — et le service tourne des jours.
-                let mut enfant = enfant;
-                let _ = enfant.wait();
                 if let Some(abonne) = session_lecteur.abonne() {
                     abonne.pousser(Pousse::Fini { id });
                 }
@@ -262,17 +278,50 @@ impl Session {
         ecrivain.write_all(octets).map_err(|e| e.to_string())
     }
 
+    /// Le shell vient de mourir : on le dit, et on debloque le lecteur.
+    ///
+    /// ## Pourquoi le PROCESS est l'autorite, et pas le tuyau
+    ///
+    /// Le thread lecteur constatait la fin en recevant la fin de fichier du PTY. C'est vrai
+    /// sous Unix — la mort du shell ferme l'esclave — et FAUX sous Windows : ConPTY garde son
+    /// tuyau ouvert apres la mort du shell (c'est `conhost` qui le tient, pas le shell), donc
+    /// la lecture ne rend jamais rien. Consequences mesurees sur le runner le 2026-08-21 :
+    /// `vivant` restait vrai indefiniment, donc la fin d'un terminal n'etait JAMAIS annoncee
+    /// a l'application, la session ne se refermait pas cote service, et `fermer()` attendait
+    /// pour rien. Attendre le PROCESS, lui, marche partout.
+    ///
+    /// Relacher le maitre ferme le pseudo-terminal, ce qui debloque le lecteur. On laisse
+    /// d'abord passer `GRACE_DE_LECTURE` : sous Unix le lecteur a deja fini d'avaler ce qui
+    /// restait (il a eu sa fin de fichier), et fermer trop tot lui couperait les derniers
+    /// octets — ceux qui portent souvent le message d'adieu d'un programme.
+    fn guetter_la_fin(&self) {
+        self.vivant.store(false, Ordering::SeqCst);
+        {
+            let (tampon, signal) = &*self.partage;
+            tampon.lock().unwrap_or_else(|e| e.into_inner()).fini = true;
+            signal.notify_all();
+        }
+        std::thread::sleep(GRACE_DE_LECTURE);
+        // Le `drop` a lieu HORS du verrou : fermer un pseudo-terminal peut bloquer, et le
+        // garder pris pendant ce temps figerait un redimensionnement concurrent.
+        let maitre = self.maitre.lock().map(|mut m| m.take()).unwrap_or(None);
+        drop(maitre);
+    }
+
+    /// Redimensionne le PTY. Sans effet — et sans erreur — quand le shell est mort : le
+    /// frontend continue de mesurer son conteneur pendant qu'un onglet se referme, et ce
+    /// n'est pas une panne a montrer a l'utilisateur.
     pub fn redimensionner(&self, taille: Taille) -> Result<(), String> {
-        self.maitre
-            .lock()
-            .map_err(|_| "PTY perdu")?
-            .resize(PtySize {
-                rows: taille.lignes.max(1),
-                cols: taille.colonnes.max(1),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| e.to_string())?;
+        if let Some(maitre) = self.maitre.lock().map_err(|_| "PTY perdu")?.as_mut() {
+            maitre
+                .resize(PtySize {
+                    rows: taille.lignes.max(1),
+                    cols: taille.colonnes.max(1),
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| e.to_string())?;
+        }
         *self.taille.lock().unwrap_or_else(|e| e.into_inner()) = taille;
         let (tampon, signal) = &*self.partage;
         let mut t = tampon.lock().unwrap_or_else(|e| e.into_inner());

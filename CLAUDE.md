@@ -1561,6 +1561,21 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **LA FIN D'UN SHELL SE CONSTATE SUR LE PROCESS, PAS SUR LE TUYAU.** Le thread lecteur
+  concluait a la fin en recevant la fin de fichier du PTY. Vrai sous Unix, ou la mort du shell
+  ferme l'esclave. FAUX sous Windows : **ConPTY garde son tuyau ouvert apres la mort du
+  shell** — c'est `conhost` qui le tient, pas le shell — donc la lecture ne rend jamais rien.
+  Mesures du runner le 2026-08-21 : `vivant` restait vrai indefiniment, la fin d'un terminal
+  n'etait JAMAIS annoncee a l'application (`terminal_exit` jamais emis), la session ne se
+  refermait pas cote service, et `fermer()` attendait son delai pour rien. D'ou un thread
+  GUETTEUR par session, qui bloque sur `enfant.wait()` — ce qui marche partout, et ramasse le
+  shell du meme coup. Il relache ensuite le maitre pour FERMER le pseudo-terminal, seule facon
+  de debloquer le lecteur sous Windows, apres une grace de 300 ms : sous Unix le lecteur a
+  deja fini d'avaler ce qui restait, et fermer plus tot lui couperait les derniers octets
+  d'un programme qui s'arrete.
+  Corollaire : `maitre` est un `Option`, et `redimensionner` ne fait RIEN — sans erreur — quand
+  le shell est mort. Le frontend continue de mesurer son conteneur pendant qu'un onglet se
+  referme, et ce n'est pas une panne a montrer.
 - **`ChildKiller::kill()` DE `portable-pty` 0.9.0 REND `Err` QUAND IL REUSSIT, SOUS WINDOWS.**
   Le test est inverse dans `WinChildKiller::kill` (`src/win/mod.rs`) :
   `let res = TerminateProcess(...); if res != 0 { Err(last_os_error()) } else { Ok(()) }` —
