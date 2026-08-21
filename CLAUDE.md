@@ -107,9 +107,10 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 
 ## Regles non negociables (a lire AVANT de coder)
 
-**Definition de "fini"** — une modification n'est livrable que si ces 6 points passent :
+**Definition de "fini"** — une modification n'est livrable que si ces 8 points passent :
 1. `npm run check` -> 0 erreur, 0 warning (c'est l'etat actuel, le maintenir)
-2. `cd src-tauri && cargo test` -> tous verts
+2. `cd src-tauri && cargo test` -> tous verts (241 au 2026-08-21). `cargo check --all-targets`
+   -> 0 avertissement, sinon la CI le refusera de toute facon
 3. `npx tauri build --no-bundle` si on livre un binaire (JAMAIS `cargo build --release` seul :
    sans les env vars Tauri le binaire sort en mode dev et cherche Vite sur localhost:5173)
 4. `npm run i18n:audit` -> 0 chaine en dur (tout texte visible passe par le catalogue,
@@ -120,10 +121,23 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
    commande. Prerequis, une fois : `rustup target add x86_64-pc-windows-gnu` ET un compilateur
    C croise, sans quoi `libsqlite3-sys` (SQLite embarque) ne se construit pas — voir
    « Compilation croisee Windows » dans les Pieges connus.
-6. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
+6. `npm run test:front` -> tous verts (les modules purs du frontend, testes sous node, rien
+   a installer)
+7. **`gh workflow run essais.yml` -> vert sur les TROIS systemes**, des que le changement
+   touche quoi que ce soit qui depende du systeme (terminaux, chemins, processus, audio,
+   disques). Il joue les memes verifications sur `ubuntu-22.04`, `macos-latest` et
+   `windows-latest`, construit l'installeur Windows, et **ne publie rien**. Voir « Le banc
+   d'essai » ci-dessous : il existe parce que trois versions de suite sont parties incompletes
+   pour un essai qui ne tombait que sur une autre machine.
+8. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
    `## [Unreleased]`**, dans la bonne section (Added / Changed / Fixed / Removed). Ce texte
    n'est pas de la doc interne : il est affiche dans le logiciel ET sert de notes de version
    dans le modal de mise a jour. Une refonte interne sans effet visible n'a rien a y faire.
+
+**CE QUI NE SE RELEASE PAS.** Un commit qui ne touche QUE `CLAUDE.md`, `.claude/`, `docs/`,
+`README.md` ou `.github/workflows/` ne donne ni entree de changelog, ni version. C'est notre
+outillage, pas le produit : on commite, on pousse, et c'est fini. Jimmy l'a rappele le
+2026-08-21. Une release ne part que quand un UTILISATEUR peut constater quelque chose.
 
 **Traduction — francais et anglais, sans exception** :
 - L'interface existe en deux langues, francais par defaut, anglais au choix
@@ -381,7 +395,7 @@ npx tauri build --no-bundle
 # Build frontend seul
 npm run build
 
-# Tests Rust (239 tests)
+# Tests Rust (241 tests)
 cd src-tauri && cargo test
 
 # Tests frontend des modules PURS (node strip-types, aucune dependance a installer)
@@ -795,10 +809,11 @@ garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `mai
 **sans jamais pousser**. Le push reste le seul geste humain (regle git du projet) :
 
 ```
+IA  : gh workflow run essais.yml    # les 3 systemes, ne publie rien — AVANT le tag
 IA  : npm run release -- <niveau>   # changelog + bump + commit + tag
 IA  : git push origin main          # libre, ne declenche RIEN
 IA  : git push origin vX.Y.Z        # libre AUSSI : c'est ce qui publie
-CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
+CI  : release.yml -> AppImage + dmg + installeur .exe signes, Release, latest.json
 APP : la cloche s'allume chez les utilisateurs
 ```
 
@@ -819,21 +834,49 @@ je prend les maj et je test apres »). Consequences :
 - Ne jamais lui demander de relancer `target/release/cockpit` ni de reproduire sur un binaire local.
 - Une instrumentation de diagnostic doit etre PUBLIEE pour qu'il puisse l'exercer. C'est
   acceptable : elle n'ecrit que dans `/tmp/cockpit-debug.log`. La retirer des la cause tranchee.
-- Le build local reste obligatoire pour l'IA (4e point de la definition de "fini"), simplement
+- Le build local reste obligatoire pour l'IA (3e point de la definition de "fini"), simplement
   il ne sert pas de moyen de test pour lui.
-Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 6 points de la definition
+Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 8 points de la definition
 de "fini" ne passent pas, et annoncer apres coup ce qui est parti et en quelle version.
 Seule exception encore soumise a accord : reecrire un historique deja pousse.
 
-**Un seul workflow, declenche uniquement par un tag `v*`.** Il n'y a volontairement PAS de CI
-sur les pushes de `main` : `release.yml` lance lui-meme `npm run check` et `cargo test` avant de
-builder, donc un commit casse ne peut de toute facon pas etre publie. Une CI de branche ne faisait
-que refaire ce travail en double. Ne pas la reintroduire — c'est une decision de Jimmy, prise deux
-fois. La verification avant un tag se fait en local (les 6 points de la definition de "fini").
+**Deux workflows, et AUCUN sur les pushes de `main`.**
+- `release.yml`, declenche uniquement par un tag `v*` : il lance lui-meme les verifications puis
+  construit et publie les trois plateformes.
+- `essais.yml`, uniquement a la demande (`gh workflow run essais.yml`) : les memes verifications
+  sur `ubuntu-22.04`, `macos-latest` et `windows-latest`, plus l'installeur Windows en artefact,
+  et **il ne publie rien**.
 
-**Distribution** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
-avec entree de menu. C'est le `curl | sh` annonce dans le README. Il lit la derniere release via
-l'API GitHub — il n'y a donc rien a mettre a jour dedans quand une version sort.
+Il n'y a volontairement PAS de CI sur les pushes de branche : `release.yml` refait de toute facon
+les verifications avant de builder, donc un commit casse ne peut pas etre publie, et une CI de
+branche ne ferait que ce travail en double. Ne pas la reintroduire — decision de Jimmy, prise
+deux fois.
+
+**LE BANC D'ESSAI — pourquoi il existe, et quand il est obligatoire.** Trois versions de suite
+(0.38.0, 0.39.0, 0.40.0) sont parties INCOMPLETES parce qu'un essai ne tombait que sur une
+machine qu'on n'a pas ici. On ne l'apprenait qu'apres le tag, donc apres publication, et chaque
+tentative coutait une version aux utilisateurs. `essais.yml` donne la meme reponse avant,
+gratuitement, autant de fois qu'il faut.
+- **Linux EST dans sa matrice**, et ce n'est pas de la redondance avec le poste de travail : le
+  runner a deux coeurs et un disque lent, et ca change le comportement. La v0.41.2 a echoue LA
+  apres avoir passe macOS et Windows.
+- Le lancer des que le changement touche les terminaux, les chemins, les processus, l'audio, les
+  disques — c'est-a-dire tout ce qui depend du systeme.
+- Ne PAS mettre de `continue-on-error` sur une etape de build : le premier atelier Windows est
+  passe « vert » avec une erreur de signature dedans, ce qui a masque ce qu'on venait mesurer.
+
+**Distribution — les trois systemes, aucun store.**
+- **Linux** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
+  avec entree de menu. C'est le `curl | sh` du README. Il lit la derniere release par l'API
+  GitHub, donc il n'y a rien a y toucher quand une version sort.
+- **macOS** : le `.dmg` depuis la page des releases. Pas de certificat Apple, donc le premier
+  lancement est refuse et le README explique les deux messages possibles.
+- **Windows** : l'installeur `.exe` (NSIS) depuis la page des releases. Windows previent que
+  l'editeur est inconnu — « Informations complementaires », puis « Executer quand meme ».
+  Premiere version publiee : la 0.41.0, le 2026-08-21.
+
+Les mises a jour suivantes passent par l'updater integre sur les trois systemes : il n'y a rien
+a retelecharger.
 
 **Temps de release** : ~7 min avec le cache chaud (mesure v0.5.0), contre 12 min 36 avant
 optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
@@ -857,11 +900,24 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
   release reste invisible. Il passe par l'API et non par `gh release view` : **un brouillon
   n'est pas accessible par son tag** (l'API rend 404), il faut le chercher dans la liste
   (tauri-action fait pareil pour retrouver le brouillon de l'autre job).
+- **UNE PLATEFORME QUI ECHOUE PENDANT UN RUN : ANNULER LE RUN.** `gh run cancel <id>`, tant
+  que `publier` n'a pas tourne. Rien n'est alors publie du tout — verifie le 2026-08-21 sur la
+  v0.41.1 : aucune release n'a meme ete creee, et les utilisateurs sont restes sur la version
+  complete precedente sans rien remarquer. C'est mieux que publier puis replier, parce que la
+  fenetre ou quelqu'un voit une version incomplete n'existe simplement pas.
+  Ensuite : corriger, passer par `essais.yml`, et tagger la version SUIVANTE. Le tag rate
+  reste orphelin, et **ses notes reviennent sous `[Unreleased]`** — sinon le correctif part
+  sans figurer dans les notes que le logiciel affiche.
 - **URGENCE : une release deja publiee mais incomplete se repare sans rien republier** —
   `gh release edit vX.Y.Z --prerelease --latest=false`. `releases/latest` exclut les
   preversions, donc l'endpoint retombe aussitot sur la derniere version COMPLETE et les
   utilisateurs cessent de voir l'erreur (~1 min de propagation CDN). C'est le premier geste a
-  faire, avant meme de diagnostiquer.
+  faire, avant meme de diagnostiquer. Applique deux fois le 2026-08-21 (v0.38.0 et v0.39.0),
+  et ca a marche les deux fois : `latest.json` est retombe sur la 0.37.1 complete.
+  **Le garde-fou du job `publier` couvre deja le cas le plus courant** : sans AppImage Linux,
+  il ne leve PAS le brouillon, donc la release reste invisible et il n'y a rien a replier —
+  constate sur les v0.40.0 et v0.41.2. Le repli manuel ne sert que quand Linux a reussi et
+  qu'une AUTRE plateforme manque.
 - **Le job Linux peut se figer sur `apt-get`** : `unattended-upgrades` tient le verrou dpkg au
   demarrage du runner et apt attend indefiniment. Sans plafond, GitHub laisse courir **six
   heures** avant de tuer le job (v0.31.0 : fige de 15h19 a 21h20, aucune AppImage publiee,
