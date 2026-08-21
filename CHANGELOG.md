@@ -14,13 +14,6 @@ le script de release.
 
 ### Fixed
 
-- Correction interne d'un test : rien de visible.
-
-
-## [0.40.0] — 2026-08-21
-
-### Fixed
-
 - **Une grosse sortie de terminal n'est plus tronquée.** Une commande qui écrit beaucoup —
   `seq`, un journal de build — pouvait voir la majeure partie de sa sortie remplacée par un
   simple rafraîchissement de l'écran : on remontait à la molette et on ne trouvait pas ce
@@ -52,6 +45,7 @@ le script de release.
   toute première version Windows : la suite de tests y passe en entier, mais personne ne s'en
   est encore servi une journée. Si quelque chose ne va pas, ouvrir une issue est ce qui
   aidera le plus.
+
 
 ## [0.38.0] — 2026-08-21
 
