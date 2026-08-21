@@ -18,7 +18,8 @@
  * dernier commentaire qu'on a reellement lu, issue par issue. Tout ce qui est plus recent
  * est nouveau, quel que soit son auteur et quels que soient les labels.
  *
- * Le fichier de repere vit hors du depot (`.claude/issues-vues.json`, ignore par git) :
+ * Le fichier de repere vit hors du depot, dans le dossier PARENT
+ * (`../.claude/issues-vues.json`), avec le reste de l'outillage de developpement :
  * le commiter ajouterait un commit a chaque passage, pour une donnee qui ne concerne que
  * la machine qui travaille. Sur une machine neuve, la premiere execution relit tout —
  * c'est bruyant une fois, jamais faux.
@@ -32,7 +33,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Deux reperes distincts, et c'est voulu : la surveillance en continu ne doit pas marquer
 // comme vu ce que la lecture manuelle n'a pas encore traite, et inversement.
 const argRepere = process.argv.find((a) => a.startsWith("--repere="));
-const REPERE = resolve(ROOT, argRepere ? argRepere.slice(9) : ".claude/issues-vues.json");
+const REPERE = resolve(ROOT, argRepere ? argRepere.slice(9) : "../.claude/issues-vues.json");
 /// Mode surveillance : une ligne par evenement, rien du tout quand il n'y a rien.
 const brut = process.argv.includes("--brut");
 const DEPOT = "jguevel-tech/cockpit";

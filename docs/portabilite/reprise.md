@@ -65,7 +65,7 @@ La surveillance des issues, qui ne survit pas à la session :
 
 ```
 Monitor: while true; do node scripts/issues-nouveautes.mjs --brut --marquer \
-  --repere=.claude/issues-vues-surveillance.json 2>&1 | grep -E "^(ISSUE #|⚠)" || true; sleep 60; done
+  --repere=../.claude/issues-vues-surveillance.json 2>&1 | grep -E "^(ISSUE #|⚠)" || true; sleep 60; done
 ```
 
 Sans elle, une réponse d'auteur passe inaperçue — c'est arrivé trois fois le 2026-08-20, et c'est

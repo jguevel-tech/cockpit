@@ -253,9 +253,6 @@ Frontend and backend talk exclusively over Tauri's IPC: `invoke` for calls, even
 updates. No HTTP server, no WebSocket. Releases ship from a Linux + macOS + Windows CI matrix that
 runs the full test suite before bundling anything.
 
-Project conventions — non-negotiable rules, known pitfalls, release process — live in
-[CLAUDE.md](CLAUDE.md).
-
 ---
 
 ## Contributing

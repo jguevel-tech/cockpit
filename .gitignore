@@ -14,8 +14,9 @@ cockpit-updater.key*
 # Secrets applicatifs (cle OpenAI importee au premier lancement)
 secrets.json
 
-# Reglages locaux Claude Code (specifiques a la machine)
-.claude/settings.local.json
+# L'outillage de developpement vit dans le dossier PARENT, hors de ce depot. Ce filet
+# evite qu'un fichier de reglages pose ici par un editeur y entre par accident.
+.claude/
 
 # Specs et plans de travail : utiles en local, sans interet pour qui clone le projet.
 docs/superpowers/
@@ -23,6 +24,4 @@ docs/superpowers/
 # Divers
 *.log
 .DS_Store
-.claude/issues-vues.json
-.claude/issues-vues-surveillance.json
 *.swp
