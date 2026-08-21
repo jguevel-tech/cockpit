@@ -100,10 +100,9 @@ build rate, gere secrets et releases seule — sans jamais demander a Jimmy de c
   cassent.
 - Une cle ajoutee dans `fr.ts` DOIT l'etre dans `en.ts` : le type de `en.ts` derive de `fr.ts`,
   donc l'oubli est une erreur de `npm run check`.
-- **Ne jamais brancher une decision sur un texte affiche** : le test devient faux au changement
-  de langue. Utiliser un booleen d'etat.
-- Les libelles portes par des donnees (onglets, menus, palettes) stockent une CLE, pas un
-  texte : c'est ce qui les rend reactifs.
+- **Ne jamais brancher une decision sur un texte affiche** : faux des que la langue change.
+- Les libelles portes par des donnees (onglets, menus, palettes) stockent une CLE, pas un texte :
+  c'est ce qui les rend reactifs au changement de langue.
 
 ## Interdits absolus
 
@@ -409,8 +408,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   glisser un enfant demarre aussi le glisser du parent et deux retours visuels s'allument.
   Mettre les gestionnaires sur l'EN-TETE, pas sur le bloc qui contient la branche.
 - **Un module frontend teste sous node ne doit RIEN importer de l'application** : node resout les
-  imports autrement que Vite. D'ou la coupe entre le module PUR et celui qui touche toasts et IPC.
-  Les essais vivent dans `scripts/`, pas sous `src/`.
+  imports autrement que Vite, d'ou la coupe entre le module PUR et celui qui touche toasts et IPC.
+  Les essais vivent dans `scripts/`, pas sous `src/` (que `tsconfig` inclut).
 
 ### Backend et systeme
 
