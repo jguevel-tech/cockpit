@@ -524,13 +524,12 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   deja les trois systemes avant de construire, donc un commit casse ne peut pas etre publie ; et
   un numero de version ne coute rien. Ne PAS reintroduire d'etape de verification en CI avant le
   tag : Jimmy n'en veut pas, il l'a dit deux fois.
-- **La release est publiee en BROUILLON**, et un job la rend visible a la fin. Les trois jobs
+- **La release est publiee en BROUILLON**, et un job la rend visible a la fin — il verifie que
+  TOUTES les plateformes de la matrice sont la, sinon leur absence redevient silencieuse. Les trois jobs
   publient sur la MEME release et le manifeste de mise a jour est fusionne plateforme par
   plateforme : le premier a finir exposait sinon un manifeste incomplet, et l'updater de l'autre
   systeme affichait « None of the fallback platforms were found ». Le brouillon n'est pas servi
   par `releases/latest`, donc personne ne voit un fichier incomplet.
-- **La liste des plateformes attendues doit contenir TOUTES celles de la matrice**, sinon
-  l'absence de l'une redevient silencieuse et ses utilisateurs sont coupes des mises a jour.
 - **UNE PLATEFORME QUI ECHOUE PENDANT UN RUN : ANNULER LE RUN**, tant que le job de publication
   n'a pas tourne. Rien n'est alors publie du tout, et la fenetre ou quelqu'un voit une version
   incomplete n'existe pas. Ensuite : corriger, tagger la version SUIVANTE, et **remettre les
