@@ -19,6 +19,7 @@
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
   import AppearanceSettings from "./AppearanceSettings.svelte";
+  import CarteCompte from "../compte/CarteCompte.svelte";
   import AgentsView from "../agents/AgentsView.svelte";
   import { marked } from "marked";
   // Le CHANGELOG.md est embarque au build (Vite ?raw) : consultable hors ligne, et toujours
@@ -238,6 +239,7 @@
 
     <div class="settings-content stack">
       {#if view === "general"}
+        <CarteCompte />
         <section class="card">
           <div class="card-head">
             <h3>{$trad("settings.app.title")}</h3>

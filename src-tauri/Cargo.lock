@@ -625,6 +625,7 @@ dependencies = [
  "tokio",
  "trash",
  "unicode-width",
+ "uuid",
 ]
 
 [[package]]

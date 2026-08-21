@@ -23,6 +23,9 @@ serde_json = "1"
 rusqlite = { version = "0.31", features = ["bundled", "backup"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "process", "sync"] }
 sysinfo = "0.30"
+# Identifiants stables entre machines : les identifiants entiers de SQLite sont locaux,
+# donc deux postes donneraient le meme a deux choses differentes.
+uuid = { version = "1", features = ["v4"] }
 log = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "json", "multipart"] }
 chrono = "0.4"

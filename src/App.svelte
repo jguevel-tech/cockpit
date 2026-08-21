@@ -5,8 +5,11 @@
   import Toast from "./lib/components/ui/Toast.svelte";
   import ConfirmDialog from "./lib/components/ui/ConfirmDialog.svelte";
   import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
-  import ReportingConsent from "./lib/components/settings/ReportingConsent.svelte";
-  import { reportingConsent, loadReportingSettings } from "./lib/stores/errors";
+  import EcranConnexion from "./lib/components/compte/EcranConnexion.svelte";
+  import { reportingConsent, loadReportingSettings, setReportingConsent } from "./lib/stores/errors";
+  import { chargerCompte } from "./lib/stores/compte";
+  import { getAppSettings, setAppSetting } from "./lib/api/recorder";
+  import { signalerErreur } from "./lib/stores/errors";
   import { loadProjects } from "./lib/stores/projects";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
@@ -34,9 +37,47 @@
   }
 
   void loadReportingSettings();
+  void chargerCompte();
+
+  /**
+   * L'ecran montre UNE fois, au premier lancement.
+   *
+   * C'etait l'ecran d'accord sur la remontee des erreurs ; c'est maintenant la connexion, qui a
+   * plus de sens comme premiere chose qu'on voit. La remontee passe donc a « active par
+   * defaut », et ce n'est pas un detail : l'ecran de connexion le DIT, en toutes lettres, avec
+   * l'endroit ou la couper. Changer un comportement sans le dire serait le vrai probleme, pas
+   * le reglage lui-meme.
+   *
+   * Le repere est un reglage a lui, et non l'etat de l'accord : melanger les deux rendrait
+   * impossible de remontrer l'ecran sans toucher a un choix de l'utilisateur.
+   */
+  const CLE_ACCUEIL = "compte_accueil_vu";
+  let accueilOuvert = $state(false);
+
+  async function ouvrirLAccueilSiPremierLancement() {
+    try {
+      const reglages = await getAppSettings();
+      accueilOuvert = reglages[CLE_ACCUEIL] !== "1";
+    } catch (e) {
+      // Sans reponse on ne montre RIEN : mieux vaut ne pas accueillir que de rouvrir cet
+      // ecran a chaque demarrage chez quelqu'un dont la base repond mal.
+      signalerErreur("app.accueil", String(e));
+    }
+  }
+
+  async function fermerLAccueil() {
+    accueilOuvert = false;
+    try {
+      await setAppSetting(CLE_ACCUEIL, "1");
+      if ($reportingConsent === "unset") await setReportingConsent(true);
+    } catch (e) {
+      signalerErreur("app.accueil.fermer", String(e));
+    }
+  }
 
   onMount(() => {
     loadProjects();
+    void ouvrirLAccueilSiPremierLancement();
     loadWallpaper();
     const stopUpdateWatcher = startUpdateWatcher();
     const stopTodoDueWatcher = startTodoDueWatcher();
@@ -73,8 +114,8 @@
   <Toast />
   <ConfirmDialog />
   <CommandPalette />
-  {#if $reportingConsent === "unset"}
-    <ReportingConsent />
+  {#if accueilOuvert}
+    <EcranConnexion onClose={fermerLAccueil} />
   {/if}
 </div>
 

@@ -12,6 +12,19 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Un compte Cockpit, pour retrouver ses projets sur une autre machine.** À la première
+  ouverture, Cockpit propose de se connecter ou d'en créer un — par mot de passe, ou avec
+  Google. Continuer sans compte ne retire rien : tout fonctionne pareil, y compris hors
+  connexion. Le compte se gère ensuite dans Paramètres → Général, où l'on voit sous quel nom
+  cette machine apparaît et où l'on peut la déconnecter.
+
+### Changed
+
+- **L'écran affiché au tout premier lancement est maintenant celui de la connexion.** Le
+  réglage de la remontée des erreurs reste là où il était, dans Paramètres → Général.
+
 ## [0.45.1] — 2026-08-21
 
 ### Fixed

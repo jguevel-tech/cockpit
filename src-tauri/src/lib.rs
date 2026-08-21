@@ -2,6 +2,7 @@ mod agents;
 mod appearance;
 mod chemins;
 mod claude_auth;
+mod compte;
 mod commande;
 mod docker;
 mod gitdiff;
@@ -1588,6 +1589,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Compte et synchronisation
+            compte::compte_etat,
+            compte::compte_inscription,
+            compte::compte_connexion,
+            compte::compte_appairage_demarrer,
+            compte::compte_appairage_etat,
+            compte::compte_deconnexion,
+            compte::compte_definir_serveur,
             // Docker
             list_projects,
             start_project,
