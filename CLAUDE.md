@@ -255,6 +255,13 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - Svelte 5 runes uniquement : `$state`/`$derived`/`$props` + callback props
   (pas de createEventDispatcher, pas de stores locaux inutiles)
 - Commandes externes (git, docker...) : args en tableau via Command, jamais `sh -c` interpole
+- **Toute commande externe s'ecrit `Command::new(...).sans_console()`** (`commande.rs`). Sous
+  Windows, une application graphique n'a pas de console : chaque programme console qu'elle
+  lance en ouvre une, le temps de son execution. Le monitor Docker lance un `compose ps` PAR
+  PROJET toutes les CINQ SECONDES — avec cinq projets, cinq fenetres noires qui clignotent
+  toute la journee. `sans_console()` ne fait RIEN sous Unix, donc il n'y a pas de `#[cfg]` a
+  ecrire chez l'appelant. Aucun test ne peut voir une fenetre clignoter : la seule protection
+  est que tout passe par la.
 - **Le dossier personnel se demande a `chemins::dossier_personnel()`**, jamais a
   `std::env::var("HOME")` : Windows n'a pas `HOME` mais `USERPROFILE`. Cette fonction rend une
   ERREUR nommee, la ou les six anciens appels rendaient « rien trouve » (`Ok(vec![])`,
@@ -451,6 +458,7 @@ ai-workforce/
 │       ├── lib.rs                  # AppState, commandes Tauri, setup, import DB
 │       ├── chemins.rs              # Dossier personnel (HOME / USERPROFILE) + dossier de
 │       │                           #   donnees memorise pour le hook de panic
+│       ├── commande.rs             # `.sans_console()` : tout programme externe passe par la
 │       ├── docker/
 │       │   ├── compose.rs          # Wrapper docker compose (up/down/ps) async
 │       │   ├── graph.rs            # Tri topologique, detection de cycles (7 tests)

@@ -21,6 +21,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use crate::commande::SansConsole;
 
 /// Cle de reglage : "on" / "off". Absente = la question n'a pas encore ete posee.
 pub const CONSENT_KEY: &str = "error_reporting";
@@ -180,6 +181,7 @@ pub fn audio_server_from_pactl(sortie: &str) -> String {
 
 fn sortie_commande(programme: &str, args: &[&str]) -> String {
     std::process::Command::new(programme)
+        .sans_console()
         .args(args)
         .output()
         .map(|o| {

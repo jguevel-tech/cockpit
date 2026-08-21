@@ -5,6 +5,8 @@ use serde::Serialize;
 use std::time::Duration;
 use tokio::process::Command;
 
+use crate::commande::SansConsole;
+
 const TIMEOUT: Duration = Duration::from_secs(15);
 /// Operations longues : `system df` mesure chaque volume/image (10s+ avec
 /// beaucoup de volumes), prune et stop en masse peuvent durer plusieurs minutes.
@@ -29,7 +31,7 @@ async fn run_docker(args: &[&str]) -> Result<String, String> {
 async fn run_docker_timeout(args: &[&str], timeout: Duration) -> Result<String, String> {
     let output = tokio::time::timeout(
         timeout,
-        Command::new("docker").args(args).kill_on_drop(true).output(),
+        Command::new("docker").sans_console().args(args).kill_on_drop(true).output(),
     )
     .await
     .map_err(|_| "docker: delai depasse".to_string())?
@@ -116,6 +118,7 @@ pub async fn container_logs(id: &str, tail: u32) -> Result<String, String> {
     let output = tokio::time::timeout(
         TIMEOUT,
         Command::new("docker")
+            .sans_console()
             .args(["logs", "--tail", &tail_s, "--timestamps", id])
             .kill_on_drop(true)
             .output(),

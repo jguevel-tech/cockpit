@@ -4,6 +4,7 @@
 //! pour un usage interactif. Seuls initialize / didOpen / didChange /
 //! textDocument/definition sont utilises.
 
+use crate::commande::SansConsole;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -114,6 +115,7 @@ fn spawn_reader(stdout: impl Read + Send + 'static, tx: Sender<Value>) {
 impl LspServer {
     fn spawn(bin: &str, args: &[&str], root: &str) -> Result<Self, String> {
         let mut child = Command::new(bin)
+            .sans_console()
             .args(args)
             .current_dir(root)
             .stdin(Stdio::piped())

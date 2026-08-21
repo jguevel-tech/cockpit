@@ -2,6 +2,7 @@ mod agents;
 mod appearance;
 mod chemins;
 mod claude_auth;
+mod commande;
 mod docker;
 mod gitdiff;
 mod lsp;
@@ -15,6 +16,7 @@ mod terminal;
 mod urlhealth;
 mod workspace;
 
+use commande::SansConsole;
 use docker::orchestrator::Orchestrator;
 use std::sync::Arc;
 use storage::Database;
@@ -592,6 +594,7 @@ async fn open_terminal(path: String) -> Result<(), String> {
 
     // Try gnome-terminal with two tabs
     let result = tokio::process::Command::new("gnome-terminal")
+        .sans_console()
         .arg("--tab")
         .arg("--title=Terminal")
         .arg(format!("--working-directory={}", &path_str))
@@ -610,6 +613,7 @@ async fn open_terminal(path: String) -> Result<(), String> {
 
     // Fallback: x-terminal-emulator (single tab)
     let result = tokio::process::Command::new("x-terminal-emulator")
+        .sans_console()
         .arg("-e")
         .arg("bash")
         .current_dir(&path_str)

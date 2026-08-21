@@ -5,6 +5,8 @@
 use serde::Serialize;
 use tokio::process::Command;
 
+use crate::commande::SansConsole;
+
 #[derive(Serialize, Clone)]
 pub struct GitStatus {
     pub branch: String,
@@ -65,6 +67,7 @@ pub struct DiffLine {
 /// (1 = "des differences existent" pour git diff).
 async fn run_git(repo: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
+        .sans_console()
         .args(args)
         .current_dir(repo)
         .env("GIT_OPTIONAL_LOCKS", "0")
@@ -89,6 +92,7 @@ async fn run_git(repo: &str, args: &[&str]) -> Result<String, String> {
 /// est une erreur, avec stderr+stdout comme message (git ecrit sur les deux).
 async fn run_git_strict(repo: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
+        .sans_console()
         .args(args)
         .current_dir(repo)
         .env("GIT_OPTIONAL_LOCKS", "0")
@@ -109,6 +113,7 @@ async fn run_git_strict(repo: &str, args: &[&str]) -> Result<String, String> {
 pub async fn git_status(repo: &str) -> Result<GitStatus, String> {
     // Repo git ?
     let check = Command::new("git")
+        .sans_console()
         .args(["rev-parse", "--is-inside-work-tree"])
         .current_dir(repo)
         .output()

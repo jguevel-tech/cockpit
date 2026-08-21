@@ -14,6 +14,7 @@
 //! comportement juste quelle que soit la cause (option refusee, serveur absent, aucun
 //! peripherique expose).
 
+use crate::commande::SansConsole;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::{Child, Command};
@@ -116,6 +117,7 @@ fn supports_properties_flag() -> bool {
     static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *SUPPORTED.get_or_init(|| {
         std::process::Command::new("pw-record")
+            .sans_console()
             .arg("--help")
             .output()
             .map(|out| {
@@ -191,6 +193,7 @@ fn spawn_track(out_path: &Path, capture_sink: bool, outil: Outil) -> Result<Chil
 
     let properties_flag = outil == Outil::PipeWire && supports_properties_flag();
     let mut cmd = Command::new(outil.programme());
+    cmd.sans_console();
     cmd.args(args_capture(outil, capture_sink, properties_flag));
     if outil == Outil::PipeWire && capture_sink && !properties_flag {
         // Forme comprise par les pw-record qui ignorent `-P`.
@@ -253,7 +256,7 @@ impl CaptureHandles {
     pub async fn stop(mut self) -> Result<(), String> {
         for child in [&mut self.mic, &mut self.system].into_iter().flatten() {
             if let Some(pid) = child.id() {
-                let _ = Command::new("kill").arg(pid.to_string()).output().await;
+                let _ = Command::new("kill").sans_console().arg(pid.to_string()).output().await;
             }
         }
         // Laisse le temps de flusher, puis force si besoin

@@ -4,6 +4,8 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
 
+use crate::commande::SansConsole;
+
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 const PS_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -79,6 +81,7 @@ impl Compose {
 
         let output = tokio::time::timeout(COMMAND_TIMEOUT, async {
             Command::new("docker")
+                .sans_console()
                 .args(&args)
                 .current_dir(&self.project_dir)
                 .stdout(Stdio::piped())
@@ -103,6 +106,7 @@ impl Compose {
 
         let output = tokio::time::timeout(COMMAND_TIMEOUT, async {
             Command::new("docker")
+                .sans_console()
                 .args(&args)
                 .current_dir(&self.project_dir)
                 .stdout(Stdio::piped())
@@ -127,6 +131,7 @@ impl Compose {
 
         let output = tokio::time::timeout(PS_TIMEOUT, async {
             Command::new("docker")
+                .sans_console()
                 .args(&args)
                 .current_dir(&self.project_dir)
                 .stdout(Stdio::piped())
@@ -184,6 +189,7 @@ pub async fn ps_by_working_dir(project_dir: &std::path::Path) -> Result<Vec<Cont
     );
     let output = tokio::time::timeout(PS_TIMEOUT, async {
         Command::new("docker")
+            .sans_console()
             .args(["ps", "--format", "json", "--filter", &filter])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

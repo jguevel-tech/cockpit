@@ -4,6 +4,7 @@
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
+use crate::commande::SansConsole;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
@@ -40,6 +41,7 @@ struct LoginSession {
 
 pub fn status() -> ClaudeAuthStatus {
     let version = std::process::Command::new("claude")
+        .sans_console()
         .arg("--version")
         .output()
         .ok()
