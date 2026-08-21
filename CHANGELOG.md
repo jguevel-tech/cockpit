@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-08-21
+
 ### Fixed
 
 - **La barre d'avancement d'une tâche se voit sur les thèmes sombres.** Elle s'appuyait sur le
