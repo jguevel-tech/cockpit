@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-08-21
+
 ### Added
 
 - **Avancement d'une tâche, de 0 à 100 %.** Chaque tâche porte un curseur, réglable au clic ou
