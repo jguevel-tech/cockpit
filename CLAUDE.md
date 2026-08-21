@@ -556,8 +556,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Toujours verifier apres publication** que le manifeste repond 200 et contient les trois
   plateformes. Un 404 dans les deux premieres minutes est la propagation, pas un incident.
 - **L'updater Linux ne remplace qu'une AppImage** : pour essayer le flux reel, lancer l'AppImage.
-  Le changelog est embarque au build, donc toujours celui de la version installee. Et **perdre la
-  cle de signature = plus aucune mise a jour possible** pour les installes.
+  Le changelog est embarque au build. **Perdre la cle de signature = plus aucune mise a jour.**
 - **`scripts/release.mjs` bump aussi le verrou de dependances Rust** : sans ca le commit taggue
   se contredisait et le premier build suivant salissait l'arbre, ce qui bloquait la release
   d'apres.
