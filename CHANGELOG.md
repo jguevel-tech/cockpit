@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- La barre d'avancement d'une tâche est **plus grande** — presque deux fois plus large dans le
+  tableau de bord, et plus épaisse. Elle était trop petite pour être visée confortablement.
+
+
 ## [0.43.1] — 2026-08-21
 
 ### Fixed

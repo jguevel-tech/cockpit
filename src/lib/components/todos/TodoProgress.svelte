@@ -79,11 +79,15 @@
      natif des `input[type=range]` avec un `!important` sur `background-color`. L'image de fond
      du degrade, elle, n'est pas touchee. */
   .avancement input {
-    width: 5.5rem;
-    height: 6px;
+    /* Assez large pour qu'on lise l'avancement d'un coup d'oeil et qu'on le vise sans effort.
+       La ligne etant en flex avec le texte en `flex: 1`, ce que la barre prend est rendu par le
+       texte — c'est voulu : dans une liste de taches, savoir OU on en est vaut la fin d'une
+       phrase qu'on connait deja. */
+    width: 7rem;
+    height: 8px;
     appearance: none;
     -webkit-appearance: none;
-    border-radius: 3px;
+    border-radius: 4px;
     background-image: linear-gradient(
       to right,
       var(--accent) 0 var(--rempli),
@@ -91,16 +95,18 @@
     );
     cursor: pointer;
   }
+  /* Le tableau de bord est plus large que la colonne d'un projet, et c'est LA que la demande
+     prend son sens : la barre y est plus grande, pas plus petite. */
   .avancement.dense input {
-    width: 4.5rem;
+    width: 9rem;
   }
   /* Le curseur lui-meme : accent, avec un anneau de la couleur de la surface pour qu'il se
      detache de la barre au lieu de s'y fondre. */
   .avancement input::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
-    width: 13px;
-    height: 13px;
+    width: 15px;
+    height: 15px;
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid var(--surface-base);
