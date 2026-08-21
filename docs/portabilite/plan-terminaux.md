@@ -440,3 +440,62 @@ Ce que la compilation ne dit PAS, et qui reste à vérifier sur une vraie machin
   reconnaissance retombe sur la ligne de commande, qui est usurpable. Le retrait des
   extensions (`.cmd`, `.exe`) et la coupe sur `\` sont faits ; la limite, elle, ne se
   rattrape pas.
+
+### Ce que le compilateur a trouvé, et ce qu'il ne pouvait pas trouver
+
+Bilan honnête de la question « compiler valait-il mieux que relire ? ». La réponse est oui,
+mais **pas là où on l'attendait** : le compilateur n'a signalé qu'un seul fichier. Sa vraie
+valeur est ailleurs — il transforme la portabilité en garde-fou permanent, là où une étude de
+lecture se périme le jour où elle est écrite.
+
+**1. Trouvé PAR LE COMPILATEUR, et par lui seul — 1 fichier**
+
+| Fichier | Ce qui n'existe pas sous Windows |
+|---|---|
+| `terminal/service/tuyau.rs` | `interprocess::PeerCreds::euid()` est déclaré `#[cfg(unix)]` |
+
+Plus deux avertissements de code mort visibles uniquement sur la cible Windows, donc invisibles
+en relecture : `lib.rs::configuration_polices` (fontconfig n'existe que sous Linux) et
+`tuyau.rs::refus` (utilisé par la seule branche Unix).
+
+**2. Là où l'étude s'est TROMPÉE, et c'est ça qui compte**
+
+`divers.md` donnait `PermissionsExt` non conditionné (`terminal/mod.rs:231`) pour « le SEUL
+bloqueur de compilation Windows », et ajoutait qu'il « empêche même de *découvrir* les autres ».
+Les deux affirmations étaient fausses au moment de la vérification : le fichier avait été
+corrigé entre-temps par le chantier des terminaux, et le seul bloqueur réel — `PeerCreds` —
+n'existait pas encore quand l'étude a été écrite. **Une étude de lecture décrit un état
+révolu ; un `cargo check` décrit l'état présent.** C'est l'argument, et il ne dépend pas du
+nombre d'erreurs trouvées.
+
+**3. Ce que le compilateur ne pouvait PAS voir : du code qui compile et qui ment**
+
+C'est la catégorie la plus dangereuse, et l'étude l'avait bien vue — la corriger relevait de
+la lecture, pas de la compilation.
+
+| Fichier | Ce qui compile mais rate à l'exécution |
+|---|---|
+| `system/process.rs` | `Signal::Term` existe partout ; c'est sa *conversion* qui rend `None` sous Windows. Le message d'erreur nommait « SIGTERM », un mécanisme inexistant là-bas |
+| `terminal/agents_llm.rs` | `/proc/<pid>/exe` lu sans `cfg` : compile partout, rend toujours faux ailleurs. La moitié anti-usurpation d'argv était morte |
+| `system/metrics.rs` | filtre de six points de montage Unix : ne matche rien sous `C:\`, donc liste de disques vide sans message. Et `kernel_version()` rend « 22631 » |
+| `workspace/claude_sessions.rs`, `claude_auth/mod.rs`, `agents/mod.rs`, `terminal/history.rs` | `env::var("HOME")` : Windows n'a que `USERPROFILE`. Les quatre répondaient « rien trouvé » au lieu de le dire |
+| `lib.rs` | `debug_log` écrit dans `/tmp` ; le hook de panic reconstruit `~/.local/share/…` ; `whoami_fallback` ignore `USERNAME` |
+| `docker/compose.rs`, `docker/containers.rs`, `gitdiff/mod.rs`, `lsp/mod.rs`, `recorder/capture.rs`, `report/mod.rs`, `claude_auth/mod.rs`, `lib.rs` | aucun `CREATE_NO_WINDOW` : chaque commande externe ouvre une console. Le monitor Docker en lance une par projet **toutes les cinq secondes** |
+
+**Ces cinq derniers fichiers ne sont donc PAS des trouvailles du compilateur** — l'étude les
+avait listés, classés « B », et aucun ne produit d'erreur de compilation. Les compter comme
+tels donnerait au `cargo check` un crédit qui ne lui revient pas.
+
+**4. Ce que NI le compilateur NI l'étude n'avaient vu**
+
+Trouvé en corrigeant, dans les fichiers déjà ouverts :
+
+- `basename()` ne coupait que sur `/`, et seules `.js`/`.mjs` étaient retirées d'un nom de
+  programme : `C:\...\claude.cmd` et `node.exe` n'étaient donc **jamais** reconnus. Trois
+  défauts silencieux dans une fonction de vingt lignes.
+- `read_proc_meminfo` rendait `(0,0,0,0)` quand `/proc/meminfo` est illisible : un échec de
+  lecture qui fabrique une mesure.
+- `format_uptime` composait « 3j 4h 12m » en Rust — du texte affiché hors catalogue, donc du
+  français chez un utilisateur anglais.
+- La croix d'arrêt d'un processus portait `title="SIGTERM"` en dur, que l'audit i18n ne voyait
+  pas.
