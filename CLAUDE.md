@@ -33,7 +33,7 @@ heures.** Sinon elle encombre. Quand une entree devient fausse, la CORRIGER, pas
 
 ## Workflow IA
 
-**Ce repo est pilote a 100 % par l'IA.** Jimmy demande des fonctionnalites, l'IA fait tout le
+**Ce repo est pilote a 100 % par l'IA.** Le mainteneur demande des fonctionnalites, l'IA fait tout le
 reste : code, tests, changelog, version, commit, push, release. Il ne doit rappeler aucune de
 ces etapes.
 
@@ -51,7 +51,7 @@ ces etapes.
 6. **Releaser** : `npm run release -- <patch|minor|major>` puis pousser le tag.
 
 **Ne JAMAIS demander l'autorisation de releaser.** Un lot fini et verifie part, point. Demande
-explicite de Jimmy le 2026-08-13 (« c'est relou que je doive te demander tout le temps »).
+explicite du mainteneur le 2026-08-13 (« c'est relou que je doive te demander tout le temps »).
 
 **Une fonctionnalite = une release.** Ce qui est fini part ; on n'accumule pas dans
 `[Unreleased]`. Plusieurs fonctionnalites ensemble, c'est bon si elles sont finies ensemble.
@@ -63,7 +63,7 @@ Le script refuse les incoherences ; en cas de doute, prendre le plus haut.
 
 **`package.json` est la source unique de la version**, et seul le script y touche.
 
-**AUCUN SAUT DE VERSION. Les numeros publies se suivent.** Demande de Jimmy le 2026-08-21 :
+**AUCUN SAUT DE VERSION. Les numeros publies se suivent.** Demande du mainteneur le 2026-08-21 :
 « ca fait franchement pas pro » de voir 0.41.4 puis 0.43.0. Donc quand un tag echoue AVANT
 d'avoir rien publie, on ne passe pas au numero suivant : on **supprime le tag**, on ramene les
 fichiers de version a la derniere version PUBLIEE, on corrige, et on retague le MEME numero.
@@ -81,13 +81,18 @@ sessions Claude partageaient ce meme dossier de travail (leur commit apparait da
 local, entre deux des miens). Aucune n'a ecrase l'autre, par chance. Donc : lire
 `git status --short` avant, et ajouter les fichiers NOMMES des qu'il y a le moindre doute.
 
+**NE JAMAIS CITER LE MAINTENEUR NULLE PART** — aucun fichier du depot, aucune note de version,
+aucun commentaire d'issue, aucun message de commit. Le depot est PUBLIC. Faute du 2026-08-21 :
+les notes de la 0.44.0 le nommaient, et son prenom traînait dans dix-huit fichiers dont deux
+libelles AFFICHES. Ecrire « le mainteneur », ou mieux rien : donner la RAISON, pas l'auteur.
+
 **Messages de commit** : titre a l'imperatif, puis un corps qui explique POURQUOI (le diff dit
 deja quoi) et ce qui a ete verifie. **JAMAIS de `Co-Authored-By: Claude` ni aucune mention d'IA**
 — le harnais l'ajoute par defaut, il faut activement l'omettre. Les passer par un FICHIER
 (`commit -F`) : des accents graves dans un `-m` sont evalues par le shell et mangent le message.
 
 **Outils** : `gh` est authentifie sur `jguevel-tech`. L'IA lit les logs de CI, diagnostique un
-build rate, gere secrets et releases seule, sans demander a Jimmy de copier des logs.
+build rate, gere secrets et releases seule, sans demander au mainteneur de copier des logs.
 
 ## Definition de « fini »
 
@@ -211,7 +216,7 @@ build rate, gere secrets et releases seule, sans demander a Jimmy de copier des 
 - **Un fichier en mauvais etat se refactore quand on y touche.** Trois limites : le refactoring
   va dans un commit SEPARE, le comportement ne change pas pendant, et on reste dans la zone
   touchee. Ne s'applique jamais au code marque `NE PAS RETIRER`.
-- Ne faire trancher Jimmy que sur le necessaire — typiquement une nouvelle fonctionnalite. Le
+- Ne faire trancher le mainteneur que sur le necessaire — typiquement une nouvelle fonctionnalite. Le
   reste se decide.
 
 ## Fonctionnalites
@@ -433,8 +438,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   IA lancait un `ps -e` complet a chaque passe. Remplacee par une descente de l'arbre depuis la
   racine de chaque session : 56,5 ms -> 4,0 ms. La descente passe par les taches, pas seulement
   le thread principal, parce qu'un node fork depuis un thread de travail.
-- **Un evenement Tauri est du JavaScript construit puis evalue**, pas un canal binaire : 8 Ko
-  d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement.
+- **Un evenement Tauri est du JavaScript construit puis evalue** : 8 Ko d'octets = ~11 Ko de
+  source JS plus un saut vers le WebProcess. D'ou le regroupement.
 - **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast** : un nom de projet deja pris
   affichait « UNIQUE constraint failed ». Deux parades necessaires : l'interface controle avant
   d'appeler, avec un message traduit ; et cote Rust une fonction qui NOMME la cause. Une
@@ -494,7 +499,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   ajouter la feature `pipewire` : elle ajouterait libpipewire EN PLUS, sans rien apporter.
 - **NE JAMAIS FAIRE SORTIR DE SON DES ENCEINTES POUR TESTER.** C'est la machine de quelqu'un.
   La capture du son systeme se verifie par un sink NUL dont on capte le monitor — et il faut
-  remettre le sink d'origine apres. Un banc en a joue deux fois pendant que Jimmy travaillait.
+  remettre le sink d'origine apres. Un banc en a joue deux fois pendant que le mainteneur travaillait.
 - **L'identifiant et le nom lisible d'un appareil ne disent pas la meme chose** : seul
   l'identifiant porte la convention `.monitor`, donc la source du son systeme.
 - **Un appareil de SORTIE refuse la config d'entree par defaut**, alors que c'est sur lui qu'on
@@ -522,7 +527,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **ON TAGUE DIRECTEMENT, et si la CI plante on corrige et on relance.** `release.yml` verifie
   deja les trois systemes avant de construire, donc un commit casse ne peut pas etre publie ; et
   un numero de version ne coute rien. Ne PAS reintroduire d'etape de verification en CI avant le
-  tag : Jimmy n'en veut pas, il l'a dit deux fois.
+  tag : le mainteneur n'en veut pas, il l'a dit deux fois.
 - **La release est publiee en BROUILLON**, et un job la rend visible a la fin — il verifie que
   TOUTES les plateformes de la matrice sont la, sinon leur absence redevient silencieuse. Les trois jobs
   publient sur la MEME release et le manifeste de mise a jour est fusionne plateforme par
@@ -555,11 +560,6 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   plateformes. Un 404 dans les deux premieres minutes est la propagation, pas un incident.
 - **L'updater Linux ne remplace qu'une AppImage** : pour essayer le flux reel, lancer l'AppImage.
   Le changelog est embarque au build. **Perdre la cle de signature = plus aucune mise a jour.**
-- **`scripts/release.mjs` bump aussi le verrou de dependances Rust** : sans ca le commit taggue
-  se contredisait et le premier build suivant salissait l'arbre, ce qui bloquait la release
-  d'apres.
-- **Les tests tournent en `--release` en CI** et le cache est partage par une cle fixe : ne pas
-  « corriger » ca en croyant accelerer, c'est l'inverse.
 - **L'AppImage embarque des bibliotheques de sa machine de construction**, et ca casse chez les
   autres : la libwayland du runner melangee au pilote graphique du systeme faisait abort WebKit,
   fenetre jamais ouverte. Contournement dans le code, bug amont sans correctif. Deux fausses
@@ -582,7 +582,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Registre npm** : la config globale pointe sur un registre prive, celle du projet la surcharge
   vers le public — **ne pas la retirer**, sinon la CI echoue et un nom d'hote interne fuite dans
   un repo public. Verrou npm a regenerer : supprimer les modules AVANT.
-- **Jimmy ne lance PAS de build local** — il teste depuis la version publiee. Une instrumentation
+- **Le mainteneur ne lance PAS de build local** — il teste depuis la version publiee. Une instrumentation
   de diagnostic doit donc etre PUBLIEE, puis retiree des la cause tranchee.
 
 ## Conventions

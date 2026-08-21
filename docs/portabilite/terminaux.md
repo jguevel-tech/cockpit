@@ -257,7 +257,7 @@ lignes, la sélection à la souris qui reste affichée au relâchement : tout es
 construire et à régler.
 
 **12. Dix-huit ans de correctifs de fidélité.**
-Chaque programme que Jimmy lance dans un terminal Cockpit — claude, vim, htop, less, top,
+Chaque programme que le mainteneur lance dans un terminal Cockpit — claude, vim, htop, less, top,
 git log en pager — devient un cas de test qu'on passe pour la première fois.
 
 **Bilan : sept familles sur dix disparaissent, une change de forme, deux restent, et deux

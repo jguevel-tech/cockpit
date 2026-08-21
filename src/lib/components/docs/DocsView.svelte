@@ -1,7 +1,7 @@
 <script lang="ts">
   import { trad, translate } from "../../i18n";
   /**
-   * Documentation integree (bouton ⓘ du Header). Principe voulu par Jimmy :
+   * Documentation integree (bouton ⓘ du Header). Principe voulu :
    * TRES PEU de texte, surtout des exemples et des illustrations. Les "captures"
    * sont des maquettes dessinees en HTML/CSS : legeres, nettes a tout zoom, et
    * elles suivent le theme. Chaque bloc = une legende d'une ligne + une maquette.

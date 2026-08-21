@@ -8,7 +8,7 @@
  *
  *  - les LABELS : ils ne bougent que si quelqu'un les bouge. L'auteur d'une issue ne
  *    posera jamais un label, et nous, on oublie.
- *  - QUI A LE DERNIER MOT : on commente sous le meme compte GitHub que Jimmy
+ *  - QUI A LE DERNIER MOT : on commente sous le meme compte GitHub que le mainteneur
  *    (`jguevel-tech`). Sur ses propres issues, son « c'est tout bon merci » est
  *    indistinguable de notre reponse. C'est exactement ce qui a fait manquer la
  *    confirmation de l'issue #9 pendant une demi-heure.

@@ -21,8 +21,8 @@ le script de release.
   bouton qui détruit est en rouge. Les vingt-quatre endroits qui demandaient confirmation y
   passent : fichiers, notes, projets, branches, worktrees, conteneurs, volumes, images, agents,
   enregistrements, processus.
-- **Le zoom démarre un cran plus grand**, et c'est lui qui s'affiche « 100 % ». C'est le rendu
-  que Jimmy trouve le plus agréable. Si tu avais gardé le zoom par défaut, tu passes
+- **Le zoom démarre un cran plus grand**, et c'est lui qui s'affiche « 100 % » : c'est le rendu
+  le plus confortable à l'usage. Si tu avais gardé le zoom par défaut, tu passes
   automatiquement au nouveau ; si tu en avais choisi un autre, il ne bouge pas — seule son
   étiquette change, puisque les pourcentages se comptent maintenant depuis le nouveau défaut.
 

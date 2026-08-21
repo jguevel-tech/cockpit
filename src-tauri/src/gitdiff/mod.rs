@@ -534,12 +534,12 @@ index 1234567..89abcde 100644
 
     #[test]
     fn test_parse_git_log() {
-        let raw = "abc123\u{1f}abc123def\u{1f}Jimmy\u{1f}1755000000\u{1f}HEAD -> main\u{1f}Corriger le bug\n\
+        let raw = "abc123\u{1f}abc123def\u{1f}le mainteneur\u{1f}1755000000\u{1f}HEAD -> main\u{1f}Corriger le bug\n\
                    def456\u{1f}def456abc\u{1f}Alice\u{1f}1754000000\u{1f}\u{1f}Sujet avec des \u{1f} impossibles ? non";
         let commits = parse_git_log(raw);
         assert_eq!(commits.len(), 1, "la 2e ligne a 7 champs (separateur dans le sujet simule) et doit etre ignoree");
         assert_eq!(commits[0].hash, "abc123");
-        assert_eq!(commits[0].author, "Jimmy");
+        assert_eq!(commits[0].author, "le mainteneur");
         assert_eq!(commits[0].epoch, 1755000000);
         assert_eq!(commits[0].refs, "HEAD -> main");
         assert_eq!(commits[0].subject, "Corriger le bug");

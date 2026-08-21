@@ -458,7 +458,7 @@ export const fr = {
   "docs.git.pushPull": "<strong>Pull / Push</strong> avec compteurs de retard/avance. Pull toujours en avance rapide : jamais de merge surprise.",
   "docs.git.history": "<strong>Historique</strong> : les 100 derniers commits, clic = diff complet du commit.",
   "docs.git.historyDemo1": "Corriger la détection docker",
-  "docs.git.historyDemo2": "Jimmy · il y a 2 h",
+  "docs.git.historyDemo2": "Camille · il y a 2 h",
   "docs.git.branches": "<strong>Branches</strong> : le bouton ⎇ change de branche, en crée, en supprime.",
   "docs.git.worktrees": "<strong>Worktrees</strong> : un second dossier de travail sur le même dépôt, sur une autre branche. Pratique pour faire tourner plusieurs agents en parallèle — chacun a son dossier, personne ne change le code sous les pieds des autres.",
   "docs.git.worktreesDemo": "👉 ▶ ouvre un terminal dans le worktree · le chemin est toujours affiché",

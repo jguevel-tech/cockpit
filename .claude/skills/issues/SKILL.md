@@ -1,6 +1,6 @@
 ---
 name: issues
-description: Traiter les issues GitHub ouvertes du repo cockpit de bout en bout — lire les captures, reproduire, corriger, releaser, repondre a l'auteur dans sa langue et fermer. A utiliser quand Jimmy demande de traiter/regarder les issues, ou quand une issue precise est citee.
+description: Traiter les issues GitHub ouvertes du repo cockpit de bout en bout — lire les captures, reproduire, corriger, releaser, repondre a l'auteur dans sa langue et fermer. A utiliser quand le mainteneur demande de traiter/regarder les issues, ou quand une issue precise est citee.
 ---
 
 # Traiter les issues GitHub
@@ -32,7 +32,7 @@ publie ensuite », « je vais releaser », « puis je previens les auteurs » : 
 phrases qui remplacent l'action. Soit tu le fais dans le meme tour, soit tu dis
 clairement que ce n'est PAS fait et pourquoi. Le 2026-08-20, trois correctifs verifies
 (#4, #7, #8) sont restes non publies pendant que le rapport annoncait leur
-publication ; c'est Jimmy qui a du le remarquer, deux fois dans la meme session.
+publication ; c'est le mainteneur qui a du le remarquer, deux fois dans la meme session.
 
 **Pourquoi c'est grave au-dela du retard** : le depot reste dans un etat que personne
 ne sait lire.
@@ -55,7 +55,7 @@ travaille encore. Dans ces cas-la, le dire explicitement dans le bloc 5 du rappo
 
 ## Principe
 
-**Tu vas jusqu'au bout, seul.** Jimmy ne tranche QU'UNE chose : les demandes de
+**Tu vas jusqu'au bout, seul.** Le mainteneur ne tranche QU'UNE chose : les demandes de
 nouvelle fonctionnalite. Tout le reste — corriger un bug, demander une precision,
 expliquer qu'une fonctionnalite existe deja, releaser, repondre, fermer — se fait
 sans lui poser la question.
@@ -65,7 +65,7 @@ ce qui est parti.
 
 ## L'ETAT DE CHAQUE ISSUE EST VISIBLE SUR GITHUB
 
-**Toute issue ouverte porte EXACTEMENT UN label d'etat, tout le temps.** Jimmy doit
+**Toute issue ouverte porte EXACTEMENT UN label d'etat, tout le temps.** Le mainteneur doit
 pouvoir ouvrir la liste des issues et voir d'un coup d'oeil ou en est chaque chose, sans
 demander. Zero etat ou deux etats est une incoherence, pas une nuance.
 
@@ -73,7 +73,7 @@ demander. Zero etat ou deux etats est une incoherence, pas une nuance.
 |---|---|---|
 | `a-trier` | arrivee, pas encore analysee | nous |
 | `en-analyse` | un agent de triage travaille dessus | nous |
-| `attente-arbitrage` | analysee, Jimmy doit trancher | **Jimmy** |
+| `attente-arbitrage` | analysee, le mainteneur doit trancher | **le mainteneur** |
 | `a-livrer` | retenue, pas encore livree | nous |
 | `en-cours` | un agent ecrit la correction | nous |
 | `attente-retour` | livree et publiee, on attend la confirmation | l'auteur |
@@ -95,7 +95,7 @@ a-livrer ─> en-cours ─> [release publiee + auteur prevenu] ─> attente-reto
 ```
 
 **`attente-arbitrage` exige que la matiere soit SUR L'ISSUE.** Poser cet etat sans avoir
-depose le dossier en commentaire, c'est un label qui ment : Jimmy ouvre l'issue et n'y
+depose le dossier en commentaire, c'est un label qui ment : le mainteneur ouvre l'issue et n'y
 trouve rien a trancher. Discuter le sujet dans la conversation ne compte pas — elle ne
 survit pas a la session, et il ne peut pas la relire depuis GitHub.
 
@@ -107,7 +107,7 @@ session ne conserve rien.
 
 Constate le 2026-08-20 sur l'issue #11 : cinq etudes faites, 136 Ko de mesures, l'etat
 `attente-arbitrage` pose... et pas un commentaire sur l'issue. Les etudes allaient
-disparaitre avec la session. C'est Jimmy qui a demande « rien ne m'a ete soumis ».
+disparaitre avec la session. C'est le mainteneur qui a demande « rien ne m'a ete soumis ».
 
 **Un retour negatif SORT l'issue de `attente-retour` immediatement.** « Ca ne marche
 toujours pas », mais aussi « c'est mieux mais... » : des que l'auteur signale qu'il reste
@@ -115,7 +115,7 @@ quelque chose, la balle est revenue chez nous et l'etat doit le dire. Laisser
 `attente-retour` ferait fermer l'issue tout seule au bout de 24 h alors qu'il reste
 du travail — et surtout, elle disparaitrait du tableau des choses a faire.
 
-Constate le 2026-08-20 sur l'issue #14 : Jimmy avait ecrit « c'est mieux mais quand je
+Constate le 2026-08-20 sur l'issue #14 : le mainteneur avait ecrit « c'est mieux mais quand je
 lance ma commande qui lance K9s ca l'affiche en petit », et l'issue est restee en
 `attente-retour`. C'est lui qui a du le signaler.
 
@@ -169,7 +169,7 @@ Il se retire quand c'est publie ET l'auteur prevenu — moment ou l'issue passe 
 |---|---|---|
 | `attente-retour` | nous attendons l'auteur | sa reponse, ou **24 h** de silence apres livraison |
 
-**FERMETURE AU BOUT DE 24 H — les DEUX conditions.** Jimmy l'a demande le 2026-08-21 : on ferme
+**FERMETURE AU BOUT DE 24 H — les DEUX conditions.** Le mainteneur l'a demande le 2026-08-21 : on ferme
 une issue restee sans reponse **plus de 24 h** ET **dont le code est livre**. Les deux comptent :
 sans livraison, le silence ne veut rien dire, et on ne ferme pas une demande a laquelle on n'a
 pas repondu. Le delai se compte depuis NOTRE dernier commentaire, celui qui annonce la version.
@@ -181,17 +181,17 @@ installee. Le label passe a `a-livrer`.
 
 Le 2026-08-20, trois issues (#2, #3, #6) ont recu « c'est retenu, je vous previens » puis
 plus rien pendant des heures, pendant qu'un autre chantier demarrait. Aucun label ne les
-suivait, aucun rapport ne les mentionnait, et c'est Jimmy qui a du les retrouver dans
+suivait, aucun rapport ne les mentionnait, et c'est le mainteneur qui a du les retrouver dans
 l'interface GitHub.
 
 **Le point important pour la suite** : ce jour-la, le nouveau chantier avait ete demande
-par Jimmy lui-meme. Le lancer n'etait donc pas la faute. **La faute etait de ne pas dire
+par le mainteneur lui-meme. Le lancer n'etait donc pas la faute. **La faute etait de ne pas dire
 que des promesses etaient en attente.**
 
 ### Quand une nouvelle demande arrive alors qu'une promesse est en attente
 
 Tu ne refuses pas, et tu ne repousses pas silencieusement la promesse. Tu **dis les
-deux** et tu laisses Jimmy ordonner :
+deux** et tu laisses le mainteneur ordonner :
 
 > « Je le fais. Note qu'il reste #2, #3 et #6 promises a gmarchault et non livrees — je
 >   les prends avant ou apres ? »
@@ -205,7 +205,7 @@ faille le redemander.
 ## ARME LA SURVEILLANCE AVANT TOUT LE RESTE
 
 **Premiere action du run, avant meme l'etape 0** — parce que se fier a sa memoire a
-echoue trois fois le 2026-08-20, et que Jimmy a du le signaler chaque fois :
+echoue trois fois le 2026-08-20, et que le mainteneur a du le signaler chaque fois :
 
 ```
 Monitor({
@@ -230,12 +230,12 @@ marquer comme vu ce que la lecture manuelle n'a pas encore traite.
 
 **Ce que ca remplace** : la regle « relire les issues avant chaque rapport » existait
 deja et n'a pas suffi — j'ai lu, marque, puis discute une demi-heure, puis rendu un
-rapport sans relire. Une reponse de Jimmy postee entre-temps est restee invisible
+rapport sans relire. Une reponse du mainteneur postee entre-temps est restee invisible
 jusqu'a ce qu'il demande « faut lire l'issue ^^ ». Une regle qu'on oublie ne vaut rien
 face a un mecanisme qui previent.
 
 **Et une consequence a accepter** : la surveillance annonce AUSSI nos propres
-commentaires, puisqu'on poste sous le compte de Jimmy et que rien ne les distingue. Ce
+commentaires, puisqu'on poste sous le compte du mainteneur et que rien ne les distingue. Ce
 n'est pas un defaut a corriger, c'est le prix de la seule methode qui ne mente pas.
 
 ## Etape 0 — Suivi des issues en attente de retour (EN PREMIER, ET A CHAQUE PAUSE)
@@ -247,7 +247,7 @@ que tu travailles sur autre chose.
 
 Le 2026-08-20, deux auteurs avaient repondu depuis deux heures et personne ne les avait
 lus : les questions avaient ete posees a 11h00, l'etape 0 n'avait tourne qu'a 10h30.
-C'est Jimmy qui a du le remarquer.
+C'est le mainteneur qui a du le remarquer.
 
 Donc : avant chaque rapport, tu relis les DEUX listes — celles ou l'on attend l'auteur et
 celles ou l'auteur nous attend. C'est court, et c'est ce qui evite de laisser quelqu'un sans
@@ -271,7 +271,7 @@ Rien d'autre ne se passe sur ces issues tant qu'il ne parle pas — **on ne rela
 une deuxieme fois**.
 
 **Des que la balle revient chez nous, le label saute.** Un auteur qui a repondu et une
-demande que Jimmy a retenue : ce n'est plus une attente, c'est du travail a faire. Si le
+demande que le mainteneur a retenue : ce n'est plus une attente, c'est du travail a faire. Si le
 label restait, le compteur des 24 h fermerait tout seul une issue sur laquelle on
 est en train de bosser. On retire donc le label et on laisse l'issue ouverte jusqu'a la
 livraison :
@@ -397,7 +397,7 @@ se traite par une reponse + un ajout dans la doc integree
 | `bug-confirme` | corriger (etape 4), releaser (etape 5), demander a l'auteur de verifier chez lui | **non** — label `attente-retour` |
 | `bug-non-reproduit` | repondre en demandant ce qui manque | **non** — label `attente-retour` |
 | `existe-deja` | expliquer ou c'est + completer la doc integree si elle est muette | **non** — label `attente-retour` |
-| `nouvelle-fonctionnalite` | analyser et s'arreter — Jimmy tranche | non, jamais |
+| `nouvelle-fonctionnalite` | analyser et s'arreter — le mainteneur tranche | non, jamais |
 
 **On ne ferme JAMAIS une issue soi-meme au moment ou on la traite.** Ce n'est pas
 regle parce que le code est corrige et publie : c'est regle quand ca marche chez la
@@ -411,7 +411,7 @@ apres dix jours de silence.
 Pour `existe-deja` et `nouvelle-fonctionnalite`, si la doc integree est completee,
 c'est une modification visible : elle passe par le changelog et part dans la release.
 
-**Ne jamais ecrire a un auteur qu'une demande est refusee** sans l'accord de Jimmy.
+**Ne jamais ecrire a un auteur qu'une demande est refusee** sans l'accord du mainteneur.
 Une demande non retenue reste ouverte, sans reponse.
 
 ### Si tu ne comprends pas l'issue : demande
@@ -473,7 +473,7 @@ personne ne l'a signale — ca se corrige, ca va au changelog si c'est visible, 
 part dans la meme release. Le champ `croise en chemin` du rendu des agents de
 correction sert a en garder la trace.
 
-Ce qui remonte a Jimmy plutot que d'etre fait : un remaniement dont l'ampleur depasse
+Ce qui remonte au mainteneur plutot que d'etre fait : un remaniement dont l'ampleur depasse
 largement l'issue. La aussi c'est une decision de perimetre, donc la sienne.
 
 **Entre deux agents, applique l'etape 4bis.** C'est la raison d'etre de la serie.
@@ -494,7 +494,7 @@ Declencheurs — des qu'un de ces cas se produit, tu edites avant de continuer :
 - une consigne du skill s'est revelee fausse, ambigue ou absente (le champ
   `ecart au workflow` de la fiche `issue-fix` sert exactement a ca) ;
 - une commande donnee ici n'a pas marche telle quelle ;
-- Jimmy te reprend sur la facon de faire.
+- Le mainteneur te reprend sur la facon de faire.
 
 Ou ecrire la correction :
 
@@ -593,7 +593,7 @@ Ce que ca veut dire concretement :
 - **Avant de lancer un agent sur une nouvelle issue, regarde ce qui traine** : une
   correction non publiee, un auteur non prevenu, un rapport non rendu. On termine, puis
   on ouvre.
-- Un sujet vraiment bloque (il attend une reponse de Jimmy ou d'un auteur) ne compte pas
+- Un sujet vraiment bloque (il attend une reponse du mainteneur ou d'un auteur) ne compte pas
   comme en cours : il est en attente, il figure dans le rapport, et il ne bloque pas la
   suite.
 
@@ -656,7 +656,7 @@ Le commentaire doit demander a l'auteur de verifier chez lui et de repondre. San
 cette demande explicite, le label ne veut rien dire : personne ne sait qu'on attend
 quelque chose.
 
-## Etape 6 — Rapport a Jimmy : FORMAT IMPOSE
+## Etape 6 — Rapport au mainteneur : FORMAT IMPOSE
 
 **A chaque fois que tu t'arretes de travailler, tu rends ce rapport.** Pas seulement a
 la fin du run : a chaque pause, meme au milieu. Un point d'etape en prose ou il doit
@@ -672,7 +672,7 @@ premier et le dernier, jamais omis.
 ### 1. Ce que j'attends de toi
 
 En premier, toujours. **Pose-les avec `AskUserQuestion`, en choix cliquables**, pas en
-prose : sinon Jimmy doit recopier la question pour y repondre, il l'a demande le
+prose : sinon le mainteneur doit recopier la question pour y repondre, il l'a demande le
 2026-08-20. Une question par decision, ta recommandation en premiere option et marquee
 comme telle.
 
@@ -680,7 +680,7 @@ comme telle.
 information, pas un blanc a combler.
 
 **Formule le comportement par un EXEMPLE CONCRET, pas par la mecanique interne.**
-Jimmy a du reformuler lui-meme une question mal posee sur l'issue #7, et sa version est
+Le mainteneur a du reformuler lui-meme une question mal posee sur l'issue #7, et sa version est
 le modele a suivre :
 
 > « si j'etais sur l'onglet fichier dans le projet toto, quand je vais sur le projet
@@ -739,7 +739,7 @@ agents pendant le run, une ligne par regle. Ne rien inventer s'il n'y a rien —
 quelque chose s'est mal passe et que rien n'a bouge, c'est que l'etape 4bis a ete
 sautee.
 
-### Ecrire simplement — Jimmy l'a demande deux fois
+### Ecrire simplement — le mainteneur l'a demande deux fois
 
 Phrases courtes. Un fait par phrase. Des mots de tous les jours.
 
@@ -763,13 +763,13 @@ une periphrase : ca appauvrit le texte. Remplace les tournures alambiquees.
 **NE JAMAIS INVENTER DE MOT, ni employer un nom de mecanisme interne comme s'il etait
 connu.** C'est la faute la plus grave de cette section, et elle a ete commise le
 2026-08-21 : une explication entiere batie sur « rafale », « lot », « envois »,
-« regroupement » — quatre mots que j'avais fabriques et jamais definis. Jimmy n'y a rien
+« regroupement » — quatre mots que j'avais fabriques et jamais definis. Le mainteneur n'y a rien
 compris, et il a du le dire deux fois.
 
 Le test avant d'envoyer : **chaque mot du rapport existe-t-il en dehors de ma tete ?** Un
 nom qui ne vit que dans notre code (`rafale`, `lot`, `envoi`, `regroupement`, `tuyau`,
 `fil d'execution`, `garde`, `guetteur`) n'a rien a faire dans un rapport. Ce qui a droit
-de cite : ce que Jimmy tape lui-meme — terminal, commit, release, build, cache, PTY,
+de cite : ce que le mainteneur tape lui-meme — terminal, commit, release, build, cache, PTY,
 Docker, CSS.
 
 Et la regle qui decoule : **on decrit ce que l'utilisateur VOIT, jamais le mecanisme.**
@@ -901,4 +901,4 @@ part ». L'issue nous a rendu service, la personne ne doit rien.
 - Plusieurs issues corrigees ensemble partent dans **une seule** version. Chaque
   reponse cite cette version.
 - Une issue peut en cacher deux (un bug + une demande). La traiter comme telle :
-  corriger la partie bug, remonter l'autre a Jimmy, et le dire dans la reponse.
+  corriger la partie bug, remonter l'autre au mainteneur, et le dire dans la reponse.

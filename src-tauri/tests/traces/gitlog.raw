@@ -135,7 +135,7 @@
 [31m|[m 
 [31m|[m     Ecrire les rapports simplement, avec mes propres contre-exemples
 [31m|[m     
-[31m|[m     Jimmy l'a demande deux fois, et la deuxieme avec agacement. Le probleme n'est pas le
+[31m|[m     le mainteneur l'a demande deux fois, et la deuxieme avec agacement. Le probleme n'est pas le
 [31m|[m     vocabulaire technique — commit, PTY, migration, tmux ne le genent pas — mais les
 [31m|[m     tournures abstraites et les phrases tordues.
 [31m|[m     
@@ -157,7 +157,7 @@
 [31m|[m     Exiger que la matiere d'arbitrage soit deposee sur l'issue
 [31m|[m     
 [31m|[m     L'etat attente-arbitrage a ete pose sur #11 sans qu'aucun commentaire n'y soit
-[31m|[m     depose : cinq etudes faites, 136 Ko de mesures, et Jimmy ouvrant l'issue n'y trouvait
+[31m|[m     depose : cinq etudes faites, 136 Ko de mesures, et le mainteneur ouvrant l'issue n'y trouvait
 [31m|[m     rien a trancher. Le label mentait, et la matiere n'existait que dans la conversation
 [31m|[m     et dans un dossier temporaire — donc perdue a la fermeture de la session.
 [31m|[m     
@@ -177,7 +177,7 @@
 [31m|[m     
 [31m|[m     Elles vivaient dans un dossier temporaire de session : 136 Ko de mesures et de
 [31m|[m     decisions qui disparaissaient a la fermeture, alors que l'issue #11 portait l'etat
-[31m|[m     « Jimmy doit trancher » sans que rien ne lui ait ete soumis.
+[31m|[m     « le mainteneur doit trancher » sans que rien ne lui ait ete soumis.
 [31m|[m     
 [31m|[m     Un fichier par domaine plus un sommaire qui donne l'essentiel sans les lire. Tout ce
 [31m|[m     qui y est affirme est mesure sur la machine ou verifie dans les sources : c'est ce qui
@@ -201,7 +201,7 @@
 [31m|[m     negatif n'avait donc pas de transition, et l'issue #14 est restee en attente-retour
 [31m|[m     apres un « c'est mieux mais K9s s'affiche en petit » : elle serait tombee en fermeture
 [31m|[m     automatique au bout de dix jours alors qu'il restait du travail, et elle avait disparu
-[31m|[m     du tableau des choses a faire. C'est Jimmy qui l'a vu.
+[31m|[m     du tableau des choses a faire. C'est le mainteneur qui l'a vu.
 [31m|[m     
 [31m|[m     « C'est mieux mais... » compte autant que « toujours pas » : des que l'auteur signale
 [31m|[m     qu'il reste quelque chose, la balle est chez nous. Note au passage qu'un retour negatif
@@ -288,7 +288,7 @@
 [31m|[m     
 [31m|[m     La regle « relire les issues avant chaque rapport » existait deja et n'a pas suffi :
 [31m|[m     trois fois dans la journee une reponse est restee invisible, et chaque fois c'est
-[31m|[m     Jimmy qui a du le signaler. La derniere avait ete postee pendant qu'on travaillait,
+[31m|[m     le mainteneur qui a du le signaler. La derniere avait ete postee pendant qu'on travaillait,
 [31m|[m     apres un marquage — donc rien ne la rappelait.
 [31m|[m     
 [31m|[m     Le script gagne un mode surveillance : `--brut` n'emet qu'une ligne par evenement et
@@ -299,7 +299,7 @@
 [31m|[m     Le skill demande d'armer cette surveillance en PREMIERE action du run, avant meme la
 [31m|[m     relecture des issues : une regle qu'on oublie ne vaut rien face a un mecanisme qui
 [31m|[m     previent. Consequence assumee : nos propres commentaires sont annonces aussi, puisque
-[31m|[m     rien ne les distingue de ceux de Jimmy — meme compte GitHub.
+[31m|[m     rien ne les distingue de ceux du mainteneur — meme compte GitHub.
 [31m|[m 
 [31m|[m  .claude/skills/issues/SKILL.md | 36 [32m++++++++++++++++++++++++++++++++[m
 [31m|[m  .gitignore                     |  1 [32m+[m

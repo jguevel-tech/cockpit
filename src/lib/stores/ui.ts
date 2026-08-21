@@ -87,7 +87,7 @@ export const ZOOM_LEVELS = TERMINAL_FONT_STEPS.map((px) => px / TERMINAL_FONT_SI
 /// Taille de police terminal du zoom PAR DEFAUT — celle sur laquelle les pourcentages
 /// affiches sont comptes, donc celle qui s'affiche « 100 % ».
 ///
-/// 15 px et non 13 : Jimmy trouve ce rendu plus agreable et l'a demande comme reference
+/// 15 px et non 13 : le mainteneur trouve ce rendu plus agreable et l'a demande comme reference
 /// (« le 115 % devrait etre la version 100 % »). Ce n'est pas qu'un defaut de demarrage — le
 /// bouton du milieu, qui remet le zoom a sa valeur de reference, y revient aussi.
 ///

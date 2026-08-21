@@ -450,7 +450,7 @@ export const en: Catalog = {
   "docs.git.pushPull": "<strong>Pull / Push</strong> with behind/ahead counters. Pull is always fast-forward: never a surprise merge.",
   "docs.git.history": "<strong>History</strong>: the last 100 commits, click for the commit's full diff.",
   "docs.git.historyDemo1": "Fix docker detection",
-  "docs.git.historyDemo2": "Jimmy · 2 h ago",
+  "docs.git.historyDemo2": "Camille · 2 h ago",
   "docs.git.branches": "<strong>Branches</strong>: the ⎇ button switches branch, creates one, deletes one.",
   "docs.git.worktrees": "<strong>Worktrees</strong>: a second working folder on the same repository, on another branch. Handy for running several agents in parallel — each has its own folder, and nobody changes the code under the others' feet.",
   "docs.git.worktreesDemo": "👉 ▶ opens a terminal in the worktree · the path is always shown",

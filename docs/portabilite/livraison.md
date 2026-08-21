@@ -101,7 +101,7 @@ binaires signes en heritent, ce qui n'est pas le cas d'un binaire nu.
 
 ### Verdict
 
-- **Windows sans certificat : non distribuable a quelqu'un d'autre que Jimmy.** Trois
+- **Windows sans certificat : non distribuable a quelqu'un d'autre que le mainteneur.** Trois
   avertissements en cascade a chaque version, dont un que le navigateur impose avant meme le
   telechargement.
 - **macOS sans signature : distribuable a un utilisateur technique averti, et pas au-dela.**
@@ -276,7 +276,7 @@ simplement pas signee par Apple.
 
 ---
 
-## 8. Ce que Jimmy doit decider ou payer
+## 8. Ce que le mainteneur doit decider ou payer
 
 1. **99 €/an, Apple Developer Program** — pour que le dmg s'ouvre normalement sur macOS. Le
    plus rentable des deux. Attention au delai de validation de l'adhesion, et au fait que le

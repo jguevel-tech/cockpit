@@ -147,7 +147,7 @@ Les limites, pour que ca reste relisable :
 - **Ne refactore pas ce que tu n'as pas besoin de comprendre.** La zone que tu touches
   et son voisinage immediat, pas le fichier entier parce qu'il te deplait. Si le
   chantier depasse largement l'issue, arrete-toi et decris-le dans ton rendu : c'est a
-  Jimmy de decider d'un gros remaniement.
+  Le mainteneur de decider d'un gros remaniement.
 - **Rien de tout ca ne s'applique au code marque `NE PAS RETIRER`**, ni aux
   contournements documentes sur place : ils ont l'air inutiles justement parce qu'ils
   fonctionnent.

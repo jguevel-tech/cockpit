@@ -24,7 +24,7 @@ on ne renumérote pas ce qui a déjà été servi.
 ## Ce qui n'est pas vérifié
 
 **Personne n'a utilisé Cockpit une journée entière sous Windows.** La suite de tests y passe,
-l'installeur est signé, et Jimmy l'a installé — mais l'usage réel dira le reste. C'est la seule
+l'installeur est signé, et le mainteneur l'a installé — mais l'usage réel dira le reste. C'est la seule
 zone d'ombre qui reste sur le portage.
 
 ## Décisions à ne pas rouvrir
@@ -43,7 +43,7 @@ zone d'ombre qui reste sur le portage.
   qui ne s'ouvrait pas chez un testeur.
 - **Pas d'étape de vérification en CI avant le tag.** Ça a été essayé et retiré : la CI de
   release vérifie déjà les trois systèmes, et un numéro de version ne coûte rien. Demande
-  explicite de Jimmy, deux fois.
+  explicite du mainteneur, deux fois.
 
 ## Prérequis locaux, sans droits administrateur
 
@@ -69,7 +69,7 @@ Monitor: while true; do node scripts/issues-nouveautes.mjs --brut --marquer \
 ```
 
 Sans elle, une réponse d'auteur passe inaperçue — c'est arrivé trois fois le 2026-08-20, et c'est
-Jimmy qui a dû le signaler chaque fois.
+Le mainteneur qui a dû le signaler chaque fois.
 
 ## Issues ouvertes
 

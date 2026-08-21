@@ -119,7 +119,7 @@ html.has-wallpaper {
    le WebKitGTK de Tauri INCLUT LE CONTENU DE L'ELEMENT dans le "backdrop" qu'il floute —
    en violation de la spec. Resultat : chaque panneau affichait une copie floutee de son
    propre texte et de ses boutons, un HALO lumineux epousant chaque lettre (la
-   « sur-brillance » signalee par Jimmy). Reproduit en isolation avec QUATRE variantes
+   « sur-brillance » signalee par le mainteneur). Reproduit en isolation avec QUATRE variantes
    (::before z-index -1 + isolation, filtre direct, contenu promu translateZ) : toutes
    halotees ; seul le temoin SANS backdrop-filter est net.
 

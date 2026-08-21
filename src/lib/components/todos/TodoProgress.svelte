@@ -71,7 +71,7 @@
   /* La barre porte SA propre couleur, elle ne compte pas sur le rendu natif : sur un theme
      sombre — et pire encore sur une image de fond — la partie vide du rail natif se confond
      avec ce qu'il y a derriere, et on ne voit plus qu'un point blanc flottant (signale par
-     Jimmy en 0.43.0).
+     Le mainteneur en 0.43.0).
      La partie vide est tiree de la couleur du TEXTE et non d'un `--bg-*` : un fond suit la
      surface, donc il disparait des qu'elle est sombre ou translucide, alors qu'une couleur de
      texte contraste par construction dans tous les themes.

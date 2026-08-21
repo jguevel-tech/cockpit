@@ -409,7 +409,7 @@ mod tests {
         }
     }
 
-    /// La ligne EXACTE relevee sur la machine de Jimmy le 2026-08-21. Le type est
+    /// La ligne EXACTE relevee sur la machine du mainteneur le 2026-08-21. Le type est
     /// `fuse.cockpit` et non `squashfs` : c'est ce qui a fait echouer la premiere tentative
     /// de correctif, qui filtrait le type. L'option `ro`, elle, est la.
     #[cfg(target_os = "linux")]

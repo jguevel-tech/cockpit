@@ -93,7 +93,7 @@ Trois decoupages, trois jeux de libelles dans `fr.ts` et `en.ts` (« Compressee 
 Total / utilise / swap, rien d'autre.
 - *Nature du travail* : suppression.
 - *Ce qu'on perd* : la seule information de cet ecran qui ne se trouve pas ailleurs. Sur la
-  machine de Jimmy, l'ARC ZFS peut avaler des dizaines de Go et fait passer une memoire saine
+  machine du mainteneur, l'ARC ZFS peut avaler des dizaines de Go et fait passer une memoire saine
   pour une fuite ; c'est precisement ce que la barre violette explique.
 - *Risque* : nul techniquement. Mais c'est une perte de fonctionnalite assumee sur la
   plateforme principale, pour le confort des deux autres.
@@ -112,7 +112,7 @@ Linux. Trois raisons :
    vocabulaires differents pour la meme jauge demande a l'utilisateur d'apprendre son
    systeme d'exploitation avant de lire Cockpit.
 
-**Ce qui reste a valider par Jimmy** : accepte-t-il qu'un ecran de Cockpit ne montre pas la
+**Ce qui reste a valider par le mainteneur** : accepte-t-il qu'un ecran de Cockpit ne montre pas la
 meme chose selon le systeme ? C'est la seule question ; le reste suit.
 
 ---
@@ -287,7 +287,7 @@ aucune explication.
    `{disk.mount} ({disk.device})` donnerait « C:\ () ». Il faut un repli quand l'etiquette
    est vide.
 
-**A trancher par Jimmy** : tous les disques locaux, ou seulement le disque systeme ?
+**A trancher par le mainteneur** : tous les disques locaux, ou seulement le disque systeme ?
 
 ---
 
