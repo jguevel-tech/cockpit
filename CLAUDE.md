@@ -75,6 +75,12 @@ le trou qu'il laisse reste (0.40, 0.41.1 et 0.41.2 sont des trous de ce genre, g
 `README.md` ou `.github/workflows/` ne donne ni entree de changelog, ni version. C'est notre
 outillage, pas le produit.
 
+**AVANT DE COMMITER, REGARDER CE QU'ON AJOUTE.** `git add -A` prend TOUT ce qui traine dans le
+dossier — y compris le travail a moitie fini de quelqu'un d'autre. Constate le 2026-08-21 : deux
+sessions Claude partageaient ce meme dossier de travail (leur commit apparait dans le journal
+local, entre deux des miens). Aucune n'a ecrase l'autre, par chance. Donc : lire
+`git status --short` avant, et ajouter les fichiers NOMMES des qu'il y a le moindre doute.
+
 **Messages de commit** : titre a l'imperatif, puis un corps qui explique POURQUOI (le diff dit
 deja quoi) et ce qui a ete verifie. **JAMAIS de `Co-Authored-By: Claude` ni aucune mention d'IA**
 — le harnais l'ajoute par defaut, il faut activement l'omettre. Les passer par un FICHIER
@@ -225,14 +231,13 @@ savoir ce qui existe :
 - **Conteneurs** : Compose dans le bon ordre (tri topologique, cycles detectes), logs et shell
   par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
 - **Projets** : un nom et un dossier. Dossiers imbriques sans limite, glisser-deposer, renommage
-  au double-clic, memoire d'onglet. Ctrl+K va partout, et les commandes par projet se lancent
-  depuis ▶ Cmd.
+  au double-clic, memoire d'onglet. Ctrl+K va partout ; ▶ Cmd lance les commandes du projet.
 - **Taches, notes, reunions** : todos avec echeances ; notes Markdown arborescentes en WYSIWYG
   avec mode lecture ; enregistrement micro + son systeme, transcrit et resume en note.
-- **Monitoring et alertes** : CPU, memoire, disques, processus ; la cloche previent pour un
-  disque presque plein ou une saturation qui dure. Liens rapides avec pastille up/down.
+- **Monitoring** : CPU, memoire, disques, processus ; la cloche previent pour un disque presque
+  plein ou une saturation qui dure. Liens rapides avec pastille up/down.
 - **Apparence** : palettes, accent, image de fond en verre depoli, zoom natif Ctrl+molette.
-- **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement. Mises
+  **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement, mises
   a jour integrees sur les trois systemes.
 
 ## Stack
@@ -426,8 +431,6 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Un evenement Tauri est du JavaScript construit puis evalue**, pas un canal binaire : 8 Ko
   d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement, par
   contre-pression et jamais par une horloge.
-- **`Uint8Array.from(atob(s), cb)` appelle le callback une fois PAR CARACTERE** : 75 ms pour 2 Mo
-  contre 2,8 ms avec une boucle nue sur un tableau prealloue.
 - **Un projet en base doit TOUJOURS apparaitre dans l'interface** : l'ancienne liste ne rendait
   que l'intersection base ∩ orchestrateur, donc un ajout rate en silence le rendait invisible.
 - **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast** : un nom de projet deja pris
@@ -455,7 +458,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   Quand une bibliotheque expose un enum commun a trois systemes, chercher la table de conversion
   de CHAQUE plateforme.
 - **Du code d'apparence portable peut etre mort a moitie** : une lecture de `/proc` sans `#[cfg]`
-  compile partout et rend toujours faux ailleurs, sans erreur. Chercher les chemins en dur.
+  compile partout et rend faux ailleurs, sans erreur. Chercher les chemins en dur.
 - **L'OUTIL EST L'AUTORITE SUR LE CHEMIN QU'IL REND, jamais nous.** Un chemin assemble a la main
   et le meme chemin rendu par git ne sont pas la meme CHAINE : sous macOS `/var` est un lien vers
   `/private/var`, et sous Windows git ecrit ses chemins avec des `/` la ou `join` met des `\`.
@@ -464,8 +467,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   pour les essais : ne jamais comparer un chemin a une chaine ecrite en dur — comparer le NOM.
 - **Sockets** : sous Unix le nom est limite a ~108 octets et l'erreur ne le dit pas (le service
   demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est pas un
-  fichier mais un tuyau nomme. Un helper d'essai qui construit un chemin est un endroit ou la
-  portabilite se perd sans que rien ne le signale.
+  fichier mais un tuyau nomme. Un helper d'essai qui construit un chemin perd la portabilite sans
+  que rien ne le signale.
 - **Les zombies portant notre nom ne viennent PAS de nous** : mesure a zero sur dix releves, et un
   essai verrouille la propriete. Ils viennent du fork intermediaire de `g_spawn` (GLib), dont
   WebKit se sert. Benin — ne pas chercher dans notre code, et ne pas « corriger » par un ramassage
@@ -474,8 +477,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   bonne assertion est « le parent n'est plus celui qui a lance ».
 - **Un essai qui lance un VRAI processus doit l'arreter dans un `Drop`**, pas a la fin du corps :
   un `assert!` rate laisse sinon un service et ses shells tourner, invisibles. Et ne compter que
-  les zombies portant NOTRE nom : les shells voisins passent par cet etat une fraction de seconde
-  et font echouer la mesure au hasard.
+  les zombies portant NOTRE nom : les shells voisins passent par cet etat une fraction de
+  seconde.
 - **Un nombre d'envois n'est pas un invariant, c'est une mesure de la vitesse de la machine** :
   un lot part au plus toutes les 8 ms, donc le compte suit la DUREE. Borner ce que la
   fonctionnalite GARANTIT (ici la taille moyenne d'un envoi), jamais ce que la machine se trouve
@@ -553,8 +556,8 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Toujours verifier apres publication** que le manifeste repond 200 et contient les trois
   plateformes. Un 404 dans les deux premieres minutes est la propagation, pas un incident.
 - **L'updater Linux ne remplace qu'une AppImage** : pour essayer le flux reel, lancer l'AppImage.
-- **Le changelog est embarque au build**, donc toujours celui de la version installee. Perdre la
-  cle de signature = plus aucune mise a jour possible pour les installes.
+  Le changelog est embarque au build, donc toujours celui de la version installee. Et **perdre la
+  cle de signature = plus aucune mise a jour possible** pour les installes.
 - **`scripts/release.mjs` bump aussi le verrou de dependances Rust** : sans ca le commit taggue
   se contredisait et le premier build suivant salissait l'arbre, ce qui bloquait la release
   d'apres.
@@ -579,8 +582,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   tester. **Commandes de fond : chemins ABSOLUS**, et relire le log reel : la fin ne prouve rien.
 - **Le proxy `rtk` reformate `ls`, `ps` et les comptages de `grep`**, et rend parfois VIDE : on
   croit un dossier vide alors qu'il est plein. Passer par `rtk proxy`. Et **`npx tauri` peut
-  resoudre un AUTRE paquet** ici : utiliser le binaire local quand la commande echoue sur un
-  argument que la doc donne pour valide.
+  resoudre un AUTRE paquet** ici : prendre le binaire local si un argument valide est refuse.
 - **Registre npm** : la config globale pointe sur un registre prive, celle du projet la surcharge
   vers le public — **ne pas la retirer**, sinon la CI echoue et un nom d'hote interne fuite dans
   un repo public. Verrou npm a regenerer : supprimer les modules AVANT.
