@@ -14,10 +14,11 @@ permissions:
 
 jobs:
   release:
-    # Matrice Linux + macOS : les deux jobs publient sur la MEME release (meme tagName),
-    # et tauri-action FUSIONNE latest.json plateforme par plateforme — l'updater de chaque
-    # OS y trouve son artefact. fail-fast: false pour qu'un echec macOS (plateforme beta,
-    # non testable en local) ne prive jamais les utilisateurs Linux de leur version.
+    # Matrice Linux + macOS + Windows : les trois jobs publient sur la MEME release (meme
+    # tagName), et tauri-action FUSIONNE latest.json plateforme par plateforme — l'updater de
+    # chaque OS y trouve son artefact. fail-fast: false pour qu'un echec macOS ou Windows
+    # (plateformes non testables en local) ne prive jamais les utilisateurs Linux de leur
+    # version.
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +30,13 @@ jobs:
           # darwin et l'updater integre ne fonctionne pas (constate sur la v0.25.0).
           - os: macos-latest # Apple Silicon (aarch64)
             bundles: app,dmg
+          # NSIS et pas MSI. MSI passe par WiX, s'installe PAR MACHINE donc reclame
+          # l'elevation a chaque mise a jour, et double les fichiers a signer. NSIS
+          # s'installe par utilisateur et c'est le format que l'updater Tauri v2 sait
+          # remplacer tout seul. Rien a installer sur le runner : WebView2 est deja present
+          # sur les images `windows-*`, et les etapes `apt-get` sont conditionnees a Linux.
+          - os: windows-latest
+            bundles: nsis
     runs-on: ${{ matrix.os }}
     # Le build Rust a cache froid prend ~80 min ; au-dela c'est un blocage, pas une
     # lenteur. Sans ce plafond GitHub attend SIX HEURES avant de tuer le job.
@@ -98,6 +106,10 @@ jobs:
       # de la version taguee, delimitee par le titre suivant.
       - name: Extraire les notes du CHANGELOG
         id: notes
+        # `shell: bash` explicite : le shell par defaut du runner Windows est PowerShell, qui
+        # ne connait ni `${VAR#prefixe}` ni les heredocs. Git Bash est installe sur les images
+        # `windows-*`, donc la MEME etape sert aux trois plateformes.
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           NOTES=$(awk -v ver="$VERSION" '
@@ -233,7 +245,7 @@ jobs:
           # On publie quand meme — les systemes qui ont reussi ne doivent pas attendre l'autre —
           # puis on fait ECHOUER le run en nommant ce qui manque. Ajouter une plateforme a la
           # matrice = l'ajouter ici, sinon son absence redevient silencieuse.
-          PLATEFORMES_ATTENDUES="linux- darwin-" python3 - <<'EOF'
+          PLATEFORMES_ATTENDUES="linux- darwin- windows-" python3 - <<'EOF'
           import json, os, sys
           plateformes = sorted(json.load(open("/tmp/latest.json")).get("platforms", {}))
           attendues = os.environ["PLATEFORMES_ATTENDUES"].split()

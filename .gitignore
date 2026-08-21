@@ -14,9 +14,6 @@ cockpit-updater.key*
 # Secrets applicatifs (cle OpenAI importee au premier lancement)
 secrets.json
 
-# tmux statique embarque : construit par scripts/build-tmux-static.sh (CI), jamais commite
-src-tauri/resources/bin/tmux
-
 # Reglages locaux Claude Code (specifiques a la machine)
 .claude/settings.local.json
 

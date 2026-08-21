@@ -876,6 +876,20 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
   le vieux tag — sa release deviendrait "latest" (GitHub classe par date de creation) et
   servirait un latest.json plus vieux aux utilisateurs. Le contenu du tag rate part de toute
   facon dans la version suivante (le code est cumulatif) ; on laisse le tag orphelin.
+- **Windows : NSIS et pas MSI** (ajoute a la matrice le 2026-08-21). MSI passe par WiX,
+  s'installe PAR MACHINE donc reclame l'elevation a chaque mise a jour, et double les fichiers
+  a signer ; NSIS s'installe par utilisateur et c'est le format que l'updater Tauri v2 sait
+  remplacer seul. `plugins.updater.windows.installMode = "passive"` est ecrit explicitement
+  dans `tauri.conf.json` — c'est deja la valeur par defaut du plugin, mais « quiet » ne relance
+  pas l'application proprement et on ne veut pas dependre d'un defaut qui peut changer.
+  Rien a installer sur le runner : WebView2 est deja present sur les images `windows-*`.
+  **Le shell par defaut du runner Windows est PowerShell** : l'etape qui extrait les notes du
+  CHANGELOG porte donc un `shell: bash` explicite (`${VAR#prefixe}` et les heredocs n'existent
+  pas en PowerShell ; Git Bash est installe sur ces images).
+- **`PLATEFORMES_ATTENDUES` du job `publier` doit lister TOUTES les plateformes de la
+  matrice** (`linux- darwin- windows-`). C'est ce qui fait echouer le run quand une plateforme
+  manque dans `latest.json` : sans ca, son absence redevient silencieuse et ses utilisateurs
+  sont coupes des mises a jour sans que personne ne soit averti (bug de la v0.32.0).
 - **macOS : les bundles du job mac doivent etre `app,dmg`, pas `dmg` seul** — l'artefact de
   mise a jour (.app.tar.gz + .sig) est genere depuis le bundle `app` ; sans lui, latest.json
   n'a pas d'entree darwin et l'updater mac est muet (constate sur la v0.25.0).

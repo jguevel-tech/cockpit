@@ -32,6 +32,9 @@
       "open": true
     },
     "updater": {
+      "windows": {
+        "installMode": "passive"
+      },
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFERjUzNEE1ODRDMDYxODQKUldTRVljQ0VwVFQxclpTdUEwRXV5TFdkUmloUTltZStOMHZIVnBNeVkxREhFVW5ONGdER1VjN2kK",
       "endpoints": [
         "https://github.com/jguevel-tech/cockpit/releases/latest/download/latest.json"
