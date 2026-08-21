@@ -4,7 +4,7 @@
 
 ## En une phrase
 
-**La v0.39.0 est publiée** : elle emporte le remplacement de tmux par notre service de
+**La v0.39.0 est taguée et poussée** (vérifier que la CI a bien publié les deux plateformes) : elle emporte le remplacement de tmux par notre service de
 terminaux et la capture audio dans le processus, pour Linux et macOS. **Windows ne part
 pas** — le code compile, les terminaux n'y marchent pas encore.
 
@@ -16,7 +16,7 @@ pas** — le code compile, les terminaux n'y marchent pas encore.
 | `npm run test:front` | 12 verts |
 | `npm run i18n:audit` | 0 chaîne en dur |
 | `cargo check --all-targets` (Linux) | 0 avertissement |
-| `cargo test --release` | **237 verts**, 1 ignoré (l'essai qui demande une carte son) |
+| `cargo test --release` | **238 verts**, 1 ignoré (l'essai qui demande une carte son) |
 | `cargo check --target x86_64-pc-windows-gnu --all-targets` | 0 erreur, 0 avertissement |
 | `tauri build --no-bundle` | OK |
 | Enregistrement réel sur cette machine, **sans jouer un son** | micro 64 ko en 2 s, crête 3243 ; son système 69 ko, crête 0 (le monitor s'ouvre et débite, muet parce que rien ne jouait) |
