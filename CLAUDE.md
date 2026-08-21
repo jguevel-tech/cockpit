@@ -1386,6 +1386,15 @@ Le backend (`system/metrics.rs`) collecte :
   - `gnu` et non `msvc` : la cible MSVC voudrait `cl.exe`, introuvable sur une machine Linux.
     Le binaire publie, lui, est construit par le runner `windows-latest` en MSVC — la cible
     croisee ne sert qu'a GARDER LE CODE COMPILABLE, pas a produire un binaire.
+  - **Recette complete, verifiee le 2026-08-21 (13 s de check, 0 erreur)** :
+    `apt-get download gcc-mingw-w64-x86-64-win32 gcc-mingw-w64-base binutils-mingw-w64-x86-64
+    mingw-w64-x86-64-dev mingw-w64-common` (51 Mo), `dpkg-deb -x` chacun dans un prefixe a soi,
+    puis `PATH=<prefixe>/usr/bin:$PATH`,
+    `CC_x86_64_pc_windows_gnu=<prefixe>/usr/bin/x86_64-w64-mingw32-gcc-13-win32` et
+    `AR_x86_64_pc_windows_gnu=<prefixe>/usr/bin/x86_64-w64-mingw32-ar`. Sans ces variables,
+    `ring` et `libsqlite3-sys` echouent AVANT que notre crate soit analysee — le check rend
+    alors 2 erreurs qui n'ont rien a voir avec notre code, et on croit a tort que le portage
+    est casse.
   - Verifier `--all-targets` : sans lui, le code des tests (`#[cfg(test)]`) n'est pas compile
     pour la cible et ses `use std::os::unix::...` passent inapercus.
 - **UN SIGNAL POSIX COMPILE SOUS WINDOWS ET RATE A L'EXECUTION.** `sysinfo::Signal::Term`
