@@ -12,7 +12,10 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.42.0] — 2026-08-21
+### Fixed
+
+- Barre latérale : le nom d'un dossier de projets s'affichait plus petit que les projets
+  qu'il contient. Il est maintenant à la même taille.
 
 ### Added
 

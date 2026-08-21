@@ -865,7 +865,11 @@
   .folder-item { border-bottom: 1px solid var(--border-color); }
   .folder-header {
     display: flex; align-items: center; gap: 0.25rem;
-    padding: 0.4rem 0.5rem; font-size: 0.8rem; color: var(--text-secondary);
+    padding: 0.4rem 0.5rem; color: var(--text-secondary);
+    /* Au moins aussi grand que le nom d'un projet (.project-name, 0.9rem) : un dossier
+       CONTIENT des projets, il ne doit pas s'ecrire plus petit qu'eux. Il etait a 0.8rem,
+       donc le contenant paraissait moins important que son contenu (issue #16). */
+    font-size: 0.9rem;
     background: var(--bg-tertiary);
     /* Les traits de depot se posent ici : reserver la place evite que la ligne saute. */
     border-top: 2px solid transparent; border-bottom: 2px solid transparent;
