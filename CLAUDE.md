@@ -1561,6 +1561,22 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **LE BANC D'ESSAI DOIT COUVRIR LA MACHINE QUI CONSTRUIT, LINUX COMPRIS.** `essais.yml` ne
+  prenait que macOS et Windows, au motif que Linux se teste en local. Faux : le runner a deux
+  coeurs et un disque lent, et **ca change le comportement**. La v0.41.2 a echoue LA, apres
+  avoir passe macOS et Windows.
+- **UNE DECISION PRISE SUR « CE QUI ATTEND A CET INSTANT » DEPEND DE QUI TIENT LE VERROU.**
+  Le regroupement des sorties regardait la taille de ce qui attendait au moment de la decision.
+  Or le thread lecteur tient le verrou pendant qu'il fait avaler les octets a l'ecran : sur deux
+  coeurs charges, l'emetteur l'obtient rarement et avec peu de choses dedans, conclut « ce n'est
+  pas une rafale » et repart aussitot — le defaut d'origine, refabrique. Mesure du runner Linux
+  de la v0.41.2 : **2 810 envois pour 1,5 Mo, soit 529 octets chacun**, contre 33 a 54 envois
+  (27 a 45 Ko) sur le poste de travail.
+  La decision porte desormais sur la taille du lot PRECEDENT, qui dit ce que le shell produit
+  vraiment et ne depend d'aucun ordonnancement. Au pire un petit envoi part au debut d'une
+  rafale. Benefice mesure en prime : la frappe est passee de 72 a 35 us de surcout.
+  Regle a garder : une decision qui doit valoir sur toute machine ne se prend pas sur un etat
+  instantane partage entre threads. Prendre une grandeur qui a une HISTOIRE.
 - **`cmd.exe` REAFFICHE SON INVITE ET SON TITRE A CHAQUE TOUCHE.** L'essai qui verifie que
   l'echo d'une touche part tel quel mesurait la taille du premier lot recu apres avoir tape
   un caractere. Sous Windows ce lot faisait **87 octets** : ce n'etait pas l'echo, c'etait

@@ -576,11 +576,11 @@ fn lire_pty(lecteur: &mut (impl Read + ?Sized), session: &Session) {
 /// webview. Le seuil de volume ne pouvait pas voir la rafale ; le rythme, si.
 ///
 /// La regle appliquee, en deux moities :
-/// 1. **si le lot precedent est parti il y a moins de `FENETRE_RAFALE` ET que ce qui
-///    attend depasse `TAILLE_ECHO`**, c'est une rafale — on laisse la fenetre se remplir
-///    au lieu d'envoyer des miettes. Les deux conditions comptent : une frappe rapide,
-///    elle aussi, tient une cadence soutenue, et elle ne doit jamais attendre. C'est la
-///    TAILLE du lot qui les separe (un echo fait quelques octets) ;
+/// 1. **si le lot precedent est parti il y a moins de `FENETRE_RAFALE` ET qu'il depassait
+///    `TAILLE_ECHO`**, c'est une rafale — on laisse la fenetre se remplir au lieu d'envoyer
+///    des miettes. Les deux conditions comptent : une frappe rapide, elle aussi, tient une
+///    cadence soutenue, et elle ne doit jamais attendre. C'est la TAILLE qui les separe (un
+///    echo fait quelques octets) ;
 /// 2. **ou si ce qui attend depasse deja `SEUIL_LOT`** : sur une machine chargee le shell
 ///    produit par a-coups, et la premiere moitie seule croit voir des echos la ou il y a
 ///    une rafale au ralenti.
@@ -607,11 +607,28 @@ fn lire_pty(lecteur: &mut (impl Read + ?Sized), session: &Session) {
 /// de latence fait 200 allers-retours a la suite, donc en cadence soutenue par construction,
 /// et le surcout du service est passe de 0,06 ms a 8,5 ms — soit exactement la surcouche que
 /// ce projet interdit sur le chemin de frappe. D'ou `TAILLE_ECHO`.
+///
+/// ## Et pourquoi c'est la taille du lot PRECEDENT qui compte
+///
+/// La taille regardee a d'abord ete celle de ce qui attend A L'INSTANT de la decision. Ca
+/// marche sur une machine rapide et pas sur une machine lente : le thread lecteur tient le
+/// verrou pendant qu'il fait avaler les octets a l'ecran, donc sur deux coeurs charges
+/// l'emetteur l'obtient rarement et avec peu de choses dedans — il conclut « ce n'est pas une
+/// rafale » et repart aussitot, ce qui refabrique exactement le defaut. Mesure du runner Linux
+/// de la v0.41.2 : **2 810 envois pour 1,5 Mo, soit 529 octets chacun**, la ou cette machine
+/// en fait 70 a 20 Ko.
+///
+/// La taille du lot PRECEDENT ne depend pas de cet alea : elle dit ce que le shell produit
+/// vraiment. Au pire un seul petit envoi part au debut d'une rafale, et la regle est accrochee
+/// des le suivant.
 fn emettre(session: &Session) {
     let (tampon, signal) = &*session.partage;
     // Quand le lot precedent est parti. `None` tant qu'on n'a rien envoye : le premier lot
     // ne doit pas etre retenu.
     let mut derniere_emission: Option<std::time::Instant> = None;
+    // Et sa TAILLE. C'est elle qui dit si on est dans une rafale ou sous une frappe, parce
+    // qu'elle ne depend pas du moment ou l'emetteur obtient le verrou (voir plus bas).
+    let mut derniere_taille = 0usize;
     loop {
         let (pousse, abonne) = {
             let mut t = tampon.lock().unwrap_or_else(|e| e.into_inner());
@@ -636,7 +653,7 @@ fn emettre(session: &Session) {
             let cadence_soutenue =
                 derniere_emission.is_some_and(|parti| parti.elapsed() < FENETRE_RAFALE);
             let rafale = t.en_attente.len() >= SEUIL_LOT
-                || (cadence_soutenue && t.en_attente.len() > TAILLE_ECHO);
+                || (cadence_soutenue && derniere_taille > TAILLE_ECHO);
             if rafale && !t.redessin_du && !t.fini {
                 // Rafale : on rend le verrou pour que le lecteur continue d'avaler, et on
                 // repart avec un lot entier au lieu de quelques dizaines d'octets.
@@ -674,6 +691,12 @@ fn emettre(session: &Session) {
             }
         };
         derniere_emission = Some(std::time::Instant::now());
+        // Un REDESSIN remet la taille a zero : il arrive a l'attache, et la premiere touche
+        // tapee juste apres ne doit pas etre retenue sous pretexte que le redessin etait gros.
+        derniere_taille = match &pousse {
+            Pousse::Sortie { octets, .. } => octets.len(),
+            _ => 0,
+        };
         if !abonne.pousser(pousse) {
             session.detacher_si(abonne.numero());
         }

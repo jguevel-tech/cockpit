@@ -1,4 +1,4 @@
-# Les essais sur les systemes qu'on ne peut pas exercer en local, AVANT de taguer.
+# Les essais sur les machines qu'on ne peut pas exercer en local, AVANT de taguer.
 #
 # Pourquoi ce fichier existe : deux versions de suite sont parties incompletes parce qu'un
 # essai ne tombait que sur macOS (v0.38.0 et v0.39.0). On ne l'apprenait qu'apres le tag,
@@ -10,7 +10,7 @@
 # main.
 #
 # Usage : `gh workflow run essais.yml`, puis `gh run watch`.
-name: Essais (macOS et Windows)
+name: Essais (les trois systemes)
 
 on:
   workflow_dispatch:
@@ -21,12 +21,46 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux EST dans cette liste, et ce n'est pas de la redondance avec le poste de
+          # travail : le runner a deux coeurs et un disque lent, et ca change le comportement.
+          # La v0.41.2 a echoue ICI apres avoir passe macOS et Windows — le regroupement des
+          # sorties de terminal ne tenait plus (529 octets par envoi contre 20 Ko en local).
+          # Un banc qui ne couvre pas la machine qui construit ne sert qu'a moitie.
+          - os: ubuntu-22.04
           - os: macos-latest
           - os: windows-latest
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      - name: Dependances systeme Tauri (Linux)
+        if: runner.os == 'Linux'
+        # 15 min suffisent largement (~40 s en temps normal). Le plafond est la parce que
+        # cette etape s'est figee SIX HEURES sur la v0.31.0 : `unattended-upgrades` tient le
+        # verrou dpkg au demarrage du runner et apt attend indefiniment. D'ou aussi
+        # `Lock::Timeout` (apt rend la main au lieu d'attendre) et les trois essais.
+        timeout-minutes: 15
+        run: |
+          set -eux
+          # Coupe le service qui tient le verrou, sinon on ne fait que l'attendre.
+          sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
+          export DEBIAN_FRONTEND=noninteractive
+          apt_reessai() {
+            for essai in 1 2 3; do
+              if sudo apt-get -o DPkg::Lock::Timeout=120 "$@"; then return 0; fi
+              echo "apt-get $1 : echec (essai $essai), nouvelle tentative dans 15 s"
+              sleep 15
+            done
+            return 1
+          }
+          apt_reessai update
+          # `libasound2-dev` : cpal (capture audio des reunions) depend d'`alsa-sys` sans
+          # condition sous Linux — le host ALSA n'est pas derriere une feature, meme quand
+          # on ne se sert que du host PulseAudio. Sans ce paquet, `alsa-sys` echoue sur
+          # « Package alsa was not found in the pkg-config search path ».
+          apt_reessai install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf libasound2-dev
 
       - uses: actions/setup-node@v4
         with:
