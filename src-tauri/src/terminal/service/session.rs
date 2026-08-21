@@ -397,8 +397,28 @@ impl Session {
     }
 
     /// Tue le shell. Le thread lecteur constate la fin et previent l'application.
+    ///
+    /// **Un shell deja termine n'est pas une erreur de fermeture.** C'est meme le cas le plus
+    /// banal : on tape `exit`, puis on ferme l'onglet. Or le thread lecteur ramasse le shell
+    /// mort (`enfant.wait()`), ce qui REND LE HANDLE INUTILISABLE, et le `kill` qui arrive
+    /// apres echoue. Sous Windows ca donne « The handle is invalid. (os error 6) » ou meme
+    /// « The operation completed successfully. (os error 0) » quand rien n'a pose le code
+    /// d'erreur ; sous Unix, un `ESRCH`. Dans les deux cas l'utilisateur voyait une erreur
+    /// pour un geste qui a parfaitement fonctionne.
+    ///
+    /// `vivant` tranche sans ambiguite : le lecteur le passe a faux AVANT d'appeler `wait`,
+    /// donc si le handle a ete rendu, `vivant` est deja faux. Une erreur alors que le shell
+    /// est encore vivant, elle, reste une vraie erreur et remonte.
+    ///
+    /// Constate sur le runner Windows le 2026-08-21, en trois essais qui echouaient tous sur
+    /// `fermer()` — et le meme defaut existait sous Linux, dans une fenetre plus etroite.
     pub fn fermer(&self) -> Result<(), String> {
-        self.tueur.lock().map_err(|_| "terminal deja ferme")?.kill().map_err(|e| e.to_string())
+        let mut tueur = self.tueur.lock().map_err(|_| "terminal deja ferme")?;
+        match tueur.kill() {
+            Ok(()) => Ok(()),
+            Err(_) if !self.vivant() => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }
 
@@ -799,4 +819,21 @@ mod tests {
     }
 
 
+
+    /// Fermer un terminal dont le programme s'est deja arrete doit REUSSIR.
+    ///
+    /// `exit` est la seule commande de ce fichier qui vaille sur les trois systemes (les
+    /// shells POSIX et `cmd.exe` la connaissent), donc cet essai n'a pas besoin de garde.
+    #[test]
+    fn fermer_un_shell_deja_termine_n_est_pas_une_erreur() {
+        let s = session(None);
+        attendre(&s, "l'invite du shell", |vu| !vu.trim().is_empty());
+        s.ecrire(b"exit\r").unwrap();
+        let debut = std::time::Instant::now();
+        while s.vivant() && debut.elapsed() < std::time::Duration::from_secs(20) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(!s.vivant(), "le shell devait s'arreter apres `exit`");
+        s.fermer().expect("fermer un terminal deja termine doit reussir");
+    }
 }

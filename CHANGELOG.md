@@ -20,6 +20,9 @@ le script de release.
   qu'on cherchait. Sur macOS, sur 1,3 Mo de sortie, seuls 368 Ko arrivaient. La limite qui
   déclenchait ça confondait « le système a livré un gros paquet d'un coup » avec « le débit
   est ingérable ».
+- **Fermer un terminal dont le programme s'est déjà arrêté ne signale plus d'erreur.** On tape
+  `exit`, on ferme l'onglet, et une notification d'erreur s'affichait — alors que la
+  fermeture avait parfaitement fonctionné.
 - **Les grosses sorties de terminal repartent en gros paquets.** Une commande qui écrit des
   milliers de lignes était renvoyée à l'interface en morceaux minuscules — jusqu'à 3 000
   envois pour un mégaoctet sur macOS, là où il en faut quelques dizaines. Résultat :
