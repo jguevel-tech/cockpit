@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.45.0] — 2026-08-21
+
 ### Added
 
 - **Supprimer une tâche, un lien rapide, une commande rapide ou un dossier de projets demande
