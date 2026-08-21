@@ -10,6 +10,7 @@
   import TodoText from "./TodoText.svelte";
   import TodoProgress from "./TodoProgress.svelte";
   import { trad } from "../../i18n";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { project }: { project: string } = $props();
 
@@ -38,8 +39,14 @@
     try { await updateTodo(t.id, t.text, !t.done); await load(); } catch (e) { notify(String(e)); }
   }
 
-  async function remove(id: number) {
-    try { await deleteTodo(id); await load(); } catch (e) { notify(String(e)); }
+  // La ligne dont le curseur d'avancement est en cours de reglage sort du glisser-deposer :
+  // sinon tirer le curseur demarre un deplacement de la tache, et les deux gestes se battent.
+  let reglageEnCours: number | null = $state(null);
+
+  async function remove(t: Todo) {
+    const question = $trad("todos.deleteConfirm", { texte: t.text });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
+    try { await deleteTodo(t.id); await load(); } catch (e) { notify(String(e)); }
   }
 
   async function commitEdit(t: Todo, next: string) {
@@ -87,7 +94,7 @@
     {#each visibleTodos as todo, i}
       <li
         class:done={todo.done}
-        use:reorderable={{ index: i, group: "todos", onDrop: moveTodo, disabled: showDone }}
+        use:reorderable={{ index: i, group: "todos", onDrop: moveTodo, disabled: showDone || reglageEnCours === todo.id }}
       >
         <button
           class="check"
@@ -106,7 +113,11 @@
           <TodoText texte={todo.text} done={todo.done} onEdit={() => (editingId = todo.id)} />
         {/if}
         {#if !todo.done}
-          <TodoProgress valeur={todo.progress} onChange={(v) => commitProgress(todo, v)} />
+          <TodoProgress
+            valeur={todo.progress}
+            onChange={(v) => commitProgress(todo, v)}
+            onInteraction={(actif) => (reglageEnCours = actif ? todo.id : null)}
+          />
         {/if}
         {#if editingDueId === todo.id}
           <!-- svelte-ignore a11y_autofocus -->
@@ -128,7 +139,7 @@
         {:else if !todo.done}
           <button class="due-add" onclick={() => (editingDueId = todo.id)} title={$trad("todos.addDue")}>📅</button>
         {/if}
-        <button class="del" onclick={() => remove(todo.id)} title={$trad("common.delete")}>×</button>
+        <button class="del" onclick={() => remove(todo)} title={$trad("common.delete")}>×</button>
       </li>
     {/each}
     {#if visibleTodos.length === 0}

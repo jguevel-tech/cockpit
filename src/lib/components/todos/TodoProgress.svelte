@@ -24,11 +24,19 @@
     valeur,
     dense = false,
     onChange,
+    onInteraction,
   }: {
     valeur: number;
     /** Variante du tableau de bord : plus compacte. */
     dense?: boolean;
     onChange: (valeur: number) => void;
+    /**
+     * Appele avec `true` quand le doigt ou la souris se pose sur le curseur, `false` quand il
+     * repart. La liste s'en sert pour SORTIR la ligne du glisser-deposer le temps du reglage :
+     * sans ca, tirer le curseur demarre un deplacement de la tache, et les deux gestes se
+     * battent — c'est exactement ce qui a ete signale.
+     */
+    onInteraction?: (actif: boolean) => void;
   } = $props();
 
   // Ce qui s'affiche PENDANT un glissement, et rien d'autre : `null` le reste du temps, donc
@@ -39,7 +47,7 @@
   let enCours = $derived(glisse ?? valeur);
 </script>
 
-<div class="avancement" class:dense>
+<div class="avancement" class:dense ondragstart={(e) => e.preventDefault()} role="presentation">
   <input
     type="range"
     min="0"
@@ -49,9 +57,14 @@
     style="--rempli: {enCours}%"
     aria-label={$trad("todo.progressLabel")}
     title={$trad("todo.progressHint")}
+    onpointerdown={() => onInteraction?.(true)}
+    onpointerup={() => onInteraction?.(false)}
+    onpointercancel={() => onInteraction?.(false)}
+    onblur={() => onInteraction?.(false)}
     oninput={(e) => (glisse = Number(e.currentTarget.value))}
     onchange={(e) => {
       glisse = null;
+      onInteraction?.(false);
       onChange(Number(e.currentTarget.value));
     }}
     onclick={(e) => e.stopPropagation()}

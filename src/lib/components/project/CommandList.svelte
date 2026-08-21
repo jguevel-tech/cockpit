@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { project }: { project: string } = $props();
 
@@ -47,8 +48,10 @@
     if (e.key === "Escape") editingId = null;
   }
 
-  async function remove(id: number) {
-    try { await deleteProjectCommand(id); await load(); } catch (e) { notify(String(e)); }
+  async function remove(c: ProjectCommand) {
+    const question = $trad("cmd.deleteConfirm", { label: c.label });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
+    try { await deleteProjectCommand(c.id); await load(); } catch (e) { notify(String(e)); }
   }
 
   function onAddKeydown(e: KeyboardEvent) { if (e.key === "Enter") add(); }
@@ -73,7 +76,7 @@
           <span class="label">{c.label}</span>
           <code class="cmd" title={c.command}>{c.command}</code>
           <button class="edit" onclick={() => startEdit(c)} title={$trad("common.edit")}>✎</button>
-          <button class="del" onclick={() => remove(c.id)} title={$trad("common.delete")}>×</button>
+          <button class="del" onclick={() => remove(c)} title={$trad("common.delete")}>×</button>
         {/if}
       </li>
     {/each}

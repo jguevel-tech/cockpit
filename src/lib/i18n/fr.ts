@@ -34,6 +34,7 @@ export const fr = {
   "todos.openLinkHint": "Ctrl+clic pour ouvrir {href}",
   "todos.emptyDone": "Aucune tâche terminée",
   "todos.empty": "Aucune tâche",
+  "todos.deleteConfirm": "Supprimer la tâche « {texte} » ?",
   "todo.progressLabel": "Avancement de la tâche",
   "todo.progressHint": "Avancement : glisse ou clique, par pas de 10 %. À 100 % la tâche est finie.",
   "tasks.title": "Tâches en cours",
@@ -66,6 +67,7 @@ export const fr = {
   "urls.labelPlaceholder": "Label",
   "urls.urlPlaceholder": "https://...",
   "urls.empty": "Aucune URL",
+  "urls.deleteConfirm": "Supprimer le lien « {label} » ?",
   "header.appName": "Cockpit",
   "header.notifications": "Notifications",
   "header.unread.one": "{n} notification non lue",
@@ -127,6 +129,7 @@ export const fr = {
 
   // Mises a jour
   "sidebar.deleteFolder": "Supprimer",
+  "sidebar.deleteFolderConfirm": "Supprimer le dossier « {nom} » ?",
   "dashboard.tasksTab": "☑ Tâches",
   "dashboard.monitoringTab": "📈 Monitoring",
   "dashboard.terminalsTab": ">_ Terminaux",
@@ -313,6 +316,7 @@ export const fr = {
   "cmd.hint": "Chaque commande devient une entrée du bouton « ▶ Cmd » de la barre du projet : elle est lancée dans un nouveau terminal du projet.",
   "cmd.labelPlaceholder": "Label (ex : Dev)",
   "cmd.empty": "Aucune commande",
+  "cmd.deleteConfirm": "Supprimer la commande « {label} » ?",
   "plugins.enabledFor": "Plugins du marketplace CCM activés pour",
   "plugins.advice": "Active uniquement ce qui est utile à ce projet : moins de plugins → routage plus net.",
   "plugins.storedIn": "Stocké dans",

@@ -13,6 +13,7 @@
   import TodoProgress from "../todos/TodoProgress.svelte";
   import type { Todo } from "../../types";
   import { trad, tradN } from "../../i18n";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let pendingTodos: Todo[] = $state([]);
 
@@ -42,7 +43,12 @@
     }
   }
 
+  // Meme raison que dans la colonne Todos : la ligne en cours de reglage n'est plus glissable.
+  let reglageEnCours: number | null = $state(null);
+
   async function removeTodo(todo: Todo) {
+    const question = $trad("todos.deleteConfirm", { texte: todo.text });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     pendingTodos = pendingTodos.filter((t) => t.id !== todo.id);
     try { await deleteTodo(todo.id); } catch (e) { notify(String(e)); await reload(); }
   }
@@ -245,7 +251,7 @@
             class:drag-over-top={todoDropTarget?.todoId === todo.id && todoDropTarget?.pos === "before"}
             class:drag-over-bottom={todoDropTarget?.todoId === todo.id && todoDropTarget?.pos === "after"}
             role="listitem"
-            draggable="true"
+            draggable={reglageEnCours !== todo.id}
             ondragstart={(e) => { e.stopPropagation(); onTodoDragStart(e, todo); }}
             ondragover={(e) => onTodoDragOver(e, todo)}
             ondragleave={onTodoDragLeave}
@@ -269,11 +275,13 @@
               <TodoText texte={todo.text} dense sansGlisser onEdit={() => startEditTodo(todo)} />
             {/if}
             <!-- Le tableau de bord est l'endroit ou la demande prend son sens : voir d'un coup
-                 lesquelles sont en cours et ou elles en sont. `ondragstart` bloque le glisser
-                 de la ligne, sinon tirer le curseur deplacerait la tache. -->
-            <div ondragstart={(e) => e.preventDefault()} role="presentation">
-              <TodoProgress valeur={todo.progress} dense onChange={(v) => commitProgress(todo, v)} />
-            </div>
+                 lesquelles sont en cours et ou elles en sont. -->
+            <TodoProgress
+              valeur={todo.progress}
+              dense
+              onChange={(v) => commitProgress(todo, v)}
+              onInteraction={(actif) => (reglageEnCours = actif ? todo.id : null)}
+            />
             {#if editingDueId === todo.id}
               <!-- svelte-ignore a11y_autofocus -->
               <input

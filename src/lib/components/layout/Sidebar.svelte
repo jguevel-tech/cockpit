@@ -17,6 +17,7 @@
   import { onMount } from "svelte";
   import { trad, tradN } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let showCreateModal = $state(false);
   let folders: ProjectFolder[] = $state([]);
@@ -252,6 +253,11 @@
       notify(raison, "error", 4000, { report: false });
       return;
     }
+    // Le dossier est vide, donc rien ne disparait avec lui — mais la question nomme quand meme
+    // ce qu'on supprime : c'est le geste qu'on confirme, pas la quantite perdue.
+    const nom = folders.find((f) => f.id === id)?.name ?? "";
+    const question = $trad("sidebar.deleteFolderConfirm", { nom });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try {
       await deleteProjectFolder(id);
       await loadFolders();

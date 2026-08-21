@@ -12,6 +12,19 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Supprimer une tâche, un lien rapide, une commande rapide ou un dossier de projets demande
+  confirmation.** Ces quatre suppressions étaient immédiates, sans rien demander. La question
+  nomme ce qui va disparaître.
+
+### Fixed
+
+- **Le curseur d'avancement ne déclenche plus le déplacement de la tâche.** Tirer le curseur
+  démarrait un glisser-déposer, et les deux gestes se battaient. La ligne sort du déplacement le
+  temps du réglage.
+
+
 ## [0.44.0] — 2026-08-21
 
 ### Changed

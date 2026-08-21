@@ -5,6 +5,7 @@
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { project }: { project: string } = $props();
 
@@ -77,8 +78,10 @@
     if (e.key === "Escape") cancelEdit();
   }
 
-  async function remove(id: number) {
-    try { await deleteUrl(id); await load(); } catch (e) { notify(String(e)); }
+  async function remove(u: Url) {
+    const question = $trad("urls.deleteConfirm", { label: u.label || u.url });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
+    try { await deleteUrl(u.id); await load(); } catch (e) { notify(String(e)); }
   }
 </script>
 
@@ -105,7 +108,7 @@
           ></span>
           <a href={u.url} target="_blank" rel="noopener">{u.label}</a>
           <button class="edit" onclick={() => startEdit(u)} title={$trad("common.edit")}>✎</button>
-          <button class="del" onclick={() => remove(u.id)}>×</button>
+          <button class="del" onclick={() => remove(u)} title={$trad("common.delete")}>×</button>
         {/if}
       </li>
     {/each}
