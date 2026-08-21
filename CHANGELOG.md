@@ -16,28 +16,20 @@ le script de release.
 
 ### Fixed
 
-- **Une grosse sortie de terminal n'est plus tronquée.** Une commande qui écrit beaucoup —
-  `seq`, un journal de build — pouvait voir la majeure partie de sa sortie remplacée par un
-  simple rafraîchissement de l'écran : on remontait à la molette et on ne trouvait pas ce
-  qu'on cherchait. Sur macOS, sur 1,3 Mo de sortie, seuls 368 Ko arrivaient. La limite qui
-  déclenchait ça confondait « le système a livré un gros paquet d'un coup » avec « le débit
-  est ingérable ».
+- **Une grosse sortie de terminal n'est plus perdue.** Une commande qui écrit beaucoup — un
+  `seq`, un log de build — voyait la plus grande partie de son texte disparaître : on
+  remontait à la molette et on ne le retrouvait pas. Sur macOS, sur 1,3 Mo affichés, il n'en
+  restait que 368 Ko.
 - **Fermer un terminal dont le programme s'est déjà arrêté ne signale plus d'erreur.** On tape
   `exit`, on ferme l'onglet, et une notification d'erreur s'affichait — alors que la
   fermeture avait parfaitement fonctionné.
 - **Les chemins de fichiers du projet s'écrivent toujours avec des `/`.** Sous Windows ils
   sortaient avec des antislashs, ce qui cassait l'arbre de l'onglet Fichiers : un dossier ne
   se dépliait plus, et le nom affiché devenait le chemin entier.
-- **La fin d'un terminal est maintenant détectée par le programme lui-même**, et non par son
-  tuyau de sortie. Le résultat est le même sur Linux et macOS ; c'est ce qui rend la chose
-  possible sur Windows, où le tuyau reste ouvert après l'arrêt du programme.
-- **Les grosses sorties de terminal repartent en gros paquets.** Une commande qui écrit des
-  milliers de lignes était renvoyée à l'interface en morceaux minuscules — jusqu'à 3 000
-  envois pour un mégaoctet sur macOS, là où il en faut quelques dizaines. Résultat :
-  affichage saccadé, et la fin de la sortie pouvait même être perdue quand on fermait le
-  terminal juste après. La règle qui reconnaît une rafale ne dépend plus de la vitesse
-  relative de deux fils d'exécution, donc elle se comporte pareil sur les trois systèmes.
-  Sous Linux aussi c'est cinq fois moins d'envois qu'avant.
+- **L'affichage du terminal ne saccade plus quand une commande écrit beaucoup.** Sur macOS,
+  le texte arrivait à l'écran par tout petits morceaux, et la fin pouvait même manquer si on
+  fermait le terminal juste après. Sous Linux, l'affichage est aussi nettement plus fluide
+  qu'avant.
 
 ### Added
 

@@ -745,10 +745,30 @@ Ce qui l'agace, avec des exemples pris dans mes propres rapports :
 | « deux issues possibles » | « deux choix » |
 | « la matiere d'arbitrage » | « ce qu'il faut pour decider » |
 | « une garde silencieuse sur une action utilisateur » | « on clique, rien ne se passe, aucun message » |
+| « la regle de regroupement des rafales » | « l'affichage saccadait quand une commande ecrivait beaucoup » |
+| « 3 000 envois pour un megaoctet » | « le texte arrivait par tout petits morceaux » |
+| « la fin est detectee sur le tuyau de sortie » | (ne pas le dire : ca ne se voit pas) |
 
 Le vocabulaire TECHNIQUE ne pose aucun probleme — commit, release, PTY, migration, tmux,
 cache. C'est le vocabulaire ABSTRAIT qui bloque. Ne remplace jamais un mot technique par
 une periphrase : ca appauvrit le texte. Remplace les tournures alambiquees.
+
+**NE JAMAIS INVENTER DE MOT, ni employer un nom de mecanisme interne comme s'il etait
+connu.** C'est la faute la plus grave de cette section, et elle a ete commise le
+2026-08-21 : une explication entiere batie sur « rafale », « lot », « envois »,
+« regroupement » — quatre mots que j'avais fabriques et jamais definis. Jimmy n'y a rien
+compris, et il a du le dire deux fois.
+
+Le test avant d'envoyer : **chaque mot du rapport existe-t-il en dehors de ma tete ?** Un
+nom qui ne vit que dans notre code (`rafale`, `lot`, `envoi`, `regroupement`, `tuyau`,
+`fil d'execution`, `garde`, `guetteur`) n'a rien a faire dans un rapport. Ce qui a droit
+de cite : ce que Jimmy tape lui-meme — terminal, commit, release, build, cache, PTY,
+Docker, CSS.
+
+Et la regle qui decoule : **on decrit ce que l'utilisateur VOIT, jamais le mecanisme.**
+Si le mecanisme doit vraiment etre nomme, il vient APRES l'effet visible, en une phrase.
+Un changement dont l'effet visible est nul ne se raconte pas du tout — ni en rapport, ni
+en changelog : c'est de la doc interne, elle va dans le code.
 
 Et raconte ce qui se passe pour l'utilisateur avant d'expliquer la mecanique. « Quand tu
 reviens sur un projet, tu retombes sur Workspace » avant « activeTab est remis a zero dans
@@ -761,6 +781,9 @@ selectProject ».
 - Laisser croire que quelque chose avance quand tout est arrete, ou l'inverse.
 - Annoncer une version comme livree avant que `latest.json` reponde 200.
 - Un pave. Les tableaux existent pour qu'il lise en dix secondes.
+- Un mot que je viens d'inventer, ou un nom de mecanisme interne employe comme s'il etait
+  connu. Voir « Ecrire simplement » ci-dessus : c'est un motif de reecriture complete du
+  rapport, pas un detail de style.
 
 ## Repondre a l'auteur
 
