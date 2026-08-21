@@ -13,8 +13,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::client::Client;
-use super::protocole::{ActionRecherche, Position, Pousse, Taille};
-use super::{lancement, serveur, tuyau};
+use super::protocole::{Pousse, Taille};
+// Seuls les essais qui passent par un shell POSIX s'en servent (voir la garde plus bas).
+#[cfg(unix)]
+use super::protocole::{ActionRecherche, Position};
+use super::{serveur, tuyau};
+// `lancement` ne sert qu'au banc detache, reserve aux systemes a shell POSIX.
+#[cfg(unix)]
+use super::lancement;
 use crate::terminal::ecran::Ecran;
 
 const TAILLE: Taille = Taille { colonnes: 80, lignes: 24 };
@@ -89,8 +95,11 @@ fn connecter(chemin: &std::path::Path) -> (Arc<Client>, Receiver<Pousse>) {
 /// Commandes dont la SORTIE porte un marqueur que la ligne de commande echoee ne contient
 /// pas. Sans cette precaution, un test croit avoir vu le resultat alors qu'il n'a vu que
 /// ce qui vient d'etre tape — et compare deux ecrans pris a des moments differents.
+#[cfg(unix)]
 const MARQUEUR_BONJOUR: &[u8] = b"printf 'bonjour%s\\n' -du-service\r";
+#[cfg(unix)]
 const MARQUEUR_TRACE: &[u8] = b"printf 'trace%s\\n' -avant-la-coupure\r";
+#[cfg(unix)]
 const MARQUEUR_AIGUILLE: &[u8] = b"printf 'aiguille%s\\n' -unique\r";
 
 fn dossier_de_travail() -> String {
@@ -151,6 +160,23 @@ fn ecouler(miroir: &mut Miroir, recu: &Receiver<Pousse>) {
 // --- Le tour complet ---
 
 /// Creer, ecrire, lire la sortie, redimensionner, fermer. Le minimum vital, par le socket.
+/// Les essais ci-dessous TAPENT dans le shell de la machine, et se reperent dans sa
+/// sortie. Ils sont donc reserves aux systemes ou ce shell est un shell POSIX : sous
+/// Windows c'est `%COMSPEC%`, soit `cmd.exe`, qui ne connait ni `printf`, ni `cat`, ni
+/// `for i in $(seq 1 400)`.
+///
+/// Ce qui reste couvert partout : le protocole, la poignee de main versionnee, le refus
+/// d'un interlocuteur etranger, la reconciliation, la commande d'ouverture, et tout
+/// l'emulateur (`ecran/tests.rs`). Ce qui n'est couvert NULLE PART sous Windows : le
+/// comportement d'un vrai shell dans un ConPTY. Aucun essai ne peut le dire ici — cela
+/// demande une machine Windows, et le premier installeur produit par la CI est ce qui
+/// permettra de le savoir.
+///
+/// Ne PAS remplacer ces commandes par des equivalents `cmd.exe` inventes sans machine
+/// pour les essayer : un essai vert qu'on n'a jamais vu tourner ne prouve rien, et le
+/// marqueur guette ne doit surtout pas apparaitre dans la LIGNE TAPEE (le PTY en renvoie
+/// l'echo avant que le shell ne l'execute — voir les Pieges connus).
+#[cfg(unix)]
 #[test]
 fn le_tour_complet_par_le_socket() {
     let banc = Banc::neuf(500);
@@ -208,6 +234,7 @@ fn un_terminal_inconnu_donne_une_erreur_lisible() {
 /// Le service est lance par le meme chemin que dans l'application (`lancer_detache`, donc
 /// double fork + setsid), simplement depuis le binaire de test au lieu de celui de
 /// Cockpit : c'est le mecanisme de detachement qui est verifie, pas seulement le protocole.
+#[cfg(unix)]
 #[test]
 fn le_shell_survit_a_la_mort_du_client() {
     let banc = BancDetache::neuf("survie");
@@ -253,11 +280,13 @@ fn le_shell_survit_a_la_mort_du_client() {
 ///
 /// Le `Drop` compte : sans lui, un essai qui echoue laisse un service et ses shells
 /// tourner jusqu'a la prochaine deconnexion de l'utilisateur (constate le 2026-08-21).
+#[cfg(unix)]
 struct BancDetache {
     dossier: std::path::PathBuf,
     chemin: std::path::PathBuf,
 }
 
+#[cfg(unix)]
 impl BancDetache {
     fn neuf(quoi: &str) -> Self {
         let (dossier, chemin) = emplacement(quoi);
@@ -267,6 +296,7 @@ impl BancDetache {
     }
 }
 
+#[cfg(unix)]
 impl Drop for BancDetache {
     fn drop(&mut self) {
         if let Ok(client) = Client::connecter(&self.chemin, |_| {}) {
@@ -281,7 +311,7 @@ impl Drop for BancDetache {
 /// PIEGE : sur un bureau Linux moderne, l'orphelin n'est PAS adopte par le pid 1 mais par
 /// le `systemd --user` de la session, qui se declare sous-moissonneur. Un essai qui
 /// exigerait `ppid == 1` echouerait alors qu'il n'y a rien a corriger.
-#[cfg(target_os = "linux")]
+#[cfg(all(unix, target_os = "linux"))]
 fn verifier_qu_il_est_detache(chemin: &std::path::Path) {
     use interprocess::local_socket::traits::StreamCommon as _;
     let flux = tuyau::connecter(chemin).expect("connexion au service");
@@ -298,7 +328,7 @@ fn verifier_qu_il_est_detache(chemin: &std::path::Path) {
     );
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(unix, not(target_os = "linux")))]
 fn verifier_qu_il_est_detache(_chemin: &std::path::Path) {}
 
 /// Une application plein ecran (vim) doit se retrouver DESSINEE et VIVANTE apres une
@@ -350,6 +380,7 @@ fn une_application_plein_ecran_est_retrouvee_vivante() {
 /// Se reconnecter PENDANT que le shell ecrit ne doit ni perdre ni dedoubler ce qui
 /// s'affiche. L'invariant se verifie a l'ETAT : ce qu'un terminal neuf montre apres avoir
 /// rejoue tout ce qu'il a recu doit etre exactement ce que le service affiche.
+#[cfg(unix)]
 #[test]
 fn une_reconnexion_en_plein_flux_laisse_l_ecran_juste() {
     let banc = Banc::neuf(2000);
@@ -393,6 +424,7 @@ fn une_reconnexion_en_plein_flux_laisse_l_ecran_juste() {
 
 // --- Recherche et copie ---
 
+#[cfg(unix)]
 #[test]
 fn la_recherche_et_la_copie_passent_par_le_socket() {
     let banc = Banc::neuf(2000);
@@ -487,6 +519,7 @@ fn un_interlocuteur_etranger_est_refuse() {
 /// tmux ajoutait 0,4 ms. Le chiffre affiche par `--nocapture` est celui qui compte ; le
 /// seuil du test est large a dessein (il tourne aussi en debug, et sur des machines
 /// chargees).
+#[cfg(unix)]
 #[test]
 fn la_latence_de_frappe_reste_sous_celle_de_tmux() {
     const TOURS: usize = 200;
@@ -546,6 +579,7 @@ fn la_latence_de_frappe_reste_sous_celle_de_tmux() {
 }
 
 /// L'aller-retour de reference : ecrire dans un PTY et relire l'echo, sans rien autour.
+#[cfg(unix)]
 fn aller_retour_sur_un_pty_nu(tours: usize) -> Vec<Duration> {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize};
     use std::io::{Read, Write};
@@ -654,6 +688,7 @@ const VARIABLE_ESSAI: &str = "COCKPIT_ESSAI_SERVICE_SOCKET";
 
 /// La commande qui relance le binaire de test en service, via le point d'entree
 /// `ce_processus_est_le_service` ci-dessous.
+#[cfg(unix)]
 fn service_dans_le_binaire_de_test(
     chemin: &std::path::Path,
 ) -> Result<std::process::Command, String> {

@@ -1494,6 +1494,30 @@ Le backend (`system/metrics.rs`) collecte :
     est casse.
   - Verifier `--all-targets` : sans lui, le code des tests (`#[cfg(test)]`) n'est pas compile
     pour la cible et ses `use std::os::unix::...` passent inapercus.
+  - **`--all-targets` prouve que les essais COMPILENT, jamais qu'ils PASSENT.** Cinq essais
+    de `terminal/service/tests.rs` tapent dans le shell de la machine et se reperent dans sa
+    sortie (`printf`, `cat`, `for i in $(seq 1 400)`). Sous Windows le shell est `%COMSPEC%`,
+    soit `cmd.exe`, qui ne connait aucune des trois : ils auraient echoue sur le runner, donc
+    aucun bundle Windows n'aurait ete produit — et le job `publier` aurait signale une
+    plateforme manquante APRES avoir publie Linux et macOS. Ils portent donc `#[cfg(unix)]`,
+    avec sur place ce qui reste couvert et ce qui ne l'est pas. Deux consequences a ne pas
+    oublier :
+    - **garder un essai laisse ses outils inutilises** (imports, structs de banc, `impl
+      Drop`, fonctions d'aide) : chacun devient un avertissement sur la cible ou l'essai
+      n'existe plus, et le projet exige 0 avertissement. Il faut garder l'outillage AVEC
+      l'essai — sept avertissements et deux erreurs sont sortis de cet oubli, dont un `impl
+      Drop for` orphelin que le compilateur signale comme un type introuvable.
+    - **ne PAS inventer d'equivalent `cmd.exe` sans machine pour l'essayer.** Un essai vert
+      qu'on n'a jamais vu tourner ne prouve rien, et le marqueur guette ne doit surtout pas
+      figurer dans la ligne TAPEE (le PTY en renvoie l'echo avant execution). Ce que le
+      terminal fait vraiment dans un ConPTY se saura en lancant l'installeur Windows, pas
+      en ecrivant un essai a l'aveugle.
+  - **`cargo test` en local demande `libasound2-dev`** depuis que la capture audio passe par
+    cpal (qui depend d'`alsa-sys` sans condition sous Linux) : sans lui, le build de
+    `alsa-sys` echoue sur `The system library alsa was not found` et AUCUN essai ne tourne.
+    Sans droits administrateur, meme recette que mingw (`apt-get download`, `dpkg-deb -x`
+    dans un prefixe) puis `PKG_CONFIG_PATH=<prefixe>/usr/lib/x86_64-linux-gnu/pkgconfig` et
+    `PKG_CONFIG_SYSROOT_DIR=<prefixe>`.
 - **UN SIGNAL POSIX COMPILE SOUS WINDOWS ET RATE A L'EXECUTION.** `sysinfo::Signal::Term`
   existe sur toutes les plateformes ; c'est sa CONVERSION qui rend `None` sous Windows
   (`windows/mod.rs`, branche `_ => None`), ou seul `Signal::Kill` est accepte et applique par

@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/jguevel-tech/cockpit/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/jguevel-tech/cockpit?style=flat-square&color=2f81f7"></a>
   <a href="https://github.com/jguevel-tech/cockpit/actions/workflows/release.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/jguevel-tech/cockpit/release.yml?style=flat-square"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20x86__64%20·%20macOS%20(beta)-informational?style=flat-square">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20·%20macOS%20·%20Windows-informational?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat-square"></a>
 </p>
 
@@ -45,6 +45,18 @@ quarantines what comes from a browser.
 
 > **Updates happen inside the app** on both platforms. When a new version ships, a bell appears in
 > the header: one click shows what changed and installs it. You won't need to download anything again.
+
+### Windows (first release)
+
+Download the `.exe` installer from the
+[releases page](https://github.com/jguevel-tech/cockpit/releases/latest) and run it. Windows will
+warn you that the publisher is unknown — the app is not signed with a paid certificate. Click
+**More info**, then **Run anyway**.
+
+This is the first Windows build ever published, and it has not yet been exercised on a real
+Windows machine. If something is broken,
+[open an issue](https://github.com/jguevel-tech/cockpit/issues/new) — that is exactly what would
+help most.
 
 <details>
 <summary><strong>Other install methods</strong></summary>
@@ -128,7 +140,7 @@ each in a fresh terminal.
 
 Per-project todos with **due dates** — the notification bell warns you when something is due, and
 the alert clears itself once the task is done. Tree-organised Markdown notes with a WYSIWYG editor
-and autosave. Meeting recording (Linux) captures mic + system audio, transcribes, and drops a
+and autosave. Meeting recording (Linux, Windows) captures mic + system audio, transcribes, and drops a
 summary note in the project automatically.
 
 ### Monitoring & alerts
@@ -174,7 +186,7 @@ npx tauri dev
 ### Build dependencies (Linux)
 
 ```sh
-sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf libasound2-dev
 ```
 
 On macOS, Xcode Command Line Tools are enough.
@@ -212,8 +224,8 @@ src-tauri/src/        Rust backend
 ```
 
 Frontend and backend talk exclusively over Tauri's IPC: `invoke` for calls, events for real-time
-updates. No HTTP server, no WebSocket. Releases ship from a Linux + macOS CI matrix that runs the
-full test suite before bundling anything.
+updates. No HTTP server, no WebSocket. Releases ship from a Linux + macOS + Windows CI matrix that
+runs the full test suite before bundling anything.
 
 Project conventions — non-negotiable rules, known pitfalls, release process — live in
 [CLAUDE.md](CLAUDE.md).

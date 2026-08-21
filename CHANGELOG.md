@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Cockpit s'installe maintenant sur Windows.** Un installeur `.exe` est publié à chaque
+  version, à côté de l'AppImage Linux et du `.dmg` macOS. C'est la toute première version
+  Windows : elle n'a pas encore été essayée sur une vraie machine, donc si quelque chose ne
+  va pas, ouvrir une issue est ce qui aidera le plus.
+
 ### Changed
 
 - **Les terminaux ne dépendent plus de tmux.** Cockpit tient désormais lui-même les shells,
