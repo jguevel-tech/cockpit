@@ -4,9 +4,30 @@
 
 ## En une phrase
 
-**La v0.39.0 est taguée et poussée** (vérifier que la CI a bien publié les deux plateformes) : elle emporte le remplacement de tmux par notre service de
-terminaux et la capture audio dans le processus, pour Linux et macOS. **Windows ne part
-pas** — le code compile, les terminaux n'y marchent pas encore.
+Le chantier de portabilité est **fini** : tmux remplacé par notre service de terminaux,
+capture audio dans le processus, et **les trois systèmes** (Linux, macOS, Windows) sortent de
+la CI. Reste à publier une version complète — voir « Où en sont les versions » ci-dessous.
+
+## Où en sont les versions
+
+| Version | État | Pourquoi |
+|---|---|---|
+| **0.37.1** | **servie aux utilisateurs**, complète | c'est elle que `latest.json` rend |
+| 0.38.0 | publiée puis passée en **préversion** | `latest.json` n'avait que Linux (le test de rafale tombait sur macOS) |
+| 0.39.0 | publiée puis passée en **préversion** | même cause, deuxième symptôme (sortie tronquée) |
+
+Le repli est le geste documenté dans le `CLAUDE.md` : `gh release edit vX.Y.Z --prerelease
+--latest=false`. `releases/latest` exclut les préversions, donc l'endpoint retombe aussitôt
+sur la dernière version COMPLÈTE et personne ne voit d'erreur d'updater. **À faire AVANT de
+diagnostiquer**, chaque fois qu'une release sort incomplète.
+
+## La leçon qui a coûté deux versions
+
+Un essai qui ne tombe que sur macOS ou Windows ne se découvrait **qu'après le tag**, donc
+après publication. D'où `.github/workflows/essais.yml` (`gh workflow run essais.yml`) :
+matrice macOS + Windows, mêmes vérifications que la release, installeur Windows en artefact,
+et **il ne publie rien**. Le réflexe : le lancer avant `npm run release` dès que le changement
+touche le service de terminaux ou quoi que ce soit qui dépende du système.
 
 ## Ce qui a été vérifié avant le tag, à la main
 
@@ -39,28 +60,26 @@ Les deux suivent la même recette : `apt-get download`, `dpkg-deb -x` dans un pr
 
 Recettes complètes dans les Pièges connus du `CLAUDE.md`.
 
-## Windows : ce que le premier vrai passage a dit (v0.38.0)
+## Windows : les treize échecs venaient des ESSAIS, pas du produit
 
-La compilation croisée rendait 0 erreur et 0 avertissement. Le runner a fait tomber
-**treize** essais. Donc : `--all-targets` n'exerce rien, il compile.
+Le premier vrai passage (v0.38.0) faisait tomber treize essais, dont l'écriture dans le PTY
+(« The operation completed successfully. (os error 0) ») — de quoi conclure que le cœur était
+cassé. C'était faux. Deux causes, toutes deux dans les essais :
 
-| Constat | Portée |
+| Cause | Correction |
 |---|---|
-| **Écrire dans le PTY échoue** — « The operation completed successfully. (os error 0) », et créer une session « The handle is invalid. (os error 6) » | **Bloquant.** C'est le cœur du produit. Ne se trouvera pas en lisant : il faut une machine. |
-| Un socket local n'est pas un fichier sous Windows, c'est un tuyau nommé (`\\.\pipe\`) | **Corrigé.** Le code de production le savait, les essais non. |
-| Cinq essais tapent `printf` / `cat` / `for i in $(seq …)` dans le shell — `cmd.exe` n'en connaît aucun | **Corrigé** par `#[cfg(unix)]`, avec sur place ce qui reste couvert. |
-| « le shell ne meurt pas », et un `assert_eq!` de `workspace` (séparateurs de chemin) | À reprendre. |
+| Cinq essais tapent `printf` / `cat` / `for i in $(seq …)` dans le shell — `cmd.exe` n'en connaît aucun, et un essai qui part en boucle d'attente (30 s de `PATIENCE`) fait tomber ceux d'à côté | `#[cfg(unix)]`, avec sur place ce qui reste couvert et ce qui ne l'est pas |
+| Un socket local n'est pas un fichier sous Windows, c'est un tuyau nommé (`\\.\pipe\`) — le code de production le savait, les essais non | `emplacement()` rend un nom de tuyau sous Windows |
 
-**Décision** : Windows est **sorti** de la matrice de `release.yml` et de
-`PLATEFORMES_ATTENDUES`, et prend son propre `.github/workflows/windows.yml`, sur
-`workflow_dispatch`, qui produit l'installeur en artefact **sans rien publier**
-(`gh workflow run windows.yml`). Deux raisons, aucune n'est le temps : un installeur dont
-les terminaux sont morts est pire que pas d'installeur ; et une matrice rouge à chaque
-release rend invisible le jour où l'échec est une vraie régression — la leçon exacte de la
-v0.32.0. Le remettre dans `release.yml` demande de **rajouter `windows-` à
-`PLATEFORMES_ATTENDUES`**, sinon son absence redevient silencieuse.
+**Résultat : la suite entière passe sur `windows-latest`**, y compris les essais qui écrivent
+dans le PTY et attendent la réponse d'un vrai shell. La CI produit un installeur NSIS de
+~6,6 Mo. Windows est donc **revenu** dans la matrice de `release.yml` et dans
+`PLATEFORMES_ATTENDUES`.
 
-## Ce qui reste
+Ce qui n'est toujours pas vérifié : que l'application soit **agréable** une journée durant
+sur Windows. Personne ne s'en est encore servi. Le README le dit.
+
+## Ce qui reste## Ce qui reste
 - **macOS : la capture audio rendra du silence** sans certificat Apple — décision prise, pas
   de certificat. Le cas est maintenant **dit** (`mute_track`, le pipeline s'arrête avant
   Whisper) au lieu de finir en « aucune parole détectée ».
