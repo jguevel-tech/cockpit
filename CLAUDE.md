@@ -222,14 +222,13 @@ savoir ce qui existe :
 - **Conteneurs** : Compose dans le bon ordre (tri topologique, cycles detectes), logs et shell
   par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
 - **Palette et commandes rapides** : Ctrl+K, et commandes par projet lancees par ▶ Cmd.
-- **Taches et notes** : todos avec echeances, notes Markdown arborescentes en WYSIWYG, mode
-  lecture.
-- **Reunions** : enregistrement micro + son systeme, transcription, resume depose en note.
+- **Taches, notes, reunions** : todos avec echeances ; notes Markdown arborescentes en WYSIWYG
+  avec mode lecture ; enregistrement micro + son systeme, transcrit et resume en note.
 - **Monitoring et alertes** : CPU, memoire, disques, processus ; la cloche previent pour un
   disque presque plein ou une saturation qui dure. Liens rapides avec pastille up/down.
 - **Apparence** : palettes, accent, image de fond en verre depoli, zoom natif Ctrl+molette.
-- **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement.
-- **Mises a jour** : integrees, sur les trois systemes.
+- **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement. Mises
+  a jour integrees sur les trois systemes.
 
 ## Stack
 
