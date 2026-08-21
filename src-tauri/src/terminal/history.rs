@@ -96,10 +96,19 @@ fn cockpit_entries(db: &Database) -> Vec<(String, i64)> {
 }
 
 fn read_shell_histories() -> Vec<(String, Option<i64>)> {
-    let Ok(home) = std::env::var("HOME") else { return vec![] };
+    // Ces fichiers ne sont qu'un COMPLEMENT a l'historique tenu par Cockpit : leur absence
+    // degrade la suggestion, elle ne fausse rien. On journalise quand meme, sinon une
+    // recherche pauvre reste inexplicable.
+    let home = match crate::chemins::dossier_personnel() {
+        Ok(home) => home,
+        Err(e) => {
+            log::warn!("historique des shells ignore : {e}");
+            return vec![];
+        }
+    };
     let mut out = Vec::new();
 
-    if let Ok(content) = std::fs::read_to_string(format!("{}/.zsh_history", home)) {
+    if let Ok(content) = std::fs::read_to_string(home.join(".zsh_history")) {
         let lines: Vec<&str> = content.lines().collect();
         let start = lines.len().saturating_sub(SHELL_HISTORY_TAIL);
         for line in &lines[start..] {
@@ -109,7 +118,7 @@ fn read_shell_histories() -> Vec<(String, Option<i64>)> {
         }
     }
 
-    if let Ok(content) = std::fs::read_to_string(format!("{}/.bash_history", home)) {
+    if let Ok(content) = std::fs::read_to_string(home.join(".bash_history")) {
         let lines: Vec<&str> = content.lines().collect();
         let start = lines.len().saturating_sub(SHELL_HISTORY_TAIL);
         for line in &lines[start..] {

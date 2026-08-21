@@ -2,10 +2,20 @@
   import { killProcess } from "../../api/system";
   import type { ProcessMetrics } from "../../types";
   import { trad } from "../../i18n";
-  import { signalerErreur } from "../../stores/errors";
+  import { notify } from "../../stores/toast";
 
-  let { topCpu, topMemory }: { topCpu: ProcessMetrics[]; topMemory: ProcessMetrics[] } = $props();
+  // `killForced` vient du backend (`kill_is_forced`) et non d'une detection de systeme cote
+  // interface : c'est lui qui sait quel signal il peut envoyer. Sous Windows il n'y a que
+  // `taskkill /F`, donc le bouton doit ANNONCER qu'il force — sinon un utilisateur habitue
+  // a Cockpit sous Linux croit que son editeur va pouvoir enregistrer.
+  let {
+    topCpu,
+    topMemory,
+    killForced = false,
+  }: { topCpu: ProcessMetrics[]; topMemory: ProcessMetrics[]; killForced?: boolean } = $props();
   let tab: "cpu" | "memory" = $state("cpu");
+  let arretEnCours: number | null = $state(null);
+  let libelleArret = $derived($trad(killForced ? "proc.stopForced" : "proc.stop"));
 
   function formatBytes(bytes: number): string {
     if (bytes === 0) return "0";
@@ -17,8 +27,19 @@
 
   async function kill(pid: number) {
     if (!confirm($trad("proc.killConfirm", { pid }))) return;
-    try { await killProcess(pid); } catch (e) {
-      signalerErreur("process.kill", String(e)); alert(e); }
+    // Le bouton se desactive pendant l'appel : sans ca un clic sans effet visible passe
+    // pour un bug, et un second clic partait sur un PID deja mort.
+    arretEnCours = pid;
+    try {
+      await killProcess(pid);
+    } catch (e) {
+      // `notify` journalise et remonte tout seul : pas de `signalerErreur` en double.
+      notify($trad("proc.stopFailed", { pid, detail: String(e) }), "error", 4000, {
+        scope: "process.kill",
+      });
+    } finally {
+      arretEnCours = null;
+    }
   }
 </script>
 
@@ -46,7 +67,15 @@
           <td>{proc.memory.toFixed(1)}</td>
           <td>{formatBytes(proc.memory_rss)}</td>
           {#if tab === 'memory'}<td>{proc.count || 1}</td>{/if}
-          <td><button class="kill-btn" onclick={() => kill(proc.pid)} title="SIGTERM">✕</button></td>
+          <td>
+            <button
+              class="kill-btn"
+              onclick={() => kill(proc.pid)}
+              disabled={arretEnCours !== null}
+              aria-label={libelleArret}
+              title={libelleArret}
+            >{arretEnCours === proc.pid ? "…" : "✕"}</button>
+          </td>
         </tr>
       {/each}
     </tbody>
@@ -69,4 +98,5 @@
   .mono { font-family: monospace; }
   .kill-btn { background: none; border: none; color: var(--error); cursor: pointer; opacity: 0.3; font-size: 0.8rem; }
   .kill-btn:hover { opacity: 1; }
+  .kill-btn:disabled { cursor: progress; opacity: 0.6; }
 </style>

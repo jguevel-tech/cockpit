@@ -23,7 +23,7 @@ rappeler aucune de ces etapes.
    s'affiche par `{$trad("cle")}` : la traduction fait partie du code de la fonctionnalite,
    pas d'une passe de rattrapage. Une fonctionnalite livree dans une seule langue est une
    fonctionnalite non finie.
-2. **Verifier** — les 5 points de la definition de "fini". Aucun n'est optionnel.
+2. **Verifier** — les 6 points de la definition de "fini". Aucun n'est optionnel.
 3. **Consigner** dans `CHANGELOG.md` sous `## [Unreleased]`, section Added / Changed / Fixed /
    Removed. Uniquement si l'utilisateur peut le constater ; une refonte interne n'y a pas sa place.
    **Tout ce qui touche aux journaux et a la remontee d'informations se resume a
@@ -107,14 +107,20 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 
 ## Regles non negociables (a lire AVANT de coder)
 
-**Definition de "fini"** — une modification n'est livrable que si ces 5 points passent :
+**Definition de "fini"** — une modification n'est livrable que si ces 6 points passent :
 1. `npm run check` -> 0 erreur, 0 warning (c'est l'etat actuel, le maintenir)
 2. `cd src-tauri && cargo test` -> tous verts
 3. `npx tauri build --no-bundle` si on livre un binaire (JAMAIS `cargo build --release` seul :
    sans les env vars Tauri le binaire sort en mode dev et cherche Vite sur localhost:5173)
 4. `npm run i18n:audit` -> 0 chaine en dur (tout texte visible passe par le catalogue,
    en francais ET en anglais)
-5. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
+5. `cd src-tauri && cargo check --target x86_64-pc-windows-gnu --all-targets` -> 0 erreur,
+   0 warning. **Le portage Windows se garde a la compilation, pas a la relecture** : c'est le
+   seul garde-fou possible sans machine Windows, et il a trouve le premier bloqueur en une
+   commande. Prerequis, une fois : `rustup target add x86_64-pc-windows-gnu` ET un compilateur
+   C croise, sans quoi `libsqlite3-sys` (SQLite embarque) ne se construit pas — voir
+   « Compilation croisee Windows » dans les Pieges connus.
+6. **Toute modification visible par l'utilisateur est consignee dans `CHANGELOG.md` sous
    `## [Unreleased]`**, dans la bonne section (Added / Changed / Fixed / Removed). Ce texte
    n'est pas de la doc interne : il est affiche dans le logiciel ET sert de notes de version
    dans le modal de mise a jour. Une refonte interne sans effet visible n'a rien a y faire.
@@ -249,6 +255,13 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
 - Svelte 5 runes uniquement : `$state`/`$derived`/`$props` + callback props
   (pas de createEventDispatcher, pas de stores locaux inutiles)
 - Commandes externes (git, docker...) : args en tableau via Command, jamais `sh -c` interpole
+- **Le dossier personnel se demande a `chemins::dossier_personnel()`**, jamais a
+  `std::env::var("HOME")` : Windows n'a pas `HOME` mais `USERPROFILE`. Cette fonction rend une
+  ERREUR nommee, la ou les six anciens appels rendaient « rien trouve » (`Ok(vec![])`,
+  `logged_in: false`, un repli `"/root"` qui designait le dossier d'un AUTRE utilisateur).
+- **Un chemin en dur qui commence par `/` est un bug de portabilite** : `/tmp` devient
+  `std::env::temp_dir()`, et un dossier de donnees se demande a Tauri (memorise dans
+  `chemins::dossier_donnees()` pour le hook de panic, qui ne peut pas appeler le handle).
 - Bug a corriger -> reproduire et instrumenter AVANT de patcher (lecon du bug accents) ;
   ne jamais enchainer des correctifs hypothetiques
 - **Un bug croise en chemin se corrige**, meme si personne ne l'a signale : on est dans
@@ -372,9 +385,9 @@ cd src-tauri && cargo check
 # Pointer vers une DB specifique
 COCKPIT_DB=/chemin/vers/data.db ./src-tauri/target/release/cockpit
 
-# Le MEME binaire sert de service de terminaux (etape B2 du chantier des terminaux).
-# Lance a la main, il ecoute et n'ouvre aucune fenetre ; l'application le relance elle-meme,
-# detache, quand elle en a besoin. Rien n'y passe encore.
+# Le MEME binaire sert de service de terminaux. Lance a la main, il ecoute et n'ouvre aucune
+# fenetre ; l'application le relance elle-meme, detache, quand elle en a besoin. TOUS les
+# terminaux passent par lui depuis le 2026-08-21.
 ./src-tauri/target/release/cockpit --service-terminaux /run/user/1000/cockpit/terminaux.sock
 ```
 
@@ -417,11 +430,11 @@ Communication frontend <-> backend via IPC Tauri :
 
 Pas de serveur HTTP ni de WebSocket.
 
-**Un second processus arrive** (etape B2 du chantier des terminaux, faite le 2026-08-21) : le
-service de terminaux, le meme binaire lance avec `--service-terminaux`, detache de
-l'application pour lui survivre. Il parle par un socket de domaine Unix (tuyau nomme sous
-Windows), avec son propre protocole versionne. L'application ne s'en sert PAS encore — voir
-« Onglets Terminal / Fichiers / Git » et `docs/portabilite/plan-terminaux.md`.
+**Il y a un SECOND PROCESSUS** (chantier des terminaux, fini le 2026-08-21) : le service de
+terminaux, le meme binaire lance avec `--service-terminaux`, detache de l'application pour lui
+survivre. Il parle par un socket de domaine Unix (tuyau nomme sous Windows), avec son propre
+protocole versionne. **Tous les terminaux passent par lui** — voir « Onglets Terminal /
+Fichiers / Git » et `docs/portabilite/plan-terminaux.md`.
 
 ## Arborescence du projet
 
@@ -436,6 +449,8 @@ ai-workforce/
 │   └── src/
 │       ├── main.rs                 # Point d'entree
 │       ├── lib.rs                  # AppState, commandes Tauri, setup, import DB
+│       ├── chemins.rs              # Dossier personnel (HOME / USERPROFILE) + dossier de
+│       │                           #   donnees memorise pour le hook de panic
 │       ├── docker/
 │       │   ├── compose.rs          # Wrapper docker compose (up/down/ps) async
 │       │   ├── graph.rs            # Tri topologique, detection de cycles (7 tests)
@@ -496,8 +511,10 @@ ai-workforce/
 │       ├── gitdiff/
 │       │   └── mod.rs              # git status/diff par shell-out, parser unified diff
 │       ├── system/
-│       │   ├── metrics.rs          # CPU, RAM (detail: cached/buffers/shmem/zfs_arc), disques
-│       │   └── process.rs          # Liste processus groupes, kill via SIGTERM
+│       │   ├── metrics.rs          # CPU, RAM (detail cache/buffers/partage/ZFS : LINUX seul,
+│       │   │                       #   `Option`), disques (aucun filtre maison), version de l'OS
+│       │   └── process.rs          # Liste processus groupes, arret par le signal le plus doux
+│       │                           #   que le systeme accepte (Term ; Kill sous Windows)
 │       ├── scanner/
 │       │   └── mod.rs              # Scan filesystem pour docker-compose.yml (2 tests)
 │       └── plugin/
@@ -599,9 +616,10 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
 - **Terminaux** : tous les terminaux ouverts, raccourci direct vers chaque session
 - **Conteneurs** : tous les conteneurs Docker de la machine + volumes/images + prune
 - **Monitoring** : monitoring systeme avec :
-  - Badge hostname, version kernel, uptime
+  - Badge hostname, systeme et version (`long_os_version`, pas le noyau), uptime
   - Jauges circulaires SVG (donuts) CPU + Memoire avec pourcentage, nombre de coeurs, modele CPU
-  - Detail memoire (Processus, ZFS ARC, Cache, Partage, Buffers) lu depuis `/proc/meminfo` et `/proc/spl/kstat/zfs/arcstats`
+  - Detail memoire (Processus, ZFS ARC, Cache, Partage, Buffers) lu depuis `/proc/meminfo` et
+    `/proc/spl/kstat/zfs/arcstats` — **LINUX uniquement**, le panneau se masque ailleurs
   - Graphiques d'historique CPU et memoire (SVG polyline, 60 points FIFO a 3s d'intervalle)
   - Top 20 processus CPU et Top 20 processus memoire (tableau avec toggle)
 
@@ -610,7 +628,8 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
 - Section **Terminaux** en haut (repliable, masquee si vide) : raccourcis vers toutes les sessions
   vivantes (nom + projet), clic = navigation directe vers la session (pendingTerminalId),
   clic droit = Renommer/Fermer. Logo Claude = un agent IA (claude, codex...) tourne dans la
-  session (detection par /proc/<pid>/exe, insensible a l'usurpation d'argv), point gris =
+  session (detection par le BINAIRE REEL du process, insensible a l'usurpation d'argv :
+  `/proc/<pid>/exe` sous Linux, `Process::exe()` de sysinfo ailleurs), point gris =
   terminal normal. Alimentee par le store `terminals` (stores/terminals.ts) : recharge sur
   terminal_exit, apres creation/fermeture/renommage, et toutes les 5 s (suivi du flag llm).
 - Boutons **« + Projet »** et **« + Dossier »** en toutes lettres (une icone seule n'etait pas
@@ -783,7 +802,7 @@ je prend les maj et je test apres »). Consequences :
   acceptable : elle n'ecrit que dans `/tmp/cockpit-debug.log`. La retirer des la cause tranchee.
 - Le build local reste obligatoire pour l'IA (4e point de la definition de "fini"), simplement
   il ne sert pas de moyen de test pour lui.
-Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 4 points de la definition
+Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 6 points de la definition
 de "fini" ne passent pas, et annoncer apres coup ce qui est parti et en quelle version.
 Seule exception encore soumise a accord : reecrire un historique deja pousse.
 
@@ -791,7 +810,7 @@ Seule exception encore soumise a accord : reecrire un historique deja pousse.
 sur les pushes de `main` : `release.yml` lance lui-meme `npm run check` et `cargo test` avant de
 builder, donc un commit casse ne peut de toute facon pas etre publie. Une CI de branche ne faisait
 que refaire ce travail en double. Ne pas la reintroduire — c'est une decision de Jimmy, prise deux
-fois. La verification avant un tag se fait en local (les 4 points de la definition de "fini").
+fois. La verification avant un tag se fait en local (les 6 points de la definition de "fini").
 
 **Distribution** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
 avec entree de menu. C'est le `curl | sh` annonce dans le README. Il lit la derniere release via
@@ -1301,14 +1320,27 @@ Le monitor (`docker/monitor.rs`) rafraichit les statuts en 3 phases :
 
 Le backend (`system/metrics.rs`) collecte :
 - **CPU** : usage global, par coeur, modele, nombre de coeurs (via sysinfo)
-- **Memoire** : total, used, available, swap + detail via `/proc/meminfo` :
+- **Memoire** : total, used, available, swap + un detail **Linux uniquement** (`detail:
+  Option<MemoryDetail>`, `None` ailleurs et `None` si `/proc/meminfo` est illisible), via
+  `/proc/meminfo` :
   - `cached` : pages cache disque
   - `buffers` : buffers kernel
   - `shmem` : memoire partagee
   - `s_reclaimable` : memoire reclamable (slab)
   - `zfs_arc` : cache ZFS (lu depuis `/proc/spl/kstat/zfs/arcstats`, 0 si absent)
-- **Disques** : partitions filtrees (/, /home, /boot, /var, /tmp, /opt)
+- **Disques** : ce que `sysinfo` juge local et reel. **Plus aucun filtre maison** : les six
+  points de montage Unix qui etaient ecrits en dur ne matchaient RIEN sous Windows (`C:\`) et
+  laissaient tomber `/System/Volumes/Data` sous macOS. sysinfo ecarte deja les pseudo-systemes
+  de fichiers et les montages snap sous Linux, les instantanes APFS et les volumes reseau sous
+  macOS, et ne garde que `DRIVE_FIXED`/`DRIVE_REMOVABLE` sous Windows. Consequence voulue : un
+  disque monte sur `/mnt/data` apparait enfin, et la liste peut etre plus longue qu'avant.
+  **Ne pas dedupliquer** deux volumes qui se ressemblent (APFS, ZFS) : c'est de l'heuristique
+  qui se trompera, et l'ecran affiche une carte par disque sans jamais additionner.
 - **Processus** : top 20 CPU + top 20 memoire groupes par nom
+- **Arret d'un processus** : le signal le plus doux que le systeme accepte. `Signal::Term`
+  sous Unix, `Signal::Kill` sous Windows — `SystemMetrics.kill_is_forced` le dit au frontend,
+  qui affiche « Forcer l'arret » au lieu de « Arreter ». Voir « Un signal POSIX compile sous
+  Windows » dans les Pieges connus.
 
 ## Vision future
 
@@ -1317,6 +1349,93 @@ Le backend (`system/metrics.rs`) collecte :
 
 ## Pieges connus (lecons apprises)
 
+- **COMPILATION CROISEE WINDOWS : `rustup target add` ne suffit pas, il faut un compilateur C
+  croise.** `cargo check --target x86_64-pc-windows-gnu` echoue d'abord sur
+  `failed to find tool "x86_64-w64-mingw32-gcc"` — ce n'est pas notre code, c'est
+  `libsqlite3-sys` (feature `bundled`) qui compile `sqlite3.c` POUR LA CIBLE, et `cargo check`
+  execute les scripts de construction. Le message ne dit pas quelle crate le demande.
+  - Avec les droits : `sudo apt-get install gcc-mingw-w64-x86-64-win32`.
+  - Sans les droits, et ca marche : `apt-get download` des paquets mingw puis `dpkg-deb -x`
+    dans un dossier a soi. Le pilote gcc de Debian est RELOCATABLE (il retrouve son `libexec`
+    a partir de `argv[0]`), donc `<prefixe>/usr/bin/x86_64-w64-mingw32-gcc-13-win32` compile
+    tel quel depuis n'importe ou. Poser `CC_x86_64_pc_windows_gnu` et
+    `AR_x86_64_pc_windows_gnu` dessus, et ajouter son `bin` au `PATH` (l'assembleur et le
+    lieur y sont cherches par nom court).
+  - `gnu` et non `msvc` : la cible MSVC voudrait `cl.exe`, introuvable sur une machine Linux.
+    Le binaire publie, lui, est construit par le runner `windows-latest` en MSVC — la cible
+    croisee ne sert qu'a GARDER LE CODE COMPILABLE, pas a produire un binaire.
+  - Verifier `--all-targets` : sans lui, le code des tests (`#[cfg(test)]`) n'est pas compile
+    pour la cible et ses `use std::os::unix::...` passent inapercus.
+- **UN SIGNAL POSIX COMPILE SOUS WINDOWS ET RATE A L'EXECUTION.** `sysinfo::Signal::Term`
+  existe sur toutes les plateformes ; c'est sa CONVERSION qui rend `None` sous Windows
+  (`windows/mod.rs`, branche `_ => None`), ou seul `Signal::Kill` est accepte et applique par
+  `taskkill.exe /F`. Donc `kill_with(Signal::Term)` compilait sans un mot et notre code
+  affichait « failed to send SIGTERM », un message qui NOMME un mecanisme inexistant sur ce
+  systeme et envoie le diagnostic vers un probleme de permission. La regle qui en sort :
+  quand une bibliotheque expose un enum commun a trois systemes, chercher la table de
+  conversion de chaque plateforme avant de croire que la valeur est acceptee. Corrige le
+  2026-08-21 (`system/process.rs`, `SIGNAL_D_ARRET` + `ARRET_FORCE`).
+- **`interprocess::PeerCreds::euid()` est declare `#[cfg(unix)]`** : il n'EXISTE pas a la
+  compilation sous Windows, ou la structure ne porte qu'un pid. C'etait le SEUL bloqueur de
+  compilation Windows de tout le crate au 2026-08-21 (une erreur, `terminal/service/tuyau.rs`)
+  — l'etude `docs/portabilite/divers.md` en annoncait un autre (`PermissionsExt` non
+  conditionne) qui avait deja ete corrige entre-temps. Lecon d'usage : prendre le compilateur
+  pour verite, pas l'etude de lecture.
+- **`sysinfo` n'expose AUCUNE notion de cache, de buffers ni de memoire partagee, sur aucune
+  plateforme** — sept nombres de memoire, point (verifie dans la source vendoree). Le detail
+  memoire n'est donc pas un manque qu'une montee de version comblerait : c'est du code natif
+  par systeme, ou rien. D'ou le choix acte : socle commun partout, detail LINUX en supplement
+  (`MemoryMetrics.detail: Option<...>`). Ne pas rouvrir ce debat sans une raison neuve : les
+  categories ne se traduisent pas (macOS compresse la RAM, Windows n'a ni buffers ni partage),
+  et deux des trois branches ne seraient pas testables ici.
+- **Le nom d'un socket de domaine Unix est limite a ~108 OCTETS**, et l'erreur ne le dit pas.
+  Constate le 2026-08-21 en pointant `COCKPIT_TERMINAUX_SOCKET` dans un dossier de travail
+  profond : le service demarrait, n'ouvrait rien, et l'application rendait seulement « le
+  service de terminaux n'a pas ouvert son socket en 10 s ». Consequence pratique : pour un banc
+  d'essai, mettre le socket dans `$XDG_RUNTIME_DIR` (chemin court), pas dans le dossier de
+  travail du scratchpad.
+- **Du code d'apparence portable peut etre mort a moitie.** `exe_est_llm` lisait
+  `/proc/<pid>/exe` sans `#[cfg]` : ca compile partout, et ca rend TOUJOURS faux ailleurs que
+  sous Linux. La detection des agents avait donc bien une branche non-Linux (construite sur
+  `sysinfo`), mais la moitie anti-usurpation d'argv y etait inerte, sans erreur ni trace. Meme
+  famille de piege : `basename()` ne coupait que sur `/`, donc `C:\...\claude.cmd` rendait le
+  chemin entier, et `est_commande_llm` ne retirait que `.js`/`.mjs`, donc jamais `.cmd` ni
+  `.exe` — trois defauts silencieux dans une fonction de vingt lignes. Chercher les chemins et
+  les separateurs en dur AVANT de conclure qu'un module est portable.
+
+- **`[cockpit] <defunct>` derriere l'application : ce N'EST PAS le double fork du service, et
+  la cause reste a trouver (mesures du 2026-08-21, a ne pas refaire).** Symptome : un ou deux
+  zombies dont le parent est l'application, qui apparaissent a des moments imprevisibles
+  (t+82 s apres le demarrage, puis 37 min plus tard) et restent jusqu'a la fermeture.
+  - **Signature du zombie**, lue dans `/proc/<pid>/stat` : `comm` = `cockpit`, `exit_code`
+    (champ 52) = 0, `minflt` (champ 10) = 205-229, `utime` = 0. Un `cockpit` qui a VRAIMENT
+    exec puis quitte tout de suite fait 1348 fautes mineures et 1215 majeures (mesure :
+    `/usr/bin/time -v ./cockpit --service-terminaux /chemin/absent`). Donc **ce zombie n'a
+    jamais exec** : c'est un fork de l'application qui a fait `_exit(0)`.
+  - **`lancer_detache` a ete disculpe trois fois** : (1) 2000 lancements d'affilee avec le
+    meme double fork, dans un processus multi-thread ou tokio lance et moissonne des process
+    en continu — zero fuite ; (2) service tue a la main sur une instance isolee, relance par
+    l'application, aucun zombie ; (3) socket rendu injoignable, l'application reessaie et
+    echoue en boucle, aucun zombie. `enfant.wait()` recoit bien l'intermediaire, et la
+    lecture de la source de `std` confirme que le chemin d'ERREUR de `spawn()` moissonne
+    aussi (`assert!(p.wait().is_ok())`).
+  - **Ce qui reste comme suspect** : le seul autre code du processus qui fasse « fork puis
+    `_exit(0)` sans exec » est l'enfant INTERMEDIAIRE de `g_spawn` (GLib), utilise par
+    WebKitGTK pour lancer ses processus auxiliaires. Il porte le `comm` du parent, donc
+    `cockpit`, et GLib le moissonne lui-meme par un `waitpid` qui peut perdre la course.
+  - **Ne PAS "corriger" par un `waitpid(-1, WNOHANG)` de nettoyage** : il volerait les enfants
+    de tokio (`docker`, `git`) et de GLib, qui verraient leurs commandes echouer sans raison.
+    Un zombie par heure est une fuite a comprendre, pas a masquer.
+  - **Pour trancher, il faut un strace de l'instance qui fuit** : `ptrace_scope` vaut 1 sur
+    cette machine, donc on ne peut tracer QUE ses propres descendants — lancer l'application
+    soi-meme (`xvfb-run -a dbus-run-session -- strace -f -tt -e trace=clone,clone3,execve,wait4 ...`)
+    avec une COPIE de la vraie base, sinon le monitor Docker ne tourne pas et la moitie des
+    forks n'ont pas lieu. Le guetteur qui sert a ca : lire `/proc/*/stat` toutes les 50 ms et
+    ne signaler que les enfants du pid vise.
+  - Detail qui a fait perdre du temps : les enfants de tokio passent par l'etat `Z` une
+    fraction de seconde avant d'etre moissonnes. Un compteur de zombies naif les compte et
+    annonce une fuite qui n'existe pas. Ne compter que ceux qui portent NOTRE nom de programme
+    (donc n'ont pas exec) et qui sont encore la deux secondes plus tard.
 - **Un processus detache par double fork n'est PAS adopte par le pid 1** sur un bureau Linux
   moderne : `systemd --user` se declare sous-moissonneur et recupere les orphelins de la session.
   Constate le 2026-08-21 en verifiant le detachement du service de terminaux (parent 6505 =

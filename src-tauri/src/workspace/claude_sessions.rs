@@ -28,13 +28,10 @@ fn encode_project_path(path: &str) -> String {
         .collect()
 }
 
-fn claude_projects_dir(project_path: &str) -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    Some(
-        PathBuf::from(home)
-            .join(".claude/projects")
-            .join(encode_project_path(project_path)),
-    )
+fn claude_projects_dir(project_path: &str) -> Result<PathBuf, String> {
+    Ok(crate::chemins::dossier_personnel()?
+        .join(".claude/projects")
+        .join(encode_project_path(project_path)))
 }
 
 /// Noms personnalises des sessions (table claude_session_names).
@@ -76,9 +73,11 @@ pub fn list_claude_sessions(
     project_path: &str,
 ) -> Result<Vec<ClaudeSession>, String> {
     let names = custom_names(db);
-    let Some(dir) = claude_projects_dir(project_path) else {
-        return Ok(vec![]);
-    };
+    // Un dossier personnel introuvable remonte : sans ca, la liste sortait vide et on
+    // cherchait la panne du cote de Claude Code.
+    let dir = claude_projects_dir(project_path)?;
+    // Le dossier absent, lui, n'est PAS une panne : ce projet n'a simplement encore aucune
+    // conversation.
     if !dir.is_dir() {
         return Ok(vec![]);
     }

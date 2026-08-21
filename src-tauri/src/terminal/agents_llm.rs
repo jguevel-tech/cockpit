@@ -13,15 +13,40 @@ const COMMANDES_LLM: &[&str] = &[
     "copilot", "cursor-agent", "amp", "qwen", "ollama",
 ];
 
+/// Dernier segment d'un chemin. Coupe sur `/` ET sur `\` : une ligne de commande Windows
+/// s'ecrit `C:\Users\moi\claude.cmd`, et ne couper que sur `/` rendait le chemin entier,
+/// donc aucune correspondance.
 fn basename(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
+/// Extensions qu'un nom de programme peut porter sans changer d'identite.
+///
+/// `.js`/`.mjs` : un CLI lance par node. `.exe`/`.cmd`/`.bat`/`.ps1` : Windows, ou un CLI
+/// installe par npm est un shim `.cmd` autour de `node.exe`. Sans ce retrait, la detection
+/// ne reconnaissait RIEN sous Windows — ni `claude.cmd`, ni `node.exe` comme lanceur.
+const EXTENSIONS_DE_PROGRAMME: &[&str] =
+    &[".js", ".mjs", ".cjs", ".exe", ".cmd", ".bat", ".ps1"];
+
+/// Retire l'extension d'un nom de programme, sans tenir compte de la casse : Windows ecrit
+/// aussi bien `claude.cmd` que `CLAUDE.CMD`.
+fn sans_extension(nom: &str) -> &str {
+    for ext in EXTENSIONS_DE_PROGRAMME {
+        let Some(coupe) = nom.len().checked_sub(ext.len()) else { continue };
+        // `get` plutot que `split_at` : un nom finissant par un caractere multi-octets
+        // n'aurait pas de frontiere a cet endroit, et `split_at` paniquerait.
+        if coupe > 0 && nom.get(coupe..).is_some_and(|fin| fin.eq_ignore_ascii_case(ext)) {
+            return &nom[..coupe];
+        }
+    }
+    nom
 }
 
 pub fn est_commande_llm(cmd: &str) -> bool {
-    COMMANDES_LLM.contains(&cmd)
+    COMMANDES_LLM.contains(&sans_extension(cmd))
 }
 
-/// Le BINAIRE REEL du process est-il un CLI LLM ? (`/proc/<pid>/exe`)
+/// Le BINAIRE REEL du process est-il un CLI LLM ?
 ///
 /// Necessaire parce que argv[0] peut mentir : constate le 2026-08-14, un claude natif lance
 /// depuis un shell ou trainait la variable APPIMAGE (fuite corrigee en 0.6.7) s'affichait
@@ -29,15 +54,20 @@ pub fn est_commande_llm(cmd: &str) -> bool {
 /// detection par nom de commande devenait aveugle. `/proc/exe` pointe, lui, sur le vrai
 /// binaire (`~/.local/share/claude/versions/2.1.231`) : on matche chaque composant du chemin
 /// (le basename est un numero de version, c'est le dossier `claude` qui signe).
-fn exe_est_llm(pid: u32) -> bool {
-    let Ok(exe) = std::fs::read_link(format!("/proc/{}/exe", pid)) else {
-        return false;
-    };
+fn chemin_est_llm(exe: &std::path::Path) -> bool {
     exe.components().any(|c| {
         c.as_os_str()
             .to_str()
-            .is_some_and(|s| est_commande_llm(s.trim_end_matches(".js").trim_end_matches(".mjs")))
+            .is_some_and(est_commande_llm)
     })
+}
+
+/// Sous Linux, le lien `/proc/<pid>/exe` : une lecture, pas d'enumeration.
+#[cfg(target_os = "linux")]
+fn exe_est_llm(pid: u32) -> bool {
+    std::fs::read_link(format!("/proc/{}/exe", pid))
+        .map(|exe| chemin_est_llm(&exe))
+        .unwrap_or(false)
 }
 
 /// Une ligne de commande complete correspond-elle a un CLI LLM ?
@@ -45,14 +75,13 @@ fn exe_est_llm(pid: u32) -> bool {
 pub fn arguments_sont_llm(args: &str) -> bool {
     let mut tokens = args.split_whitespace();
     let Some(first) = tokens.next() else { return false };
-    let base = basename(first);
+    let base = sans_extension(basename(first));
     if est_commande_llm(base) {
         return true;
     }
     if matches!(base, "node" | "bun" | "deno" | "python" | "python3") {
         if let Some(second) = tokens.next() {
-            let script = basename(second);
-            return est_commande_llm(script.trim_end_matches(".js").trim_end_matches(".mjs"));
+            return est_commande_llm(basename(second));
         }
     }
     false
@@ -111,6 +140,12 @@ impl ArbreProcess {
 pub struct ArbreProcess {
     enfants: std::collections::HashMap<u32, Vec<u32>>,
     ligne: std::collections::HashMap<u32, String>,
+    /// Le binaire REEL de chaque process. `Process::exe()` de sysinfo passe par
+    /// `proc_pidpath` sous macOS et `GetModuleFileNameExW` sous Windows : la garantie
+    /// anti-usurpation d'argv survit sur les trois systemes. La lecture directe de
+    /// `/proc/<pid>/exe` rendait, elle, toujours faux ailleurs que sous Linux — la moitie
+    /// de la detection etait donc morte sans que rien ne le dise.
+    exe: std::collections::HashMap<u32, std::path::PathBuf>,
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -123,14 +158,18 @@ impl ArbreProcess {
         );
         let mut enfants: HashMap<u32, Vec<u32>> = HashMap::new();
         let mut ligne: HashMap<u32, String> = HashMap::new();
+        let mut exe: HashMap<u32, std::path::PathBuf> = HashMap::new();
         for (pid, process) in sys.processes() {
             let pid = pid.as_u32();
             if let Some(parent) = process.parent() {
                 enfants.entry(parent.as_u32()).or_default().push(pid);
             }
             ligne.insert(pid, process.cmd().join(" "));
+            if let Some(chemin) = process.exe() {
+                exe.insert(pid, chemin.to_path_buf());
+            }
         }
-        Self { enfants, ligne }
+        Self { enfants, ligne, exe }
     }
 
     fn enfants(&self, pid: u32) -> Vec<u32> {
@@ -138,7 +177,8 @@ impl ArbreProcess {
     }
 
     fn est_llm(&self, pid: u32) -> bool {
-        self.ligne.get(&pid).is_some_and(|l| arguments_sont_llm(l)) || exe_est_llm(pid)
+        self.ligne.get(&pid).is_some_and(|l| arguments_sont_llm(l))
+            || self.exe.get(&pid).is_some_and(|e| chemin_est_llm(e))
     }
 }
 
@@ -167,7 +207,21 @@ impl ArbreProcess {
 
 #[cfg(test)]
 mod tests {
-    use super::arguments_sont_llm;
+    use super::{arguments_sont_llm, sans_extension};
+
+    #[test]
+    fn les_extensions_de_programme_sont_retirees() {
+        assert_eq!(sans_extension("claude.cmd"), "claude");
+        assert_eq!(sans_extension("CLAUDE.CMD"), "CLAUDE");
+        assert_eq!(sans_extension("node.exe"), "node");
+        assert_eq!(sans_extension("gemini.js"), "gemini");
+        // Rien a retirer : le nom passe tel quel, sans tronquer.
+        assert_eq!(sans_extension("claude"), "claude");
+        assert_eq!(sans_extension(".exe"), ".exe");
+        assert_eq!(sans_extension("resume.md"), "resume.md");
+        // Un nom accentue ne doit pas faire paniquer la coupe.
+        assert_eq!(sans_extension("resumé"), "resumé");
+    }
 
     #[test]
     fn detects_llm_command_lines() {
@@ -176,6 +230,24 @@ mod tests {
         assert!(arguments_sont_llm("node /home/x/.npm/bin/gemini.js chat"));
         assert!(arguments_sont_llm("python3 /opt/aider serve"));
         assert!(arguments_sont_llm("codex"));
+    }
+
+    /// Une ligne de commande Windows n'a pas le meme separateur, et ses programmes portent
+    /// une extension : sans la coupe sur `\` ni le retrait de `.cmd`/`.exe`, rien n'etait
+    /// jamais reconnu la-bas.
+    #[test]
+    fn detects_llm_on_windows_paths() {
+        assert!(arguments_sont_llm(r"C:\Users\moi\AppData\npm\claude.cmd --resume abc"));
+        assert!(arguments_sont_llm(r"C:\tools\nodejs\node.exe C:\x\gemini.js"));
+    }
+
+    /// LIMITE CONNUE, et c'est pour ca que le controle du binaire reel compte : la ligne de
+    /// commande est decoupee sur les ESPACES, donc un chemin qui en contient (`C:\Program
+    /// Files\...`, tres courant sous Windows) n'est pas reconnu ici. La reconnaissance passe
+    /// alors par `chemin_est_llm`, qui lit le binaire du process et non ses arguments.
+    #[test]
+    fn un_chemin_avec_espace_echappe_a_la_ligne_de_commande() {
+        assert!(!arguments_sont_llm(r"C:\Program Files\nodejs\node.exe C:\x\gemini.js"));
     }
 
     #[test]

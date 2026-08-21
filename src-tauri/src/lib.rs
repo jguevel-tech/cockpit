@@ -1,5 +1,6 @@
 mod agents;
 mod appearance;
+mod chemins;
 mod claude_auth;
 mod docker;
 mod gitdiff;
@@ -932,9 +933,11 @@ async fn report_error(
 }
 
 /// Nom par defaut a cote des erreurs : le compte du systeme, faute de mieux.
+/// `USERNAME` est la variable de Windows, `USER`/`LOGNAME` celles d'Unix.
 fn whoami_fallback() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
+        .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "inconnu".to_string())
 }
 
@@ -948,7 +951,10 @@ fn machine_report() -> report::MachineInfo {
 #[tauri::command]
 fn debug_log(line: String) {
     use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/cockpit-debug.log") {
+    // `temp_dir()` et pas `/tmp` : sous Windows le dossier temporaire est dans le profil de
+    // l'utilisateur, et un chemin absolu `/tmp` y designerait la racine du lecteur courant.
+    let chemin = std::env::temp_dir().join("cockpit-debug.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(chemin) {
         let _ = writeln!(f, "{}", line);
     }
 }
@@ -1154,8 +1160,8 @@ async fn git_delete_branch(project_path: String, name: String, force: bool) -> R
 // --- Tauri Commands: Agents marketplace (multi-marketplace) ---
 
 #[tauri::command]
-fn get_marketplace_path() -> String {
-    agents::ccm_marketplace_path().to_string_lossy().to_string()
+fn get_marketplace_path() -> Result<String, String> {
+    Ok(agents::ccm_marketplace_path()?.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -1296,6 +1302,9 @@ fn ecarter_polices_colrv1() {
 }
 
 /// Contenu de la configuration de polices : celle du systeme, moins les polices COLRv1.
+/// Linux seulement — fontconfig n'existe ni sous Windows ni sous macOS, et son seul
+/// appelant (`ecarter_polices_colrv1`) porte deja ce `cfg`.
+#[cfg(target_os = "linux")]
 fn configuration_polices() -> String {
     // `include` d'abord : sans la configuration du systeme, plus AUCUNE police n'est
     // trouvee et l'interface s'affiche en carres.
@@ -1395,21 +1404,24 @@ pub fn run() {
     {
         let precedent = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            // Le chemin est reconstruit a la main : a l'instant d'un panic, on ne peut
-            // pas compter sur le handle Tauri, et on n'ajoute pas une dependance pour ca.
-            let base = std::env::var_os("XDG_DATA_HOME")
-                .map(std::path::PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(|h| std::path::PathBuf::from(h).join(".local/share"))
-                });
-            if let Some(dir) = base.map(|b| b.join("com.cockpit.dev")) {
-                let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                report::append_log(
-                    &dir,
-                    &report::format_log_line(&horodatage, "panic", &info.to_string()),
-                );
-            }
+            // Le dossier est celui que Tauri a resolu, memorise pendant le `setup` : a
+            // l'instant d'un panic on ne peut pas compter sur le handle Tauri (raison qui
+            // n'a pas change), mais on n'a plus besoin de RECONSTRUIRE un chemin. La
+            // version precedente rejouait `XDG_DATA_HOME` -> `~/.local/share`, juste sous
+            // Linux : sur macOS elle ecrivait dans un dossier que personne ne relit, sous
+            // Windows nulle part.
+            let dir = chemins::dossier_donnees().cloned().unwrap_or_else(|| {
+                // Un panic AVANT le `setup` (init des plugins) n'a pas encore de dossier de
+                // donnees memorise. Le temporaire est le seul endroit portable et toujours
+                // accessible : mieux qu'une trace perdue, et la fenetre se compte en
+                // millisecondes.
+                std::env::temp_dir().join("cockpit")
+            });
+            let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            report::append_log(
+                &dir,
+                &report::format_log_line(&horodatage, "panic", &info.to_string()),
+            );
             precedent(info);
         }));
     }
@@ -1439,6 +1451,12 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // EN PREMIER : le hook de panic ecrit dans ce dossier, et le `expect` de
+            // l'ouverture de la base, juste dessous, est une source de panic reelle.
+            if let Ok(dir) = app.path().app_data_dir() {
+                chemins::memoriser_dossier_donnees(dir);
+            }
+
             // Check for --db CLI argument or env var, otherwise use app data dir
             let db_path = std::env::var("COCKPIT_DB")
                 .ok()
@@ -1712,6 +1730,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     #[test]
+    #[cfg(target_os = "linux")]
     fn la_configuration_de_polices_inclut_celle_du_systeme() {
         // Sans cet include, plus aucune police n'est trouvee : l'interface s'affiche en
         // carres, ce qui serait pire que le defaut corrige.
@@ -1721,6 +1740,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn la_configuration_ecarte_les_polices_colrv1() {
         let conf = super::configuration_polices();
         assert!(conf.contains("rejectfont"), "{conf}");

@@ -17,6 +17,13 @@ pub struct ClaudeAuthStatus {
     pub rate_limit_tier: Option<String>,
     /// Epoch secondes d'expiration du token courant.
     pub expires_at: Option<i64>,
+    /// Pourquoi le statut n'a pas pu etre determine, quand c'est le cas.
+    ///
+    /// « Non connecte » et « on n'a pas su regarder » sont deux choses differentes, et
+    /// jusqu'ici elles s'affichaient pareil : dossier personnel introuvable ou fichier de
+    /// jetons illisible rendaient `logged_in: false`, sans un mot. L'utilisateur relancait
+    /// alors une connexion qui ne changeait rien.
+    pub problem: Option<String>,
 }
 
 #[derive(Default)]
@@ -46,14 +53,36 @@ pub fn status() -> ClaudeAuthStatus {
         subscription_type: None,
         rate_limit_tier: None,
         expires_at: None,
+        problem: None,
     };
 
-    let Ok(home) = std::env::var("HOME") else { return auth };
-    let Ok(raw) = std::fs::read_to_string(format!("{}/.claude/.credentials.json", home)) else {
+    let chemin = match crate::chemins::dossier_personnel() {
+        Ok(home) => home.join(".claude").join(".credentials.json"),
+        Err(e) => {
+            auth.problem = Some(e);
+            return auth;
+        }
+    };
+    // Fichier absent = pas encore connecte : c'est le cas normal, pas un probleme a signaler.
+    let raw = match std::fs::read_to_string(&chemin) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return auth,
+        Err(e) => {
+            auth.problem = Some(format!("{} illisible : {e}", chemin.display()));
+            return auth;
+        }
+    };
+    let json = match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(json) => json,
+        Err(e) => {
+            auth.problem = Some(format!("{} n'est pas du JSON valide : {e}", chemin.display()));
+            return auth;
+        }
+    };
+    let Some(oauth) = json.get("claudeAiOauth") else {
+        auth.problem = Some(format!("{} ne contient pas de bloc claudeAiOauth", chemin.display()));
         return auth;
     };
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) else { return auth };
-    let Some(oauth) = json.get("claudeAiOauth") else { return auth };
 
     auth.logged_in = oauth
         .get("accessToken")
@@ -90,8 +119,11 @@ impl ClaudeLoginState {
         let mut cmd = CommandBuilder::new("claude");
         cmd.arg("setup-token");
         cmd.env("TERM", "xterm-256color");
-        if let Ok(home) = std::env::var("HOME") {
-            cmd.cwd(home);
+        // Un dossier personnel introuvable n'empeche pas le flow : la CLI partira du
+        // dossier courant. On ne bloque donc pas dessus, mais on le journalise.
+        match crate::chemins::dossier_personnel() {
+            Ok(home) => cmd.cwd(home),
+            Err(e) => log::warn!("claude setup-token lance sans dossier de depart : {e}"),
         }
 
         let child = pair

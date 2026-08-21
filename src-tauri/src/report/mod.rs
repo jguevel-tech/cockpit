@@ -21,6 +21,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+
 /// Cle de reglage : "on" / "off". Absente = la question n'a pas encore ete posee.
 pub const CONSENT_KEY: &str = "error_reporting";
 /// Cle de reglage : nom affiche a cote des erreurs remontees.
@@ -142,6 +143,21 @@ pub fn distro_from_os_release(contenu: &str) -> String {
     }
 }
 
+/// Le systeme, tel qu'il figure a cote des erreurs.
+///
+/// `/etc/os-release` d'abord : c'est le seul endroit qui distingue Ubuntu de Fedora, et le
+/// CLAUDE.md rappelle que c'est cette fiche « qui a manque pendant plusieurs corrections ».
+/// Hors Linux le fichier n'existe pas, et la fiche affichait alors « inconnue » : on porte
+/// a la aussi une reponse, celle de `sysinfo`, qui rend « Windows 11 » ou « macOS 14.6 ».
+fn systeme_lisible() -> String {
+    let depuis_os_release =
+        distro_from_os_release(&std::fs::read_to_string("/etc/os-release").unwrap_or_default());
+    if depuis_os_release != "inconnue" {
+        return depuis_os_release;
+    }
+    sysinfo::System::long_os_version().unwrap_or_else(|| "inconnue".to_string())
+}
+
 /// Serveur audio actif, d'apres la sortie de `pactl info`.
 ///
 /// Sur les systemes ou PipeWire remplace PulseAudio, `pactl` repond « PulseAudio (on
@@ -179,9 +195,7 @@ pub fn machine_info() -> &'static MachineInfo {
     static INFO: OnceLock<MachineInfo> = OnceLock::new();
     INFO.get_or_init(|| MachineInfo {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
-        distro: distro_from_os_release(
-            &std::fs::read_to_string("/etc/os-release").unwrap_or_default(),
-        ),
+        distro: systeme_lisible(),
         audio_server: audio_server_from_pactl(&sortie_commande("pactl", &["info"])),
         pw_record: pw_record_version(&sortie_commande("pw-record", &["--version"])),
         packaging: if std::env::var_os("APPDIR").is_some() {

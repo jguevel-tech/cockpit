@@ -26,6 +26,17 @@ le script de release.
 - **À cette mise à jour, ce qui tournait dans les terminaux est perdu, une fois.** Les
   anciennes sessions tmux, elles, continuent de tourner en fond : `tmux -L cockpit attach`
   permet de les retrouver, et `tmux -L cockpit kill-server` de les arrêter pour de bon.
+- Le monitoring système affiche désormais **tous les disques locaux**, et plus seulement six
+  points de montage écrits en dur : un disque monté sur `/mnt/data` ou `/srv` était invisible
+  sans aucune explication.
+- Le badge à côté du nom de la machine annonce maintenant **le système et sa version**
+  (« Ubuntu 26.04 ») plutôt que le numéro de version du noyau, et la durée de fonctionnement
+  s'affiche enfin en anglais quand l'interface est en anglais.
+- Le détail de la mémoire (Processus, Cache, Partage, Buffers, ZFS ARC) n'est publié que par
+  Linux : ailleurs, le panneau se masque au lieu d'afficher cinq barres à zéro, et le survol
+  du titre explique pourquoi.
+- La croix qui arrête un processus dit ce qu'elle fait au survol, se désactive pendant
+  l'opération, et signale un échec par une notification au lieu d'une boîte de dialogue.
 
 ## [0.37.1] — 2026-08-20
 

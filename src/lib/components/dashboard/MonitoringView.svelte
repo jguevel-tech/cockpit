@@ -1,6 +1,6 @@
 <script lang="ts">
   import { systemMetrics, cpuHistory, memoryHistory, metricsLive, refreshMetrics, startLiveMetrics, stopLiveMetrics } from "../../stores/system";
-  import { formatBytes } from "../../utils/format";
+  import { formatBytes, formatUptime } from "../../utils/format";
   import type { SystemMetrics } from "../../types";
   import { trad, tradN, translate } from "../../i18n";
 
@@ -16,6 +16,13 @@
     return circumference - (percent / 100) * circumference;
   }
 
+  /**
+   * Le decoupage des cinq barres. Rend `[]` quand le systeme ne publie pas de detail
+   * (`memory.detail === null`, c'est-a-dire ailleurs que sous Linux) : la barre
+   * « Processus » est obtenue par SOUSTRACTION des quatre autres, donc sans elles elle
+   * afficherait le total utilise sous une etiquette fausse. Le panneau se masque, il ne se
+   * remplit pas de zeros.
+   */
   function memoryBreakdown(m: SystemMetrics["memory"]) {
     const items: {
       labelKey: Parameters<typeof translate>[0];
@@ -23,14 +30,16 @@
       percent: number;
       color: string;
     }[] = [];
-    const processBytes = Math.max(0, m.used - m.cached - m.buffers - m.s_reclaimable - m.zfs_arc);
+    const d = m.detail;
+    if (!d) return items;
+    const processBytes = Math.max(0, m.used - d.cached - d.buffers - d.s_reclaimable - d.zfs_arc);
     items.push({ labelKey: "mon.processes", bytes: processBytes, percent: pct(processBytes, m.total), color: "var(--success)" });
-    if (m.zfs_arc > 0) {
-      items.push({ labelKey: "mon.zfsArc", bytes: m.zfs_arc, percent: pct(m.zfs_arc, m.total), color: "#a855f7" });
+    if (d.zfs_arc > 0) {
+      items.push({ labelKey: "mon.zfsArc", bytes: d.zfs_arc, percent: pct(d.zfs_arc, m.total), color: "#a855f7" });
     }
-    items.push({ labelKey: "mon.cache", bytes: m.cached, percent: pct(m.cached, m.total), color: "var(--accent)" });
-    items.push({ labelKey: "mon.shared", bytes: m.shmem, percent: pct(m.shmem, m.total), color: "var(--error)" });
-    items.push({ labelKey: "mon.buffers", bytes: m.buffers, percent: pct(m.buffers, m.total), color: "var(--warning)" });
+    items.push({ labelKey: "mon.cache", bytes: d.cached, percent: pct(d.cached, m.total), color: "var(--accent)" });
+    items.push({ labelKey: "mon.shared", bytes: d.shmem, percent: pct(d.shmem, m.total), color: "var(--error)" });
+    items.push({ labelKey: "mon.buffers", bytes: d.buffers, percent: pct(d.buffers, m.total), color: "var(--warning)" });
     return items;
   }
 
@@ -73,8 +82,8 @@
   {#if metrics}
     <div class="system-info">
       <span class="sys-badge">{metrics.hostname}</span>
-      <span class="sys-detail">{metrics.kernel_version}</span>
-      <span class="sys-detail">Uptime: {metrics.uptime}</span>
+      <span class="sys-detail">{metrics.os_version}</span>
+      <span class="sys-detail">{$trad("sys.uptime", { duration: formatUptime(metrics.uptime_secs) })}</span>
     </div>
 
     <!-- Gauges CPU + Memory -->
@@ -99,7 +108,10 @@
 
       <div class="gauge-card">
         <div class="gauge-icon">▪</div>
-        <div class="gauge-title">{$trad("mon.memoryCaps")}</div>
+        <div
+          class="gauge-title"
+          title={metrics.memory.detail ? undefined : $trad("sys.memoryDetailUnavailable")}
+        >{$trad("mon.memoryCaps")}</div>
         <svg viewBox="0 0 120 120" class="donut">
           <circle cx="60" cy="60" r="45" fill="none" stroke="var(--border-color)" stroke-width="10"/>
           <circle cx="60" cy="60" r="45" fill="none"
@@ -114,20 +126,25 @@
             {formatBytes(metrics.memory.used)} / {formatBytes(metrics.memory.total)}
           </text>
         </svg>
-        <div class="gauge-sub">Swap: {formatBytes(metrics.memory.swap_used)} / {formatBytes(metrics.memory.swap_total)}</div>
+        <div class="gauge-sub">{$trad("mon.swap")} {formatBytes(metrics.memory.swap_used)} / {formatBytes(metrics.memory.swap_total)}</div>
       </div>
     </div>
 
-    <div class="memory-breakdown">
-      {#each memoryBreakdown(metrics.memory) as item}
-        <div class="mem-item">
-          <span class="mem-dot" style="background:{item.color}"></span>
-          <span class="mem-label">{$trad(item.labelKey)}</span>
-          <span class="mem-value">{formatBytes(item.bytes)}</span>
-          <span class="mem-pct">{item.percent}%</span>
-        </div>
-      {/each}
-    </div>
+    <!-- Panneau MASQUE quand le systeme ne publie pas de detail memoire : cinq barres a
+         zero ne renseignent personne, et une barre « Processus » calculee sans les autres
+         mentirait. L'infobulle du titre de la jauge dit pourquoi il manque. -->
+    {#if metrics.memory.detail}
+      <div class="memory-breakdown">
+        {#each memoryBreakdown(metrics.memory) as item}
+          <div class="mem-item">
+            <span class="mem-dot" style="background:{item.color}"></span>
+            <span class="mem-label">{$trad(item.labelKey)}</span>
+            <span class="mem-value">{formatBytes(item.bytes)}</span>
+            <span class="mem-pct">{item.percent}%</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
 
     <div class="chart-section">
       <div class="chart-label">CPU</div>

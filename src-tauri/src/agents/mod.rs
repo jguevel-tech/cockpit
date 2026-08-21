@@ -92,24 +92,28 @@ pub struct MarketplacePluginEntry {
 
 pub const CCM_MARKETPLACE_ID: &str = "ccm-claude-marketplace";
 
-pub fn ccm_marketplace_path() -> PathBuf {
+/// Ces quatre fonctions rendent un `Result` et non un `PathBuf` : le repli `"/root"`
+/// qu'elles portaient avant designait le dossier d'un AUTRE utilisateur (ou rien du tout
+/// sous Windows, qui n'a pas de `HOME`), donc un marketplace vide et une liste d'agents
+/// muette. Une ecriture y aurait en plus depose des fichiers au hasard. Le dossier
+/// personnel est resolu par `crate::chemins`, seul endroit qui connait `USERPROFILE`.
+pub fn ccm_marketplace_path() -> Result<PathBuf, String> {
     if let Ok(p) = std::env::var("CCM_MARKETPLACE_PATH") {
-        return PathBuf::from(p);
+        return Ok(PathBuf::from(p));
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-    PathBuf::from(home).join("Documents/workspace/ccm-claude-marketplace")
+    Ok(home_path()?.join("Documents/workspace/ccm-claude-marketplace"))
 }
 
-fn home_path() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/root".to_string()))
+fn home_path() -> Result<PathBuf, String> {
+    crate::chemins::dossier_personnel()
 }
 
-fn claude_settings_path() -> PathBuf {
-    home_path().join(".claude/settings.json")
+fn claude_settings_path() -> Result<PathBuf, String> {
+    Ok(home_path()?.join(".claude/settings.json"))
 }
 
-fn claude_cache_dir() -> PathBuf {
-    home_path().join(".claude/plugins/cache")
+fn claude_cache_dir() -> Result<PathBuf, String> {
+    Ok(home_path()?.join(".claude/plugins/cache"))
 }
 
 fn validate_name(name: &str) -> Result<(), String> {
@@ -128,11 +132,11 @@ fn validate_name(name: &str) -> Result<(), String> {
 fn plugin_root(marketplace_id: &str, plugin: &str) -> Option<PathBuf> {
     validate_name(plugin).ok()?;
     if marketplace_id == CCM_MARKETPLACE_ID {
-        let p = ccm_marketplace_path().join("plugins").join(plugin);
+        let p = ccm_marketplace_path().ok()?.join("plugins").join(plugin);
         return if p.exists() { Some(p) } else { None };
     }
     // Cache Claude Code
-    let plugin_versions_dir = claude_cache_dir().join(marketplace_id).join(plugin);
+    let plugin_versions_dir = claude_cache_dir().ok()?.join(marketplace_id).join(plugin);
     if !plugin_versions_dir.exists() {
         return None;
     }
@@ -156,7 +160,7 @@ pub fn list_marketplaces() -> Result<Vec<MarketplaceLocation>, String> {
     let mut out = Vec::new();
 
     // 1. CCM marketplace (local, editable)
-    let ccm = ccm_marketplace_path();
+    let ccm = ccm_marketplace_path()?;
     if ccm.exists() {
         let count = count_plugins_in_dir(&ccm.join("plugins"));
         out.push(MarketplaceLocation {
@@ -170,7 +174,7 @@ pub fn list_marketplaces() -> Result<Vec<MarketplaceLocation>, String> {
     }
 
     // 2. Cache Claude Code (read-only)
-    let cache = claude_cache_dir();
+    let cache = claude_cache_dir()?;
     if cache.exists() {
         if let Ok(entries) = std::fs::read_dir(&cache) {
             for entry in entries.flatten() {
@@ -236,7 +240,7 @@ pub fn list_plugins_in(marketplace_id: &str) -> Result<Vec<PluginInfo>, String> 
 }
 
 fn list_ccm_plugins() -> Result<Vec<PluginInfo>, String> {
-    let dir = ccm_marketplace_path().join("plugins");
+    let dir = ccm_marketplace_path()?.join("plugins");
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -261,7 +265,7 @@ fn list_ccm_plugins() -> Result<Vec<PluginInfo>, String> {
 
 fn list_cached_plugins(marketplace_id: &str) -> Result<Vec<PluginInfo>, String> {
     validate_name(marketplace_id)?;
-    let dir = claude_cache_dir().join(marketplace_id);
+    let dir = claude_cache_dir()?.join(marketplace_id);
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -438,7 +442,7 @@ pub fn save_agent(
     ensure_editable(marketplace_id)?;
     validate_name(plugin)?;
     validate_name(name)?;
-    let dir = ccm_marketplace_path()
+    let dir = ccm_marketplace_path()?
         .join("plugins")
         .join(plugin)
         .join("agents");
@@ -451,7 +455,7 @@ pub fn delete_agent(marketplace_id: &str, plugin: &str, name: &str) -> Result<()
     ensure_editable(marketplace_id)?;
     validate_name(plugin)?;
     validate_name(name)?;
-    let path = ccm_marketplace_path()
+    let path = ccm_marketplace_path()?
         .join("plugins")
         .join(plugin)
         .join("agents")
@@ -475,7 +479,7 @@ pub fn rename_agent(
     if old_name == new_name {
         return Ok(());
     }
-    let dir = ccm_marketplace_path()
+    let dir = ccm_marketplace_path()?
         .join("plugins")
         .join(plugin)
         .join("agents");
@@ -528,7 +532,7 @@ fn replace_frontmatter_name(content: &str, new_name: &str) -> String {
 
 pub fn create_plugin(name: &str, description: &str) -> Result<(), String> {
     validate_name(name)?;
-    let dir = ccm_marketplace_path().join("plugins").join(name);
+    let dir = ccm_marketplace_path()?.join("plugins").join(name);
     if dir.exists() {
         return Err(format!("le plugin '{}' existe deja", name));
     }
@@ -557,7 +561,7 @@ pub fn create_plugin(name: &str, description: &str) -> Result<(), String> {
 }
 
 fn add_plugin_to_manifest(plugin_name: &str, description: &str) -> Result<(), String> {
-    let manifest_path = ccm_marketplace_path().join(".claude-plugin/marketplace.json");
+    let manifest_path = ccm_marketplace_path()?.join(".claude-plugin/marketplace.json");
     if !manifest_path.exists() {
         return Err("marketplace.json introuvable".to_string());
     }
@@ -585,7 +589,7 @@ fn add_plugin_to_manifest(plugin_name: &str, description: &str) -> Result<(), St
 pub fn delete_plugin(marketplace_id: &str, name: &str) -> Result<(), String> {
     ensure_editable(marketplace_id)?;
     validate_name(name)?;
-    let dir = ccm_marketplace_path().join("plugins").join(name);
+    let dir = ccm_marketplace_path()?.join("plugins").join(name);
     if !dir.exists() {
         return Err(format!("plugin inexistant : {}", name));
     }
@@ -595,7 +599,7 @@ pub fn delete_plugin(marketplace_id: &str, name: &str) -> Result<(), String> {
 }
 
 fn remove_plugin_from_manifest(plugin_name: &str) -> Result<(), String> {
-    let manifest_path = ccm_marketplace_path().join(".claude-plugin/marketplace.json");
+    let manifest_path = ccm_marketplace_path()?.join(".claude-plugin/marketplace.json");
     if !manifest_path.exists() {
         return Ok(());
     }
@@ -626,7 +630,7 @@ pub fn rename_plugin(
     if old_name == new_name {
         return Ok(());
     }
-    let base = ccm_marketplace_path().join("plugins");
+    let base = ccm_marketplace_path()?.join("plugins");
     let old_dir = base.join(old_name);
     let new_dir = base.join(new_name);
     if !old_dir.exists() {
@@ -657,7 +661,7 @@ pub fn rename_plugin(
     }
 
     // Mettre a jour marketplace.json (entry name + source path)
-    let market_manifest = ccm_marketplace_path().join(".claude-plugin/marketplace.json");
+    let market_manifest = ccm_marketplace_path()?.join(".claude-plugin/marketplace.json");
     if market_manifest.exists() {
         if let Ok(raw) = std::fs::read_to_string(&market_manifest) {
             if let Ok(mut manifest) = serde_json::from_str::<MarketplaceManifest>(&raw) {
@@ -733,7 +737,7 @@ pub fn set_project_plugins(project_path: &str, plugins: Vec<String>) -> Result<(
 // ---------- Orchestrator / global Claude settings ----------
 
 fn read_claude_settings() -> Result<serde_json::Value, String> {
-    let path = claude_settings_path();
+    let path = claude_settings_path()?;
     if !path.exists() {
         return Ok(serde_json::json!({}));
     }
@@ -744,7 +748,7 @@ fn read_claude_settings() -> Result<serde_json::Value, String> {
 fn write_claude_settings(v: &serde_json::Value) -> Result<(), String> {
     let out = serde_json::to_string_pretty(v)
         .map_err(|e| format!("serialize: {}", e))?;
-    std::fs::write(claude_settings_path(), out + "\n")
+    std::fs::write(claude_settings_path()?, out + "\n")
         .map_err(|e| format!("write settings: {}", e))
 }
 

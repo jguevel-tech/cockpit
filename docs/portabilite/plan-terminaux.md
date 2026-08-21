@@ -409,3 +409,34 @@ Deux pièges à surveiller, parce qu'ils remplacent des avantages qu'on avait sa
 2. **Ne pas rendre le chemin de frappe plus long.** 0,4 ms était le prix de tmux ; faire
    pire serait une régression que personne ne pardonne. Le chemin frappe → shell doit
    rester direct.
+
+## Et sous Windows (2026-08-21)
+
+Le service compile pour Windows, et c'est vérifié à chaque changement :
+`cargo check --target x86_64-pc-windows-gnu --all-targets` fait partie de la définition de
+« fini » (voir `CLAUDE.md`, et « Compilation croisée Windows » dans ses pièges connus pour le
+compilateur C croisé qu'il faut installer une fois).
+
+Ce que ça a trouvé : **une seule erreur** dans tout le crate,
+`interprocess::PeerCreds::euid()` déclaré `#[cfg(unix)]` (`terminal/service/tuyau.rs`). Le
+reste du chantier avait été écrit portable, y compris `lancement.rs` (double fork Unix /
+`DETACHED_PROCESS` Windows) et `tuyau.rs` (tuyau nommé `\\.\pipe\cockpit-<compte>`).
+
+Ce que la compilation ne dit PAS, et qui reste à vérifier sur une vraie machine Windows :
+
+- **Le tuyau nommé n'a pas de contrôle de propriétaire équivalent.** `PeerCreds` n'y rend
+  qu'un pid : `verifier_pair` répond `Ok(())` et la protection repose entièrement sur la
+  liste de contrôle par défaut du tuyau, qui n'autorise que le compte créateur. C'est écrit
+  sur place ; ce n'est pas une garde muette, mais ce n'est pas la même garantie qu'un euid
+  comparé.
+- **`ecouter` ne nettoie pas de reste sous Windows** (le `remove_file` est `#[cfg(unix)]`) :
+  un tuyau nommé disparaît avec le processus qui l'a créé, donc il n'y a rien à effacer. À
+  confirmer par un `kill -9` réel du service.
+- **ConPTY** : `portable-pty` le prend en charge, rien n'a été exercé. C'est le morceau le
+  plus susceptible de se comporter autrement (dimensions, séquences émises par le shell par
+  défaut, `powershell.exe` contre `cmd.exe`).
+- **La détection d'un agent IA devient un indice, plus une preuve.** Un CLI installé par npm
+  est un shim `.cmd` autour de `node.exe` : `Process::exe()` rend `node.exe`, et la
+  reconnaissance retombe sur la ligne de commande, qui est usurpable. Le retrait des
+  extensions (`.cmd`, `.exe`) et la coupe sur `\` sont faits ; la limite, elle, ne se
+  rattrape pas.

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { systemMetrics, metricsLive, refreshMetrics, startLiveMetrics, stopLiveMetrics } from "../../stores/system";
   import ProcessList from "./ProcessList.svelte";
+  import { formatUptime } from "../../utils/format";
   import { trad } from "../../i18n";
 
   let isLive: boolean = $derived($metricsLive);
@@ -32,8 +33,8 @@
 
     <div class="info-row">
       <span>{m.hostname}</span>
-      <span>Kernel {m.kernel_version}</span>
-      <span>Uptime {m.uptime}</span>
+      <span>{m.os_version}</span>
+      <span>{$trad("sys.uptime", { duration: formatUptime(m.uptime_secs) })}</span>
     </div>
 
     <div class="metrics-grid">
@@ -61,14 +62,16 @@
         </div>
         <span class="metric-value">{formatBytes(m.memory.used)} / {formatBytes(m.memory.total)} ({m.memory.percent.toFixed(1)}%)</span>
         {#if m.memory.swap_total > 0}
-          <span class="metric-sub">Swap: {formatBytes(m.memory.swap_used)} / {formatBytes(m.memory.swap_total)}</span>
+          <span class="metric-sub">{$trad("mon.swap")} {formatBytes(m.memory.swap_used)} / {formatBytes(m.memory.swap_total)}</span>
         {/if}
       </div>
 
       <!-- Disks -->
       {#each m.disks as disk}
         <div class="metric-card">
-          <h3>{disk.mount} ({disk.device})</h3>
+          <!-- L'etiquette de volume peut etre VIDE (Windows) : sans cette garde on
+               affichait « C:\ () ». -->
+          <h3>{disk.device ? `${disk.mount} (${disk.device})` : disk.mount}</h3>
           <div class="bar-container">
             <div class="bar" style="width:{disk.percent}%" class:warning={disk.percent > 90}></div>
           </div>
@@ -77,7 +80,7 @@
       {/each}
     </div>
 
-    <ProcessList topCpu={m.top_cpu} topMemory={m.top_memory} />
+    <ProcessList topCpu={m.top_cpu} topMemory={m.top_memory} killForced={m.kill_is_forced} />
 
   {:else}
     <p class="no-data">{$trad("sys.startHint")}</p>

@@ -16,7 +16,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use interprocess::local_socket::traits::{Stream as _, StreamCommon as _};
+use interprocess::local_socket::traits::Stream as _;
 use interprocess::local_socket::{GenericFilePath, Listener, ListenerOptions, Stream, ToFsName};
 
 /// De quoi pointer un service donne. Permet a un test — ou a une installation de
@@ -88,6 +88,7 @@ fn dossier_utilisateur() -> io::Result<PathBuf> {
     Ok(PathBuf::from(format!(r"\\.\pipe\cockpit-{compte}")))
 }
 
+#[cfg(unix)]
 fn refus(detail: String) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, detail)
 }
@@ -129,9 +130,25 @@ pub fn connecter(chemin: &std::path::Path) -> io::Result<Stream> {
 /// Vaut dans LES DEUX SENS : le service refuse une connexion venue d'un autre compte, et
 /// le client refuse de confier ses frappes a un service qui n'est pas le sien. Un socket
 /// pose par quelqu'un d'autre a l'endroit attendu recevrait sinon tout ce qui est tape.
+/// `PeerCreds::euid()` est declare `#[cfg(unix)]` dans `interprocess` : il n'existe PAS a la
+/// compilation sous Windows, ou la structure ne porte que le pid. La fonction est donc
+/// dedoublee par plateforme plutot que de faire semblant de lire un uid.
+#[cfg(unix)]
 pub fn verifier_pair(flux: &Stream) -> Result<(), String> {
+    use interprocess::local_socket::traits::StreamCommon as _;
+
     let creds = flux.peer_creds().map_err(|e| format!("identite du pair illisible : {e}"))?;
     verdict_sur_le_pair(creds.euid())
+}
+
+/// Sous Windows la protection est portee par le tuyau nomme lui-meme : sa liste de controle
+/// par defaut n'autorise que le compte qui l'a cree, et `PeerCreds` n'y rend qu'un pid — dont
+/// on ne peut rien conclure sans interroger le systeme sur le proprietaire de ce processus.
+/// Il n'y a donc rien a comparer ici, et ce n'est pas une garde muette : c'est un controle qui
+/// a lieu ailleurs.
+#[cfg(windows)]
+pub fn verifier_pair(_flux: &Stream) -> Result<(), String> {
+    Ok(())
 }
 
 /// La decision, separee de la lecture des identifiants pour etre testable.
@@ -147,14 +164,6 @@ fn verdict_sur_le_pair(euid: Option<libc::uid_t>) -> Result<(), String> {
         // s'il en apparaissait un, refuser vaut mieux que faire confiance.
         None => Err("l'identite du pair n'est pas disponible sur ce systeme".into()),
     }
-}
-
-#[cfg(windows)]
-fn verdict_sur_le_pair(_euid: Option<u32>) -> Result<(), String> {
-    // Sous Windows la protection est portee par le tuyau nomme lui-meme : sa liste de
-    // controle par defaut n'autorise que le compte qui l'a cree. `peer_creds` n'y rend pas
-    // d'uid, il n'y a donc rien a comparer.
-    Ok(())
 }
 
 #[cfg(test)]

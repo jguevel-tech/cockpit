@@ -130,6 +130,17 @@ export interface MemoryMetrics {
   percent: number;
   swap_total: number;
   swap_used: number;
+  /**
+   * Le decoupage fin de la memoire, LINUX seulement : `null` ailleurs, et `null` aussi sous
+   * Linux quand /proc/meminfo est illisible. Les categories (cache, buffers, partage) n'ont
+   * pas d'equivalent sur macOS ni Windows — ce ne sont pas d'autres noms pour les memes
+   * choses, ce sont d'autres decoupages. Le panneau des cinq barres se masque donc au lieu
+   * d'afficher des zeros.
+   */
+  detail: MemoryDetail | null;
+}
+
+export interface MemoryDetail {
   cached: number;
   buffers: number;
   shmem: number;
@@ -163,8 +174,12 @@ export interface SystemMetrics {
   memory: MemoryMetrics;
   disks: DiskMetrics[];
   hostname: string;
-  uptime: string;
-  kernel_version: string;
+  /** Secondes depuis le demarrage : la mise en forme est faite ici, par les catalogues. */
+  uptime_secs: number;
+  /** « Ubuntu 26.04 », « Windows 11 », « macOS 14.6 ». */
+  os_version: string;
+  /** Vrai quand arreter un processus le TUE (Windows) : change le libelle du bouton. */
+  kill_is_forced: boolean;
   top_cpu: ProcessMetrics[];
   top_memory: ProcessMetrics[];
 }
