@@ -61,6 +61,27 @@ fn secure_join(root: &str, rel: &str) -> Result<(PathBuf, PathBuf), String> {
 }
 
 /// Liste un repertoire (non recursif) en respectant .gitignore, comme l'arbre de Warp.
+/// Le chemin d'une entree RELATIF a la racine du projet, toujours ecrit avec des `/`.
+///
+/// C'est un IDENTIFIANT qui traverse l'IPC : le frontend le decoupe et le recolle sur `/`
+/// (`relPath.split("/")` pour deplier l'arbre, `path.split("/").pop()` pour le nom du
+/// fichier). Sous Windows, `to_string_lossy` rend `src\notes.md`, et tout ce decoupage
+/// tombe a plat : l'arbre ne se deplie plus, le nom affiche devient le chemin entier.
+/// Constate sur le runner le 2026-08-21 — `left: "src\\notes.md"`, `right: "src/notes.md"`.
+///
+/// On recolle les COMPOSANTS, on ne remplace pas les antislashs : `\` est un caractere de
+/// nom de fichier parfaitement valide sous Unix, et un `replace` global corromprait des noms
+/// legitimes.
+fn chemin_relatif(racine: &Path, chemin: &Path) -> String {
+    chemin
+        .strip_prefix(racine)
+        .unwrap_or(chemin)
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 pub fn list_dir(project_path: &str, rel_path: &str) -> Result<Vec<DirEntry>, String> {
     let (root, dir) = secure_join(project_path, rel_path)?;
     if !dir.is_dir() {
@@ -76,7 +97,7 @@ pub fn list_dir(project_path: &str, rel_path: &str) -> Result<Vec<DirEntry>, Str
         .filter(|e| e.depth() == 1)
         .filter_map(|e| {
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            let rel = e.path().strip_prefix(&root).ok()?.to_string_lossy().to_string();
+            let rel = chemin_relatif(&root, e.path());
             Some(DirEntry {
                 name: e.file_name().to_string_lossy().to_string(),
                 rel_path: rel,
@@ -230,7 +251,7 @@ pub fn find_symbol(project_path: &str, symbol: &str) -> Result<Vec<SymbolHit>, S
         for (i, line) in text.lines().enumerate() {
             if regexes.iter().any(|r| r.is_match(line)) {
                 hits.push(SymbolHit {
-                    rel_path: path.strip_prefix(&root).unwrap_or(path).to_string_lossy().to_string(),
+                    rel_path: chemin_relatif(&root, path),
                     line: i as u32,
                     preview: line.trim().chars().take(120).collect(),
                 });
@@ -309,7 +330,7 @@ pub fn create_project_file(project_path: &str, rel_dir: &str, name: &str) -> Res
         return Err(format!("{} existe déjà", name.trim()));
     }
     std::fs::write(&target, "").map_err(|e| e.to_string())?;
-    Ok(target.strip_prefix(&root).unwrap_or(&target).to_string_lossy().to_string())
+    Ok(chemin_relatif(&root, &target))
 }
 
 /// Cree un sous-dossier dans un repertoire existant du projet. Refuse d'ecraser.
@@ -324,7 +345,7 @@ pub fn create_project_dir(project_path: &str, rel_dir: &str, name: &str) -> Resu
         return Err(format!("{} existe déjà", name.trim()));
     }
     std::fs::create_dir(&target).map_err(|e| e.to_string())?;
-    Ok(target.strip_prefix(&root).unwrap_or(&target).to_string_lossy().to_string())
+    Ok(chemin_relatif(&root, &target))
 }
 
 /// Renomme un fichier ou dossier DANS son repertoire (pas un deplacement). Refuse d'ecraser.
@@ -340,7 +361,7 @@ pub fn rename_project_entry(project_path: &str, rel_path: &str, new_name: &str) 
         return Err(format!("{} existe déjà", new_name.trim()));
     }
     std::fs::rename(&path, &target).map_err(|e| e.to_string())?;
-    Ok(target.strip_prefix(&root).unwrap_or(&target).to_string_lossy().to_string())
+    Ok(chemin_relatif(&root, &target))
 }
 
 /// Envoie un fichier ou dossier a la CORBEILLE SYSTEME — jamais de suppression

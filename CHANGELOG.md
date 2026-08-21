@@ -23,6 +23,9 @@ le script de release.
 - **Fermer un terminal dont le programme s'est déjà arrêté ne signale plus d'erreur.** On tape
   `exit`, on ferme l'onglet, et une notification d'erreur s'affichait — alors que la
   fermeture avait parfaitement fonctionné.
+- **Les chemins de fichiers du projet s'écrivent toujours avec des `/`.** Sous Windows ils
+  sortaient avec des antislashs, ce qui cassait l'arbre de l'onglet Fichiers : un dossier ne
+  se dépliait plus, et le nom affiché devenait le chemin entier.
 - **La fin d'un terminal est maintenant détectée par le programme lui-même**, et non par son
   tuyau de sortie. Le résultat est le même sur Linux et macOS ; c'est ce qui rend la chose
   possible sur Windows, où le tuyau reste ouvert après l'arrêt du programme.

@@ -754,6 +754,16 @@ mod tests {
 
     /// L'invariant de la sortie en rafale : le contenu arrive EN ENTIER (c'est lui qui
     /// remplit le tampon de defilement du frontend) mais en gros lots, pas en miettes.
+    ///
+    /// Reserve aux shells POSIX : la ligne tapee enchaine deux commandes par `;`, et
+    /// `cmd.exe` ne connait pas ce separateur (il utilise `&`). Sur le runner Windows, toute
+    /// la ligne partait donc en arguments de `seq`, qui repondait « extra operand ». Ne PAS
+    /// bricoler un equivalent `cmd.exe` sans machine pour l'essayer : le marqueur de fin ne
+    /// doit pas figurer dans la ligne TAPEE (le PTY en renvoie l'echo avant execution), et
+    /// les tournures qui permettent ca en `cmd.exe` sont exactement le genre de chose qu'on
+    /// ne peut pas valider a l'aveugle. Le regroupement lui-meme n'a rien de specifique a un
+    /// systeme — il est verifie ici, et macOS le verifie aussi.
+    #[cfg(unix)]
     #[test]
     fn une_rafale_part_en_gros_lots_pas_en_miettes() {
         let s = session(None);

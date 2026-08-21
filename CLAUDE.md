@@ -1561,6 +1561,16 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **UN CHEMIN QUI TRAVERSE L'IPC EST UN IDENTIFIANT : IL S'ECRIT AVEC DES `/`.** Toutes les
+  fonctions de `workspace/` rendaient leur chemin relatif par `to_string_lossy()`, donc avec le
+  separateur du systeme. Sous Windows, `src\notes.md` — et le frontend, lui, DECOUPE et RECOLLE
+  sur `/` (`relPath.split("/")` pour deplier l'arbre, `path.split("/").pop()` pour le nom du
+  fichier). Consequence : l'arbre de l'onglet Fichiers ne se deplie plus et le nom affiche
+  devient le chemin entier. Un seul essai l'a signale (`left: "src\\notes.md"`), mais il
+  concernait cinq fonctions.
+  `chemin_relatif()` recolle les COMPOSANTS avec `/` — et ne fait PAS un `replace('\\', "/")` :
+  l'antislash est un caractere de nom de fichier valide sous Unix, un remplacement global
+  corromprait des noms legitimes. Tout nouveau chemin rendu au frontend passe par la.
 - **LA FIN D'UN SHELL SE CONSTATE SUR LE PROCESS, PAS SUR LE TUYAU.** Le thread lecteur
   concluait a la fin en recevant la fin de fichier du PTY. Vrai sous Unix, ou la mort du shell
   ferme l'esclave. FAUX sous Windows : **ConPTY garde son tuyau ouvert apres la mort du
