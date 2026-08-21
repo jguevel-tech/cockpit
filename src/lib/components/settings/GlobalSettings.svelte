@@ -387,6 +387,9 @@
               {#if claudeStatus.cli_version}
                 <span class="detail muted">{claudeStatus.cli_version}</span>
               {/if}
+              {#if claudeStatus.problem}
+                <span class="detail probleme">{$trad("settings.claude.problem")} {claudeStatus.problem}</span>
+              {/if}
               <button class="icon-btn" onclick={refreshClaudeStatus} title={$trad("common.refresh")}>↻</button>
             </div>
 
@@ -588,6 +591,7 @@
   .badge.off { background: rgba(229, 72, 77, 0.12); color: #e5484d; }
   .claude-status-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
   .detail { font-size: 0.78rem; color: var(--text-secondary); }
+  .detail.probleme { color: var(--error); }
   .detail.muted { color: var(--text-muted); }
   .login-flow { display: flex; flex-direction: column; gap: 0.5rem; }
   .login-steps { font-size: 0.8rem; color: var(--text-secondary); }

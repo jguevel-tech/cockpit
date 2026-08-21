@@ -37,6 +37,9 @@ le script de release.
   du titre explique pourquoi.
 - La croix qui arrête un processus dit ce qu'elle fait au survol, se désactive pendant
   l'opération, et signale un échec par une notification au lieu d'une boîte de dialogue.
+- Paramètres → Claude & IA : quand le statut de connexion n'a pas pu être **déterminé**
+  (fichier de jetons illisible, dossier personnel introuvable), l'écran le dit au lieu
+  d'afficher « non connecté » et de proposer une connexion qui ne changera rien.
 
 ## [0.37.1] — 2026-08-20
 

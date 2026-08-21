@@ -653,6 +653,7 @@ export const en: Catalog = {
   "settings.claude.subscription": "subscription",
   "settings.claude.tier": "tier {tier}",
   "settings.claude.tokenValidUntil": "token valid until {date}",
+  "settings.claude.problem": "Status could not be determined:",
   "settings.claude.notConnected": "Not connected",
   "settings.claude.regenerate": "Regenerate the connection (setup-token)",
   "settings.claude.connect": "Connect to the Claude subscription",

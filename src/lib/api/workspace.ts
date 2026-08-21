@@ -30,6 +30,13 @@ export interface ClaudeAuthStatus {
   subscription_type: string | null;
   rate_limit_tier: string | null;
   expires_at: number | null;
+  /**
+   * Pourquoi le statut n'a pas pu etre determine, quand c'est le cas. « Non connecte » et
+   * « on n'a pas su regarder » sont deux choses differentes : dossier personnel introuvable
+   * ou fichier de jetons illisible affichaient le meme badge, et l'utilisateur relançait une
+   * connexion qui ne changeait rien.
+   */
+  problem: string | null;
 }
 export const claudeAuthStatus = () => invoke<ClaudeAuthStatus>("claude_auth_status");
 export const startClaudeLogin = () => invoke("start_claude_login");

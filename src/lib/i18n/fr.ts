@@ -661,6 +661,7 @@ export const fr = {
   "settings.claude.subscription": "abonnement",
   "settings.claude.tier": "tier {tier}",
   "settings.claude.tokenValidUntil": "token valide jusqu'au {date}",
+  "settings.claude.problem": "Statut indéterminable :",
   "settings.claude.notConnected": "Non connecté",
   "settings.claude.regenerate": "Régénérer la connexion (setup-token)",
   "settings.claude.connect": "Se connecter à l'abonnement Claude",
