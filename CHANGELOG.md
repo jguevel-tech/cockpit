@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-08-21
+
 ### Added
 
 - **Cockpit s'installe maintenant sur Windows.** Un installeur `.exe` est publié à chaque
