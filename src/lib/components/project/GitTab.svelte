@@ -12,6 +12,7 @@
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { name }: { name: string } = $props();
 
@@ -131,7 +132,9 @@
       signalerErreur("git.doPush", String(e));
       // Branche sans upstream : proposer --set-upstream
       const msg = String(e);
-      if (/upstream/i.test(msg) && confirm($trad("git.noUpstreamConfirm"))) {
+      const sansUpstream = /upstream/i.test(msg)
+        && (await demanderConfirmation({ message: $trad("git.noUpstreamConfirm"), action: $trad("common.confirm"), danger: false }));
+      if (sansUpstream) {
         try { await gitPush(project.path, true); await refresh(); } catch (e2) { notify(String(e2)); }
       } else {
         notify(String(e));
@@ -205,7 +208,8 @@
 
   async function retirerWorktree(w: Worktree) {
     if (!project?.path) { notify($trad("git.noProjectPath")); return; }
-    if (!confirm($trad("git.worktreeRemoveConfirm", { chemin: w.chemin }))) return;
+    const question = $trad("git.worktreeRemoveConfirm", { chemin: w.chemin });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     busy = "worktree";
     try {
       await gitWorktreeRemove(project.path, w.chemin, false);
@@ -213,7 +217,8 @@
     } catch (e) {
       // Git refuse un worktree qui porte des modifications non validees. On le dit, et on
       // propose d'insister — plutot que de forcer d'office, ce qui perdrait du travail.
-      if (confirm($trad("git.worktreeRemoveForce", { erreur: String(e) }))) {
+      const insister = $trad("git.worktreeRemoveForce", { erreur: String(e) });
+      if (await demanderConfirmation({ message: insister, action: $trad("common.delete") })) {
         try {
           await gitWorktreeRemove(project.path, w.chemin, true);
           await loadWorktrees();
@@ -283,13 +288,15 @@
   async function deleteBranch(b: BranchInfo, e: MouseEvent) {
     e.stopPropagation();
     if (!project?.path || b.current) return;
-    if (!confirm($trad("git.deleteBranchConfirm", { name: b.name }))) return;
+    const question = $trad("git.deleteBranchConfirm", { name: b.name });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try {
       await gitDeleteBranch(project.path, b.name, false);
     } catch (err) {
       signalerErreur("git.deleteBranch", String(err));
       // Non mergee : proposer le force delete
-      if (confirm($trad("git.forceDeleteConfirm", { name: b.name }))) {
+      const forcer = $trad("git.forceDeleteConfirm", { name: b.name });
+      if (await demanderConfirmation({ message: forcer, action: $trad("common.delete") })) {
         try { await gitDeleteBranch(project.path, b.name, true); } catch (e2) { notify(String(e2)); return; }
       } else return;
     }

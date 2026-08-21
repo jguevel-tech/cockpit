@@ -9,6 +9,7 @@
   import { readingMode } from "../../stores/ui";
   import { onMount } from "svelte";
   import { trad } from "../../i18n";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { project }: { project: string } = $props();
 
@@ -45,7 +46,7 @@
   }
 
   async function removeFolder(id: number) {
-    if (!confirm($trad("notes.deleteFolderConfirm"))) return;
+    if (!(await demanderConfirmation({ message: $trad("notes.deleteFolderConfirm"), action: $trad("common.delete") }))) return;
     try { await deleteNoteFolder(id); await loadTree(); } catch (e) { notify(String(e)); }
   }
 
@@ -53,7 +54,7 @@
     // Une note peut etre le compte rendu d'une reunion d'une heure : jamais de suppression
     // sur un simple clic (demande d'un utilisateur).
     const nom = tree.files.find((f) => f.id === id)?.name ?? "";
-    if (!confirm($trad("notes.deleteFileConfirm", { name: nom }))) return;
+    if (!(await demanderConfirmation({ message: $trad("notes.deleteFileConfirm", { name: nom }), action: $trad("common.delete") }))) return;
     try {
       await deleteNoteFile(id);
       if (selectedFile?.id === id) selectedFile = null;

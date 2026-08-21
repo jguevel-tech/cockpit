@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goHome, openSettings, openDocs, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS } from "../../stores/ui";
+  import { goHome, openSettings, openDocs, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS, zoomPourcent } from "../../stores/ui";
   import { toggleBase } from "../../stores/appearance";
   import { unreadCount } from "../../stores/notifications";
   import { trad, tradN } from "../../i18n";
@@ -10,7 +10,8 @@
   // le nombre de non-lues.
   let showNotifications = $state(false);
 
-  const zoomPercent = $derived(Math.round($zoom * 100));
+  // Compte depuis le zoom par defaut, pas depuis 1 : c'est lui qui s'affiche « 100 % ».
+  const zoomPercent = $derived(zoomPourcent($zoom));
   const atMin = $derived($zoom <= ZOOM_LEVELS[0]);
   const atMax = $derived($zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]);
 </script>

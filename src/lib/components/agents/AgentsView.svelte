@@ -16,6 +16,7 @@
   import AgentsConfig from "./AgentsConfig.svelte";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   type Mode = "agents" | "config";
 
@@ -70,7 +71,7 @@
   }
 
   async function selectMarketplace(id: string) {
-    if (dirty && !confirm($trad("agents.unsavedConfirm"))) return;
+    if (dirty && !(await demanderConfirmation({ message: $trad("agents.unsavedConfirm"), action: $trad("common.discard") }))) return;
     selectedMarketplace = id;
     selectedPlugin = null;
     selectedAgent = null;
@@ -98,7 +99,7 @@
   }
 
   async function selectPlugin(name: string) {
-    if (dirty && !confirm($trad("agents.unsavedConfirm"))) return;
+    if (dirty && !(await demanderConfirmation({ message: $trad("agents.unsavedConfirm"), action: $trad("common.discard") }))) return;
     selectedPlugin = name;
     selectedAgent = null;
     agentContent = "";
@@ -129,7 +130,7 @@
 
   async function selectAgent(name: string) {
     if (!selectedMarketplace || !selectedPlugin) return;
-    if (dirty && !confirm($trad("agents.unsavedConfirm"))) return;
+    if (dirty && !(await demanderConfirmation({ message: $trad("agents.unsavedConfirm"), action: $trad("common.discard") }))) return;
     try {
       selectedAgent = name;
       const content = await readAgent(
@@ -196,8 +197,8 @@
 
   async function doDeleteAgent() {
     if (!selectedMarketplace || !selectedPlugin || !selectedAgent) return;
-    if (!confirm($trad("agents.deleteAgentConfirm", { agent: selectedAgent, plugin: selectedPlugin })))
-      return;
+    const question = $trad("agents.deleteAgentConfirm", { agent: selectedAgent, plugin: selectedPlugin });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try {
       await deleteAgent(selectedMarketplace, selectedPlugin, selectedAgent);
       selectedAgent = null;
@@ -234,12 +235,8 @@
 
   async function doDeletePlugin(pluginName: string) {
     if (!selectedMarketplace) return;
-    if (
-      !confirm(
-        $trad("agents.deletePluginConfirm", { plugin: pluginName }),
-      )
-    )
-      return;
+    const question = $trad("agents.deletePluginConfirm", { plugin: pluginName });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try {
       await deletePlugin(selectedMarketplace, pluginName);
       if (selectedPlugin === pluginName) {

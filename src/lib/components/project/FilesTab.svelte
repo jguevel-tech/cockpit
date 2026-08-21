@@ -13,6 +13,7 @@
   import type { DefLocation, SearchResults, SearchNameHit, SearchContentHit } from "../../types";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { name }: { name: string } = $props();
 
@@ -154,7 +155,7 @@
 
   async function openFileByPath(relPath: string) {
     if (!project?.path) return;
-    if (dirty && !confirm($trad("files.discardConfirm"))) return;
+    if (dirty && !(await demanderConfirmation({ message: $trad("files.discardConfirm"), action: $trad("common.discard") }))) return;
     editing = false;
     selectedPath = relPath;
     loadingFile = true;
@@ -204,8 +205,8 @@
     editing = true;
   }
 
-  function cancelEdit() {
-    if (dirty && !confirm($trad("files.discardConfirm"))) return;
+  async function cancelEdit() {
+    if (dirty && !(await demanderConfirmation({ message: $trad("files.discardConfirm"), action: $trad("common.discard") }))) return;
     editing = false;
   }
 
@@ -290,7 +291,7 @@
 
   /** Rechargement demande explicitement (bandeau) : peut abandonner l'edition en cours. */
   async function reloadNow() {
-    if (editing && dirty && !confirm($trad("files.discardConfirm"))) return;
+    if (editing && dirty && !(await demanderConfirmation({ message: $trad("files.discardConfirm"), action: $trad("common.discard") }))) return;
     editing = false;
     try {
       await reloadFromDisk();
@@ -514,7 +515,8 @@
 
   async function deleteEntry(node: TreeNode) {
     if (!project?.path) return;
-    if (!confirm($trad("files.trashConfirm", { name: node.name }))) return;
+    const question = $trad("files.trashConfirm", { name: node.name });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try {
       await trashProjectEntry(project.path, node.rel_path);
       if (selectedPath === node.rel_path || selectedPath.startsWith(node.rel_path + "/")) {

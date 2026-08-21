@@ -10,6 +10,7 @@
   import { onMount } from "svelte";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { name }: { name: string } = $props();
 
@@ -47,7 +48,8 @@
   let deleting = $state(false);
   async function deleteProject() {
     if (!settings) return;
-    if (!confirm($trad("projectSettings.deleteConfirmFull", { name }))) return;
+    const question = $trad("projectSettings.deleteConfirmFull", { name });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     deleting = true;
     try {
       await deleteDbProject(settings.id);

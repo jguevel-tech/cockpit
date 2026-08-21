@@ -18,6 +18,7 @@
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let { name }: { name: string } = $props();
   let urls: Url[] = $state([]);
@@ -102,7 +103,7 @@
   }
 
   async function doDeleteRecording(id: number) {
-    if (!confirm($trad("rec.deleteConfirm"))) return;
+    if (!(await demanderConfirmation({ message: $trad("rec.deleteConfirm"), action: $trad("common.delete") }))) return;
     try { await deleteRecording(id); await loadFailedRecordings(); } catch (e) { notify(String(e)); }
   }
 

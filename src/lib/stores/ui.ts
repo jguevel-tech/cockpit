@@ -83,7 +83,26 @@ const TERMINAL_FONT_STEPS = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 26];
 
 /// Paliers de zoom. Bornes alignees sur ZOOM_MIN/ZOOM_MAX (src-tauri/src/lib.rs).
 export const ZOOM_LEVELS = TERMINAL_FONT_STEPS.map((px) => px / TERMINAL_FONT_SIZE);
-const ZOOM_DEFAULT = 1;
+
+/// Taille de police terminal du zoom PAR DEFAUT — celle sur laquelle les pourcentages
+/// affiches sont comptes, donc celle qui s'affiche « 100 % ».
+///
+/// 15 px et non 13 : Jimmy trouve ce rendu plus agreable et l'a demande comme reference
+/// (« le 115 % devrait etre la version 100 % »). Ce n'est pas qu'un defaut de demarrage — le
+/// bouton du milieu, qui remet le zoom a sa valeur de reference, y revient aussi.
+///
+/// Les FACTEURS ne changent pas : ils restent tires de tailles de police entieres, sinon le
+/// texte devient mou (voir TERMINAL_FONT_STEPS). Seul le point de comptage se deplace, donc
+/// les paliers s'affichent desormais 67, 73, 80, 87, 93, **100**, 107, 120, 133, 147, 173 %.
+/// Le zoom REEL de quelqu'un qui en avait choisi un ne bouge pas : c'est son etiquette qui
+/// change.
+const TERMINAL_FONT_DEFAULT = 15;
+const ZOOM_DEFAULT = TERMINAL_FONT_DEFAULT / TERMINAL_FONT_SIZE;
+
+/// Pourcentage a afficher pour un palier, compte depuis le zoom par defaut.
+export function zoomPourcent(niveau: number): number {
+  return Math.round((niveau / ZOOM_DEFAULT) * 100);
+}
 
 export const zoom = writable<number>(ZOOM_DEFAULT);
 
@@ -96,8 +115,17 @@ function nearestLevel(value: number): number {
 }
 
 if (typeof window !== "undefined") {
-  const saved = parseFloat(localStorage.getItem("cockpit-zoom") ?? "");
-  if (Number.isFinite(saved)) zoom.set(nearestLevel(saved));
+  const brut = localStorage.getItem("cockpit-zoom");
+  // Reprise du changement de reference : l'ancien defaut s'ecrivait exactement « 1 », et le
+  // magasin enregistre des l'initialisation — donc TOUT LE MONDE a cette valeur, y compris
+  // ceux qui n'ont jamais touche au zoom. On les emmene sur le nouveau defaut, sinon le
+  // changement ne se verrait que sur une installation neuve.
+  //
+  // Consequence assumee : quelqu'un qui avait CHOISI l'ancien 100 % est deplace lui aussi. Il
+  // n'y a pas moyen de distinguer les deux, et deux clics suffisent a revenir.
+  const saved = parseFloat(brut ?? "");
+  if (brut === "1") zoom.set(ZOOM_DEFAULT);
+  else if (Number.isFinite(saved)) zoom.set(nearestLevel(saved));
 }
 
 zoom.subscribe((z) => {

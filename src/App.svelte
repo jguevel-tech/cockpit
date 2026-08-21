@@ -3,6 +3,7 @@
   import Sidebar from "./lib/components/layout/Sidebar.svelte";
   import MainPanel from "./lib/components/layout/MainPanel.svelte";
   import Toast from "./lib/components/ui/Toast.svelte";
+  import ConfirmDialog from "./lib/components/ui/ConfirmDialog.svelte";
   import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
   import ReportingConsent from "./lib/components/settings/ReportingConsent.svelte";
   import { reportingConsent, loadReportingSettings } from "./lib/stores/errors";
@@ -70,6 +71,7 @@
     <MainPanel />
   </div>
   <Toast />
+  <ConfirmDialog />
   <CommandPalette />
   {#if $reportingConsent === "unset"}
     <ReportingConsent />

@@ -3,6 +3,7 @@
   import type { ProcessMetrics } from "../../types";
   import { trad } from "../../i18n";
   import { notify } from "../../stores/toast";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   // `killForced` vient du backend (`kill_is_forced`) et non d'une detection de systeme cote
   // interface : c'est lui qui sait quel signal il peut envoyer. Sous Windows il n'y a que
@@ -26,7 +27,7 @@
   }
 
   async function kill(pid: number) {
-    if (!confirm($trad("proc.killConfirm", { pid }))) return;
+    if (!(await demanderConfirmation({ message: $trad("proc.killConfirm", { pid }), action: $trad("proc.stopAction") }))) return;
     // Le bouton se desactive pendant l'appel : sans ca un clic sans effet visible passe
     // pour un bug, et un second clic partait sur un PID deja mort.
     arretEnCours = pid;

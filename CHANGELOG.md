@@ -12,6 +12,19 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Les confirmations de suppression sont des fenêtres de l'application**, à la place de la
+  boîte grise du système. Elles suivent le thème et la langue, se ferment avec Échap, et le
+  bouton qui détruit est en rouge. Les vingt-quatre endroits qui demandaient confirmation y
+  passent : fichiers, notes, projets, branches, worktrees, conteneurs, volumes, images, agents,
+  enregistrements, processus.
+- **Le zoom démarre un cran plus grand**, et c'est lui qui s'affiche « 100 % ». C'est le rendu
+  que Jimmy trouve le plus agréable. Si tu avais gardé le zoom par défaut, tu passes
+  automatiquement au nouveau ; si tu en avais choisi un autre, il ne bouge pas — seule son
+  étiquette change, puisque les pourcentages se comptent maintenant depuis le nouveau défaut.
+
+
 ## [0.43.2] — 2026-08-21
 
 ### Fixed

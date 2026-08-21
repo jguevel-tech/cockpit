@@ -24,6 +24,7 @@
   // Le CHANGELOG.md est embarque au build (Vite ?raw) : consultable hors ligne, et toujours
   // celui de la version installee — pas celui d'une branche distante.
   import changelogRaw from "../../../../CHANGELOG.md?raw";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   const changelogHtml = marked.parse(changelogRaw, { async: false });
 
@@ -205,7 +206,7 @@
   }
 
   async function doDelete(id: number, name: string) {
-    if (!confirm($trad("settings.projects.deleteConfirm"))) return;
+    if (!(await demanderConfirmation({ message: $trad("settings.projects.deleteConfirm"), action: $trad("common.delete") }))) return;
     try {
       await deleteDbProject(id);
       // Le projet disparait : son onglet memorise aussi, sinon un projet recree sous le

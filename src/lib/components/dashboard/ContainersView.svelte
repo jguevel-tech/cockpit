@@ -11,6 +11,7 @@
   import type { DockerContainer, DiskUsage, DockerVolume, DockerImage } from "../../types";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { demanderConfirmation } from "../../stores/confirm";
 
   let containers: DockerContainer[] = $state([]);
   let logsFor: DockerContainer | null = $state(null);
@@ -62,7 +63,10 @@
 
   async function doContainerAction(c: DockerContainer, action: "start" | "stop" | "restart" | "remove") {
     if (containerBusy) return;
-    if (action === "remove" && !confirm($trad("cont.deleteContainerConfirm", { name: c.name }))) return;
+    if (action === "remove") {
+      const question = $trad("cont.deleteContainerConfirm", { name: c.name });
+      if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
+    }
     containerBusy = c.id + action;
     try { await containerAction(c.id, action); await loadContainers(); }
     catch (e) { notify(String(e)); }
@@ -83,17 +87,19 @@
   }
 
   async function doRemoveVolume(v: DockerVolume) {
-    if (!confirm($trad("cont.deleteVolumeConfirm", { name: v.name }))) return;
+    const question = $trad("cont.deleteVolumeConfirm", { name: v.name });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try { await removeDockerVolume(v.name); await loadVolumes(); await loadContainers(); } catch (e) { notify(String(e)); }
   }
   async function doRemoveImage(img: DockerImage) {
-    if (!confirm($trad("cont.deleteImageConfirm", { name: `${img.repository}:${img.tag}` }))) return;
+    const question = $trad("cont.deleteImageConfirm", { name: `${img.repository}:${img.tag}` });
+    if (!(await demanderConfirmation({ message: question, action: $trad("common.delete") }))) return;
     try { await removeDockerImage(img.id); await loadImages(); await loadContainers(); } catch (e) { notify(String(e)); }
   }
 
   async function doPrune(target: "containers" | "images" | "images_all" | "volumes" | "builder", label: string) {
     if (pruning) return;
-    if (!confirm($trad("cont.pruneConfirm", { label }))) return;
+    if (!(await demanderConfirmation({ message: $trad("cont.pruneConfirm", { label }), action: $trad("common.delete") }))) return;
     pruning = target;
     try {
       const msg = await dockerPrune(target);

@@ -592,9 +592,11 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - Nouvelle table liee a un projet -> `PROJECT_SCOPED_TABLES`.
 - Avant de coder un modal, un rename inline, un menu contextuel, un DnD de liste ou un toast ->
   `components/ui/`, `actions/reorderable.ts`, `stores/toast.ts`.
-- Erreurs d'interface : jamais de `catch` muet ; `confirm()` natif accepte pour une action
-  destructive. Styles : tokens de `theme.css` uniquement, classes partagees dans
-  `components.css`. Navigation inter-projet : forcer le remontage des composants.
+- Erreurs d'interface : jamais de `catch` muet. **Une confirmation passe par
+  `demanderConfirmation()`** (`stores/confirm.ts`), jamais par le `confirm()` du systeme : meme
+  forme d'appel au `await` pres, mais la fenetre suit le theme et la langue. Styles : tokens de
+  `theme.css` uniquement, classes partagees dans `components.css`. Navigation inter-projet :
+  forcer le remontage des composants.
 - Nouvelle commande Tauri -> wrapper type dans `src/lib/api/`, types partages en snake_case.
 - Nouvelle fonctionnalite visible -> l'illustrer dans la DOC INTEGREE (peu de texte, des
   maquettes ; « les gens ne lisent pas »). Une fonctionnalite absente de la doc n'existe pas.
