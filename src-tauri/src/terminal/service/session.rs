@@ -795,22 +795,32 @@ mod tests {
         }
         let total = octets_bruts + octets_redessin;
         let envois = nb_bruts + nb_redessins;
+        let lot_moyen = total / envois.max(1);
         eprintln!(
-            "rafale seq 1..200000 (~1,3 Mo au shell) : {total} octets transmis en {envois} envois \
+            "rafale seq 1..200000 (~1,3 Mo au shell) : {total} octets transmis en {envois} envois, \
+             soit {lot_moyen} octets par envoi \
              ({octets_bruts} bruts en {nb_bruts}, {octets_redessin} de redessins en {nb_redessins})"
         );
-        // CE QUI COMPTE EST LE NOMBRE D'ENVOIS, pas le volume : chaque envoi devient un
-        // evenement Tauri, c'est-a-dire une source JavaScript construite et evaluee dans le
-        // webview. Sans regroupement, cette rafale en faisait 16 461 (mesure du 2026-08-21).
+        // CE QUI COMPTE EST LA TAILLE MOYENNE D'UN ENVOI, et non leur nombre. Chaque envoi
+        // devient un evenement Tauri, c'est-a-dire une source JavaScript construite et evaluee
+        // dans le webview : ce qu'on veut garantir, c'est qu'un evenement porte un vrai lot et
+        // pas quelques octets.
         //
-        // Ordres de grandeur mesures, pour situer un chiffre qu'on relirait ici un jour :
-        // 19 a 21 envois depuis que la rafale se reconnait a la CADENCE de nos envois ; 99
-        // a 158 avec la regle precedente ; 3 047 sur le runner macOS, ou cette regle ne se
-        // declenchait jamais. La borne reste large expres — un runner lent etale la meme
-        // rafale sur plus de fenetres de 8 ms, et ce n'est pas un defaut.
+        // Le NOMBRE ne peut pas servir de borne, et c'est une lecon payee : un lot part au
+        // plus toutes les 8 ms, donc le nombre d'envois suit la DUREE de la rafale. Sur cette
+        // machine `seq 1 200000` prend une fraction de seconde (19 a 123 envois selon la
+        // charge) ; sur un runner lent la meme rafale s'etale et depasse allegrement les 600
+        // envois qui etaient ecrits ici — sans qu'aucun regroupement n'ait cesse de marcher.
+        // La borne d'origine mesurait la vitesse de la machine, pas le regroupement.
+        //
+        // Ordres de grandeur du DEFAUT, eux, sont sans ambiguite : 16 461 envois pour 1,3 Mo
+        // sans aucun regroupement (~85 octets par envoi), et 3 047 sur le runner macOS quand
+        // la regle ne se declenchait jamais (~295 octets). Un seuil a 1 Ko de moyenne les
+        // attrape tous les deux et laisse passer toute machine, quelle que soit sa vitesse.
         assert!(
-            envois < 600,
-            "{envois} envois pour ~1,3 Mo : le regroupement ne fait plus son travail"
+            lot_moyen > 1024,
+            "{lot_moyen} octets par envoi ({envois} envois pour {total} octets) : \
+             le regroupement ne fait plus son travail"
         );
         // Et le contenu, lui, arrive VRAIMENT : c'est ce qui remplit le tampon de
         // defilement du terminal du frontend, donc ce qui fait marcher la molette.

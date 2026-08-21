@@ -1561,6 +1561,23 @@ Le backend (`system/metrics.rs`) collecte :
     version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
     que le changement touche le service de terminaux ou quoi que ce soit de dependant du
     systeme.
+- **UN NOMBRE D'ENVOIS N'EST PAS UN INVARIANT : C'EST UNE MESURE DE LA VITESSE DE LA MACHINE.**
+  L'essai de rafale bornait le nombre d'envois (`envois < 600`). Or un lot part au plus toutes
+  les 8 ms, donc le nombre suit la DUREE de la rafale : quelques dizaines ici (`seq 1 200000`
+  prend une fraction de seconde), largement plus de 600 sur un runner lent — sans qu'aucun
+  regroupement n'ait cesse de marcher. La v0.40.0 a echoue sous LINUX pour cette seule raison,
+  apres avoir passe macOS et Windows. L'invariant est desormais la **taille moyenne d'un
+  envoi** (> 1 Ko) : elle attrape les deux vrais defauts connus (16 461 envois soit ~85 octets
+  sans regroupement, 3 047 soit ~295 octets quand la regle ne se declenchait pas) et laisse
+  passer n'importe quelle machine. Regle generale : borner ce que la fonctionnalite GARANTIT,
+  jamais ce que la machine se trouve a produire.
+- **GITHUB MASQUE LA VALEUR DES SECRETS DANS LES LOGS, Y COMPRIS AU MILIEU D'UN NOMBRE.**
+  `COCKPIT_REPORT_ALLOW_HTTP` vaut `1`, donc tous les `1` des logs de CI sortent en `***` :
+  « 1489157 octets en 156 envois » se lit « ***489***57 octets en ***56 envois ». Un chiffre
+  de mesure devient illisible et on peut passer un moment a mal le reconstruire. Deux parades :
+  faire IMPRIMER par l'essai la grandeur qui porte la conclusion (ici la moyenne par envoi,
+  pas seulement le compte), et se souvenir qu'un `***` au milieu d'un nombre est une redaction,
+  pas un caractere.
 - **UN BANC QUI CONSTRUIT UN BUNDLE A BESOIN DE LA CLE DE SIGNATURE.** `tauri.conf.json`
   porte la cle PUBLIQUE de l'updater : la CLI reclame donc la privee et echoue APRES avoir
   produit l'installeur (« A public key has been found, but no private key »). Le banc rendait

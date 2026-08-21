@@ -12,6 +12,11 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Correction interne d'un test : rien de visible.
+
+
 ## [0.40.0] — 2026-08-21
 
 ### Fixed
