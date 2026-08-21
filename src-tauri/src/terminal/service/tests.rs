@@ -5,8 +5,8 @@
 //! - le service dans un VRAI processus detache, pour la promesse du produit — le shell
 //!   survit au depart du client.
 //!
-//! Chaque essai a son socket, dans un dossier a lui, efface a la fin. Rien ne touche aux
-//! sessions tmux de la machine.
+//! Chaque essai a son socket, dans un dossier a lui, efface a la fin : rien ne touche au
+//! service de l'utilisateur, ni a ses terminaux.
 
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;

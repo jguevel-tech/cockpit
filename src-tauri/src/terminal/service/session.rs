@@ -1,24 +1,20 @@
 //! Un terminal, cote service : un shell dans un PTY, et l'ecran qu'il dessine.
 //!
-//! ## Ce qui part vers l'application, et pourquoi ce n'est pas le flux brut
+//! ## Ce qui part vers l'application : le flux, mais par lots
 //!
-//! Un shell peut ecrire 4 Mo en une seconde ; l'ecran, lui, fait 1 280 octets a redessiner
-//! (mesure de l'etape B1). Retransmettre tout ce que le shell ecrit ferait dessiner au
-//! frontend quatre mille fois ce qu'il finira par afficher — c'est le service que tmux
-//! rendait sans qu'on le sache, en ecrasant les lignes qui avaient defile.
+//! Tout ce que le shell ecrit est transmis — c'est ce qui remplit le tampon de defilement
+//! du terminal du frontend, donc ce qui fait marcher la molette sans rien demander a
+//! personne. Ce qui est REGROUPE, c'est le nombre d'envois : chacun devient un evenement
+//! Tauri, c'est-a-dire une source JavaScript construite et evaluee dans le webview.
 //!
-//! La regle appliquee ici :
-//! - **ce qui est petit part TEL QUEL, tout de suite** : l'echo d'une touche fait quelques
-//!   octets, il ne doit ni attendre ni provoquer un repeint complet ;
-//! - **ce qui est gros est REMPLACE par un redessin** : au-dela de ce qu'un ecran peut
-//!   montrer, le contenu a forcement ete recouvert, et le redessin est a la fois plus
-//!   court et plus juste.
-//!
-//! Le prix de ce choix, assume : les lignes qui defilent pendant une rafale n'arrivent
-//! jamais au terminal du frontend. Elles ne sont pas perdues — le service garde
-//! l'historique — mais le defilement a la molette devra le lui demander (`Redessiner`
-//! avec historique), au lieu de compter sur le tampon du frontend. tmux avait exactement
-//! la meme propriete.
+//! La regle appliquee ici (voir `emettre` pour le detail) :
+//! - **un petit lot arrive apres un silence part TEL QUEL, tout de suite** : c'est l'echo
+//!   d'une touche, il ne doit rien attendre ;
+//! - **le reste attend `FENETRE_RAFALE`** pour partir groupe ;
+//! - **un lot au-dela de `VOLUME_INSOUTENABLE` est REMPLACE par un redessin** : a 32 Mo/s
+//!   personne ne lit ce qui defile, le contenu a forcement ete recouvert, et le redessin
+//!   est plus court ET plus juste. L'historique complet est renvoye des que le calme
+//!   revient, pour rendre au frontend ce que la remise a plat lui a fait perdre.
 //!
 //! ## Ce qui ne passe PAS par ici
 //!
