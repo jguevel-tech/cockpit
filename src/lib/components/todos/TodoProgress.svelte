@@ -46,6 +46,7 @@
     max="100"
     step="10"
     value={enCours}
+    style="--rempli: {enCours}%"
     aria-label={$trad("todo.progressLabel")}
     title={$trad("todo.progressHint")}
     oninput={(e) => (glisse = Number(e.currentTarget.value))}
@@ -67,15 +68,47 @@
     gap: 0.4rem;
     flex-shrink: 0;
   }
+  /* La barre porte SA propre couleur, elle ne compte pas sur le rendu natif : sur un theme
+     sombre — et pire encore sur une image de fond — la partie vide du rail natif se confond
+     avec ce qu'il y a derriere, et on ne voit plus qu'un point blanc flottant (signale par
+     Jimmy en 0.43.0).
+     La partie vide est tiree de la couleur du TEXTE et non d'un `--bg-*` : un fond suit la
+     surface, donc il disparait des qu'elle est sombre ou translucide, alors qu'une couleur de
+     texte contraste par construction dans tous les themes.
+     `background-image` et pas `background` : sous image de fond, `components.css` remet le fond
+     natif des `input[type=range]` avec un `!important` sur `background-color`. L'image de fond
+     du degrade, elle, n'est pas touchee. */
   .avancement input {
     width: 5.5rem;
-    /* Le controle natif porte son propre fond, ce qui le garde lisible sur une image de fond
-       (voir la couche has-wallpaper de components.css). */
-    accent-color: var(--accent);
+    height: 6px;
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 3px;
+    background-image: linear-gradient(
+      to right,
+      var(--accent) 0 var(--rempli),
+      var(--border-strong) var(--rempli) 100%
+    );
     cursor: pointer;
   }
   .avancement.dense input {
     width: 4.5rem;
+  }
+  /* Le curseur lui-meme : accent, avec un anneau de la couleur de la surface pour qu'il se
+     detache de la barre au lieu de s'y fondre. */
+  .avancement input::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface-base);
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .avancement input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
   }
   .valeur {
     font-size: 0.7rem;

@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **La barre d'avancement d'une tâche se voit sur les thèmes sombres.** Elle s'appuyait sur le
+  rendu par défaut du système : la partie non remplie se confondait avec le fond, et il ne
+  restait qu'un point flottant. Elle porte maintenant ses propres couleurs, lisibles aussi sur
+  une image de fond.
+
+
 ## [0.43.0] — 2026-08-21
 
 ### Added

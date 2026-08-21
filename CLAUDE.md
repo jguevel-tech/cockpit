@@ -409,6 +409,12 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   clic, ni Range force n'en sortent. L'editeur garantit un paragraphe final. Et un bloc de code
   sans enfant `code` n'est pas du code pour turndown : le contenu repartait en paragraphe, du
   code perdu en silence.
+- **LE RENDU NATIF D'UN CONTROLE N'EST PAS FORCEMENT VISIBLE.** Un `input[type=range]` laisse au
+  systeme la couleur de son rail : sur un theme sombre, et pire sur une image de fond, la partie
+  vide disparait et il ne reste qu'un point flottant (livre tel quel en 0.43.0). Un controle porte
+  SES couleurs, et sa partie neutre se tire du TEXTE (`--border-strong`), jamais d'un `--bg-*`
+  qui suit la surface. Par `background-image` : la couche image de fond remet le
+  `background-color` natif de ces `input` avec un `!important`.
 - **Une liste blanche de schemas d'URL doit dire la MEME chose des deux cotes**, d'ou un seul
   endroit cote frontend. L'autolink ne repere que ce qui est ouvrable TEL QUEL.
 - **Un lien ne peut pas etre imbrique dans un `<button>`** : les adresses dans un texte de tache
@@ -417,8 +423,6 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Dans une liste imbriquee, `dragstart` et `dragover` REMONTENT** : sans `stopPropagation`,
   glisser un enfant demarre aussi le glisser du parent et deux retours visuels s'allument.
   Mettre les gestionnaires sur l'EN-TETE, pas sur le bloc qui contient la branche.
-- **Un module frontend teste sous node ne doit RIEN importer de l'application** : node resout les
-  imports autrement que Vite. Les essais vivent dans `scripts/`, pas sous `src/`.
 
 ### Backend et systeme
 
@@ -432,8 +436,6 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Un evenement Tauri est du JavaScript construit puis evalue**, pas un canal binaire : 8 Ko
   d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement, par
   contre-pression et jamais par une horloge.
-- **Un projet en base doit TOUJOURS apparaitre dans l'interface** : l'ancienne liste ne rendait
-  que l'intersection base ∩ orchestrateur, donc un ajout rate en silence le rendait invisible.
 - **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast** : un nom de projet deja pris
   affichait « UNIQUE constraint failed ». Deux parades necessaires : l'interface controle avant
   d'appeler, avec un message traduit ; et cote Rust une fonction qui NOMME la cause. Une
@@ -520,7 +522,6 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   Windows a fait tomber treize essais alors que la compilation croisee rendait 0 avertissement.
   Et garder un essai laisse son outillage inutilise ailleurs : chaque import, banc ou `impl Drop`
   devient un avertissement sur la cible ou l'essai n'existe plus.
-- **`cargo test` en local demande `libasound2-dev`** : sans lui aucun essai ne tourne.
 - **ON TAGUE DIRECTEMENT, et si la CI plante on corrige et on relance.** `release.yml` verifie
   deja les trois systemes avant de construire, donc un commit casse ne peut pas etre publie ; et
   un numero de version ne coute rien. Ne PAS reintroduire d'etape de verification en CI avant le
