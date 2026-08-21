@@ -572,8 +572,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   secret valant `1` rend tous les `1` illisibles. Faire IMPRIMER par l'essai la grandeur qui
   porte la conclusion, et se souvenir qu'un `***` au milieu d'un nombre est une redaction.
 - **Un essai peut ne tomber que sur une autre machine** : le runner Linux a deux coeurs et un
-  disque lent, et ca change le comportement. Ne pas croire qu'un essai vert en local vaut preuve
-  sur les trois systemes ; lire le log de la plateforme qui coince.
+  disque lent, ce qui change le comportement. Lire le log de la plateforme qui coince.
 
 ### Outillage local
 
