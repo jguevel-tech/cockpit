@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo, setTodoDue } from "../../api/storage";
+  import { getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo, setTodoDue, setTodoProgress } from "../../api/storage";
   import { reorderProjects } from "../../api/scanner";
   import { selectProject, activeTab } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
@@ -10,6 +10,7 @@
   import { dueLabel, dueUrgency } from "../../utils/due";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import TodoText from "../todos/TodoText.svelte";
+  import TodoProgress from "../todos/TodoProgress.svelte";
   import type { Todo } from "../../types";
   import { trad, tradN } from "../../i18n";
 
@@ -78,6 +79,23 @@
     // Optimiste : la tache reste en place, on ne renvoie pas l'utilisateur en haut de liste.
     pendingTodos = pendingTodos.map((t) => (t.id === todo.id ? { ...t, due_date: due } : t));
     try { await setTodoDue(todo.id, due); } catch (e) { notify(String(e)); await reload(); }
+  }
+
+  /// Avancement d'une tache. En dessous de 100 % on met a jour SUR PLACE, comme pour
+  /// l'echeance : recharger ferait sauter la liste sous le curseur. A 100 % la tache devient
+  /// finie, donc elle doit quitter la liste des en-cours — la, il faut recharger.
+  async function commitProgress(todo: Todo, valeur: number) {
+    if (valeur === todo.progress) return;
+    if (valeur < 100) {
+      pendingTodos = pendingTodos.map((t) => (t.id === todo.id ? { ...t, progress: valeur } : t));
+    }
+    try {
+      await setTodoProgress(todo.id, valeur);
+      if (valeur >= 100) await reload();
+    } catch (e) {
+      notify(String(e));
+      await reload();
+    }
   }
 
   // --- Drag & Drop des groupes (projets) via l'action partagee ---
@@ -250,6 +268,12 @@
             {:else}
               <TodoText texte={todo.text} dense sansGlisser onEdit={() => startEditTodo(todo)} />
             {/if}
+            <!-- Le tableau de bord est l'endroit ou la demande prend son sens : voir d'un coup
+                 lesquelles sont en cours et ou elles en sont. `ondragstart` bloque le glisser
+                 de la ligne, sinon tirer le curseur deplacerait la tache. -->
+            <div ondragstart={(e) => e.preventDefault()} role="presentation">
+              <TodoProgress valeur={todo.progress} dense onChange={(v) => commitProgress(todo, v)} />
+            </div>
             {#if editingDueId === todo.id}
               <!-- svelte-ignore a11y_autofocus -->
               <input

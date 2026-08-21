@@ -51,6 +51,8 @@ export interface Todo {
   created_at: string;
   /** Échéance optionnelle, date ISO "2026-08-20" (null = sans échéance) */
   due_date: string | null;
+  /** Avancement en pourcentage, 0 à 100. 0 = pas commencée, 100 = finie. */
+  progress: number;
 }
 
 export interface Note {

@@ -198,6 +198,14 @@ impl Database {
             [],
         );
 
+        // Migration: avancement d'une tache, en pourcentage (0 = pas commencee, 100 = finie).
+        // Demande de l'issue #15 : avec beaucoup de petites taches menees en parallele, savoir
+        // lesquelles sont en cours et ou elles en sont.
+        let _ = conn.execute(
+            "ALTER TABLE todos ADD COLUMN progress INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
         // Migration: commandes rapides par projet (boutons qui lancent une commande
         // dans un terminal Cockpit)
         conn.execute_batch(

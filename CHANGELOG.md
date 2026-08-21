@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Avancement d'une tâche, de 0 à 100 %.** Chaque tâche porte un curseur, réglable au clic ou
+  aux flèches par pas de 10. On voit d'un coup lesquelles sont en cours et où elles en sont —
+  dans la colonne Tâches du projet comme dans le tableau de bord. À 100 % la tâche passe en
+  terminée, et redescendre la rouvre.
+
+
 ## [0.42.0] — 2026-08-21
 
 ### Fixed

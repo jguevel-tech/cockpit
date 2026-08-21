@@ -283,6 +283,16 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.progress")}</p>
+        <div class="demo">
+          <div class="d-row"><span class="d-check"></span> {$trad("docs.tasks.demo1")} <span class="d-bar"><span class="d-bar-fill" style="width: 70%"></span></span> <span class="d-muted">70%</span></div>
+          <div class="d-row"><span class="d-check"></span> {$trad("docs.tasks.demo2")} <span class="d-bar"><span class="d-bar-fill" style="width: 20%"></span></span> <span class="d-muted">20%</span></div>
+          <div class="d-row"><span class="d-check"></span> {$trad("docs.tasks.demo3")} <span class="d-bar"></span></div>
+          <div class="d-note">{$trad("docs.tasks.progressDemo")}</div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.todoLinks")}</p>
         <div class="demo">
           <div class="d-row"><span class="d-check"></span> {@html $trad("docs.tasks.todoLinksDemo")}</div>
@@ -603,6 +613,12 @@
   .d-hash { color: var(--accent); font-size: 0.75rem; }
   .d-state { color: var(--success); font-weight: 700; font-size: 0.78rem; }
   .d-check { width: 15px; height: 15px; border: 2px solid var(--text-muted); border-radius: 50%; flex-shrink: 0; }
+  /* Barre d'avancement des maquettes : meme langage visuel que le reste de la doc. */
+  .d-bar {
+    display: inline-block; width: 3.5rem; height: 5px; border-radius: 3px;
+    background: var(--bg-tertiary); overflow: hidden; vertical-align: middle;
+  }
+  .d-bar-fill { display: block; height: 100%; background: var(--accent); }
   .d-due {
     margin-left: auto; border: 1px solid var(--border-color); border-radius: 10px;
     padding: 0.05rem 0.45rem; font-size: 0.68rem; color: var(--text-secondary);

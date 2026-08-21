@@ -11,6 +11,8 @@ pub struct Todo {
     pub created_at: String,
     /// Echeance optionnelle, date ISO "2026-08-20" (NULL = sans echeance)
     pub due_date: Option<String>,
+    /// Avancement en pourcentage, 0 a 100. 0 = pas commencee.
+    pub progress: i32,
 }
 
 impl Todo {
@@ -23,6 +25,7 @@ impl Todo {
             position: row.get(4)?,
             created_at: row.get(5)?,
             due_date: row.get(6)?,
+            progress: row.get(7)?,
         })
     }
 }
@@ -31,7 +34,7 @@ impl Database {
     pub fn get_todos(&self, project: &str) -> Result<Vec<Todo>, String> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare("SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE project=?1 ORDER BY position, id")
+            .prepare("SELECT id, project, text, done, position, created_at, due_date, progress FROM todos WHERE project=?1 ORDER BY position, id")
             .map_err(|e| e.to_string())?;
 
         let rows = stmt
@@ -53,7 +56,7 @@ impl Database {
 
         let id = conn.last_insert_rowid();
         conn.query_row(
-            "SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE id=?1",
+            "SELECT id, project, text, done, position, created_at, due_date, progress FROM todos WHERE id=?1",
             [id],
             Todo::from_row,
         )
@@ -69,7 +72,7 @@ impl Database {
         .map_err(|e| e.to_string())?;
 
         conn.query_row(
-            "SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE id=?1",
+            "SELECT id, project, text, done, position, created_at, due_date, progress FROM todos WHERE id=?1",
             [id],
             Todo::from_row,
         )
@@ -86,7 +89,30 @@ impl Database {
         .map_err(|e| e.to_string())?;
 
         conn.query_row(
-            "SELECT id, project, text, done, position, created_at, due_date FROM todos WHERE id=?1",
+            "SELECT id, project, text, done, position, created_at, due_date, progress FROM todos WHERE id=?1",
+            [id],
+            Todo::from_row,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    /// Pose l'avancement d'une tache, en pourcentage.
+    ///
+    /// La valeur est BORNEE ici, et pas seulement dans l'interface : une commande Tauri est
+    /// appelable depuis n'importe ou, et une barre de progression a -30 % ou 400 % dessinerait
+    /// n'importe quoi. 100 % marque la tache comme finie — c'est ce que veut dire « fini »,
+    /// et deux verites pour une meme chose finiraient par diverger.
+    pub fn set_todo_progress(&self, id: i64, progress: i32) -> Result<Todo, String> {
+        let progress = progress.clamp(0, 100);
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE todos SET progress=?1, done=?2 WHERE id=?3",
+            rusqlite::params![progress, progress >= 100, id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.query_row(
+            "SELECT id, project, text, done, position, created_at, due_date, progress FROM todos WHERE id=?1",
             [id],
             Todo::from_row,
         )
@@ -119,7 +145,8 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT t.id, t.project, t.text, t.done, t.position, t.created_at, t.due_date
+                "SELECT t.id, t.project, t.text, t.done, t.position, t.created_at, t.due_date,
+                        t.progress
                  FROM todos t
                  LEFT JOIN projects p ON t.project = p.name
                  WHERE t.done = 0
@@ -139,6 +166,37 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use crate::storage::db::Database;
+
+    /// L'avancement est BORNE en base, pas seulement dans l'interface : une commande Tauri est
+    /// appelable depuis n'importe ou, et une barre a -30 % ou 400 % dessinerait n'importe quoi.
+    #[test]
+    fn l_avancement_est_borne_entre_0_et_100() {
+        let db = Database::new(":memory:").unwrap();
+        let t = db.create_todo("proj", "Ranger le garage").unwrap();
+        assert_eq!(t.progress, 0, "une tache neuve n'est pas commencee");
+
+        assert_eq!(db.set_todo_progress(t.id, 40).unwrap().progress, 40);
+        assert_eq!(db.set_todo_progress(t.id, -30).unwrap().progress, 0);
+        assert_eq!(db.set_todo_progress(t.id, 400).unwrap().progress, 100);
+    }
+
+    /// 100 % et « finie » sont la MEME chose : deux verites pour un seul etat finiraient par
+    /// diverger, et l'utilisateur verrait une tache pleine a 100 % encore dans ses en-cours.
+    #[test]
+    fn cent_pour_cent_marque_la_tache_finie() {
+        let db = Database::new(":memory:").unwrap();
+        let t = db.create_todo("proj", "Sortir les poubelles").unwrap();
+
+        let en_cours = db.set_todo_progress(t.id, 60).unwrap();
+        assert!(!en_cours.done, "60 % n'est pas fini");
+
+        let finie = db.set_todo_progress(t.id, 100).unwrap();
+        assert!(finie.done, "100 % doit marquer la tache finie");
+
+        // Et on peut la reprendre : redescendre la remet dans les en-cours.
+        let reprise = db.set_todo_progress(t.id, 70).unwrap();
+        assert!(!reprise.done, "redescendre sous 100 % doit rouvrir la tache");
+    }
 
     #[test]
     fn test_todo_crud() {

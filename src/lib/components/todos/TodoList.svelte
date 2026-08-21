@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getTodos, createTodo, updateTodo, deleteTodo, reorderTodos, setTodoDue } from "../../api/storage";
+  import { getTodos, createTodo, updateTodo, deleteTodo, reorderTodos, setTodoDue, setTodoProgress } from "../../api/storage";
   import { dueLabel, dueUrgency } from "../../utils/due";
   import type { Todo } from "../../types";
   import { onMount } from "svelte";
@@ -8,6 +8,7 @@
   import { notify } from "../../stores/toast";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import TodoText from "./TodoText.svelte";
+  import TodoProgress from "./TodoProgress.svelte";
   import { trad } from "../../i18n";
 
   let { project }: { project: string } = $props();
@@ -49,6 +50,12 @@
   async function commitDue(t: Todo, value: string) {
     editingDueId = null;
     try { await setTodoDue(t.id, value || null); await load(); } catch (e) { notify(String(e)); }
+  }
+
+  /// 100 % marque la tache finie, cote base : la liste est donc rechargee pour qu'elle passe
+  /// dans le bon groupe au lieu de rester affichee comme en cours.
+  async function commitProgress(t: Todo, valeur: number) {
+    try { await setTodoProgress(t.id, valeur); await load(); } catch (e) { notify(String(e)); }
   }
 
   function onKeydown(e: KeyboardEvent) { if (e.key === "Enter") add(); }
@@ -97,6 +104,9 @@
           />
         {:else}
           <TodoText texte={todo.text} done={todo.done} onEdit={() => (editingId = todo.id)} />
+        {/if}
+        {#if !todo.done}
+          <TodoProgress valeur={todo.progress} onChange={(v) => commitProgress(todo, v)} />
         {/if}
         {#if editingDueId === todo.id}
           <!-- svelte-ignore a11y_autofocus -->

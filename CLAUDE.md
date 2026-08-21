@@ -232,12 +232,13 @@ savoir ce qui existe :
   par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
 - **Projets** : un nom et un dossier. Dossiers imbriques sans limite, glisser-deposer, renommage
   au double-clic, memoire d'onglet. Ctrl+K va partout ; ▶ Cmd lance les commandes du projet.
-- **Taches, notes, reunions** : todos avec echeances ; notes Markdown arborescentes en WYSIWYG
-  avec mode lecture ; enregistrement micro + son systeme, transcrit et resume en note.
+- **Taches, notes, reunions** : todos avec echeances et avancement en pourcentage (100 % = finie,
+  une seule verite) ; notes Markdown arborescentes en WYSIWYG avec mode lecture ; enregistrement
+  micro + son systeme, transcrit et resume en note.
 - **Monitoring** : CPU, memoire, disques, processus ; la cloche previent pour un disque presque
-  plein ou une saturation qui dure. Liens rapides avec pastille up/down.
-- **Apparence** : palettes, accent, image de fond en verre depoli, zoom natif Ctrl+molette.
-  **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement, mises
+  plein ou une saturation qui dure. Liens rapides avec pastille up/down. **Apparence** : palettes,
+  accent, image de fond en verre depoli, zoom natif Ctrl+molette.
+- **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement, mises
   a jour integrees sur les trois systemes.
 
 ## Stack

@@ -189,6 +189,12 @@ fn set_todo_due(id: i64, due_date: Option<String>, state: tauri::State<'_, AppSt
     state.db.set_todo_due(id, due_date.as_deref())
 }
 
+/// Avancement d'une tache, en pourcentage. 100 la marque finie.
+#[tauri::command]
+fn set_todo_progress(id: i64, progress: i32, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
+    state.db.set_todo_progress(id, progress)
+}
+
 #[tauri::command]
 fn delete_todo(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.db.delete_todo(id)
@@ -1602,6 +1608,7 @@ pub fn run() {
             create_todo,
             update_todo,
             set_todo_due,
+            set_todo_progress,
             delete_todo,
             reorder_todos,
             move_todo,
