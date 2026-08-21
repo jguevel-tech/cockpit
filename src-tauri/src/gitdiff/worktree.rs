@@ -134,13 +134,20 @@ pub async fn ajouter(repo: &str, branche: &str, creer: bool) -> Result<String, S
         args.push(branche);
     }
     run_git_strict(repo, &args).await?;
-    // Le chemin RESOLU, et pas celui qu'on a construit : sous macOS `/var` est un lien vers
-    // `/private/var`, donc git rend le second et notre liste aussi. Rendre le premier ferait
-    // afficher a l'utilisateur un chemin different de celui qu'il verra dans la liste juste
-    // apres. Si la resolution echoue, on garde ce qu'on avait — mieux vaut un chemin
-    // approximatif que pas de reponse.
-    Ok(std::fs::canonicalize(&dossier)
-        .map(|c| c.to_string_lossy().to_string())
+    // GIT EST L'AUTORITE SUR LE CHEMIN, pas nous. Celui qu'on vient de construire n'est pas
+    // celui qu'il rendra : sous macOS `/var` est un lien vers `/private/var`, et sous Windows
+    // git ecrit ses chemins avec des `/` la ou nous les assemblons avec des `\`. Rendre le
+    // notre ferait afficher a l'utilisateur autre chose que ce que la liste montre juste apres,
+    // et casserait la comparaison qui sert a retirer un worktree.
+    //
+    // On relit donc la liste et on rend l'entree de NOTRE branche. Si elle n'y est pas — cas
+    // qui ne devrait pas exister puisque git vient de dire oui — on retombe sur le chemin
+    // construit plutot que de rendre une erreur pour un worktree qui existe.
+    let liste = lister(repo).await.unwrap_or_default();
+    Ok(liste
+        .into_iter()
+        .find(|w| w.branche.as_deref() == Some(branche))
+        .map(|w| w.chemin)
         .unwrap_or(chemin))
 }
 
@@ -208,7 +215,11 @@ mod tests {
     #[test]
     fn le_dossier_des_worktrees_est_frere_du_projet() {
         let d = dossier_des_worktrees("/home/moi/mon-projet");
-        assert_eq!(d.to_string_lossy(), "/home/moi/mon-projet.worktrees");
+        // Sur le NOM, pas sur la chaine entiere : `join` assemble avec le separateur du
+        // systeme, donc comparer un chemin ecrit en dur echoue sous Windows sans que rien ne
+        // soit casse.
+        assert_eq!(d.file_name().unwrap(), "mon-projet.worktrees");
+        assert_eq!(d.parent().unwrap(), Path::new("/home/moi"));
     }
 
     /// Ce qui pourrait fabriquer une hierarchie ou sortir du dossier est aplati.
@@ -274,6 +285,8 @@ mod tests {
             assert_eq!(apres.len(), 2, "{apres:?}");
             let ajoute = apres.iter().find(|w| !w.principal).unwrap();
             assert_eq!(ajoute.branche.as_deref(), Some("feat/essai"));
+            // Le chemin rendu par l'ajout est CELUI de la liste, a la chaine pres : c'est ce
+            // qui permet a l'interface d'afficher puis de retirer le meme worktree.
             assert_eq!(ajoute.chemin, chemin);
 
             // Deux fois la meme branche : refuse, et le message vient de git.

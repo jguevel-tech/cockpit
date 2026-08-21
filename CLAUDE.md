@@ -351,11 +351,10 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   ouvert apres la mort du shell, donc la lecture ne rend jamais rien : sous Windows la fin d'un
   terminal n'etait JAMAIS annoncee. Un thread guetteur bloque sur l'attente du process, ce qui
   marche partout, puis relache le maitre pour debloquer le lecteur.
-- **`ChildKiller::kill()` de portable-pty rend `Err` QUAND IL REUSSIT, sous Windows** : le test
-  du code de retour est inverse dans la crate. D'ou « The operation completed successfully.
-  (os error 0) » ou une erreur PERIMEE d'un appel anterieur. `fermer()` CONSTATE donc au lieu de
-  croire le retour. Corollaire : quand une bibliotheque rend une erreur qui n'a pas de sens,
-  aller lire sa source — elle est dans le cache cargo.
+- **`ChildKiller::kill()` de portable-pty rend `Err` QUAND IL REUSSIT, sous Windows** : le test du
+  code de retour est inverse dans la crate, d'ou « The operation completed successfully. (os error
+  0) » ou une erreur PERIMEE d'un appel anterieur. `fermer()` CONSTATE donc au lieu de croire le
+  retour. Quand une bibliotheque rend une erreur absurde, lire sa source dans le cache cargo.
 - **`cmd.exe` reaffiche son invite et son titre a chaque touche** (87 octets) : un essai qui
   mesure « l'echo d'une touche » doit attendre le SILENCE du shell avant de taper. Et il ne
   connait ni `printf`, ni `cat`, ni `;` comme separateur — cinq essais a shell POSIX portent
@@ -439,7 +438,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   contrainte de base n'est jamais un message d'interface.
 - **Un helper de position qui prend un nom de colonne se lit sur son APPEL** : `WHERE id IS NULL`
   n'est jamais vrai, donc chaque dossier naissait a la position 0 et le reordonnancement etait
-  INERTE. La position se calcule par fratrie avec `IS` et non `=`, sinon la racine ne compte pas.
+  INERTE. Position par fratrie, avec `IS` et non `=`, sinon la racine ne compte pas.
 - **`ON DELETE SET NULL` ajoute par `ALTER TABLE` EST bien applique** (mesure sur une copie de
   la base). Le commentaire qui affirmait le contraire etait faux. La garde utile est ailleurs :
   le REFUS de supprimer un dossier non vide.
@@ -459,13 +458,16 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   de CHAQUE plateforme.
 - **Du code d'apparence portable peut etre mort a moitie** : une lecture de `/proc` sans `#[cfg]`
   compile partout et rend toujours faux ailleurs, sans erreur. Chercher les chemins en dur.
-- **Sous macOS, `/var` est un lien vers `/private/var`** : un chemin construit a la main et le
-  meme chemin rendu par un outil (git) ne sont pas la MEME chaine. Resoudre avant de rendre,
-  sinon on montre autre chose que ce que la liste affichera juste apres.
+- **L'OUTIL EST L'AUTORITE SUR LE CHEMIN QU'IL REND, jamais nous.** Un chemin assemble a la main
+  et le meme chemin rendu par git ne sont pas la meme CHAINE : sous macOS `/var` est un lien vers
+  `/private/var`, et sous Windows git ecrit ses chemins avec des `/` la ou `join` met des `\`.
+  Afficher le notre montre autre chose que la liste juste apres, et casse la comparaison qui sert
+  a retirer l'entree. On relit donc la liste et on rend l'entree que l'outil y met. Corollaire
+  pour les essais : ne jamais comparer un chemin a une chaine ecrite en dur — comparer le NOM.
 - **Sockets** : sous Unix le nom est limite a ~108 octets et l'erreur ne le dit pas (le service
-  demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est PAS un
-  fichier mais un tuyau nomme. Le code de production le savait, les essais non — un helper d'essai
-  qui construit un chemin est un endroit ou la portabilite se perd sans que rien ne le signale.
+  demarre, n'ouvre rien, l'application ne rend qu'un delai depasse) ; sous Windows ce n'est pas un
+  fichier mais un tuyau nomme. Un helper d'essai qui construit un chemin est un endroit ou la
+  portabilite se perd sans que rien ne le signale.
 - **Les zombies portant notre nom ne viennent PAS de nous** : mesure a zero sur dix releves, et un
   essai verrouille la propriete. Ils viennent du fork intermediaire de `g_spawn` (GLib), dont
   WebKit se sert. Benin — ne pas chercher dans notre code, et ne pas « corriger » par un ramassage
