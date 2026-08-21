@@ -224,6 +224,18 @@
         <p>{@html $trad("docs.git.branches")}</p>
       </div>
 
+      <div class="block">
+        <p>{@html $trad("docs.git.worktrees")}</p>
+        <div class="demo">
+          <div class="d-tabs"><span class="d-muted">{$trad("git.changes")}</span><span class="d-muted">{$trad("git.history")}</span><span class="d-state">{$trad("git.worktrees")}</span></div>
+          <div class="d-row"><strong>main</strong> <span class="d-count">{$trad("git.worktreeMain")}</span> <span class="d-btn small">▶</span></div>
+          <div class="d-row indent"><span class="d-muted">/home/moi/projet</span></div>
+          <div class="d-row"><strong>feat/refonte</strong> <span class="d-btn small">▶</span> <span class="d-btn small danger">🗑</span></div>
+          <div class="d-row indent"><span class="d-muted">/home/moi/projet.worktrees/feat-refonte</span></div>
+          <div class="d-note">{$trad("docs.git.worktreesDemo")}</div>
+        </div>
+      </div>
+
     {:else if section === "docker"}
       <h3>{$trad("docs.docker.heading")}</h3>
 

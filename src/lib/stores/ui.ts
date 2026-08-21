@@ -32,7 +32,13 @@ export const pendingFilePath = writable<string | null>(null);
  *  seul l'onglet Terminal connait la taille de son conteneur, et une TUI lancee a la
  *  creation (k9s, htop, top) se dessine a la taille du PTY. Creer la session a une
  *  taille arbitraire la laisse dans un petit carre — voir `honorerCommande`. */
-export const pendingTerminalCommand = writable<{ project: string; command: string } | null>(null);
+// `dossier` permet d'ouvrir le terminal AILLEURS que dans le dossier du projet — c'est ce qui
+// sert aux worktrees git. Absent = le dossier du projet, comme avant.
+export const pendingTerminalCommand = writable<{
+  project: string;
+  command: string;
+  dossier?: string;
+} | null>(null);
 // Sous-vue active du tableau de bord
 export const dashboardView = writable<"tasks" | "monitoring" | "terminals" | "containers">("tasks");
 

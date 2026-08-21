@@ -344,6 +344,17 @@ export interface BranchInfo {
   current: boolean;
 }
 
+/// Un dossier de travail du depot. Le principal en fait partie.
+export interface Worktree {
+  chemin: string;
+  /** Nom court de la branche, ou null quand la tete est detachee. */
+  branche: string | null;
+  tete: string;
+  principal: boolean;
+  verrouille: boolean;
+  elagable: boolean;
+}
+
 export interface CommitInfo {
   hash: string;
   full_hash: string;

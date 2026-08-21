@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TerminalInfo, TerminalSearchResult, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
+import type { TerminalInfo, TerminalSearchResult, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults, Worktree } from "../types";
 
 // Terminaux integres
 export const createTerminal = (project: string, cwd: string, cols: number, rows: number, initCommand?: string) =>
@@ -102,6 +102,11 @@ export const gitLog = (projectPath: string, limit = 100) =>
 export const gitCommitDiff = (projectPath: string, hash: string) =>
   invoke<FileDiff[]>("git_commit_diff", { projectPath, hash });
 export const gitBranches = (projectPath: string) => invoke<BranchInfo[]>("git_branches", { projectPath });
+export const gitWorktrees = (projectPath: string) => invoke<Worktree[]>("git_worktrees", { projectPath });
+export const gitWorktreeAdd = (projectPath: string, branche: string, creer: boolean) =>
+  invoke<string>("git_worktree_add", { projectPath, branche, creer });
+export const gitWorktreeRemove = (projectPath: string, chemin: string, force: boolean) =>
+  invoke<void>("git_worktree_remove", { projectPath, chemin, force });
 export const gitCheckoutBranch = (projectPath: string, name: string) =>
   invoke("git_checkout_branch", { projectPath, name });
 export const gitCreateBranch = (projectPath: string, name: string) =>

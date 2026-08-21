@@ -441,7 +441,7 @@
   /// la taille du PTY et rien ne la redimensionne apres coup. Ces appelants creaient la
   /// session en 80x24 : la TUI restait dans un petit carre en haut a gauche d'un conteneur
   /// large (issue #14).
-  async function honorerCommande(demande: { project: string; command: string }): Promise<boolean> {
+  async function honorerCommande(demande: { project: string; command: string; dossier?: string }): Promise<boolean> {
     // Demande deja traitee, ou remplacee par une autre depuis : on ne la rejoue pas.
     if (get(pendingTerminalCommand) !== demande) return false;
     // Vide AVANT de creer : une commande consommee ne doit pas pouvoir etre rejouee au
@@ -454,7 +454,7 @@
       notify($trad("term.commandOtherProject", { project: demande.project }));
       return false;
     }
-    await addTerminal(demande.command);
+    await addTerminal(demande.command, demande.dossier);
     return true;
   }
 
@@ -660,7 +660,7 @@
     return { term, fit, el };
   }
 
-  async function addTerminal(initCommand?: string) {
+  async function addTerminal(initCommand?: string, dossier?: string) {
     // JAMAIS de retour silencieux ici : c'est exactement ce qui a laisse le premier
     // utilisateur externe cliquer sur + sans que rien ne se passe ni ne s'affiche.
     // Y COMPRIS pour le conteneur : c'est lui qui donne la taille du PTY, et une commande
@@ -689,7 +689,13 @@
     const rows = entry.term.rows || 24;
 
     try {
-      const id = await createTerminal(name, project.path, cols, rows, initCommand);
+      // `dossier` sert aux worktrees git : le shell demarre dans le dossier du worktree, pas
+      // dans celui du projet. Absent = le projet, comme avant.
+      //
+      // Une commande VIDE vaut « pas de commande » : « ouvrir un terminal ici » depose une
+      // demande sans commande, et taper une ligne vide dans le shell laisserait une invite
+      // orpheline au demarrage.
+      const id = await createTerminal(name, dossier || project.path, cols, rows, initCommand || undefined);
       pool.set(id, entry);
       mounted.add(id);
       lastSentSize.set(id, `${cols}x${rows}`);

@@ -1153,6 +1153,32 @@ async fn git_branches(project_path: String) -> Result<Vec<gitdiff::BranchInfo>, 
     gitdiff::git_branches(&project_path).await
 }
 
+/// Les dossiers de travail du depot, le principal en premier.
+#[tauri::command]
+async fn git_worktrees(project_path: String) -> Result<Vec<gitdiff::worktree::Worktree>, String> {
+    gitdiff::worktree::lister(&project_path).await
+}
+
+/// Ajoute un dossier de travail sur `branche`, en la creant si `creer`. Rend son chemin.
+#[tauri::command]
+async fn git_worktree_add(
+    project_path: String,
+    branche: String,
+    creer: bool,
+) -> Result<String, String> {
+    gitdiff::worktree::ajouter(&project_path, &branche, creer).await
+}
+
+/// Retire un dossier de travail. `force` abandonne les modifications non validees.
+#[tauri::command]
+async fn git_worktree_remove(
+    project_path: String,
+    chemin: String,
+    force: bool,
+) -> Result<(), String> {
+    gitdiff::worktree::retirer(&project_path, &chemin, force).await
+}
+
 #[tauri::command]
 async fn git_checkout_branch(project_path: String, name: String) -> Result<(), String> {
     gitdiff::git_checkout_branch(&project_path, &name).await
@@ -1703,6 +1729,9 @@ pub fn run() {
             git_log,
             git_commit_diff,
             git_branches,
+            git_worktrees,
+            git_worktree_add,
+            git_worktree_remove,
             git_checkout_branch,
             git_create_branch,
             git_delete_branch,

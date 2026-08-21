@@ -89,7 +89,7 @@ ouverture ─> a-trier ─> en-analyse ─┬─> attente-arbitrage ─> a-livre
 
 a-livrer ─> en-cours ─> [release publiee + auteur prevenu] ─> attente-retour
                                                                     │
-                                          confirmation ou 10 jours ─┼─> ferme
+                                          confirmation ou 24 h ────┼─> ferme
                                                                     │
                           « c'est mieux mais... » / « toujours pas » ┴─> en-cours
 ```
@@ -112,7 +112,7 @@ disparaitre avec la session. C'est Jimmy qui a demande « rien ne m'a ete soumis
 **Un retour negatif SORT l'issue de `attente-retour` immediatement.** « Ca ne marche
 toujours pas », mais aussi « c'est mieux mais... » : des que l'auteur signale qu'il reste
 quelque chose, la balle est revenue chez nous et l'etat doit le dire. Laisser
-`attente-retour` ferait fermer l'issue tout seule au bout de dix jours alors qu'il reste
+`attente-retour` ferait fermer l'issue tout seule au bout de 24 h alors qu'il reste
 du travail — et surtout, elle disparaitrait du tableau des choses a faire.
 
 Constate le 2026-08-20 sur l'issue #14 : Jimmy avait ecrit « c'est mieux mais quand je
@@ -167,7 +167,14 @@ Il se retire quand c'est publie ET l'auteur prevenu — moment ou l'issue passe 
 
 | Label | Qui attend | Ce qui le retire |
 |---|---|---|
-| `attente-retour` | nous attendons l'auteur | sa reponse, ou dix jours de silence |
+| `attente-retour` | nous attendons l'auteur | sa reponse, ou **24 h** de silence apres livraison |
+
+**FERMETURE AU BOUT DE 24 H — les DEUX conditions.** Jimmy l'a demande le 2026-08-21 : on ferme
+une issue restee sans reponse **plus de 24 h** ET **dont le code est livre**. Les deux comptent :
+sans livraison, le silence ne veut rien dire, et on ne ferme pas une demande a laquelle on n'a
+pas repondu. Le delai se compte depuis NOTRE dernier commentaire, celui qui annonce la version.
+Le message de fermeture dit pourquoi, invite a rouvrir, et rappelle de verifier la version
+installee. Le label passe a `a-livrer`.
 | `a-livrer` | l'auteur nous attend | la livraison, puis on le previent |
 
 ### Ce qui a rendu cette regle necessaire
@@ -265,7 +272,7 @@ une deuxieme fois**.
 
 **Des que la balle revient chez nous, le label saute.** Un auteur qui a repondu et une
 demande que Jimmy a retenue : ce n'est plus une attente, c'est du travail a faire. Si le
-label restait, le compteur des dix jours fermerait tout seul une issue sur laquelle on
+label restait, le compteur des 24 h fermerait tout seul une issue sur laquelle on
 est en train de bosser. On retire donc le label et on laisse l'issue ouverte jusqu'a la
 livraison :
 
@@ -285,7 +292,7 @@ Pour chacune, compare **notre dernier commentaire** (auteur `jguevel-tech`) et l
 |---|---|
 | L'auteur a repondu apres nous que c'est bon | remercier, retirer le label, **fermer** |
 | L'auteur a repondu que c'est toujours casse | retirer le label, reprendre l'issue au triage **avec les nouvelles informations** (souvent une capture de plus) |
-| L'auteur a repondu autre chose (question, cas different) | repondre, garder le label — le compteur des dix jours repart de notre reponse |
+| L'auteur a repondu autre chose (question, cas different) | repondre, garder le label — le compteur des 24 h repart de notre reponse |
 | Aucune reponse de l'auteur, notre commentaire a **plus de 10 jours** | **fermer**, en disant que ca reste rouvrable |
 | Aucune reponse, moins de 10 jours | **ne rien faire** — ne pas relancer, ne pas commenter |
 

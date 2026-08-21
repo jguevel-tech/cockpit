@@ -5,6 +5,8 @@
 use serde::Serialize;
 use tokio::process::Command;
 
+pub mod worktree;
+
 use crate::commande::SansConsole;
 
 #[derive(Serialize, Clone)]
@@ -65,7 +67,7 @@ pub struct DiffLine {
 
 /// Lance git dans le repo. Les codes retour 0 et 1 sont acceptes
 /// (1 = "des differences existent" pour git diff).
-async fn run_git(repo: &str, args: &[&str]) -> Result<String, String> {
+pub(super) async fn run_git(repo: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
         .sans_console()
         .args(args)
@@ -90,7 +92,7 @@ async fn run_git(repo: &str, args: &[&str]) -> Result<String, String> {
 
 /// Runner strict pour les operations (add/commit/push/branch) : tout code != 0
 /// est une erreur, avec stderr+stdout comme message (git ecrit sur les deux).
-async fn run_git_strict(repo: &str, args: &[&str]) -> Result<String, String> {
+pub(super) async fn run_git_strict(repo: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
         .sans_console()
         .args(args)

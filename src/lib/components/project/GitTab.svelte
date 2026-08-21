@@ -5,8 +5,10 @@
     gitStatus, gitDiffFile, gitStage, gitUnstage, gitStageAll, gitUnstageAll,
     gitCommit, gitPush, gitPull, gitLog, gitCommitDiff,
     gitBranches, gitCheckoutBranch, gitCreateBranch, gitDeleteBranch,
+    gitWorktrees, gitWorktreeAdd, gitWorktreeRemove,
   } from "../../api/workspace";
-  import type { GitStatus, GitStatusEntry, FileDiff, BranchInfo, CommitInfo } from "../../types";
+  import type { GitStatus, GitStatusEntry, FileDiff, BranchInfo, CommitInfo, Worktree } from "../../types";
+  import { pendingTerminalCommand, activeTab } from "../../stores/ui";
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
@@ -27,7 +29,7 @@
   let commitMsg = $state("");
 
   // Historique
-  let view: "changes" | "history" = $state("changes");
+  let view: "changes" | "history" | "worktrees" = $state("changes");
   let commits: CommitInfo[] = $state([]);
   let commitsError = $state("");
   let loadingCommits = $state(false);
@@ -145,9 +147,88 @@
     });
   }
 
-  async function showView(v: "changes" | "history") {
+  async function showView(v: "changes" | "history" | "worktrees") {
     view = v;
     if (v === "history" && commits.length === 0) await loadHistory();
+    if (v === "worktrees") await loadWorktrees();
+  }
+
+  // --- Worktrees ---
+  // Un worktree est un second dossier de travail sur le meme depot, sur une autre branche :
+  // c'est ce qui permet de faire tourner plusieurs agents en parallele sans qu'un `checkout`
+  // change le code sous les pieds des autres.
+  let worktrees: Worktree[] = $state([]);
+  let worktreesError = $state("");
+  let loadingWorktrees = $state(false);
+  let nouvelleBranche = $state("");
+
+  // La branche saisie existe-t-elle deja ? Ca decide entre « ajouter » et « creer et ajouter »,
+  // et le libelle du bouton le DIT avant le clic — on ne fait pas deviner.
+  let brancheExiste = $derived(
+    branches.some((b) => b.name === nouvelleBranche.trim()),
+  );
+
+  async function loadWorktrees() {
+    if (!project?.path) return;
+    loadingWorktrees = true;
+    worktreesError = "";
+    try {
+      worktrees = await gitWorktrees(project.path);
+      // La liste des branches sert a savoir s'il faut en creer une : on la charge ici aussi,
+      // sinon le libelle du bouton serait faux tant que le menu des branches n'a pas ete ouvert.
+      if (branches.length === 0) branches = await gitBranches(project.path);
+    } catch (e) {
+      signalerErreur("git.loadWorktrees", String(e));
+      worktreesError = String(e);
+    } finally {
+      loadingWorktrees = false;
+    }
+  }
+
+  async function ajouterWorktree() {
+    const branche = nouvelleBranche.trim();
+    if (!branche) { notify($trad("git.worktreeBranchNeeded")); return; }
+    if (!project?.path) { notify($trad("git.noProjectPath")); return; }
+    busy = "worktree";
+    try {
+      const chemin = await gitWorktreeAdd(project.path, branche, !brancheExiste);
+      nouvelleBranche = "";
+      notify($trad("git.worktreeAdded", { chemin }), "success");
+      await loadWorktrees();
+      branches = await gitBranches(project.path);
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      busy = "";
+    }
+  }
+
+  async function retirerWorktree(w: Worktree) {
+    if (!project?.path) { notify($trad("git.noProjectPath")); return; }
+    if (!confirm($trad("git.worktreeRemoveConfirm", { chemin: w.chemin }))) return;
+    busy = "worktree";
+    try {
+      await gitWorktreeRemove(project.path, w.chemin, false);
+      await loadWorktrees();
+    } catch (e) {
+      // Git refuse un worktree qui porte des modifications non validees. On le dit, et on
+      // propose d'insister — plutot que de forcer d'office, ce qui perdrait du travail.
+      if (confirm($trad("git.worktreeRemoveForce", { erreur: String(e) }))) {
+        try {
+          await gitWorktreeRemove(project.path, w.chemin, true);
+          await loadWorktrees();
+        } catch (e2) { notify(String(e2)); }
+      }
+    } finally {
+      busy = "";
+    }
+  }
+
+  /// Ouvre un terminal DANS le worktree. C'est l'onglet Terminal qui cree la session (lui seul
+  /// mesure son conteneur, donc la taille du PTY) : on depose la demande et on y navigue.
+  function terminalDansWorktree(w: Worktree) {
+    pendingTerminalCommand.set({ project: name, command: "", dossier: w.chemin });
+    activeTab.set("terminal");
   }
 
   async function loadHistory() {
@@ -278,7 +359,50 @@
       <div class="git-views">
         <button class:active={view === "changes"} onclick={() => showView("changes")}>{$trad("git.changes")}</button>
         <button class:active={view === "history"} onclick={() => showView("history")}>{$trad("git.history")}</button>
+        <button class:active={view === "worktrees"} onclick={() => showView("worktrees")}>{$trad("git.worktrees")}</button>
       </div>
+
+      {#if view === "worktrees"}
+        <div class="worktree-panel">
+          <p class="git-msg hint">{$trad("git.worktreesHint")}</p>
+          <div class="worktree-add">
+            <input
+              class="input"
+              bind:value={nouvelleBranche}
+              placeholder={$trad("git.worktreeBranchPlaceholder")}
+              spellcheck="false"
+              onkeydown={(e) => { if (e.key === "Enter") ajouterWorktree(); }}
+            />
+            <button class="btn" onclick={ajouterWorktree} disabled={busy === "worktree" || !nouvelleBranche.trim()}>
+              {brancheExiste ? $trad("git.worktreeAdd") : $trad("git.worktreeCreateAndAdd")}
+            </button>
+          </div>
+
+          {#if loadingWorktrees}
+            <p class="git-msg">{$trad("common.loading")}</p>
+          {:else if worktreesError}
+            <p class="git-msg error">{worktreesError}</p>
+          {:else}
+            {#each worktrees as w (w.chemin)}
+              <div class="worktree-row">
+                <div class="worktree-id">
+                  <span class="worktree-branch">
+                    {w.branche ?? $trad("git.worktreeDetached", { tete: w.tete })}
+                    {#if w.principal}<span class="badge">{$trad("git.worktreeMain")}</span>{/if}
+                    {#if w.verrouille}<span class="badge">{$trad("git.worktreeLocked")}</span>{/if}
+                    {#if w.elagable}<span class="badge">{$trad("git.worktreePrunable")}</span>{/if}
+                  </span>
+                  <span class="worktree-path" title={w.chemin}>{w.chemin}</span>
+                </div>
+                <button class="icon-btn" title={$trad("git.worktreeTerminal")} onclick={() => terminalDansWorktree(w)}>▶</button>
+                {#if !w.principal}
+                  <button class="icon-btn" title={$trad("git.worktreeRemove")} onclick={() => retirerWorktree(w)} disabled={busy === "worktree"}>🗑</button>
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
 
       {#if view === "history"}
         <div class="commit-list">
@@ -565,6 +689,28 @@
     position: sticky; top: 2.1rem;
   }
   .git-msg { padding: 0.6rem; color: var(--text-muted); font-size: 0.85rem; }
+  .git-msg.hint { line-height: 1.45; }
+
+  /* --- Worktrees --- */
+  .worktree-panel { overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem; }
+  .worktree-add { display: flex; gap: 0.4rem; padding: 0 0.6rem 0.5rem; }
+  .worktree-add .input { flex: 1; min-width: 0; }
+  .worktree-row {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border-color);
+  }
+  .worktree-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+  .worktree-branch {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-size: 0.85rem; color: var(--text-primary);
+  }
+  /* Le chemin est TOUJOURS montre : rien ne doit apparaitre sur le disque de quelqu'un sans
+     qu'il sache ou. Tronque a gauche, la fin d'un chemin etant ce qui distingue. */
+  .worktree-path {
+    font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);
+    direction: rtl; text-align: left; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .git-msg.error { color: var(--error, #e5484d); }
 
   .file-groups { flex: 1; overflow-y: auto; min-height: 0; }
