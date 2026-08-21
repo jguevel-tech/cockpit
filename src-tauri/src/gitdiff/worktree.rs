@@ -216,4 +216,66 @@ mod tests {
         assert!(nom_de_dossier("///").is_err());
         assert!(nom_de_dossier("..").is_err());
     }
+
+    /// De bout en bout sur un VRAI depot jetable : ajouter, lister, retirer.
+    ///
+    /// Les essais sur texte plus haut verifient l'analyse ; celui-ci verifie les APPELS a git,
+    /// qui est la seule chose que l'analyse ne peut pas dire. Il demande `git`, qui est une
+    /// dependance du projet et est present sur les runners.
+    #[test]
+    fn le_tour_complet_sur_un_depot_jetable() {
+        let base = std::env::temp_dir().join(format!("cockpit-wt-{}", std::process::id()));
+        let depot = base.join("projet");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&depot).unwrap();
+        let repo = depot.to_string_lossy().to_string();
+
+        // Le menage est fait quoi qu'il arrive : un `assert!` rate laisserait sinon un depot et
+        // ses worktrees en travers du dossier temporaire.
+        struct Menage(std::path::PathBuf);
+        impl Drop for Menage {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _menage = Menage(base.clone());
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            // Une identite locale au depot : sans elle, `git commit` echoue sur une machine
+            // qui n'en a pas de globale — un runner, typiquement.
+            for args in [
+                vec!["init", "-q"],
+                vec!["config", "user.email", "banc@cockpit"],
+                vec!["config", "user.name", "Banc"],
+                vec!["commit", "-q", "--allow-empty", "-m", "depart"],
+            ] {
+                run_git_strict(&repo, &args).await.expect("preparation du depot");
+            }
+
+            // Au depart, le worktree principal et lui seul.
+            let depart = lister(&repo).await.unwrap();
+            assert_eq!(depart.len(), 1, "{depart:?}");
+            assert!(depart[0].principal);
+
+            // Ajout sur une branche qui n'existe pas : elle est creee.
+            let chemin = ajouter(&repo, "feat/essai", true).await.expect("ajout");
+            assert!(chemin.ends_with("feat-essai"), "{chemin}");
+            assert!(std::path::Path::new(&chemin).is_dir(), "le dossier doit exister");
+
+            let apres = lister(&repo).await.unwrap();
+            assert_eq!(apres.len(), 2, "{apres:?}");
+            let ajoute = apres.iter().find(|w| !w.principal).unwrap();
+            assert_eq!(ajoute.branche.as_deref(), Some("feat/essai"));
+            assert_eq!(ajoute.chemin, chemin);
+
+            // Deux fois la meme branche : refuse, et le message vient de git.
+            assert!(ajouter(&repo, "feat/essai", true).await.is_err());
+
+            retirer(&repo, &chemin, false).await.expect("retrait");
+            let fini = lister(&repo).await.unwrap();
+            assert_eq!(fini.len(), 1, "{fini:?}");
+            assert!(!std::path::Path::new(&chemin).exists(), "le dossier doit avoir disparu");
+        });
+    }
 }

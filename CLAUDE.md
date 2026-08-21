@@ -207,23 +207,27 @@ Le detail vit dans le code et dans la doc integree (bouton « i » du Header). L
 savoir ce qui existe :
 
 - **Projets** : un nom et un dossier. Dossiers imbriques sans limite, glisser-deposer, renommage
-  au double-clic, memoire d'onglet par projet.
+  au double-clic, memoire d'onglet.
 - **Terminaux persistants** : service a nous qui survit a la fermeture, ecran et historique
   compris. Recherche dans l'historique, logo Claude quand un agent IA tourne, sessions Claude
   Code reprises en un clic.
 - **Fichiers** : arbre gitignore-aware, coloration ~30 langages, edition en place, corbeille
-  systeme, recherche dans le fichier et dans le projet, aller a la definition (LSP).
+  systeme, recherche dans le fichier et le projet, aller a la definition (LSP).
 - **Git** : status, diff colore, staging par fichier, commit, push, pull en fast-forward
-  uniquement, branches, historique avec diff.
-- **Conteneurs** : Compose dans le bon ordre (tri topologique, detection de cycles), logs et
-  shell par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
+  uniquement, branches, historique avec diff, et **worktrees** — un second dossier de travail
+  par branche, pour faire tourner plusieurs agents en parallele. Ils sont crees dans un dossier
+  FRERE du projet (`<projet>.worktrees/<branche>`) et jamais dedans : un worktree dans le depot
+  serait vu par l'onglet Fichiers, par les recherches, et par git comme du contenu non suivi.
+  Le chemin est toujours affiche — rien n'apparait sur le disque de quelqu'un sans qu'il sache
+  ou.
+- **Conteneurs** : Compose dans le bon ordre (tri topologique, cycles detectes), logs et shell
+  par conteneur, vue globale machine avec nettoyage. Entierement optionnel.
 - **Palette et commandes rapides** : Ctrl+K, et commandes par projet lancees par ▶ Cmd.
 - **Taches et notes** : todos avec echeances, notes Markdown arborescentes en WYSIWYG avec
   mode lecture.
 - **Reunions** : enregistrement micro + son systeme, transcription, resume depose en note.
 - **Monitoring et alertes** : CPU, memoire, disques, processus ; la cloche previent pour un
-  disque presque plein ou une saturation qui dure. Les liens rapides portent une pastille
-  up/down.
+  disque presque plein ou une saturation qui dure. Liens rapides avec pastille up/down.
 - **Apparence** : palettes, accent, image de fond en verre depoli, zoom natif Ctrl+molette.
 - **Agents Claude Code** : place de marche par projet et globale, connexion par abonnement.
 - **Mises a jour** : integrees, sur les trois systemes.
