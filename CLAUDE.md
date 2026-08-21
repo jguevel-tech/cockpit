@@ -434,8 +434,7 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
   racine de chaque session : 56,5 ms -> 4,0 ms. La descente passe par les taches, pas seulement
   le thread principal, parce qu'un node fork depuis un thread de travail.
 - **Un evenement Tauri est du JavaScript construit puis evalue**, pas un canal binaire : 8 Ko
-  d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement, par
-  contre-pression et jamais par une horloge.
+  d'octets = ~11 Ko de source JS plus un saut vers le WebProcess. D'ou le regroupement.
 - **Un message d'erreur de SQLite remonte TEL QUEL jusqu'au toast** : un nom de projet deja pris
   affichait « UNIQUE constraint failed ». Deux parades necessaires : l'interface controle avant
   d'appeler, avec un message traduit ; et cote Rust une fonction qui NOMME la cause. Une
