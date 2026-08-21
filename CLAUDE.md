@@ -1549,6 +1549,19 @@ Le backend (`system/metrics.rs`) collecte :
     invisible le jour ou c'est une vraie regression (exactement la lecon de la v0.32.0).
     Le remettre dans `release.yml` demande d'ajouter `windows-` a `PLATEFORMES_ATTENDUES`
     du job `publier`, sinon son absence redevient silencieuse.
+- **UN GROS LOT NE VEUT PAS DIRE UN DEBIT INGERABLE.** `VOLUME_INSOUTENABLE`
+  (`terminal/service/session.rs`) valait 256 Ko, justifie par « 256 Ko dans une fenetre de
+  8 ms, c'est 32 Mo/s, aucun affichage humain ne suit ». Le raisonnement est faux : un gros
+  lot dit seulement que le PTY a livre son tampon d'un coup, ce que macOS fait beaucoup plus
+  que Linux. Consequence mesuree sur le runner macOS de la v0.39.0 : sur 1,3 Mo de
+  `seq 1 200000` — une sortie tout a fait ordinaire — **368 Ko seulement arrivaient**, le
+  reste remplace par sept redessins. L'utilisateur remonte a la molette et ne trouve pas sa
+  sortie, ce que le flux brut existe justement pour eviter. Le seuil est un PLAFOND DE
+  MEMOIRE (4 Mo), pas un jugement sur le debit : borne pour un flux sans fin
+  (`cat /dev/urandom`), et au-dessus de toute sortie de commande normale.
+  A retenir plus largement : une constante justifiee par un calcul de debit merite qu'on
+  verifie sur quoi ce debit est mesure — ici la fenetre de 8 ms etait le denominateur, et
+  elle ne dit rien de ce que la machine tiendra la seconde suivante.
 - **LE REGROUPEMENT DE LA SORTIE NE DOIT PAS SE DECIDER SUR « IL A FALLU ATTENDRE ».** La
   regle a d'abord dit : « si la suite attendait deja quand on est revenu, c'est une rafale »
   (`!a_attendu`, `terminal/service/session.rs`). Ca ne mesure pas le debit, ca mesure lequel

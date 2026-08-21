@@ -70,12 +70,21 @@ const TAILLE_ECHO: usize = 64;
 
 /// Volume d'un seul lot au-dela duquel on renonce a transmettre et on redessine.
 ///
-/// 256 Ko dans une fenetre de 8 ms, c'est 32 Mo/s : aucun affichage humain ne suit, le
-/// contenu a forcement ete recouvert plusieurs fois, et le redessin est a la fois plus
-/// court et plus juste. En dessous on transmet TOUT — c'est ce qui remplit le tampon de
-/// defilement du terminal du frontend, donc ce qui fait marcher la molette sans aller
-/// demander quoi que ce soit au service.
-const VOLUME_INSOUTENABLE: usize = 256 * 1024;
+/// C'est un PLAFOND DE MEMOIRE — ce qu'on accepte de garder pour un frontend — et non un
+/// jugement sur le debit. La nuance a coute une regression : la valeur etait de 256 Ko,
+/// justifiee par « 256 Ko dans une fenetre de 8 ms, c'est 32 Mo/s, aucun affichage ne
+/// suit ». Ce raisonnement est faux. Un gros lot ne dit pas que le debit est ingerable, il
+/// dit que le PTY a livre son tampon d'un coup — ce que macOS fait beaucoup plus qu'Linux.
+/// Mesure du runner macOS de la v0.39.0 : sur 1,3 Mo de `seq 1 200000`, une sortie tout a
+/// fait ordinaire, **368 Ko seulement arrivaient** et le reste etait remplace par sept
+/// redessins. Concretement l'utilisateur remontait a la molette et ne trouvait pas sa
+/// sortie : c'est precisement ce que le flux brut existe pour eviter.
+///
+/// 4 Mo, donc : au-dessus de toute sortie de commande normale (un gros journal de build fait
+/// quelques Mo), et ca reste borne — c'est la seule chose qui compte pour un flux sans fin
+/// (`cat /dev/urandom`), ou la protection garde tout son sens. En dessous on transmet TOUT,
+/// et c'est ce qui remplit le tampon de defilement du terminal du frontend.
+const VOLUME_INSOUTENABLE: usize = 4 * 1024 * 1024;
 
 /// A qui la sortie d'un terminal est remise. Implemente par une connexion cliente.
 ///

@@ -12,10 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.39.0] — 2026-08-21
-
 ### Fixed
 
+- **Une grosse sortie de terminal n'est plus tronquée.** Une commande qui écrit beaucoup —
+  `seq`, un journal de build — pouvait voir la majeure partie de sa sortie remplacée par un
+  simple rafraîchissement de l'écran : on remontait à la molette et on ne trouvait pas ce
+  qu'on cherchait. Sur macOS, sur 1,3 Mo de sortie, seuls 368 Ko arrivaient. La limite qui
+  déclenchait ça confondait « le système a livré un gros paquet d'un coup » avec « le débit
+  est ingérable ».
 - **Les grosses sorties de terminal repartent en gros paquets.** Une commande qui écrit des
   milliers de lignes était renvoyée à l'interface en morceaux minuscules — jusqu'à 3 000
   envois pour un mégaoctet sur macOS, là où il en faut quelques dizaines. Résultat :
