@@ -28,11 +28,14 @@ le script de release.
   relative de deux fils d'exécution, donc elle se comporte pareil sur les trois systèmes.
   Sous Linux aussi c'est cinq fois moins d'envois qu'avant.
 
-### Changed
+### Added
 
-- **L'installeur Windows annoncé en 0.38.0 n'est pas publié.** Tout le code se compile pour
-  Windows, mais les terminaux n'y fonctionnent pas encore : écrire dans la console échoue.
-  Un installeur dont les terminaux sont morts n'aurait servi personne. Le travail continue.
+- **Cockpit s'installe maintenant sur Windows.** Un installeur `.exe` est publié à chaque
+  version, à côté de l'AppImage Linux et du `.dmg` macOS. Terminaux persistants, fichiers,
+  Git, notes et enregistrement de réunions y marchent sans rien installer d'autre. C'est la
+  toute première version Windows : la suite de tests y passe en entier, mais personne ne s'en
+  est encore servi une journée. Si quelque chose ne va pas, ouvrir une issue est ce qui
+  aidera le plus.
 
 ## [0.38.0] — 2026-08-21
 

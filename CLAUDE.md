@@ -1542,13 +1542,25 @@ Le backend (`system/metrics.rs`) collecte :
     n'en connait aucun. Ils portent `#[cfg(unix)]`.
   - `le shell ne meurt pas` : la fin d'un process n'a pas la meme semantique.
   - Un `assert_eq!` de `workspace` tombe : separateurs de chemin.
-  - **DECISION : Windows est SORTI de la matrice de `release.yml`** et a son propre
-    `windows.yml` sur `workflow_dispatch`, qui produit un installeur en ARTEFACT sans rien
-    publier. Deux raisons, aucune n'est le temps : un installeur dont les terminaux sont
-    morts est pire que pas d'installeur ; et une matrice qui echoue a chaque release rend
-    invisible le jour ou c'est une vraie regression (exactement la lecon de la v0.32.0).
-    Le remettre dans `release.yml` demande d'ajouter `windows-` a `PLATEFORMES_ATTENDUES`
-    du job `publier`, sinon son absence redevient silencieuse.
+  - **DENOUEMENT : les treize echecs venaient des ESSAIS, pas du produit.** Une fois les
+    cinq essais a shell POSIX gardes et le tuyau nomme corrige, la suite entiere passe sur
+    `windows-latest` — y compris les essais qui ecrivent dans le PTY et attendent la reponse
+    d'un vrai shell, ceux dont l'echec avait fait conclure que le coeur etait casse. Windows
+    est donc revenu dans la matrice de `release.yml` (et dans `PLATEFORMES_ATTENDUES`), avec
+    un installeur NSIS de ~6,6 Mo produit par la CI. Lecon a garder : quand un lot d'essais
+    tombe d'un bloc sur une nouvelle plateforme, chercher d'abord ce que les essais
+    supposent de leur environnement — un seul essai qui part en boucle d'attente (30 s de
+    `PATIENCE`) en fait tomber d'autres autour de lui, et le tableau ressemble alors a une
+    panne du produit.
+  - **UN ESSAI QUI NE TOMBE QUE SUR macOS OU WINDOWS SE VERIFIE AVANT LE TAG.**
+    `.github/workflows/essais.yml`, sur `workflow_dispatch` (`gh workflow run essais.yml`) :
+    matrice macOS + Windows, memes verifications que la release, plus l'installeur Windows en
+    artefact, et il ne publie RIEN. Il existe parce que deux versions de suite sont parties
+    incompletes (v0.38.0 et v0.39.0) pour un essai qui ne tombait que sur macOS : on ne
+    l'apprenait qu'apres le tag, donc apres publication, et chaque tentative coutait une
+    version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
+    que le changement touche le service de terminaux ou quoi que ce soit de dependant du
+    systeme.
 - **UN GROS LOT NE VEUT PAS DIRE UN DEBIT INGERABLE.** `VOLUME_INSOUTENABLE`
   (`terminal/service/session.rs`) valait 256 Ko, justifie par « 256 Ko dans une fenetre de
   8 ms, c'est 32 Mo/s, aucun affichage humain ne suit ». Le raisonnement est faux : un gros

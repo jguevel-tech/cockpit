@@ -30,14 +30,21 @@ jobs:
           # darwin et l'updater integre ne fonctionne pas (constate sur la v0.25.0).
           - os: macos-latest # Apple Silicon (aarch64)
             bundles: app,dmg
-          # PAS DE WINDOWS ICI, et ce n'est pas un oubli. Le portage COMPILE (0 erreur,
-          # 0 avertissement en compilation croisee) mais il ne MARCHE pas : sur le runner de
-          # la v0.38.0, ecrire dans le PTY a rendu « The operation completed successfully.
-          # (os error 0) » et la creation d'une session « The handle is invalid. (os error
-          # 6) ». Un installeur dont les terminaux sont morts est pire que pas d'installeur,
-          # et une matrice qui echoue a chaque release rend invisible le jour ou c'est une
-          # VRAIE regression (lecon de la v0.32.0, ou l'echec macOS est passe inapercu).
-          # Windows s'exerce dans `windows.yml`, sur demande, jusqu'a ce qu'il tourne.
+          # NSIS et pas MSI. MSI passe par WiX, s'installe PAR MACHINE donc reclame
+          # l'elevation a chaque mise a jour, et double les fichiers a signer. NSIS
+          # s'installe par utilisateur et c'est le format que l'updater Tauri v2 sait
+          # remplacer tout seul. Rien a installer sur le runner : WebView2 est deja present
+          # sur les images `windows-*`, et les etapes `apt-get` sont conditionnees a Linux.
+          #
+          # Windows a ete SORTI de cette matrice le temps d'une version : sur le runner de la
+          # v0.38.0, treize essais tombaient, dont l'ecriture dans le PTY (« os error 0 »).
+          # Il y est revenu quand les essais sont passes au vert — la cause etait dans les
+          # essais eux-memes (cinq tapaient du `printf` dans `cmd.exe`, et le socket etait un
+          # chemin de fichier au lieu d'un tuyau nomme), pas dans le produit. Avant de
+          # remettre une plateforme ici, la passer par `essais.yml` : c'est gratuit, et ca
+          # evite de l'apprendre en publiant.
+          - os: windows-latest
+            bundles: nsis
     runs-on: ${{ matrix.os }}
     # Le build Rust a cache froid prend ~80 min ; au-dela c'est un blocage, pas une
     # lenteur. Sans ce plafond GitHub attend SIX HEURES avant de tuer le job.
@@ -250,7 +257,7 @@ jobs:
           # On publie quand meme — les systemes qui ont reussi ne doivent pas attendre l'autre —
           # puis on fait ECHOUER le run en nommant ce qui manque. Ajouter une plateforme a la
           # matrice = l'ajouter ici, sinon son absence redevient silencieuse.
-          PLATEFORMES_ATTENDUES="linux- darwin-" python3 - <<'EOF'
+          PLATEFORMES_ATTENDUES="linux- darwin- windows-" python3 - <<'EOF'
           import json, os, sys
           plateformes = sorted(json.load(open("/tmp/latest.json")).get("platforms", {}))
           attendues = os.environ["PLATEFORMES_ATTENDUES"].split()
