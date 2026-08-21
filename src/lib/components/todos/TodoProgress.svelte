@@ -31,10 +31,17 @@
     dense?: boolean;
     onChange: (valeur: number) => void;
     /**
-     * Appele avec `true` quand le doigt ou la souris se pose sur le curseur, `false` quand il
-     * repart. La liste s'en sert pour SORTIR la ligne du glisser-deposer le temps du reglage :
-     * sans ca, tirer le curseur demarre un deplacement de la tache, et les deux gestes se
-     * battent — c'est exactement ce qui a ete signale.
+     * Appele avec `true` des que le pointeur ENTRE sur le curseur, `false` quand il en sort.
+     * La liste s'en sert pour sortir la ligne du glisser-deposer tant qu'on est dessus.
+     *
+     * Au SURVOL et non au clic, et c'est le coeur du correctif : entre le `mousedown` et la
+     * mise a jour de l'attribut `draggable` de la ligne, le navigateur a le temps de demarrer
+     * un glisser. En bloquant des l'entree du pointeur, la ligne n'est deja plus glissable
+     * quand le bouton s'enfonce. Premiere tentative faite au clic — le symptome est reste.
+     *
+     * La sortie du pointeur ne debloque QUE si aucun bouton n'est enfonce : pendant un
+     * glissement du curseur, le pointeur sort volontiers de la zone sans que le geste soit
+     * fini.
      */
     onInteraction?: (actif: boolean) => void;
   } = $props();
@@ -47,7 +54,14 @@
   let enCours = $derived(glisse ?? valeur);
 </script>
 
-<div class="avancement" class:dense ondragstart={(e) => e.preventDefault()} role="presentation">
+<div
+  class="avancement"
+  class:dense
+  role="presentation"
+  ondragstart={(e) => e.preventDefault()}
+  onpointerenter={() => onInteraction?.(true)}
+  onpointerleave={(e) => { if (e.buttons === 0) onInteraction?.(false); }}
+>
   <input
     type="range"
     min="0"
@@ -58,13 +72,11 @@
     aria-label={$trad("todo.progressLabel")}
     title={$trad("todo.progressHint")}
     onpointerdown={() => onInteraction?.(true)}
-    onpointerup={() => onInteraction?.(false)}
+    onpointerup={(e) => { if (!e.currentTarget.matches(":hover")) onInteraction?.(false); }}
     onpointercancel={() => onInteraction?.(false)}
-    onblur={() => onInteraction?.(false)}
     oninput={(e) => (glisse = Number(e.currentTarget.value))}
     onchange={(e) => {
       glisse = null;
-      onInteraction?.(false);
       onChange(Number(e.currentTarget.value));
     }}
     onclick={(e) => e.stopPropagation()}

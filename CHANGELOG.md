@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Le curseur d'avancement n'entre plus en conflit avec le déplacement d'une tâche.** Le
+  déplacement est désactivé dès que le pointeur arrive sur le curseur, et non au moment du clic —
+  entre les deux, le navigateur avait le temps de démarrer un glisser.
+
+
 ## [0.45.0] — 2026-08-21
 
 ### Added

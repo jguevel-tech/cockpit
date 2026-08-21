@@ -424,6 +424,11 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Un lien ne peut pas etre imbrique dans un `<button>`** : les adresses dans un texte de tache
   sont des `span data-href`, triees par `closest`. Ce n'est pas une violation de la regle du
   vrai bouton — consequence assumee : pas de chemin clavier pour ouvrir l'adresse.
+- **UN CONTROLE DANS UNE LIGNE GLISSABLE SE PROTEGE AU SURVOL, PAS AU CLIC.** Sur `pointerdown`
+  il est deja trop tard : entre l'enfoncement du bouton et la mise a jour de `draggable`, le
+  navigateur demarre le glisser. Bloquer des que le pointeur ENTRE (corrige deux fois avant d'y
+  arriver, sur le curseur d'avancement). Et ne debloquer a la sortie QUE si aucun bouton n'est
+  enfonce, sinon un glissement qui deborde rend la ligne glissable en pleine manipulation.
 - **Dans une liste imbriquee, `dragstart` et `dragover` REMONTENT** : sans `stopPropagation`,
   glisser un enfant demarre aussi le glisser du parent et deux retours visuels s'allument.
   Mettre les gestionnaires sur l'EN-TETE, pas sur le bloc qui contient la branche.
@@ -549,14 +554,12 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **Le job Linux peut se figer sur l'installation de paquets** : le service de mises a jour
   automatiques tient le verrou, et GitHub laisse courir six heures. D'ou les plafonds de duree,
   l'arret du service et les reessais — ils transforment un blocage en echec rapide.
-- **Windows : NSIS et pas MSI** (installation par utilisateur, remplacable par l'updater), et le
-  shell du runner est PowerShell — toute etape en syntaxe Unix doit demander bash. **macOS : les
-  bundles doivent inclure l'application ET le dmg**, l'artefact de mise a jour venant du premier.
 - **Construire un bundle demande la cle de signature, meme quand on ne publie pas** : la CLI
   reclame la privee des que la publique est declaree, et echoue APRES avoir produit
   l'installeur. A ne pas confondre avec le build local, ou cet echec est voulu.
-- **Toujours verifier apres publication** que le manifeste repond 200 et contient les trois
-  plateformes. Un 404 dans les deux premieres minutes est la propagation, pas un incident.
+- **Verifier apres publication** que le manifeste repond 200 avec les trois plateformes ; un
+  404 dans les deux premieres minutes est la propagation. **Un essai peut ne tomber que sur une
+  autre machine** : le runner Linux a deux coeurs, lire le log de la plateforme qui coince.
 - **L'updater Linux ne remplace qu'une AppImage** : pour essayer le flux reel, lancer l'AppImage.
   Le changelog est embarque au build. **Perdre la cle de signature = plus aucune mise a jour.**
 - **L'AppImage embarque des bibliotheques de sa machine de construction**, et ca casse chez les
@@ -568,8 +571,6 @@ affiche ses coequipiers en volets divises avec le tmux de L'UTILISATEUR. Rien a 
 - **GitHub masque la valeur des secrets dans les logs, y compris au milieu d'un nombre** : un
   secret valant `1` rend tous les `1` illisibles. Faire IMPRIMER par l'essai la grandeur qui
   porte la conclusion, et se souvenir qu'un `***` au milieu d'un nombre est une redaction.
-- **Un essai peut ne tomber que sur une autre machine** : le runner Linux a deux coeurs et un
-  disque lent, ce qui change le comportement. Lire le log de la plateforme qui coince.
 
 ### Outillage local
 
