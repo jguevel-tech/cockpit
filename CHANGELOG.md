@@ -12,8 +12,6 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.43.0] — 2026-08-21
-
 ### Added
 
 - **Worktrees git.** Un worktree est un second dossier de travail sur le même dépôt, sur une
