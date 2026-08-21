@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.41.2] — 2026-08-21
+
 ### Fixed
 
 - **L'alerte « disque presque plein » ne se déclenche plus sur Cockpit lui-même.** Sous Linux,
