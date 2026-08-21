@@ -295,6 +295,13 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   Jimmy au lieu d'etre entrepris. Ne s'applique jamais au code marque `NE PAS RETIRER` ni
   aux contournements documentes sur place : ils ont l'air inutiles parce qu'ils marchent.
 
+**tmux ne sert PLUS aux terminaux** (chantier d'aout 2026, ils tournent sur notre propre
+service). Mais il reste UNE mention legitime, a ne pas supprimer en croyant nettoyer :
+`agents.teammateModeHelp` et le mode « tmux » de `AgentsConfig.svelte` pilotent
+`teammateMode` dans `~/.claude/settings.json` — c'est la CLI `claude` qui s'en sert pour
+afficher ses coequipiers en volets divises, avec le tmux de L'UTILISATEUR. Rien a voir avec
+nous. Toute autre occurrence de tmux dans le code est un commentaire d'historique.
+
 ## Stack technique
 
 | Couche | Technologie | Version |

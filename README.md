@@ -76,6 +76,7 @@ what's missing) when it is absent:
 | `docker` + `docker compose` | containers tab |
 | `pw-record` (PipeWire, Linux) | meeting recording |
 | LSP servers (`rust-analyzer`, `intelephense`…) | go-to-definition |
+| `tmux` | Claude Code teammates in split panes — that display mode is Claude Code's own, not Cockpit's terminals |
 
 ---
 
