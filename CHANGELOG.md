@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.44.0] — 2026-08-21
+
 ### Changed
 
 - **Les confirmations de suppression sont des fenêtres de l'application**, à la place de la
