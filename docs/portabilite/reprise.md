@@ -48,8 +48,10 @@ Recettes complètes dans les Pièges connus du `CLAUDE.md`.
 - **macOS : la capture audio rendra du silence** sans certificat Apple — décision prise, pas
   de certificat. Le cas est maintenant **dit** (`mute_track`, le pipeline s'arrête avant
   Whisper) au lieu de finir en « aucune parole détectée ».
-- **Le processus zombie** : un `[cockpit] <defunct>` par lancement. Bénin. Le code appelle
-  bien `wait()`, donc la cause n'est pas trouvée — reproduire avant de patcher.
+- ~~Le processus zombie~~ **réglé comme question** : mesuré le 2026-08-21, notre lancement
+  détaché n'en laisse aucun (dix relevés, et un test le verrouille). Les `[cockpit] <defunct>`
+  viennent du fork intermédiaire de `g_spawn` (GLib), utilisé par WebKit et les portails. Bénin,
+  et hors de notre code.
 
 ## Décisions déjà prises, à ne pas rouvrir
 

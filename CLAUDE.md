@@ -1636,6 +1636,17 @@ Le backend (`system/metrics.rs`) collecte :
     fraction de seconde avant d'etre moissonnes. Un compteur de zombies naif les compte et
     annonce une fuite qui n'existe pas. Ne compter que ceux qui portent NOTRE nom de programme
     (donc n'ont pas exec) et qui sont encore la deux secondes plus tard.
+- **LES `[cockpit] <defunct>` NE VIENNENT PAS DE NOTRE LANCEMENT — piste fermee, mesuree.**
+  Un ou deux zombies portant notre nom apparaissent sous l'application, et le double fork
+  du service en etait le suspect evident : son intermediaire s'efface aussitot, et un `wait`
+  oublie laisserait exactement ca. Mesure du 2026-08-21 : `lancer_detache` en laisse **zero**,
+  dix releves de suite, et l'essai `lancer_le_service_ne_laisse_pas_de_zombie` verrouille
+  desormais la propriete. Nos deux autres facons de lancer un process ne peuvent pas produire
+  ce symptome : `tokio::process` a sa file d'orphelins, et un serveur LSP qui meurt porte SON
+  nom, pas le notre. Ce qui reste : le patron de `g_spawn` de GLib (WebKit et les portails s'en
+  servent) fait lui aussi un fork intermediaire, et un intermediaire non ramasse porte le nom
+  du programme PARCE QU'IL N'A JAMAIS `exec`. C'est benin — un zombie ne retient qu'un numero
+  de process. Ne pas rechercher la cause dans notre code.
 - **Un processus detache par double fork n'est PAS adopte par le pid 1** sur un bureau Linux
   moderne : `systemd --user` se declare sous-moissonneur et recupere les orphelins de la session.
   Constate le 2026-08-21 en verifiant le detachement du service de terminaux (parent 6505 =

@@ -718,3 +718,54 @@ fn ce_processus_est_le_service() {
     let chemin = std::path::PathBuf::from(chemin);
     serveur::servir(&chemin, 500).expect("le service doit pouvoir ecouter");
 }
+
+/// Lancer le service NE DOIT PAS laisser de zombie.
+///
+/// Le lancement detache fait deux `fork` : celui de `Command::spawn` (l'intermediaire) et
+/// celui de `pre_exec` (le service). L'intermediaire s'efface aussitot pour que le service
+/// soit adopte, et c'est `lancer_detache` qui le ramasse par `wait`. Oublier ce `wait`
+/// laisserait un `[cockpit] <defunct>` par lancement, invisible et sans consequence — donc
+/// jamais remarque.
+///
+/// Ce que cet essai FERME comme piste : des `[cockpit] <defunct>` ont ete observes sous
+/// l'application le 2026-08-21 et attribues a ce code. Mesure faite : zero, dix fois de
+/// suite. Ils viennent d'ailleurs — c'est le patron de `g_spawn` de GLib, qui fait lui aussi
+/// un fork intermediaire, et un intermediaire non ramasse porte le nom du programme parce
+/// qu'il n'a jamais `exec`. Ne pas rechercher la cause dans notre lancement.
+#[cfg(target_os = "linux")]
+#[test]
+fn lancer_le_service_ne_laisse_pas_de_zombie() {
+    let banc = BancDetache::neuf("zombie");
+    // Le service tourne : l'intermediaire a donc vecu et devrait etre ramasse.
+    std::thread::sleep(Duration::from_millis(300));
+    let restes = zombies_de_ce_processus();
+    drop(banc);
+    assert!(
+        restes.is_empty(),
+        "{} enfant(s) non ramasse(s) apres le lancement du service : {restes:?}",
+        restes.len()
+    );
+}
+
+/// Les enfants de CE processus restes a l'etat zombie.
+///
+/// `/proc/<pid>/stat` plutot qu'un `ps` : pas de processus externe, et l'etat comme le
+/// parent se lisent dans le meme fichier. Le champ `comm` peut contenir des espaces et des
+/// parentheses, d'ou la lecture APRES la derniere parenthese fermante.
+#[cfg(target_os = "linux")]
+fn zombies_de_ce_processus() -> Vec<i32> {
+    let moi = std::process::id().to_string();
+    let Ok(entrees) = std::fs::read_dir("/proc") else { return Vec::new() };
+    entrees
+        .flatten()
+        .filter_map(|e| e.file_name().to_str()?.parse::<i32>().ok())
+        .filter(|pid| {
+            let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+                return false;
+            };
+            let Some((_, reste)) = stat.rsplit_once(')') else { return false };
+            let champs: Vec<&str> = reste.split_whitespace().collect();
+            champs.first() == Some(&"Z") && champs.get(1) == Some(&moi.as_str())
+        })
+        .collect()
+}
