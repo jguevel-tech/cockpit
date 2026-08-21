@@ -760,6 +760,15 @@ CI  : .github/workflows/release.yml -> AppImage signe + Release + latest.json
 APP : la cloche s'allume chez les utilisateurs
 ```
 
+**UNE EXCEPTION, et une seule : un changement qui refait le coeur de l'outil.** Quand une
+release remplace un mecanisme central — le remplacement de tmux par notre service de
+terminaux, en aout 2026 — Jimmy veut l'essayer en local AVANT publication. Il l'a demande
+explicitement le 2026-08-20. Raison : ces releases partent sur les machines d'autres
+personnes, et un terminal casse rend l'application inutilisable, pas juste genante.
+Concretement : construire le binaire (`npx tauri build --no-bundle`), lui donner le chemin,
+et attendre son accord. Ca ne s'applique PAS aux corrections ordinaires, meme nombreuses :
+onze versions sont parties le meme jour sans qu'il ait rien a valider, et c'est bien ainsi.
+
 **Ne JAMAIS demander l'autorisation de releaser.** Un lot fini et verifie part, point. Jimmy l'a
 demande explicitement le 2026-08-13 (« c'est relou que je doive te demander tout le temps »).
 
