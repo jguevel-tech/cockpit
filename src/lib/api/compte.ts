@@ -35,3 +35,19 @@ export const demarrerAppairage = () => invoke<DemandeAppairage>("compte_appairag
 export const etatAppairage = (id: string) => invoke<EtatAppairage>("compte_appairage_etat", { id });
 
 export const definirServeur = (url: string) => invoke<EtatCompte>("compte_definir_serveur", { url });
+
+export type ResultatSynchro = {
+  envoyes: number;
+  recus: number;
+  /** Faux quand il reste des choses à récupérer : le passage suivant continuera. */
+  complet: boolean;
+};
+
+export type EtatSynchro = {
+  actif: boolean;
+  en_attente: number;
+  dernier_passage: number | null;
+};
+
+export const synchroMaintenant = () => invoke<ResultatSynchro>("synchro_maintenant");
+export const synchroEtat = () => invoke<EtatSynchro>("synchro_etat");

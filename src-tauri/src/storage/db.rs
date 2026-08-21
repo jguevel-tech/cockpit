@@ -247,6 +247,12 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_command_history_ts ON command_history(ts);",
         )?;
 
+        // Identifiants globaux et journal des changements. Pose EN DERNIER, quand toutes
+        // les tables existent : les declencheurs portent sur elles.
+        drop(conn);
+        self.preparer_la_synchro()?;
+        let conn = self.conn();
+
         // Migration: noms personnalises des sessions Claude Code
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS claude_session_names (

@@ -6,6 +6,8 @@ pub mod projects;
 pub mod notes;
 pub mod recordings;
 pub mod settings;
+pub mod formes;
+pub mod synchro;
 pub mod terminals;
 pub mod todos;
 pub mod urls;

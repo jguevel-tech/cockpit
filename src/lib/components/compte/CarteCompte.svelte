@@ -6,12 +6,33 @@
    * se contente de ne rien afficher laisse croire a une panne.
    */
   import { trad } from "../../i18n";
-  import { compte, seDeconnecter, definirServeur, dernierRefus } from "../../stores/compte";
+  import {
+    compte,
+    seDeconnecter,
+    definirServeur,
+    dernierRefus,
+    etatSynchro,
+    synchroEnCours,
+    synchroniser,
+    rafraichirEtatSynchro,
+  } from "../../stores/compte";
   import { demanderConfirmation } from "../../stores/confirm";
   import { notify } from "../../stores/toast";
   import EcranConnexion from "./EcranConnexion.svelte";
 
   let ecranOuvert = $state(false);
+
+  // L'etat n'est lu qu'a l'ouverture des reglages : c'est le seul moment ou il est regarde,
+  // et l'interroger en permanence n'apprendrait rien de plus.
+  $effect(() => {
+    if ($compte?.connecte) void rafraichirEtatSynchro();
+  });
+
+  const dateDuDernierPassage = $derived(
+    $etatSynchro?.dernier_passage
+      ? new Date($etatSynchro.dernier_passage).toLocaleString()
+      : null,
+  );
   let serveur = $state("");
   let serveurCharge = false;
 
@@ -61,9 +82,28 @@
       <span class="field-label">{$trad("settings.compte.machine")}</span>
       <span class="valeur">{$compte.appareil}</span>
     </div>
+    <div class="field-row">
+      <span class="field-label">{$trad("settings.compte.synchro")}</span>
+      <span class="valeur">
+        {#if $synchroEnCours}
+          {$trad("settings.compte.synchroEnCours")}
+        {:else if dateDuDernierPassage}
+          {dateDuDernierPassage}
+        {:else}
+          {$trad("settings.compte.synchroJamais")}
+        {/if}
+        {#if ($etatSynchro?.en_attente ?? 0) > 0}
+          <span class="attente">{$trad("settings.compte.enAttente")} : {$etatSynchro?.en_attente}</span>
+        {/if}
+      </span>
+    </div>
     <div class="actions">
+      <button class="btn" onclick={() => void synchroniser()} disabled={$synchroEnCours}>
+        {$trad("settings.compte.synchroniser")}
+      </button>
       <button class="btn danger" onclick={deconnecter}>{$trad("settings.compte.seDeconnecter")}</button>
     </div>
+    <p class="aide">{$trad("settings.compte.cheminsAide")}</p>
   {:else}
     <p class="etat">{$trad("settings.compte.aucun")}</p>
     <div class="actions">
@@ -99,6 +139,11 @@
     display: flex;
     gap: 0.5rem;
     margin: 0.4rem 0 1rem;
+  }
+  .attente {
+    margin-left: 0.6rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
   }
   .aide {
     margin: 0.35rem 0 0;

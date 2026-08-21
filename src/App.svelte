@@ -7,7 +7,7 @@
   import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
   import EcranConnexion from "./lib/components/compte/EcranConnexion.svelte";
   import { reportingConsent, loadReportingSettings, setReportingConsent } from "./lib/stores/errors";
-  import { chargerCompte } from "./lib/stores/compte";
+  import { chargerCompte, demarrerLaSynchro } from "./lib/stores/compte";
   import { getAppSettings, setAppSetting } from "./lib/api/recorder";
   import { signalerErreur } from "./lib/stores/errors";
   import { loadProjects } from "./lib/stores/projects";
@@ -82,12 +82,14 @@
     const stopUpdateWatcher = startUpdateWatcher();
     const stopTodoDueWatcher = startTodoDueWatcher();
     const stopSystemAlerts = startSystemAlerts();
+    const stopSynchro = demarrerLaSynchro();
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
       stopUpdateWatcher();
       stopTodoDueWatcher();
       stopSystemAlerts();
+      stopSynchro();
     };
   });
 </script>

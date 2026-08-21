@@ -2,7 +2,7 @@ mod agents;
 mod appearance;
 mod chemins;
 mod claude_auth;
-mod compte;
+pub mod compte;
 mod commande;
 mod docker;
 mod gitdiff;
@@ -1597,6 +1597,8 @@ pub fn run() {
             compte::compte_appairage_etat,
             compte::compte_deconnexion,
             compte::compte_definir_serveur,
+            compte::synchro::synchro_maintenant,
+            compte::synchro::synchro_etat,
             // Docker
             list_projects,
             start_project,

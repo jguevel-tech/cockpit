@@ -13,6 +13,8 @@
 //! **Toutes les commandes de ce module sont `async`** : une commande synchrone s'execute dans
 //! la boucle GTK et gele l'interface entiere — ici, le temps d'un aller-retour reseau.
 
+pub mod synchro;
+
 use crate::storage::db::Database;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
@@ -93,7 +95,7 @@ struct RefusServeur {
     erreur: Option<String>,
 }
 
-fn client() -> &'static reqwest::Client {
+pub(crate) fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()

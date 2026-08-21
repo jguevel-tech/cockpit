@@ -19,6 +19,12 @@ le script de release.
   Google. Continuer sans compte ne retire rien : tout fonctionne pareil, y compris hors
   connexion. Le compte se gère ensuite dans Paramètres → Général, où l'on voit sous quel nom
   cette machine apparaît et où l'on peut la déconnecter.
+- **Vos projets, dossiers, tâches, liens, commandes et notes suivent d'une machine à l'autre.**
+  Ce que vous changez ici arrive là-bas, et ce que vous supprimez reste supprimé. Ce qui se
+  contredit se tranche sur la modification la plus récente. Une seule chose ne voyage pas : le
+  dossier d'un projet, qui n'existe pas sur l'autre machine — un projet qui arrive attend que
+  vous lui indiquiez le sien. Tout continue de fonctionner sans réseau ; ce qui n'est pas parti
+  part au retour.
 
 ### Changed
 

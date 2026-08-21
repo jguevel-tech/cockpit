@@ -7,7 +7,9 @@
  */
 import { writable, get } from "svelte/store";
 import * as api from "../api/compte";
-import type { EtatCompte, DemandeAppairage } from "../api/compte";
+import type { EtatCompte, DemandeAppairage, EtatSynchro } from "../api/compte";
+import { listen } from "@tauri-apps/api/event";
+import { loadProjects } from "./projects";
 import { openUrl } from "../api/workspace";
 import { signalerErreur } from "./errors";
 
@@ -124,4 +126,63 @@ export async function appairerParLeNavigateur(): Promise<{
 
 export function estConnecte(): boolean {
   return get(compte)?.connecte === true;
+}
+
+export const etatSynchro = writable<EtatSynchro | null>(null);
+/** Vrai pendant un passage : l'interface peut le montrer sans bloquer quoi que ce soit. */
+export const synchroEnCours = writable(false);
+
+export async function rafraichirEtatSynchro(): Promise<void> {
+  try {
+    etatSynchro.set(await api.synchroEtat());
+  } catch (e) {
+    signalerErreur("synchro.etat", String(e));
+  }
+}
+
+/**
+ * Un passage de synchronisation.
+ *
+ * Ne remonte JAMAIS d'erreur a l'appelant : une synchronisation est un supplement, pas une
+ * action de l'utilisateur. Une panne se voit dans les reglages et dans les journaux, elle
+ * n'interrompt rien et n'affiche pas de fenetre par-dessus le travail en cours.
+ */
+export async function synchroniser(): Promise<boolean> {
+  if (get(synchroEnCours) || !estConnecte()) return false;
+  synchroEnCours.set(true);
+  try {
+    const resultat = await api.synchroMaintenant();
+    dernierRefus.set(null);
+    return resultat.recus > 0 || resultat.envoyes > 0;
+  } catch (e) {
+    dernierRefus.set(String(e));
+    return false;
+  } finally {
+    synchroEnCours.set(false);
+    void rafraichirEtatSynchro();
+  }
+}
+
+/** Toutes les trois minutes : assez souvent pour qu'un aller-retour entre deux machines
+ *  paraisse immediat, assez espace pour ne pas parler au serveur en permanence. */
+const PERIODE = 180_000;
+
+/**
+ * Lance la synchronisation reguliere. Rend de quoi l'arreter, comme les autres surveillances.
+ */
+export function demarrerLaSynchro(): () => void {
+  void synchroniser();
+  const minuteur = setInterval(() => void synchroniser(), PERIODE);
+
+  // Ce qui arrive d'une autre machine doit se voir sans avoir a redemarrer. On ne recharge que
+  // la liste des projets : recharger tout ferait sauter la selection et le defilement de ce
+  // que l'utilisateur est en train de lire.
+  const arretEcoute = listen<number>("synchro-recue", () => {
+    void loadProjects();
+  });
+
+  return () => {
+    clearInterval(minuteur);
+    void arretEcoute.then((stop) => stop());
+  };
 }
