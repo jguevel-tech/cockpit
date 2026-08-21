@@ -1,122 +1,80 @@
 # Reprise — à lire en PREMIER
 
-État au 2026-08-21, 13h. Écrit pour qu'une session qui reprend n'ait rien à redemander.
+État au 2026-08-21, fin de journée.
 
 ## En une phrase
 
-Le chantier de portabilité est **fini** : tmux remplacé par notre service de terminaux,
-capture audio dans le processus, et **les trois systèmes** (Linux, macOS, Windows) sortent de
-la CI. Reste à publier une version complète — voir « Où en sont les versions » ci-dessous.
+**Le chantier de portabilité est fini et livré.** La v0.43.0 est publiée et servie sur les trois
+systèmes : Linux, macOS et Windows. Il n'y a plus de chantier ouvert.
 
-## Où en sont les versions
+## Ce qui est parti le 2026-08-21
 
-| Version | État | Pourquoi |
-|---|---|---|
-| **0.37.1** | **servie aux utilisateurs**, complète | c'est elle que `latest.json` rend |
-| 0.38.0 | publiée puis passée en **préversion** | `latest.json` n'avait que Linux (le test de rafale tombait sur macOS) |
-| 0.39.0 | publiée puis passée en **préversion** | même cause, deuxième symptôme (sortie tronquée) |
-
-Le repli est le geste documenté dans le `CLAUDE.md` : `gh release edit vX.Y.Z --prerelease
---latest=false`. `releases/latest` exclut les préversions, donc l'endpoint retombe aussitôt
-sur la dernière version COMPLÈTE et personne ne voit d'erreur d'updater. **À faire AVANT de
-diagnostiquer**, chaque fois qu'une release sort incomplète.
-
-## La leçon des versions en échec
-
-Un test qui ne tombe que sur macOS, sur Windows ou sur le runner Linux ne se voit qu'après le
-tag. Ce n'est pas grave : la CI refuse de publier, on corrige, on relance — un numéro de version
-ne coûte rien. Ce qu'il faut retenir, c'est de **lire le log de la plateforme qui coince** plutôt
-que de supposer, et de ne pas prendre un test vert en local pour une preuve sur les trois
-systèmes.
-
-## Ce qui a été vérifié avant le tag, à la main
-
-| Vérification | Résultat |
+| Version | Contenu |
 |---|---|
-| `npm run check` | 0 erreur, 0 avertissement |
-| `npm run test:front` | 12 verts |
-| `npm run i18n:audit` | 0 chaîne en dur |
-| `cargo check --all-targets` (Linux) | 0 avertissement |
-| `cargo test --release` | **238 verts**, 1 ignoré (l'essai qui demande une carte son) |
-| `cargo check --target x86_64-pc-windows-gnu --all-targets` | 0 erreur, 0 avertissement |
-| `tauri build --no-bundle` | OK |
-| Enregistrement réel sur cette machine, **sans jouer un son** | micro 64 ko en 2 s, crête 3243 ; son système 69 ko, crête 0 (le monitor s'ouvre et débite, muet parce que rien ne jouait) |
+| 0.41.0 | tmux remplacé par notre service de terminaux, audio dans le processus, **premier installeur Windows** |
+| 0.41.3 | affichage du terminal qui ne saccade plus, fin d'un terminal détectée sur le programme, chemins en `/`, fermeture sans fausse erreur |
+| 0.41.4 | plus de fausse alerte « disque presque plein » sur l'AppImage elle-même |
+| 0.42.0 | worktrees git avec terminal dedans, nom de dossier à la bonne taille dans la barre latérale |
+| 0.43.0 | avancement d'une tâche de 0 à 100 % |
 
-L'enregistrement se vérifie par `cargo test --lib capture_reelle -- --ignored --nocapture`.
-**Ne jamais faire jouer un son pour ça** : router un ton vers un sink nul et capter son
-monitor (recette dans les Pièges connus du `CLAUDE.md`). Les enceintes de quelqu'un ne sont
-pas un banc de test.
+Les versions 0.38.0 et 0.39.0 sont restées en **préversion** : sorties sans macOS, repliées dans
+la minute. Elles laissent des trous dans la numérotation (0.40, 0.41.1, 0.41.2), qui sont gelés —
+on ne renumérote pas ce qui a déjà été servi.
 
-## Deux prérequis locaux, sans droits administrateur
+## Ce qui n'est pas vérifié
 
-Les deux suivent la même recette : `apt-get download`, `dpkg-deb -x` dans un préfixe à soi.
+**Personne n'a utilisé Cockpit une journée entière sous Windows.** La suite de tests y passe,
+l'installeur est signé, et Jimmy l'a installé — mais l'usage réel dira le reste. C'est la seule
+zone d'ombre qui reste sur le portage.
 
-- **`libasound2-dev`** — sinon `alsa-sys` échoue et **aucun** essai Rust ne tourne. Poser
-  `PKG_CONFIG_PATH=<préfixe>/usr/lib/x86_64-linux-gnu/pkgconfig` et
-  `PKG_CONFIG_SYSROOT_DIR=<préfixe>`.
-- **mingw-w64** pour la compilation croisée Windows — sinon `ring` et `libsqlite3-sys`
-  échouent avant que notre code soit analysé, et on croit à tort que le portage est cassé.
-  Le binaire s'appelle `x86_64-w64-mingw32-gcc-13-win32`, **pas** `-gcc`.
-
-Recettes complètes dans les Pièges connus du `CLAUDE.md`.
-
-## Windows : les treize échecs venaient des ESSAIS, pas du produit
-
-Le premier vrai passage (v0.38.0) faisait tomber treize essais, dont l'écriture dans le PTY
-(« The operation completed successfully. (os error 0) ») — de quoi conclure que le cœur était
-cassé. C'était faux. Deux causes, toutes deux dans les essais :
-
-| Cause | Correction |
-|---|---|
-| Cinq essais tapent `printf` / `cat` / `for i in $(seq …)` dans le shell — `cmd.exe` n'en connaît aucun, et un essai qui part en boucle d'attente (30 s de `PATIENCE`) fait tomber ceux d'à côté | `#[cfg(unix)]`, avec sur place ce qui reste couvert et ce qui ne l'est pas |
-| Un socket local n'est pas un fichier sous Windows, c'est un tuyau nommé (`\\.\pipe\`) — le code de production le savait, les essais non | `emplacement()` rend un nom de tuyau sous Windows |
-
-**Résultat : la suite entière passe sur `windows-latest`**, y compris les essais qui écrivent
-dans le PTY et attendent la réponse d'un vrai shell. La CI produit un installeur NSIS de
-~6,6 Mo. Windows est donc **revenu** dans la matrice de `release.yml` et dans
-`PLATEFORMES_ATTENDUES`.
-
-Ce qui n'est toujours pas vérifié : que l'application soit **agréable** une journée durant
-sur Windows. Personne ne s'en est encore servi. Le README le dit.
-
-## Ce qui reste## Ce qui reste
-- **macOS : la capture audio rendra du silence** sans certificat Apple — décision prise, pas
-  de certificat. Le cas est maintenant **dit** (`mute_track`, le pipeline s'arrête avant
-  Whisper) au lieu de finir en « aucune parole détectée ».
-- ~~Le processus zombie~~ **réglé comme question** : mesuré le 2026-08-21, notre lancement
-  détaché n'en laisse aucun (dix relevés, et un test le verrouille). Les `[cockpit] <defunct>`
-  viennent du fork intermédiaire de `g_spawn` (GLib), utilisé par WebKit et les portails. Bénin,
-  et hors de notre code.
-
-## Décisions déjà prises, à ne pas rouvrir
+## Décisions à ne pas rouvrir
 
 - Multiplexeur maison sur les trois systèmes, pas deux mécanismes en parallèle.
 - WSL écarté : le terminal verrait les fichiers sous `/mnt/c/` quand les autres onglets les
   voient sous `C:\`. Contraire au principe de l'application.
-- Pas de certificat de signature (Apple, Windows). Distribution par la page des releases,
-  **pas de store**.
+- Pas de certificat de signature (Apple, Windows). Distribution par la page des releases, **pas
+  de store**. Chaque système affiche donc un avertissement au premier lancement, expliqué dans le
+  README.
 - macOS universel : une seule version pour Intel et Apple Silicon.
 - Détail mémoire (Cache, Buffers, ZFS) : **Linux seulement**. Les notions ne se traduisent pas.
-- Le service ne persiste rien sur disque et meurt avec la machine.
+- Le service de terminaux ne persiste rien sur disque et meurt avec la machine.
 - Host PulseAudio (Rust pur) sous Linux, **pas** la feature `pipewire` de cpal : elle
-  embarquerait libpipewire dans l'AppImage, et la libwayland du runner a déjà coûté une
-  fenêtre qui ne s'ouvrait pas chez un testeur.
+  embarquerait libpipewire dans l'AppImage, et la libwayland du runner a déjà coûté une fenêtre
+  qui ne s'ouvrait pas chez un testeur.
+- **Pas d'étape de vérification en CI avant le tag.** Ça a été essayé et retiré : la CI de
+  release vérifie déjà les trois systèmes, et un numéro de version ne coûte rien. Demande
+  explicite de Jimmy, deux fois.
+
+## Prérequis locaux, sans droits administrateur
+
+Les deux suivent la même recette : `apt-get download`, puis extraction dans un préfixe à soi.
+
+- **`libasound2-dev`** — sinon `alsa-sys` échoue et **aucun** essai Rust ne tourne. Poser
+  `PKG_CONFIG_PATH=<préfixe>/usr/lib/x86_64-linux-gnu/pkgconfig` et
+  `PKG_CONFIG_SYSROOT_DIR=<préfixe>`.
+- **mingw-w64** pour la compilation croisée Windows — sinon `ring` et `libsqlite3-sys` échouent
+  avant que notre code soit analysé, et on croit à tort que le portage est cassé. Le binaire
+  s'appelle `x86_64-w64-mingw32-gcc-13-win32`, **pas** `-gcc` ; il faut aussi un lien au nom
+  court, que l'outil de ressources appelle ainsi.
+
+Recettes complètes dans les Pièges connus du `CLAUDE.md`.
 
 ## À réarmer après une reprise
 
-La surveillance des issues (elle ne survit pas à la session) :
+La surveillance des issues, qui ne survit pas à la session :
 
 ```
 Monitor: while true; do node scripts/issues-nouveautes.mjs --brut --marquer \
   --repere=.claude/issues-vues-surveillance.json 2>&1 | grep -E "^(ISSUE #|⚠)" || true; sleep 60; done
 ```
 
-Sans elle, une réponse d'auteur passe inaperçue — c'est arrivé trois fois le 2026-08-20, et
-c'est Jimmy qui a dû le signaler chaque fois.
+Sans elle, une réponse d'auteur passe inaperçue — c'est arrivé trois fois le 2026-08-20, et c'est
+Jimmy qui a dû le signaler chaque fois.
 
-## Issues en attente
+## Issues ouvertes
 
-- **#11** (Windows) — à mettre à jour dès que la CI publie l'installeur, puis `attente-retour`.
-- **#14** `attente-retour`, **#13** `attente-infos`, **#1** à **#8** `attente-retour`
-  (confirmations, fermeture automatique le 30/08).
-- **#10** (git worktree) `a-livrer` : promesse tenue, gardée pour la fin.
+- **#16** et **#15** : livrées (0.42.0 et 0.43.0), en attente du retour de gmarchault. Elles se
+  ferment d'elles-mêmes après 24 h de silence, règle posée le 2026-08-21.
+- **#13** : en attente de précisions de gmarchault sur les liaisons entre notes et réunions.
+
+Tout le reste est fermé.
