@@ -803,7 +803,6 @@ garantie : il **refuse** de partir si l'arbre est sale, si on n'est pas sur `mai
 **sans jamais pousser**. Le push reste le seul geste humain (regle git du projet) :
 
 ```
-IA  : gh workflow run essais.yml    # les 3 systemes, ne publie rien — AVANT le tag
 IA  : npm run release -- <niveau>   # changelog + bump + commit + tag
 IA  : git push origin main          # libre, ne declenche RIEN
 IA  : git push origin vX.Y.Z        # libre AUSSI : c'est ce qui publie
@@ -834,38 +833,27 @@ Deux garde-fous, qui n'exigent aucune question : ne pas publier si les 7 points 
 de "fini" ne passent pas, et annoncer apres coup ce qui est parti et en quelle version.
 Seule exception encore soumise a accord : reecrire un historique deja pousse.
 
-**Deux workflows, et AUCUN sur les pushes de `main`.**
-- `release.yml`, declenche uniquement par un tag `v*` : il lance lui-meme les verifications puis
-  construit et publie les trois plateformes.
-- `essais.yml`, uniquement a la demande (`gh workflow run essais.yml`) : les memes verifications
-  sur `ubuntu-22.04`, `macos-latest` et `windows-latest`, plus l'installeur Windows en artefact,
-  et **il ne publie rien**.
+**Un seul workflow, declenche uniquement par un tag `v*`.** `release.yml` lance lui-meme les
+verifications sur les trois systemes, puis construit et publie.
 
 Il n'y a volontairement PAS de CI sur les pushes de branche : `release.yml` refait de toute facon
 les verifications avant de builder, donc un commit casse ne peut pas etre publie, et une CI de
 branche ne ferait que ce travail en double. Ne pas la reintroduire — decision de Jimmy, prise
 deux fois.
 
-**ON TAGUE DIRECTEMENT. `essais.yml` N'EST PAS UNE ETAPE OBLIGATOIRE.** Jimmy l'a tranche le
-2026-08-21 : « tu va pas me faire des essais sur les 3 system a chaque fois, je veux qu'on
-revienne au workflow d'avant ou tu fait une release directement ». Le raisonnement tient, et
-mon garde-fou etait une sur-correction :
+**ON TAGUE DIRECTEMENT, ET SI LA CI PLANTE ON CORRIGE ET ON RELANCE.** Jimmy l'a tranche le
+2026-08-21. Le raisonnement tient :
 - **`release.yml` verifie DEJA les trois systemes** avant de construire quoi que ce soit. Un
   commit casse ne peut pas etre publie, quelle que soit la plateforme qui coince.
-- **Un numero de version ne coute rien.** Sur les trois versions « brulees » du 2026-08-21,
+- **Un numero de version ne coute rien.** Le 2026-08-21, trois versions sont parties en echec :
   DEUX n'ont jamais ete visibles — le job `publier` ne leve pas le brouillon sans AppImage
   Linux — et les deux autres ont ete repliees en une minute. Cout reel pour les utilisateurs :
   zero.
 - Le seul geste a garder par reflexe est celui d'urgence : si une release sort incomplete,
   `gh release edit vX.Y.Z --prerelease --latest=false`, AVANT de diagnostiquer.
 
-`essais.yml` reste dans le depot et ne coute rien tant qu'on ne le lance pas. Il sert quand on
-veut la reponse SANS taguer — typiquement en refaisant un mecanisme central, ou apres plusieurs
-echecs de suite sur la meme plateforme. Ce n'est pas la routine.
-- **Linux est dans sa matrice** : le runner a deux coeurs et un disque lent, et ca change le
-  comportement — la v0.41.2 a echoue la apres avoir passe macOS et Windows.
-- Ne PAS mettre de `continue-on-error` sur une etape de build : le premier atelier Windows est
-  passe « vert » avec une erreur de signature dedans, ce qui a masque ce qu'on venait mesurer.
+Ne PAS reintroduire d'etape de verification en CI avant le tag : ca a ete essaye, Jimmy n'en
+veut pas, et il l'a demande deux fois.
 
 **Distribution — les trois systemes, aucun store.**
 - **Linux** : `scripts/install.sh` installe la derniere AppImage dans `~/.local/bin` sans root,
@@ -907,9 +895,9 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
   v0.41.1 : aucune release n'a meme ete creee, et les utilisateurs sont restes sur la version
   complete precedente sans rien remarquer. C'est mieux que publier puis replier, parce que la
   fenetre ou quelqu'un voit une version incomplete n'existe simplement pas.
-  Ensuite : corriger, passer par `essais.yml`, et tagger la version SUIVANTE. Le tag rate
-  reste orphelin, et **ses notes reviennent sous `[Unreleased]`** — sinon le correctif part
-  sans figurer dans les notes que le logiciel affiche.
+  Ensuite : corriger et tagger la version SUIVANTE. Le tag rate reste orphelin, et **ses notes
+  reviennent sous `[Unreleased]`** — sinon le correctif part sans figurer dans les notes que le
+  logiciel affiche.
 - **URGENCE : une release deja publiee mais incomplete se repare sans rien republier** —
   `gh release edit vX.Y.Z --prerelease --latest=false`. `releases/latest` exclut les
   preversions, donc l'endpoint retombe aussitot sur la derniere version COMPLETE et les
@@ -1610,40 +1598,13 @@ Le backend (`system/metrics.rs`) collecte :
     supposent de leur environnement — un seul essai qui part en boucle d'attente (30 s de
     `PATIENCE`) en fait tomber d'autres autour de lui, et le tableau ressemble alors a une
     panne du produit.
-  - **UN ESSAI QUI NE TOMBE QUE SUR macOS OU WINDOWS SE VERIFIE AVANT LE TAG.**
-    `.github/workflows/essais.yml`, sur `workflow_dispatch` (`gh workflow run essais.yml`) :
-    matrice macOS + Windows, memes verifications que la release, plus l'installeur Windows en
-    artefact, et il ne publie RIEN. Il existe parce que deux versions de suite sont parties
-    incompletes (v0.38.0 et v0.39.0) pour un essai qui ne tombait que sur macOS : on ne
-    l'apprenait qu'apres le tag, donc apres publication, et chaque tentative coutait une
-    version aux utilisateurs. Le reflexe : avant `npm run release`, lancer `essais.yml` des
-    que le changement touche le service de terminaux ou quoi que ce soit de dependant du
-    systeme.
-- **LE BANC D'ESSAI DOIT COUVRIR LA MACHINE QUI CONSTRUIT, LINUX COMPRIS.** `essais.yml` ne
-  prenait que macOS et Windows, au motif que Linux se teste en local. Faux : le runner a deux
-  coeurs et un disque lent, et **ca change le comportement**. La v0.41.2 a echoue LA, apres
-  avoir passe macOS et Windows.
-- **UNE DECISION PRISE SUR « CE QUI ATTEND A CET INSTANT » DEPEND DE QUI TIENT LE VERROU.**
-  Le regroupement des sorties regardait la taille de ce qui attendait au moment de la decision.
-  Or le thread lecteur tient le verrou pendant qu'il fait avaler les octets a l'ecran : sur deux
-  coeurs charges, l'emetteur l'obtient rarement et avec peu de choses dedans, conclut « ce n'est
-  pas une rafale » et repart aussitot — le defaut d'origine, refabrique. Mesure du runner Linux
-  de la v0.41.2 : **2 810 envois pour 1,5 Mo, soit 529 octets chacun**, contre 33 a 54 envois
-  (27 a 45 Ko) sur le poste de travail.
-  La decision porte desormais sur la taille du lot PRECEDENT, qui dit ce que le shell produit
-  vraiment et ne depend d'aucun ordonnancement. Au pire un petit envoi part au debut d'une
-  rafale. Benefice mesure en prime : la frappe est passee de 72 a 35 us de surcout.
-  Regle a garder : une decision qui doit valoir sur toute machine ne se prend pas sur un etat
-  instantane partage entre threads. Prendre une grandeur qui a une HISTOIRE.
-- **`cmd.exe` REAFFICHE SON INVITE ET SON TITRE A CHAQUE TOUCHE.** L'essai qui verifie que
-  l'echo d'une touche part tel quel mesurait la taille du premier lot recu apres avoir tape
-  un caractere. Sous Windows ce lot faisait **87 octets** : ce n'etait pas l'echo, c'etait
-  `C:\Users\...\Temp>` suivi d'une sequence de titre de fenetre. L'essai concluait donc que
-  l'echo d'une touche etait gros.
-  Le correctif n'est pas une garde de plateforme mais une VRAIE correction de l'essai : on
-  vide ce que le shell a dit en demarrant (attente du silence) AVANT de taper. La meme course
-  existait sous Unix, simplement plus etroite — un essai qui depend de ce que le shell a fini
-  d'ecrire doit toujours attendre le calme d'abord.
+  - **UN ESSAI PEUT NE TOMBER QUE SUR UNE AUTRE MACHINE.** Trois versions de suite (0.38.0,
+    0.39.0, 0.40.0) sont parties en echec pour cette raison, et une quatrieme (0.41.2) a echoue
+    sur le runner LINUX apres avoir passe macOS et Windows — ce runner a deux coeurs et un
+    disque lent, et ca change le comportement. Ce n'est pas grave en soi : la CI refuse de
+    publier, on corrige, on relance. Ce qu'il faut en retenir, c'est de ne pas croire qu'un
+    essai vert en local vaut preuve sur les trois systemes, et de lire le log de la plateforme
+    qui coince au lieu de deviner.
 - **UNE APPIMAGE SE MONTE EN `fuse.<nom-du-programme>`, PAS EN `squashfs`.** Deux versions ont
   ete depensees a corriger la fausse alerte « disque presque plein » parce que le premier
   correctif filtrait le TYPE `squashfs`, suppose de memoire. Le type reel, lu dans
@@ -1690,15 +1651,14 @@ Le backend (`system/metrics.rs`) collecte :
   faire IMPRIMER par l'essai la grandeur qui porte la conclusion (ici la moyenne par envoi,
   pas seulement le compte), et se souvenir qu'un `***` au milieu d'un nombre est une redaction,
   pas un caractere.
-- **UN BANC QUI CONSTRUIT UN BUNDLE A BESOIN DE LA CLE DE SIGNATURE.** `tauri.conf.json`
-  porte la cle PUBLIQUE de l'updater : la CLI reclame donc la privee et echoue APRES avoir
-  produit l'installeur (« A public key has been found, but no private key »). Le banc rendait
-  rouge un essai qui avait tout reussi — tests verts, `Cockpit_x.y.z_x64-setup.exe` bien la —
-  et ca fait chercher un probleme la ou il n'y en a pas. `essais.yml` passe donc
-  `TAURI_SIGNING_PRIVATE_KEY` comme `release.yml`. A ne pas confondre avec le build LOCAL, ou
-  cet echec est voulu (d'ou `--no-bundle` en local).
+- **CONSTRUIRE UN BUNDLE DEMANDE LA CLE DE SIGNATURE, MEME QUAND ON NE PUBLIE PAS.**
+  `tauri.conf.json` porte la cle PUBLIQUE de l'updater : la CLI reclame donc la privee et
+  echoue APRES avoir produit l'installeur (« A public key has been found, but no private
+  key »). Tout ce qui construit un bundle doit donc passer `TAURI_SIGNING_PRIVATE_KEY`, sinon
+  on cherche un probleme la ou il n'y en a pas — les tests etaient verts et l'installeur bien
+  la. A ne pas confondre avec le build LOCAL, ou cet echec est voulu (d'ou `--no-bundle`).
   Corollaire de methode : un `continue-on-error` sur une etape de build MASQUE ce genre de
-  chose. Le premier atelier Windows est passe « vert » avec cette meme erreur dedans.
+  chose.
 - **UN CHEMIN QUI TRAVERSE L'IPC EST UN IDENTIFIANT : IL S'ECRIT AVEC DES `/`.** Toutes les
   fonctions de `workspace/` rendaient leur chemin relatif par `to_string_lossy()`, donc avec le
   separateur du systeme. Sous Windows, `src\notes.md` — et le frontend, lui, DECOUPE et RECOLLE

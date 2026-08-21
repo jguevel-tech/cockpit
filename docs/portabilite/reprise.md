@@ -21,13 +21,13 @@ Le repli est le geste documenté dans le `CLAUDE.md` : `gh release edit vX.Y.Z -
 sur la dernière version COMPLÈTE et personne ne voit d'erreur d'updater. **À faire AVANT de
 diagnostiquer**, chaque fois qu'une release sort incomplète.
 
-## La leçon qui a coûté deux versions
+## La leçon des versions en échec
 
-Un essai qui ne tombe que sur macOS ou Windows ne se découvrait **qu'après le tag**, donc
-après publication. D'où `.github/workflows/essais.yml` (`gh workflow run essais.yml`) :
-matrice macOS + Windows, mêmes vérifications que la release, installeur Windows en artefact,
-et **il ne publie rien**. Le réflexe : le lancer avant `npm run release` dès que le changement
-touche le service de terminaux ou quoi que ce soit qui dépende du système.
+Un test qui ne tombe que sur macOS, sur Windows ou sur le runner Linux ne se voit qu'après le
+tag. Ce n'est pas grave : la CI refuse de publier, on corrige, on relance — un numéro de version
+ne coûte rien. Ce qu'il faut retenir, c'est de **lire le log de la plateforme qui coince** plutôt
+que de supposer, et de ne pas prendre un test vert en local pour une preuve sur les trois
+systèmes.
 
 ## Ce qui a été vérifié avant le tag, à la main
 

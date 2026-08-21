@@ -218,7 +218,6 @@ On macOS, Xcode Command Line Tools are enough.
 | `npm run i18n:audit` | fails while any displayed string is still hardcoded |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | Rust tests |
 | `npx tauri build --no-bundle` | development binary |
-| `gh workflow run essais.yml` | runs the whole suite on macOS **and** Windows, and builds the Windows installer — without publishing anything |
 
 > Always build with `npx tauri build`, never `cargo build --release` alone: without the Tauri CLI's
 > environment variables the binary comes out in development mode and looks for a Vite server on
@@ -276,9 +275,8 @@ npx tauri build --no-bundle                     # compiles
 Every displayed string lives in **both** catalogues (`src/lib/i18n/fr.ts`, then `en.ts`) — French
 is the reference, and a feature shipped in one language only is unfinished.
 
-If your change touches anything platform-dependent, run `gh workflow run essais.yml`: it exercises
-macOS and Windows without publishing anything. A test that only fails there used to be discovered
-after tagging, which cost users a version each time.
+Releases build and run the full suite on Linux, macOS and Windows before bundling anything, so a
+test that only fails on one of them stops the release rather than shipping.
 
 And record it in [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]`, if a user can notice it.
 
