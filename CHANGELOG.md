@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-08-21
+
 ### Fixed
 
 - **Les grosses sorties de terminal repartent en gros paquets.** Une commande qui écrit des
