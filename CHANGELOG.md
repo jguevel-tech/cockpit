@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.43.2] — 2026-08-21
+
 ### Fixed
 
 - La barre d'avancement d'une tâche est **plus grande** — presque deux fois plus large dans le
