@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "cockpit"
-version = "0.40.0"
+version = "0.41.0"
 dependencies = [
  "alacritty_terminal",
  "arboard",

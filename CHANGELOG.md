@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-08-21
+
 ### Fixed
 
 - **Une grosse sortie de terminal n'est plus tronquée.** Une commande qui écrit beaucoup —
