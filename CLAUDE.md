@@ -206,7 +206,7 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   remonte rien, ce qu'un banc a demontre sur le modal de creation de projet. Toute erreur est
   ecrite dans `<app_data>/logs/cockpit.log` (toujours, sans consentement) et envoyee au
   serveur de suivi si l'utilisateur l'a accepte, avec la fiche de la machine (distribution,
-  serveur audio actif, versions de pw-record/tmux, AppImage ou binaire). C'est cette fiche
+  serveur audio actif, version de pw-record, AppImage ou binaire). C'est cette fiche
   qui a manque pendant plusieurs corrections.
 - **Tout overlay `position: fixed` (modal, menu contextuel, panneau, toast) doit porter
   `use:portal`** (actions/portal.ts, le deplace dans `<body>`). Raison : en mode image de fond,
@@ -241,14 +241,14 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   pas pour l'utilisateur.
 - Nouvelle commande Tauri -> wrapper type dans `src/lib/api/`, types partages dans
   `src/lib/types/index.ts` en snake_case (aligne sur les structs Rust Serialize)
-- **Une commande Tauri qui LANCE UN PROCESS EXTERNE (tmux, git, docker...) s'ecrit
+- **Une commande Tauri qui LANCE UN PROCESS EXTERNE (git, docker...) s'ecrit
   `async fn`.** Une commande `fn` s'execute EN LIGNE dans la boucle principale GTK et gele
   toute l'interface pendant son travail (voir Pieges connus). Restent `fn` celles qui ne
   touchent que la base ou un champ en memoire. Un `async fn` qui prend
   `tauri::State<'_, _>` DOIT rendre un `Result` — contrainte du macro, pas un choix.
 - Svelte 5 runes uniquement : `$state`/`$derived`/`$props` + callback props
   (pas de createEventDispatcher, pas de stores locaux inutiles)
-- Commandes externes (git, docker, tmux...) : args en tableau via Command, jamais `sh -c` interpole
+- Commandes externes (git, docker...) : args en tableau via Command, jamais `sh -c` interpole
 - Bug a corriger -> reproduire et instrumenter AVANT de patcher (lecon du bug accents) ;
   ne jamais enchainer des correctifs hypothetiques
 - **Un bug croise en chemin se corrige**, meme si personne ne l'a signale : on est dans
@@ -448,7 +448,7 @@ ai-workforce/
 │       │   ├── urls.rs             # CRUD URLs
 │       │   ├── settings.rs         # Cle/valeur globales (upsert)
 │       │   ├── recordings.rs       # Suivi pipeline reunions + summary_prompt par projet
-│       │   ├── terminals.rs        # Metadonnees terminaux persistants (nom, session tmux)
+│       │   ├── terminals.rs        # Metadonnees terminaux persistants (projet, nom d'onglet)
 │       ├── recorder/
 │       │   ├── mod.rs              # Pipeline reunion (recording -> transcribing -> summarizing -> done/error)
 │       │   ├── capture.rs          # 2x pw-record (micro + monitor sink), PCM brut s16 mono 16 kHz
@@ -550,7 +550,7 @@ ai-workforce/
 │   │   │   │   ├── ProjectDetail.svelte  # Barre unique (titre + onglets + actions ⏺/URLs), map tabs
 │   │   │   │   ├── DockerTab.svelte      # Start/stop/restart, dependances, conteneurs
 │   │   │   │   ├── WorkspaceTab.svelte   # Notes (gauche, flex:2) + Todos (droite, flex:1)
-│   │   │   │   ├── TerminalTab.svelte    # Multi-terminaux tmux, sessions Claude (fixes accents NE PAS RETIRER)
+│   │   │   │   ├── TerminalTab.svelte    # Multi-terminaux, sessions Claude (fixes accents NE PAS RETIRER)
 │   │   │   │   ├── FilesTab.svelte       # Arbre lazy gitignore-aware + viewer Shiki
 │   │   │   │   ├── GitTab.svelte         # Status + diff viewer (hunks colores)
 │   │   │   │   ├── PluginsTab.svelte     # Marketplace agents par projet
@@ -604,7 +604,7 @@ Menu vertical a gauche, 4 vues — un composant par vue dans `dashboard/` (voir 
 ### Sidebar
 
 - Section **Terminaux** en haut (repliable, masquee si vide) : raccourcis vers toutes les sessions
-  tmux vivantes (nom + projet), clic = navigation directe vers la session (pendingTerminalId),
+  vivantes (nom + projet), clic = navigation directe vers la session (pendingTerminalId),
   clic droit = Renommer/Fermer. Logo Claude = un agent IA (claude, codex...) tourne dans la
   session (detection par /proc/<pid>/exe, insensible a l'usurpation d'argv), point gris =
   terminal normal. Alimentee par le store `terminals` (stores/terminals.ts) : recharge sur
@@ -871,7 +871,7 @@ optimisation (mesure v0.2.0). Deux raisons, a ne pas defaire :
 
 Controle `− 100% +` dans le Header (clic sur la valeur = retour a 100 %) + **Ctrl+molette** partout,
 terminaux compris (listener capture `passive:false` dans App.svelte, garde 120 ms contre les rafales
-de trackpad ; molette nue laissee au copy-mode tmux).
+de trackpad ; molette nue laissee au defilement d'xterm).
 
 Implemente par le **zoom natif du webview** (`set_webview_zoom` -> `WebviewWindow::set_zoom`), donc
 tout est mis a l'echelle : typo, paddings, bordures ET le rendu xterm. Un `html { font-size }` variable
@@ -879,7 +879,7 @@ a ete ecarte : ~423 tailles en px (paddings, `--header-height`, boutons 32x32) n
 809 `rem` et le texte finirait par deborder de ses boites.
 
 Rien a faire cote terminaux : zoomer change les dimensions en px CSS du conteneur, donc le
-`ResizeObserver` de TerminalTab (debounce 80 ms) refit et renvoie la nouvelle taille a tmux.
+`ResizeObserver` de TerminalTab (debounce 80 ms) refit et renvoie la nouvelle taille au service.
 
 **Paliers derives de la police terminal (NE PAS remettre des paliers ronds)** : `ZOOM_LEVELS`
 vaut `TERMINAL_FONT_STEPS.map(px => px / TERMINAL_FONT_SIZE)` — les facteurs visent des tailles
@@ -949,7 +949,7 @@ SQLite stockee dans `~/.local/share/com.cockpit.dev/data.db` (ou via `COCKPIT_DB
 | `urls` | Liens rapides par projet (label, url, position) |
 | `settings` | Cle/valeur globales (openai_api_key, summary_prompt, summary_model) |
 | `recordings` | Enregistrements de reunions (project, started_at, duration_secs, state, error, dir) |
-| `terminals` | Terminaux persistants (project, name, tmux_name) |
+| `terminals` | Terminaux persistants (project, name ; `tmux_name` est une colonne HERITEE, plus lue par personne) |
 | `command_history` | Historique de commandes (command PRIMARY KEY, project, ts — upsert) |
 | `claude_session_names` | Noms personnalises des sessions Claude Code (session_id, name) |
 | `project_commands` | Commandes rapides par projet (label, command, position) |
@@ -1027,22 +1027,19 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
   dans un PTY, events `claude_login_output` / `claude_login_done`), `open_url` (navigateur systeme)
 
 ### Terminaux integres
-- `create_terminal` (init_command via tmux send-keys), `write_terminal`, `resize_terminal`, `close_terminal`
-- `attach_terminal` (REUTILISE le client tmux vivant, n'en respawn un que s'il est mort — voir la
-  doctrine du pool dans Pieges connus ; rend une chaine TOUJOURS VIDE, conservee pour ne pas
-  toucher au contrat IPC), `rename_terminal`
-- `detach_terminal` et `terminal_alt_screen` : **plus aucun appelant cote frontend** (verifie le
-  2026-08-20 — les wrappers `detachTerminal` / `terminalAltScreen` existent dans
-  `api/workspace.ts` et personne ne les importe). Le premier est mort depuis le pool de xterm,
-  le second depuis que la molette est laissee au copy-mode. Ne pas batir dessus : ils partent
-  avec tmux.
+- `create_terminal` (init_command tapee par le service des que le shell repond), `write_terminal`,
+  `resize_terminal`, `close_terminal`
+- `attach_terminal` (SANS EFFET si le terminal est deja branche — voir la doctrine du pool dans
+  Pieges connus ; ne rend rien, l'etat retrouve arrive par `terminal_output`), `rename_terminal`
 - `list_terminals`, `list_all_terminals` (avec flag `llm` : un agent IA tourne dans la session)
-- `set_clipboard` / `get_clipboard` (presse-papier systeme via arboard, instance gardee en vie),
-  `terminal_copy_selection` (copie la selection copy-mode tmux — clic droit > Copier)
+- `set_clipboard` / `get_clipboard` (presse-papier systeme via arboard, instance gardee en vie ;
+  `poser_presse_papier` est la meme chose appelable depuis le backend, pour l'OSC 52 d'un
+  programme)
 - `list_claude_sessions`, `rename_claude_session`
 - `record_command`, `search_command_history` (historique fusionne DB Cockpit + ~/.zsh_history + ~/.bash_history)
-- `terminal_search` (recherche NATIVE du copy-mode tmux : start/next/prev/cancel,
-  variante -text litterale — le scrollback vit dans tmux, pas dans xterm)
+- `terminal_search` (start/next/prev/cancel ; sous-chaine LITTERALE, casse ignoree, lignes
+  enroulees recollees). Rend `{total, index, ligne, colonne}` : le serveur n'a pas d'ecran a
+  peindre, c'est le frontend qui defile et surligne (`registerDecoration`)
 - `debug_log` (diagnostic : append dans /tmp/cockpit-debug.log)
 
 ### Explorateur de fichiers / Git
@@ -1082,91 +1079,102 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 
 ## Onglets Terminal / Fichiers / Git (vue projet)
 
-**Cote Rust, le terminal passe par un trait, pas par tmux.** `terminal/interface.rs` decrit les
-12 operations que Cockpit demande a un serveur de terminaux (preparer, creer, ecrire,
-redimensionner, fermer, attacher, detacher, renommer, lister, ecran alternatif, chercher, copier
-la selection) ; `terminal/tmux.rs` est l'implementation actuelle ; `terminal/mod.rs` la choisit
-en UNE ligne (`terminaux()`), et `AppState.terminals` est un `Box<dyn Terminaux>`. Regle :
-**rien de specifique a tmux ne remonte dans `interface.rs` ni dans `lib.rs`** — c'est ce qui
-permettra de remplacer l'implementation sans toucher aux commandes Tauri
-(`docs/portabilite/plan-terminaux.md`, etape A faite le 2026-08-20).
+**LES TERMINAUX SONT A NOUS, plus de tmux** (chantier fini le 2026-08-21,
+`docs/portabilite/plan-terminaux.md`). Trois etages, et chacun ignore les autres :
 
-**Le service maison EXISTE et tourne, mais rien ne passe encore par lui** (etape B2, faite le
-2026-08-21). Le meme binaire lance avec `--service-terminaux <socket>` devient un service de
-terminaux : il tient les shells dans ses propres PTY, leur ecran dans `terminal/ecran/`, et
-survit a la fermeture de l'application (double fork + setsid). Il n'ecrit RIEN sur disque.
-Ce qu'il faut en savoir avant l'etape C :
+- `terminal/interface.rs` : le trait `Terminaux`, ce que Cockpit demande a un serveur de
+  terminaux (preparer, creer, ecrire, redimensionner, fermer, attacher, renommer, lister,
+  chercher). `AppState.terminals` est un `Box<dyn Terminaux>`, donc **aucune commande Tauri ne
+  connait le serveur**.
+- `terminal/service/` : LE serveur. Le meme binaire lance avec `--service-terminaux <socket>`
+  tient les shells dans ses propres PTY et leur ecran dans `terminal/ecran/`. Il survit a la
+  fermeture de l'application (double fork + setsid), et n'ecrit RIEN sur disque : il meurt avec
+  la machine.
+- `terminal/adaptateur.rs` : l'implementation du trait par-dessus le socket. C'est elle que
+  `terminal/mod.rs` choisit en une ligne (`terminaux()`), elle qui lance le service au demarrage
+  s'il ne tourne pas deja, et elle qui traduit ses poussees en evenements Tauri.
+
+Ce qu'il faut en savoir avant d'y toucher :
 
 - **Qui detient quoi** : le service tient l'etat VIVANT (sessions, taille, ecran, agent qui
   tourne), SQLite garde le NOM d'onglet et le PROJET — ils doivent survivre a un redemarrage de
-  la machine, ce que le service ne fait pas. C'est pourquoi **l'identifiant d'un terminal est
-  fourni par l'application** a la creation (le rowid SQLite), et pourquoi `renommer` ne traverse
-  PAS le socket : deux verites pour une meme chaine, c'est la garantie qu'elles divergent.
-- **`detacher` et `ecran_alternatif` ne sont pas implementes** et ne doivent pas l'etre : ce sont
-  des contournements de tmux sans appelant (etape A). Ils partent a l'etape C avec leurs
-  commandes Tauri.
-- **Le service n'envoie pas le flux brut** : ce qui est petit part tel quel (l'echo d'une touche),
-  ce qui depasse quatre octets par cellule d'ecran est REMPLACE par un redessin. Mesure :
-  `seq 1 200000` (~1,3 Mo au shell) fait **94 octets** sur le socket. Consequence a assumer a
-  l'etape C : les lignes qui defilent pendant une rafale n'arrivent jamais au xterm du frontend,
-  donc **la molette devra demander l'historique au service** (`Redessiner` avec historique) au
-  lieu de compter sur le tampon d'xterm. tmux avait exactement la meme propriete.
+  la machine, ce que le service ne fait pas. D'ou deux consequences : **l'identifiant d'un
+  terminal est fourni par l'application** a la creation (le rowid SQLite), et `renommer` ne
+  traverse PAS le socket (deux verites pour une meme chaine, c'est la garantie qu'elles
+  divergent).
+- **Le service ne redessine JAMAIS un terminal deja branche.** `attacher` est un no-op quand le
+  terminal l'est deja (`TerminauxService.attaches`) : le frontend l'appelle a chaque retour sur
+  un onglet, et re-brancher demanderait un redessin complet — clignotement, et retour en bas de
+  l'historique a chaque changement d'onglet.
+- **Le flux brut EST transmis, mais en gros lots.** Ce qui est petit part tel quel et tout de
+  suite (l'echo d'une touche) ; le reste attend `FENETRE_RAFALE` (8 ms) pour partir groupe.
+  C'est ce qui remplit le tampon de defilement d'xterm, donc ce qui fait marcher la molette sans
+  rien demander au service. Un lot de plus de 256 Ko (32 Mo/s, que personne ne lit) est REMPLACE
+  par un redessin, et l'historique est renvoye entier des que le calme revient.
+- **Un redessin porte l'ecran ET les 10 000 lignes d'historique.** Il commence par une remise a
+  plat (RIS) qui VIDE le tampon de defilement du terminal d'arrivee : sans l'historique, chaque
+  attache ferait perdre ce que la molette remontait. C'est aussi ce qui garde xterm en miroir
+  exact de la grille du service — la recherche rend des positions dans cette grille.
 - **Poignee de main** : le SERVICE parle en premier, dix octets de forme figee (`CKPTERM\0` +
   version sur 2 octets). Le client sait donc dire « ce service est plus ancien que moi » avec les
   deux numeros, au lieu d'echouer sur un message incomprehensible. Tout changement de forme d'un
   message = incrementer `protocole::VERSION`.
 - **Socket** : `$XDG_RUNTIME_DIR/cockpit/terminaux.sock` (repli `<temp>/cockpit-<uid>/`), dans un
   dossier cree en 0700, et le service comme le client verifient l'euid du pair. Surchargeable par
-  `COCKPIT_TERMINAUX_SOCKET` — c'est ce qui permet a une installation de developpement
-  (`COCKPIT_DB`) d'avoir son propre service au lieu de partager celui de l'utilisateur.
+  `COCKPIT_TERMINAUX_SOCKET`. **Une base choisie a la main (`COCKPIT_DB`) obtient AUTOMATIQUEMENT
+  son propre socket** (`terminaux-<empreinte>.sock`, `adaptateur::chemin_socket`) : sans ca, la
+  reconciliation du demarrage verrait les terminaux de l'installation normale comme des sessions
+  orphelines et les tuerait.
 - **Historique borne en CELLULES, pas en lignes** (`serveur::CELLULES_D_HISTORIQUE`) : 10 000
-  lignes a 80 colonnes comme aujourd'hui, moins au-dela. Mesures en release : 19,5 Mo par session
-  pleine a 80 colonnes, 23,1 Mo a 240 — contre 57,1 Mo a 240 sans ce plafond.
+  lignes a 80 colonnes, moins au-dela. Mesures en release : 19,5 Mo par session pleine a 80
+  colonnes, 23,1 Mo a 240 — contre 57,1 Mo a 240 sans ce plafond.
+- **Sous AppImage, le service est relance depuis `$APPIMAGE`, pas depuis `current_exe()`**
+  (`lancement::binaire_a_relancer`) : le montage `/tmp/.mount_*` disparait a la fermeture de
+  l'application, et le service doit lui survivre.
 
 - **Terminal** : multi-terminaux par projet, renommables (double-clic sur l'onglet, clic droit dans
-  la sidebar), PERSISTANTS : chaque terminal est une session tmux `ckpt_<id>` sur un socket dedie
-  (`tmux -L cockpit`, isole du tmux perso). Conf geree par Cockpit (`<app_data>/tmux.conf`, reecrite
-  au demarrage + options appliquees au serveur vivant via apply_server_options(app), qui JOURNALISE
-  ses echecs — un `unbind` rate ramenait le double collage sans laisser de trace) : status off, mouse on,
-  history 10000, set-clipboard on (OSC 52), mode-style bleu accent, selection qui RESTE au relachement
-  (stop-selection), Ctrl+C copie en copy-mode, pas de menus tmux au clic droit. Metadonnees en DB
-  (table `terminals`), le serveur tmux survit a la fermeture de l'app : au redemarrage on se rattache
-  (purge au boot des sessions disparues, suppression de la ligne quand le shell se termine).
-  Les events IPC ne sont emis que si une UI est attachee. Ecritures/resizes serialises cote frontend
+  la sidebar), PERSISTANTS : chaque terminal est une session du service (`terminal/service/`), qui
+  survit a la fermeture de l'application. Metadonnees en DB (table `terminals`) ; au demarrage,
+  `preparer` RECONCILIE la base et le service (ligne sans session -> supprimee, session sans ligne
+  -> fermee, elle ne tournait pour personne). Ecritures/resizes serialises cote frontend
   (file par terminal), PTY cree a la taille mesuree. **`addTerminal` (TerminalTab) est le SEUL
   endroit qui cree une session** : une commande venue d'ailleurs (▶ Cmd, shell de conteneur,
   palette Ctrl+K) arrive par le magasin `pendingTerminalCommand` et c'est l'onglet qui la lance,
-  parce que lui seul mesure son conteneur (voir « TUI lancee a la creation » dans Pieges connus). Theme suit dark/light. RENDU : addon WebGL +
-  police mono explicite (DejaVu Sans Mono...) — le renderer DOM d'xterm avec "monospace" generique
-  derive visuellement sur les glyphes accentues ; le modele terminal etait sain (verifie via
-  tmux capture-pane), seul l'affichage etait corrompu.
-- **Copier/Coller** : selection souris (tmux copy-mode, surlignage bleu) qui reste affichee au
-  relachement -> Ctrl+C copie (sinon SIGINT normal), ou clic droit -> menu Cockpit Copier/Coller.
-  Chaine de copie : copy-pipe -> `tmux load-buffer -w -` (PAS set-buffer : il ne lit pas stdin !)
-  -> OSC 52 -> handler xterm (parser, chemin de sortie) -> commande set_clipboard (arboard, instance
-  gardee en vie sinon le presse-papier X11 meurt avec elle). Shift+glisser = selection xterm locale
-  dans les TUI qui capturent la souris (claude, vim).
+  parce que lui seul mesure son conteneur (voir « TUI lancee a la creation » dans Pieges connus).
+  Theme suit dark/light. RENDU : addon WebGL + police mono explicite (DejaVu Sans Mono...) — le
+  renderer DOM d'xterm avec "monospace" generique derive visuellement sur les glyphes accentues.
+  `allowProposedApi: true` est OBLIGATOIRE : le surlignage de la recherche passe par
+  `registerMarker`/`registerDecoration`, refuses par une exception sans ce drapeau.
+- **Copier/Coller** : la selection appartient a XTERM (glisser la souris), elle reste affichee au
+  relachement -> **Ctrl+C copie quand il y a une selection, interrompt sinon** (handler de touche,
+  `attachCustomKeyEventHandler` — pas une surcouche sur `onData`), ou clic droit -> Copier. Un
+  « Copier » sans selection le DIT. La copie va au presse-papier systeme par `set_clipboard`
+  (arboard, instance gardee en vie sinon le presse-papier X11 meurt avec elle). Un programme qui
+  demande la copie par OSC 52 est servi deux fois sans dommage : l'emulateur du service la remonte
+  (`Pousse::PressePapier`) et le handler OSC d'xterm la voit passer dans le flux.
 - **Collage : UN SEUL chemin, `pasteClipboard()`.** Clic droit -> « Coller » et clic molette
   appellent la meme fonction, donc collent la meme chose (le presse-papier systeme). Les deux
-  autres candidats sont eteints exprès : tmux (`unbind -n MouseDown2Pane` dans la conf ET sur le
-  serveur vivant) et le collage natif du WebView (annule dans `createXterm`). Voir « DOUBLE
+  autre candidat est eteint expres : le collage natif du WebView (annule dans `createXterm`).
+  Voir « DOUBLE
   COLLAGE » dans les Pieges connus avant d'y toucher : la facon d'annuler le collage natif n'est
   pas celle qu'on croit.
 - **Liens** : addon web-links, Ctrl+clic ouvre l'URL (http/https) dans le navigateur via open_url.
 - **Detection agents IA** : logo Claude dans la sidebar/dashboard quand un CLI LLM tourne dans la
-  session (claude, codex, gemini, aider... — constante COMMANDES_LLM dans terminal/agents_llm.rs, detection
-  pane_current_command + descente de l'arbre de process pour les CLIs node), point gris sinon.
+  session (claude, codex, gemini, aider... — constante COMMANDES_LLM dans terminal/agents_llm.rs).
+  La racine est le PID du shell, que le service connait puisqu'il l'a lance : on descend son arbre
+  de process (les CLIs node se cachent sous un enfant), point gris sinon.
   Store terminals rafraichi toutes les 5 s. La descente se fait par
   `/proc/<pid>/task/<tid>/children`, PAS par un `ps -e` global (voir Pieges connus) : toutes
   les taches, pas seulement le thread principal, parce qu'un node fork depuis un thread de
   travail.
-- **Sortie du PTY = 2 threads, lecteur puis emetteur** (terminal/tmux.rs, `lire_pty` et
-  `pomper`) : le lecteur vide le PTY dans une file FIFO unique, l'emetteur en sort tout ce
-  qui s'y trouve et l'emet en UN evenement. Le regroupement se fait donc de lui-meme sous
-  debit, sans horloge : au repos l'emetteur attend sur une condition et l'echo d'une touche
-  part immediatement. `PTY_GROUP_WAIT` (2 ms) ne s'applique qu'au-dela de
-  `PTY_GROUP_THRESHOLD` (8 Ko) — volume qu'une frappe n'atteint jamais. NE PAS monter cette
-  fenetre « pour mieux regrouper » : ce serait payer en latence percue.
+- **Sortie du PTY = 2 threads par session, lecteur puis emetteur**
+  (terminal/service/session.rs, `lire_pty` et `emettre`) : le lecteur vide le PTY dans l'ecran et
+  dans une file, l'emetteur decide si le lot part tel quel ou en redessin. Un lot part TOUT DE
+  SUITE quand il a fallu l'attendre ET qu'il est petit (l'echo d'une touche) ; sinon il attend
+  `FENETRE_RAFALE` (8 ms) pour partir groupe. NE PAS monter cette fenetre « pour mieux
+  regrouper » : ce serait payer en latence percue. Voir « REGROUPEMENT DE LA SORTIE » dans les
+  Pieges connus : la premiere version se declenchait sur le VOLUME en attente, et ne se
+  declenchait donc jamais.
 - **Frappe = xterm brut** : `onData` -> `queueWrite` (PTY) directement, AUCUNE surcouche sur le chemin
   de frappe. L'autosuggestion, le Ctrl+R overlay et le bandeau ⚡ ont ete RETIRES le 10/07/2026.
 - **BUG ACCENTS (fix racine, NE PAS RETIRER)** : ibus (module de saisie GTK d'Ubuntu) route les touches
@@ -1340,7 +1348,7 @@ Le backend (`system/metrics.rs`) collecte :
   inactive a zero a chaque entree en ecran alternatif. Il n'existe donc aucun moyen de LIRE
   la grille principale cachee sous une application plein ecran sans perdre l'autre. Le
   redessin ne rend que l'ecran actif ; le service tient l'etat complet et redessinera quand
-  l'ecran actif changera (tmux repeint sur le meme evenement).
+  l'ecran actif changera.
 - **La ligne qui entre par le bas herite du FOND du stylo** : `Cell::reset` ne recopie que
   `bg`. Tout ce qui fait defiler — un saut de ligne, un enroulement — avec un fond actif
   teinte la ligne d'arrivee, donc les fins de ligne qu'un redessin ne redessine pas.
@@ -1372,18 +1380,18 @@ Le backend (`system/metrics.rs`) collecte :
   Constate le 2026-08-20 sur `list_all_terminals`, appelee toutes les 5 s par le magasin
   `terminals` : 50 ms a vide, et jusqu'a 1 s quand des agents tournaient — donc une interface
   figee une seconde toutes les cinq. Mesure : chronometrage de chaque commande externe du
-  poll (`tmux list-sessions` 3,5 ms, `tmux list-panes -a` 3,8 ms, `ps -e -o pid=,ppid=,args=`
-  47,6 ms sur 1074 process). A faire : toute commande qui lance un process externe est
+  poll (deux appels tmux ~7 ms a l'epoque, `ps -e -o pid=,ppid=,args=` 47,6 ms sur 1074
+  process). A faire : toute commande qui lance un process externe est
   `async fn` ; et un `async fn` avec `tauri::State<'_, _>` doit rendre un `Result`.
 - **Enumerer tous les process de la machine pour en regarder trois** : la detection des
   agents LLM lancait `ps -e -o pid=,ppid=,args=` a chaque passe, des qu'une commande de
   premier plan n'etait pas un nom de LLM — c'est-a-dire toujours, puisque argv mentait sur
-  4 sessions sur 9. Remplace par une descente de l'arbre depuis les seuls panes tmux
-  (`/proc/<pid>/task/<tid>/children`), avec sortie des qu'un LLM est trouve. Mesure du
-  2026-08-20, meme resultat de detection verifie session par session : 56,5 ms -> 4,0 ms de
-  mediane, dont 3,3 ms de `tmux list-panes` — le cout du parcours lui-meme est de ~0,3 ms,
-  et il depend du nombre de terminaux, plus de celui des process de la machine. `sysinfo`
-  aurait evite le fork mais pas l'enumeration complete : ce n'etait pas le probleme.
+  4 sessions sur 9. Remplace par une descente de l'arbre depuis la racine de chaque session,
+  avec sortie des qu'un LLM est trouve. Mesure du 2026-08-20, meme resultat de detection verifie
+  session par session : 56,5 ms -> 4,0 ms de mediane, dont 3,3 ms allaient a tmux pour trouver
+  les racines — le service, lui, les connait deja (il a lance les shells). Le cout du parcours
+  lui-meme est de ~0,3 ms, et il depend du nombre de terminaux, plus de celui des process de la
+  machine.
 - **Un evenement Tauri v2 est du JavaScript construit puis evalue, pas un canal binaire** :
   `emit` fabrique une source `(function () { ... fn({event, payload: <charge>}) })()` et
   l'evalue dans le webview (tauri-2.11.0, `event/mod.rs::emit_js_script` et
@@ -1398,42 +1406,40 @@ Le backend (`system/metrics.rs`) collecte :
   decoder 1,96 Mo, contre 2,8 ms avec `atob` puis une boucle `for` nue qui remplit un
   `Uint8Array` prealloue (mesure du 2026-08-20, node). Sur le chemin de la sortie terminal
   c'est le thread qui dessine qui paie. La version « elegante » est 27 fois plus lente.
-- **Le cout d'une commande tmux, c'est le fork+exec, pas le travail** : les 41 commandes
-  d'`apply_server_options` prenaient 167 ms en 41 appels et 9,1 ms enchainees par `;` dans un
-  seul appel (mesure du 2026-08-20, tmux 3.4, serveur vivant). MAIS **une chaine tmux
-  S'ARRETE a la premiere erreur et ne rapporte que celle-la** : dans
-  `set @a 1 ; set bidon on ; set @b 2`, `@b` n'est jamais pose et rien ne le dit. Un
-  `unbind MouseDown2Pane` saute ainsi ramenerait le double collage sans laisser de trace.
-  D'ou le repli : si la chaine echoue, on rejoue les commandes une par une pour appliquer
-  celles qui passent et nommer celles qui echouent. Un argument valant exactement `";"`
-  serait pris pour un separateur — un test verrouille la liste.
 - **Ctrl+lettre sous WebKitGTK** : emet aussi un keypress ; n'intercepter que le keydown laisse
   xterm envoyer le caractere de controle au shell. Bloquer tous les types d'events + listener en
   phase capture sur le conteneur.
-- **tmux et ecran alternatif** : le client tmux met TOUJOURS le terminal hote en ecran alternatif ->
-  `term.buffer.active.type` est inutilisable pour detecter une TUI ; demander a tmux
-  (`#{alternate_on}`).
+- **L'ecran alternatif se lit dans la grille du SERVICE**, jamais dans xterm : c'est le service
+  qui emule (`Ecran::ecran_alternatif`), et il renvoie un redessin a chaque bascule — sinon
+  quitter vim laisserait le frontend sur l'ecran de vim. Rien a demander a personne, la reponse
+  est en memoire.
 - **Reponses du terminal dans onData** : focus in/out, DA, CPR, reponses DCS/OSC arrivent par le
   meme canal que les frappes -> a filtrer (regex TERMINAL_REPLY) sinon toute heuristique de suivi
   de frappe se fait polluer.
-- **POOL PERSISTANT : ni detach ni re-attach au switch (doctrine du 2026-08-13, remplace
-  « client frais obligatoire »).** tmux SYNTHETISE des evenements focus vers l'application du
-  pane a CHAQUE attache/detache de client — meme avec `focus-events off`, qui ne gouverne que
-  le focus du terminal exterieur. Prouve en isolation : un cycle attache/tue/rattache sans
-  AUCUNE entree fait reagir claude (re-render), et ce re-render laissait un saut de ligne a
-  chaque changement de terminal. Trois correctifs (0.6.5, 0.6.7) ont vise d'autres maillons
-  sans eteindre le symptome. Donc : les xterm vivent dans un POOL au niveau module
-  (TerminalTab, `<script module>`), gares dans un div invisible au demontage et re-adoptes au
-  retour ; les clients tmux restent attaches en permanence ; attach_terminal REUTILISE un
-  client vivant (no-op) et ne respawn que s'il est mort. Les listeners terminal_output/exit
-  sont GLOBAUX pour alimenter les xterm meme demontes. Benefice : switch instantane.
-- **Un xterm NEUF, lui, exige toujours un client frais** (sequence d'init complete : ecran
-  alternatif, modes souris, redraw) — c'est le cas au premier attach d'une session, et c'est
-  pourquoi le pool conserve le xterm d'origine : il a deja recu l'init de son client. Le
-  `attach_terminal` ne rend plus rien a rejouer : le tampon de replay a ete SUPPRIME le
-  2026-08-20 (plus personne ne le lisait depuis le pool de xterm, et il recopiait 100 Ko a
-  chaque lecture du PTY). init_command passe par `tmux send-keys` vers la SESSION.
-  Historique molette = copy-mode tmux (history-limit 10000).
+- **POOL PERSISTANT : ni detach ni re-attach au switch.** Les xterm vivent dans un POOL au
+  niveau module (TerminalTab, `<script module>`), gares dans un div invisible au demontage et
+  re-adoptes au retour ; les listeners terminal_output/exit sont GLOBAUX pour alimenter les
+  xterm meme demontes ; `attach_terminal` est un no-op quand le terminal est deja branche. La
+  raison a change avec tmux, pas la regle : un xterm re-cree part vide et exige un redessin
+  complet (ecran + 10 000 lignes), donc un clignotement et un retour en bas du defilement a
+  chaque aller-retour entre deux onglets. Du temps de tmux la cause etait ailleurs — il
+  synthetisait des evenements focus vers l'application du pane a chaque attache de client, et
+  claude y reagissait par un re-render qui laissait une ligne vide. Benefice inchange : switch
+  instantane.
+- **REGROUPEMENT DE LA SORTIE : le declencheur est le RYTHME, pas le volume en attente.** La
+  premiere version du service attendait d'avoir 8 Ko en attente pour regrouper — elle ne s'est
+  jamais declenchee, parce qu'un shell ecrit au fil de l'eau et que le lecteur du PTY est plus
+  rapide que lui : chaque lecture rend ~85 octets. Mesure du 2026-08-21 : `seq 1 200000` (1,3 Mo)
+  partait en **16 461 envois**, soit autant d'evenements Tauri. Deux details qui ont failli faire
+  rater le diagnostic :
+  - l'essai qui pretendait mesurer cette rafale attendait « 200000 » a l'ecran, chaine que la
+    LIGNE TAPEE contient deja : il repartait avant que le shell ait ecrit un octet et mesurait le
+    redessin de l'attache. Un marqueur de fin doit etre construit par le shell (`printf
+    'rafale%s' -finie`), jamais present dans la commande ;
+  - la regle du rythme seule (« la suite attendait deja, donc c'est une rafale ») retombe a 939
+    envois quand la machine est chargee : le shell produit alors par a-coups et l'emetteur attend
+    a chaque fois. D'ou la seconde moitie de la regle, sur le volume du lot (`SEUIL_LOT`, 2 Ko).
+  Etat verrouille par l'essai : moins de 600 envois pour 1,3 Mo (99 sous charge, 158 a vide).
 - **DOUBLE COLLAGE AU CLIC MOLETTE : `preventDefault` sur l'evenement `paste` NE SERT A RIEN.**
   Le symptome est revenu deux fois, avec deux causes DIFFERENTES (abonnements onData empiles la
   premiere fois, puis celle-ci) : ne jamais supposer laquelle, mesurer.
@@ -1456,14 +1462,6 @@ Le backend (`system/metrics.rs`) collecte :
     `gtk-enable-primary-paste` est ignore par WebKitGTK. Ces deux pistes sont fermees.
   - Ctrl+V dans le terminal n'emet AUCUN evenement `paste` : xterm envoie `^V` au PTY (mesure).
     Ne pas construire de raisonnement sur « il faut preserver le collage Ctrl+V ».
-- **`tmux list-sessions` a DEUX facons de dire « aucun serveur »**, et n'en reconnaitre qu'une
-  laissait des terminaux infermables. Mesure sur tmux 3.4 (2026-08-20) : serveur mort mais
-  fichier de socket encore present -> `no server running on <chemin>` ; fichier de socket absent
-  -> `error connecting to <chemin> (No such file or directory)`. C'est la SECONDE qui se produit
-  apres un redemarrage de la machine (/tmp est vide), et elle etait classee « on ne sait pas » :
-  `purge_dead` ne purgeait rien et `close()` refusait de supprimer la ligne, donc des terminaux
-  morts s'affichaient a vie. Les deux formes passent par `absence_definitive()` (3 tests).
-  Tout AUTRE echec doit rester un doute : on ne supprime jamais sur un doute.
 - **Une liste chargee au montage n'est pas une source de verite, et une garde posee dessus
   rejette exactement les cas qu'on voulait servir.** L'onglet Terminal n'honorait une demande
   d'ouverture (`pendingTerminalId`) que si l'id figurait dans sa liste locale `sessions`,
@@ -1471,7 +1469,7 @@ Le backend (`system/metrics.rs`) collecte :
   juste avant de poser l'id (commande rapide, shell d'un conteneur, palette Ctrl+K — ces trois
   la passent DEPUIS par `pendingTerminalCommand`, voir l'entree suivante ; restent la barre
   laterale, le tableau de bord et la palette, qui visent des sessions existantes) : la
-  session tmux existait donc bien et la barre laterale la montrait, mais l'onglet n'affichait
+  session existait donc bien et la barre laterale la montrait, mais l'onglet n'affichait
   rien, ne disait rien, l'id restait coince dans le magasin — empoisonnant les navigations
   suivantes — et chaque nouvel essai laissait une session de plus derriere lui (issue #14 :
   quatre `QUOTIDIEN - n` dans la barre laterale, deux onglets). Reproduit au banc frontend
@@ -1487,17 +1485,16 @@ Le backend (`system/metrics.rs`) collecte :
   gauche d'un conteneur large, et un simple shell coupait ses lignes trop tot (issue #14,
   deuxieme symptome).
   Deux maillons expliquent l'absence de correction, et les DEUX sont voulus ailleurs :
-  - `attacher()` (terminal/tmux.rs) REUTILISE un client tmux vivant et rend la main aussitot : les
-    `cols`/`rows` passes a `attach_terminal` sont alors IGNORES. Or le client cree par
-    `create_terminal` est vivant, donc l'arrivee sur l'onglet ne recadre rien.
+  - `attacher()` (terminal/adaptateur.rs) ne fait RIEN quand le terminal est deja branche : les
+    `cols`/`rows` passes a `attach_terminal` sont alors ignores. Or le terminal cree par
+    `create_terminal` l'est deja, donc l'arrivee sur l'onglet ne recadre rien.
   - `attachExisting` (TerminalTab) pre-renseigne `lastSentSize` avec la taille mesuree AVANT
     l'attache, donc le `queueResize` du `fitActive()` suivant est saute (il croit la taille
     deja envoyee). Aucun `resize_terminal` ne part.
   Mesure (2026-08-20) : banc frontend, le journal des invoke montre `create_terminal
   {cols:80,rows:24}` pour un conteneur de 1398x732 px = 196x48 cellules, `attach_terminal
-  {cols:196,rows:48}` et AUCUN `resize_terminal` ; banc tmux sur socket isole, un client cree
-  dans un PTY 80x24 donne un pane 80x24 et un htop dessine sur 80 colonnes, contre 177 colonnes
-  quand le PTY est cree a la taille mesuree. D'ou la regle : **seul l'onglet Terminal cree une
+  {cols:196,rows:48}` et AUCUN `resize_terminal` ; un shell lance dans un PTY 80x24 dessine un
+  htop sur 80 colonnes, contre 177 quand le PTY est cree a la taille mesuree. D'ou la regle : **seul l'onglet Terminal cree une
   session** (`addTerminal`, qui mesure), les autres deposent leur commande dans
   `pendingTerminalCommand`.
 - **UN `{@const}` EST UN DERIVE PARESSEUX : le lire depuis une action executee APRES la
@@ -1525,8 +1522,8 @@ Le backend (`system/metrics.rs`) collecte :
   magasins. Les `setTimeout` du scenario avancent en temps virtuel, donc c'est instantane.
   Ce que ca ne remplace pas : WebKitGTK (pour un bug de RENDU, garder le banc python3/gi).
 - **Rendu xterm** : le renderer DOM + `monospace` generique derive visuellement sur les glyphes
-  accentues. Le modele est sain (verifiable par `tmux -L cockpit capture-pane -p`) : addon WebGL
-  + police explicite.
+  accentues. Le modele est sain (verifiable par la grille du service) : addon WebGL + police
+  explicite.
 - **Saisie accents (dead-key) sous WebKitGTK** : le textarea cache d'xterm ne se vide PAS apres
   une composition -> il accumule "è","èè","èèè"... et xterm renvoie tout le buffer a chaque frappe
   (caracteres/espaces en trop). Fix REEL : vider le textarea sur `compositionend` (setTimeout 0).

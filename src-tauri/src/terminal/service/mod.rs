@@ -1,9 +1,9 @@
 //! Notre propre service de terminaux : les shells vivent dans un processus a part, qui
 //! survit a la fermeture de l'application.
 //!
-//! Etape B2 du chantier des terminaux (`docs/portabilite/plan-terminaux.md`). **Personne
-//! ne l'appelle encore** : la bascule derriere le trait `Terminaux` est l'etape C. Ce
-//! module se teste seul (`tests.rs`).
+//! L'application lui parle par `terminal/adaptateur.rs`, qui implemente le trait
+//! `Terminaux` par-dessus `client.rs`. Ce module se teste aussi seul (`tests.rs`) : il ne
+//! connait ni Tauri, ni SQLite.
 //!
 //! | Fichier | Role |
 //! |---|---|
@@ -20,12 +20,6 @@
 //! 2. **Un numero de version des la premiere version**, envoye par le SERVICE en premier,
 //!    dans un preambule de forme figee.
 //! 3. **Un service par utilisateur**, jamais un service systeme.
-
-// ETAPE B2 du chantier : le service TOURNE (le binaire lance avec `--service-terminaux`
-// le fait vivre) mais l'application ne s'en sert pas encore — la bascule derriere le trait
-// `Terminaux` est l'etape C. Le cote CLIENT n'a donc aucun appelant hors des essais, d'ou
-// cette permission. A RETIRER a l'etape C, ou tout sera branche.
-#![allow(dead_code)]
 
 pub mod client;
 pub mod lancement;

@@ -60,18 +60,17 @@
 //!   ligne » n'est pas reproductible sans ecraser la cellule. Configuration inatteignable
 //!   en pratique (le curseur est deja passe a la ligne suivante).
 
-// ETAPE B1 du chantier : ce module se teste SEUL, personne ne l'appelle encore — le
-// service arrive a l'etape B2 (`docs/portabilite/plan-terminaux.md`). Sans cette
-// permission, la compilation rend une trentaine d'avertissements de code mort qui
-// noieraient les vrais. A RETIRER des que le service s'en sert.
-#![allow(dead_code)]
-
+/// La PHOTO comparable d'un ecran : elle n'existe que pour le banc, qui serialise, relit
+/// dans un emulateur neuf et compare les deux etats. Rien en production n'en a besoin —
+/// le service transmet des octets, pas des photos.
+#[cfg(test)]
 mod etat;
 mod redessin;
 mod texte;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
 pub use etat::{Cellule, Curseur, EtatEcran};
 pub use texte::Occurrence;
 
@@ -79,7 +78,9 @@ use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
+#[cfg(test)]
 use alacritty_terminal::index::{Column, Line};
+#[cfg(test)]
 use alacritty_terminal::term::color::COUNT as TAILLE_PALETTE;
 use alacritty_terminal::term::{Config, Term, TermMode, MIN_COLUMNS, MIN_SCREEN_LINES};
 use alacritty_terminal::vte::ansi::{CharsetIndex, Handler, Processor};
@@ -112,6 +113,9 @@ pub struct Ecran {
 }
 
 impl Ecran {
+    /// Un ecran a l'historique par defaut. Le service, lui, calcule le sien depuis la
+    /// largeur du terminal (`serveur::lignes_d_historique`).
+    #[cfg(test)]
     pub fn nouveau(colonnes: usize, lignes: usize) -> Self {
         Self::avec_historique(colonnes, lignes, HISTORIQUE)
     }
@@ -186,11 +190,13 @@ impl Ecran {
     }
 
     /// La photo comparable de l'etat. Voir `etat.rs`.
+    #[cfg(test)]
     pub fn etat(&self) -> EtatEcran {
         self.etat_avec_historique(true)
     }
 
     /// La photo, historique compris ou non — pour comparer un redessin d'ecran seul.
+    #[cfg(test)]
     pub fn etat_avec_historique(&self, avec_historique: bool) -> EtatEcran {
         let grille = self.term.grid();
         let alternatif = self.ecran_alternatif();
@@ -236,6 +242,7 @@ impl Ecran {
     }
 
     /// Les lignes de la grille active, de la plus vieille a la derniere visible.
+    #[cfg(test)]
     fn cellules(&self, avec_historique: bool) -> Vec<Vec<Cellule>> {
         let grille = self.term.grid();
         let premiere = if avec_historique {

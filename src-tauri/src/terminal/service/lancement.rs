@@ -27,10 +27,27 @@ const ATTENTE_DEMARRAGE: std::time::Duration = std::time::Duration::from_secs(10
 
 /// La commande qui relance CE binaire en mode service.
 pub fn commande_du_service(chemin: &std::path::Path) -> Result<Command, String> {
-    let exe = std::env::current_exe().map_err(|e| format!("chemin de l'executable : {e}"))?;
-    let mut commande = Command::new(exe);
+    let mut commande = Command::new(binaire_a_relancer()?);
     commande.arg(DRAPEAU_SERVICE).arg(chemin);
     Ok(commande)
+}
+
+/// Quel fichier relancer. NE PAS SIMPLIFIER en `current_exe()` (voir plus bas).
+///
+/// Sous AppImage, `current_exe()` pointe dans le montage `/tmp/.mount_cockpi*`, que le
+/// runtime demonte a la fermeture de l'application. Or le service doit lui SURVIVRE : son
+/// executable disparaitrait sous lui. La variable `APPIMAGE` designe, elle, le fichier
+/// `.AppImage` pose sur le disque : le service en obtient son propre montage, vivant tant
+/// qu'il tourne. C'est la meme lecon que le tmux embarque, qu'il fallait copier hors du
+/// montage avant de le lancer.
+fn binaire_a_relancer() -> Result<std::path::PathBuf, String> {
+    if let Some(appimage) = std::env::var_os("APPIMAGE") {
+        let chemin = std::path::PathBuf::from(appimage);
+        if chemin.is_file() {
+            return Ok(chemin);
+        }
+    }
+    std::env::current_exe().map_err(|e| format!("chemin de l'executable : {e}"))
 }
 
 /// Detache une commande de l'application et la lance.

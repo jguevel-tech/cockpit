@@ -12,6 +12,21 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Les terminaux ne dépendent plus de tmux.** Cockpit tient désormais lui-même les shells,
+  dans un service à lui qui survit à la fermeture de l'application : on rouvre Cockpit, les
+  terminaux sont là où on les avait laissés, écran et historique compris. Ils répondent plus
+  vite (0,06 ms de retard sur la frappe au lieu de 0,4 ms), et il n'y a plus aucun programme
+  externe à installer.
+- La recherche dans un terminal affiche maintenant le nombre d'occurrences et surligne
+  celle en cours dans la couleur d'accent, au lieu du compteur discret que tmux dessinait
+  dans un coin. **Ctrl+C** copie la sélection quand il y en a une affichée, et interrompt
+  sinon — comme avant, mais c'est désormais Cockpit qui s'en charge.
+- **À cette mise à jour, ce qui tournait dans les terminaux est perdu, une fois.** Les
+  anciennes sessions tmux, elles, continuent de tourner en fond : `tmux -L cockpit attach`
+  permet de les retrouver, et `tmux -L cockpit kill-server` de les arrêter pour de bon.
+
 ## [0.37.1] — 2026-08-20
 
 ### Fixed

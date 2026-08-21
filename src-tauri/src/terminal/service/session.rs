@@ -40,18 +40,33 @@ use crate::terminal::environnement;
 /// des qu'UN octet est disponible, l'echo d'une touche part donc toujours seul.
 const LECTURE_PTY: usize = 64 * 1024;
 
-/// Au-dela de ce volume en attente, une RAFALE est en cours : on laisse `ATTENTE_RAFALE`
-/// d'accumulation avant de decider. En dessous, depart immediat.
+/// Fenetre d'accumulation, appliquee UNIQUEMENT en rafale (voir `emettre`). 8 ms : un
+/// demi-rafraichissement d'ecran a 60 Hz, donc invisible, et assez pour qu'une seconde de
+/// sortie soutenue tienne en ~125 envois au lieu de plusieurs milliers.
 ///
-/// 8 Ko d'un coup ne peuvent pas etre de la frappe (l'echo d'une touche fait quelques
-/// octets, un redraw de prompt quelques centaines) : le seuil ne se declenche jamais sur
-/// le chemin de frappe.
-const SEUIL_RAFALE: usize = 8 * 1024;
+/// NE PAS monter a 20-50 ms « pour mieux regrouper » : ce serait payer en latence percue
+/// ce qu'on gagne en volume. Et ne pas l'appliquer au premier lot apres un silence : c'est
+/// l'echo d'une touche, il doit partir tel quel.
+const FENETRE_RAFALE: std::time::Duration = std::time::Duration::from_millis(8);
 
-/// Fenetre d'accumulation en rafale. 2 ms : un huitieme d'image a 60 Hz, donc invisible,
-/// et assez pour agreger plusieurs lectures de 64 Ko. NE PAS monter a 20-50 ms « pour
-/// mieux regrouper » : ce serait payer en latence percue ce qu'on gagne en volume.
-const ATTENTE_RAFALE: std::time::Duration = std::time::Duration::from_millis(2);
+/// Volume a partir duquel un lot est deja une RAFALE, meme s'il a fallu l'attendre.
+///
+/// Le rythme ne suffit pas a lui seul : sur une machine chargee, le shell produit par
+/// a-coups et l'emetteur attend a chaque fois — il croit voir des echos alors qu'il voit
+/// une rafale au ralenti (mesure du 2026-08-21 : 939 envois pour 1,3 Mo pendant que la
+/// suite d'essais tournait, contre 158 a vide). 2 Ko est bien au-dessus de l'echo d'une
+/// touche (quelques octets) et d'un redessin d'invite (quelques centaines), et bien en
+/// dessous d'un ecran.
+const SEUIL_LOT: usize = 2 * 1024;
+
+/// Volume d'un seul lot au-dela duquel on renonce a transmettre et on redessine.
+///
+/// 256 Ko dans une fenetre de 8 ms, c'est 32 Mo/s : aucun affichage humain ne suit, le
+/// contenu a forcement ete recouvert plusieurs fois, et le redessin est a la fois plus
+/// court et plus juste. En dessous on transmet TOUT — c'est ce qui remplit le tampon de
+/// defilement du terminal du frontend, donc ce qui fait marcher la molette sans aller
+/// demander quoi que ce soit au service.
+const VOLUME_INSOUTENABLE: usize = 256 * 1024;
 
 /// A qui la sortie d'un terminal est remise. Implemente par une connexion cliente.
 ///
@@ -74,6 +89,10 @@ struct Tampon {
     en_attente: Vec<u8>,
     /// Un redessin complet est du (attache, bascule d'ecran alternatif, demande explicite).
     redessin_du: bool,
+    /// Une rafale insoutenable a ete remplacee par un redessin d'ecran, donc le tampon de
+    /// defilement du frontend a ete vide : des que le calme revient, on lui renvoie
+    /// l'historique complet.
+    historique_du: bool,
     /// Dernier etat connu de l'ecran alternatif, pour reperer la bascule.
     alternatif: bool,
     abonne: Option<Arc<dyn Destinataire>>,
@@ -161,6 +180,7 @@ impl Session {
                 ),
                 en_attente: Vec::new(),
                 redessin_du: false,
+                historique_du: false,
                 alternatif: false,
                 abonne: None,
                 fini: false,
@@ -431,60 +451,91 @@ fn lire_pty(lecteur: &mut (impl Read + ?Sized), session: &Session) {
 }
 
 /// Boucle de l'emetteur : decide, pour chaque lot, s'il part tel quel ou en redessin.
+///
+/// ## Ce qui declenche le regroupement : le RYTHME, pas le volume
+///
+/// Une premiere version attendait d'avoir 8 Ko en attente pour regrouper. Elle ne s'est
+/// jamais declenchee : un shell ecrit ses lignes au fil de l'eau et le lecteur du PTY est
+/// plus rapide que lui, donc chaque lecture rend ~85 octets et chaque lot partait seul.
+/// Mesure du 2026-08-21 : `seq 1 200000` (~1,3 Mo) partait en 16 461 envois — c'est-a-dire
+/// 16 461 evenements Tauri, chacun une source JavaScript construite et evaluee dans le
+/// webview. Le seuil de volume ne pouvait pas voir la rafale ; le rythme, si.
+///
+/// La regle appliquee, en deux moities :
+/// 1. **si le lot precedent etait a peine parti que la suite attendait deja**, c'est une
+///    rafale — on laisse `FENETRE_RAFALE` se remplir ;
+/// 2. **ou si ce qui attend depasse deja `SEUIL_LOT`**, meme apres attente : sur une
+///    machine chargee le shell produit par a-coups, et la premiere moitie seule croit voir
+///    des echos la ou il y a une rafale au ralenti.
+///
+/// Ce qui reste hors des deux : l'echo d'une touche, quelques octets arrives apres un
+/// silence. Il part sans delai, et c'est la seule chose qui compte pour la latence.
 fn emettre(session: &Session) {
     let (tampon, signal) = &*session.partage;
     loop {
         let (pousse, abonne) = {
             let mut t = tampon.lock().unwrap_or_else(|e| e.into_inner());
+            let mut a_attendu = false;
             loop {
                 if t.abonne.is_none() {
                     // Personne n'ecoute : on garde l'ecran a jour (le lecteur s'en charge)
                     // mais on ne conserve aucun octet pour un absent.
                     t.en_attente.clear();
                     t.redessin_du = false;
+                    t.historique_du = false;
                 }
                 if t.fini && t.en_attente.is_empty() && !t.redessin_du {
                     return;
                 }
-                if t.abonne.is_some() && (t.redessin_du || !t.en_attente.is_empty()) {
+                if t.abonne.is_some()
+                    && (t.redessin_du || t.historique_du || !t.en_attente.is_empty())
+                {
                     break;
                 }
                 t = signal.wait(t).unwrap_or_else(|e| e.into_inner());
+                a_attendu = true;
             }
-            if !t.redessin_du && t.en_attente.len() >= SEUIL_RAFALE && !t.fini {
-                // Rafale : on rend le verrou quelques millisecondes pour que le lecteur
-                // continue d'avaler, et on repart avec de quoi decider.
+            let rafale = !a_attendu || t.en_attente.len() >= SEUIL_LOT;
+            if rafale && !t.redessin_du && !t.fini {
+                // Rafale : on rend le verrou pour que le lecteur continue d'avaler, et on
+                // repart avec un lot entier au lieu de quelques dizaines d'octets.
                 drop(t);
-                std::thread::sleep(ATTENTE_RAFALE);
+                std::thread::sleep(FENETRE_RAFALE);
                 t = tampon.lock().unwrap_or_else(|e| e.into_inner());
             }
             let Some(abonne) = t.abonne.clone() else { continue };
-            let seuil = seuil_redessin(t.ecran.colonnes(), t.ecran.lignes());
-            if t.redessin_du || t.en_attente.len() >= seuil {
+            if t.redessin_du {
+                // Attache, bascule d'ecran alternatif, redimensionnement : AVEC
+                // l'historique. Un redessin commence par une remise a plat (RIS) qui vide
+                // le tampon de defilement du terminal d'arrivee — sans l'historique,
+                // revenir sur un onglet ferait perdre tout ce que la molette remontait.
                 t.redessin_du = false;
+                t.historique_du = false;
                 t.en_attente.clear();
+                (Pousse::Redessin { id: session.id, octets: t.ecran.redessiner() }, abonne)
+            } else if t.en_attente.len() >= VOLUME_INSOUTENABLE {
+                // Debit qu'aucun affichage ne suit : on renonce a transmettre et on decrit
+                // l'ecran. L'historique du frontend y passe (RIS), d'ou le drapeau : il lui
+                // sera renvoye entier des que le calme reviendra.
+                t.en_attente.clear();
+                t.historique_du = true;
                 (Pousse::Redessin { id: session.id, octets: t.ecran.redessiner_ecran() }, abonne)
-            } else {
+            } else if !t.en_attente.is_empty() {
                 (
                     Pousse::Sortie { id: session.id, octets: std::mem::take(&mut t.en_attente) },
                     abonne,
                 )
+            } else {
+                // Le calme est revenu apres une rafale insoutenable : on rend au frontend
+                // l'historique qu'on lui a fait perdre.
+                t.historique_du = false;
+                (Pousse::Redessin { id: session.id, octets: t.ecran.redessiner() }, abonne)
             }
         };
         if !abonne.pousser(pousse) {
             session.detacher_si(abonne.numero());
         }
     }
-}
-
-/// Volume au-dela duquel on remplace les octets en attente par un redessin.
-///
-/// Quatre octets par cellule : c'est genereux pour du texte colore, donc au-dela l'ecran a
-/// forcement ete recouvert au moins une fois — le redessin est alors plus court ET plus
-/// juste que le flux. En dessous, on ne touche a rien : le frontend dessine des
-/// incrementaux, ce qui evite le clignotement d'un repeint complet a chaque frappe.
-fn seuil_redessin(colonnes: usize, lignes: usize) -> usize {
-    (colonnes * lignes * 4).max(4096)
 }
 
 #[cfg(test)]
@@ -559,41 +610,56 @@ mod tests {
         s.fermer().unwrap();
     }
 
-    /// L'invariant de la sortie : ce qui est petit part tel quel, ce qui est gros est
-    /// remplace par un redessin. Sans ca, une rafale ferait dessiner au frontend mille
-    /// fois ce qu'il finira par afficher.
+    /// L'invariant de la sortie en rafale : le contenu arrive EN ENTIER (c'est lui qui
+    /// remplit le tampon de defilement du frontend) mais en gros lots, pas en miettes.
     #[test]
-    fn une_rafale_part_en_redessins_pas_en_flux_brut() {
+    fn une_rafale_part_en_gros_lots_pas_en_miettes() {
         let s = session(None);
+        attendre(&s, "l'invite du shell", |vu| !vu.trim().is_empty());
         let (abonne, recu) = boite();
         s.attacher(abonne);
         // 200 000 lignes numerotees : plusieurs Mo, tres au-dela d'un ecran.
-        s.ecrire(b"seq 1 200000\r").unwrap();
-        attendre(&s, "la fin du seq", |vu| vu.contains("200000"));
+        //
+        // Le marqueur de fin est imprime par `printf` en DEUX morceaux : la ligne tapee
+        // reste `printf 'rafale%s\n' -finie`, jamais « rafale-finie ». Attendre un
+        // marqueur present dans la commande elle-meme rendrait la mesure fausse — le test
+        // repartirait avant que le shell ait ecrit un seul octet (constate le 2026-08-21 :
+        // il ne mesurait alors que le redessin de l'attache).
+        s.ecrire(b"seq 1 200000; printf 'rafale%s\n' -finie\r").unwrap();
+        attendre(&s, "la fin de la rafale", |vu| vu.contains("rafale-finie"));
         std::thread::sleep(std::time::Duration::from_millis(200));
         s.fermer().unwrap();
 
         let mut octets_bruts = 0usize;
         let mut octets_redessin = 0usize;
+        let mut nb_bruts = 0usize;
+        let mut nb_redessins = 0usize;
         while let Ok(pousse) = recu.recv_timeout(std::time::Duration::from_millis(200)) {
             match pousse {
-                Pousse::Sortie { octets, .. } => octets_bruts += octets.len(),
-                Pousse::Redessin { octets, .. } => octets_redessin += octets.len(),
+                Pousse::Sortie { octets, .. } => { octets_bruts += octets.len(); nb_bruts += 1; }
+                Pousse::Redessin { octets, .. } => { octets_redessin += octets.len(); nb_redessins += 1; }
                 _ => {}
             }
         }
         let total = octets_bruts + octets_redessin;
+        let envois = nb_bruts + nb_redessins;
         eprintln!(
-            "rafale seq 1..200000 (~1,3 Mo au shell) : {total} octets transmis \
-             ({octets_bruts} bruts, {octets_redessin} de redessins)"
+            "rafale seq 1..200000 (~1,3 Mo au shell) : {total} octets transmis en {envois} envois \
+             ({octets_bruts} bruts en {nb_bruts}, {octets_redessin} de redessins en {nb_redessins})"
         );
-        // La sortie brute de `seq 1 200000` pese ~1,3 Mo. Le service doit en transmettre
-        // une fraction.
+        // CE QUI COMPTE EST LE NOMBRE D'ENVOIS, pas le volume : chaque envoi devient un
+        // evenement Tauri, c'est-a-dire une source JavaScript construite et evaluee dans le
+        // webview. Sans regroupement, cette rafale en faisait 16 461 (mesure du 2026-08-21).
         assert!(
-            total < 400 * 1024,
-            "{total} octets transmis pour une rafale de ~1,3 Mo : le regroupement ne fait plus son travail"
+            envois < 600,
+            "{envois} envois pour ~1,3 Mo : le regroupement ne fait plus son travail"
         );
-        assert!(octets_redessin > 0, "aucun redessin : la rafale est passee en flux brut");
+        // Et le contenu, lui, arrive VRAIMENT : c'est ce qui remplit le tampon de
+        // defilement du terminal du frontend, donc ce qui fait marcher la molette.
+        assert!(
+            total > 900 * 1024,
+            "{total} octets seulement : la rafale n'a pas ete transmise"
+        );
     }
 
     /// Le pendant du test precedent : ce qui est petit ne doit PAS declencher de redessin,
@@ -680,10 +746,5 @@ mod tests {
         s.fermer().unwrap();
     }
 
-    #[test]
-    fn le_seuil_de_redessin_suit_la_taille_de_l_ecran() {
-        assert_eq!(seuil_redessin(80, 24), 80 * 24 * 4);
-        // Un conteneur minuscule ne doit pas faire redessiner a chaque octet.
-        assert_eq!(seuil_redessin(2, 2), 4096);
-    }
+
 }

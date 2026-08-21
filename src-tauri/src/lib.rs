@@ -718,7 +718,6 @@ async fn set_project_summary_prompt(project: String, prompt: Option<String>, sta
 
 #[tauri::command]
 async fn create_terminal(
-    app: tauri::AppHandle,
     project: String,
     cwd: String,
     cols: u16,
@@ -732,7 +731,7 @@ async fn create_terminal(
         taille: terminal::Taille { colonnes: cols, lignes: rows },
         commande_initiale: init_command,
     };
-    state.terminals.creer(app, &state.db, demande)
+    state.terminals.creer(&state.db, demande)
 }
 
 #[tauri::command]
@@ -754,23 +753,14 @@ async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<()
 
 #[tauri::command]
 async fn attach_terminal(
-    app: tauri::AppHandle,
     id: i64,
     cols: u16,
     rows: u16,
     state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<(), String> {
     state
         .terminals
-        .attacher(app, &state.db, id, terminal::Taille { colonnes: cols, lignes: rows })?;
-    // Retour vide conserve pour ne pas toucher au contrat IPC : il portait un « replay »
-    // que le frontend ignore depuis le pool de xterm, et le trait ne le porte plus.
-    Ok(String::new())
-}
-
-#[tauri::command]
-fn detach_terminal(id: i64, state: tauri::State<'_, AppState>) {
-    state.terminals.detacher(id)
+        .attacher(&state.db, id, terminal::Taille { colonnes: cols, lignes: rows })
 }
 
 #[tauri::command]
@@ -799,6 +789,12 @@ static CLIPBOARD: std::sync::Mutex<Option<arboard::Clipboard>> = std::sync::Mute
 
 #[tauri::command]
 fn set_clipboard(text: String) -> Result<(), String> {
+    poser_presse_papier(text)
+}
+
+/// Le meme geste, appelable depuis le backend : un programme qui demande la copie par
+/// OSC 52 passe par le service de terminaux, pas par une commande IPC.
+pub fn poser_presse_papier(text: String) -> Result<(), String> {
     let mut guard = CLIPBOARD.lock().unwrap_or_else(|e| e.into_inner());
     if guard.is_none() {
         *guard = Some(arboard::Clipboard::new().map_err(|e| e.to_string())?);
@@ -818,11 +814,6 @@ fn get_clipboard() -> Result<String, String> {
     }
     // Presse-papier vide = chaine vide (pas une erreur)
     Ok(guard.as_mut().unwrap().get_text().unwrap_or_default())
-}
-
-#[tauri::command]
-async fn terminal_copy_selection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.terminals.copier_selection(&state.db, id)
 }
 
 #[tauri::command]
@@ -848,14 +839,12 @@ fn record_command(project: String, command: String, state: tauri::State<'_, AppS
 }
 
 #[tauri::command]
-async fn terminal_alt_screen(id: i64, state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    // Un `async fn` avec `State<'_, _>` DOIT rendre un Result (contrainte du macro Tauri) ;
-    // l'erreur est ici impossible, la sonde repond simplement faux si tmux ne repond pas.
-    Ok(state.terminals.ecran_alternatif(&state.db, id))
-}
-
-#[tauri::command]
-async fn terminal_search(id: i64, action: String, query: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn terminal_search(
+    id: i64,
+    action: String,
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<terminal::ResultatRecherche, String> {
     let action = terminal::ActionRecherche::depuis_texte(&action)?;
     state.terminals.chercher(&state.db, id, action, &query)
 }
@@ -1365,8 +1354,7 @@ fn preload_system_libwayland() {
 /// etre initialise dans ce processus, qui n'ouvre aucune fenetre. Rend `true` quand le
 /// processus vient de faire son travail et doit s'arreter.
 ///
-/// Sans cet argument, ne fait rien : etape B2 du chantier des terminaux, aucun terminal de
-/// l'application ne passe encore par le service.
+/// Sans cet argument, ne fait rien : le processus continue et ouvre l'application.
 pub fn service_terminaux_si_demande() -> bool {
     terminal::service::lancement::tourner_si_demande()
 }
@@ -1470,9 +1458,8 @@ pub fn run() {
             // Enregistrements restes en plein pipeline a la fermeture -> erreur (retry possible)
             let _ = db.fail_stale_recordings();
 
-            // Serveur de terminaux : mise en route (reconciliation avec la base, et tout
-            // ce que l'implementation courante exige de son cote) avant toute autre
-            // operation. Ce qui est propre a tmux vit dans terminal/tmux.rs, pas ici.
+            // Serveur de terminaux : mise en route (lancement du service s'il ne tourne
+            // pas deja, puis reconciliation avec la base) avant toute autre operation.
             let terminaux = terminal::terminaux();
             terminaux.preparer(app.handle(), &db);
 
@@ -1642,19 +1629,16 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             attach_terminal,
-            detach_terminal,
             rename_terminal,
             list_terminals,
             list_all_terminals,
             set_clipboard,
             get_clipboard,
-            terminal_copy_selection,
             terminal_search,
             list_claude_sessions,
             rename_claude_session,
             record_command,
             search_command_history,
-            terminal_alt_screen,
             debug_log,
             report_error,
             machine_report,

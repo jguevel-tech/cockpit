@@ -236,6 +236,17 @@ export interface TerminalInfo {
   llm: boolean;
 }
 
+/** Ce qu'un geste de recherche dans un terminal a trouve (commande `terminal_search`). */
+export interface TerminalSearchResult {
+  /** Nombre d'occurrences du motif. */
+  total: number;
+  /** Indice de l'occurrence courante, de la plus ancienne a la plus recente. */
+  index: number | null;
+  /** Ligne de la grille : 0 = premiere ligne visible, negatif = historique. */
+  ligne: number | null;
+  colonne: number | null;
+}
+
 export interface DefLocation {
   rel_path: string;
   /** 0-indexee (convention LSP) */

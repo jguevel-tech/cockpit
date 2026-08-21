@@ -15,9 +15,9 @@
   import { onMount } from "svelte";
 
   // Ctrl+molette = zoom, y compris au-dessus d'un terminal.
-  // Capture + passive:false : xterm ecoute aussi `wheel` (defilement) et le client
-  // tmux recoit les evenements souris — on intercepte AVANT eux, mais uniquement
-  // avec Ctrl enfonce pour laisser la molette nue au copy-mode tmux.
+  // Capture + passive:false : xterm ecoute aussi `wheel` pour faire defiler son
+  // historique — on intercepte AVANT lui, mais uniquement avec Ctrl enfonce, pour lui
+  // laisser la molette nue.
   // Garde de 120 ms : un trackpad emet une rafale d'evenements par geste et
   // ferait sinon sauter plusieurs paliers d'un coup.
   let lastZoomStep = 0;

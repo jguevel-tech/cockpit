@@ -98,17 +98,6 @@ pub fn locale_utf8() -> String {
     "C.UTF-8".to_string()
 }
 
-/// Applique le nettoyage a une commande systeme.
-pub fn appliquer(cmd: &mut std::process::Command) {
-    let (retirer, redefinir) = modifications_courantes();
-    for var in retirer {
-        cmd.env_remove(var);
-    }
-    for (var, valeur) in redefinir {
-        cmd.env(var, valeur);
-    }
-}
-
 /// Applique le nettoyage a une commande lancee dans un PTY, et pose la locale UTF-8.
 pub fn appliquer_pty(cmd: &mut portable_pty::CommandBuilder) {
     let (retirer, redefinir) = modifications_courantes();

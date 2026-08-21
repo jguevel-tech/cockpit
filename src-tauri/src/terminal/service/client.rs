@@ -180,8 +180,13 @@ impl Client {
         }
     }
 
-    /// Le texte d'une region, bornes comprises. C'est l'UN appel que le plan promettait a
-    /// la place des cinq maillons de la chaine tmux.
+    /// Le texte d'une region, bornes comprises.
+    ///
+    /// PAS D'APPELANT dans l'application : la selection a la souris appartient a xterm, qui
+    /// tient desormais tout l'historique et rend son texte sans aller-retour. Gardee parce
+    /// que le client doit couvrir le protocole du service — et parce qu'elle est la seule a
+    /// pouvoir lire au-dela de ce que le terminal du frontend garde. Exercee par `tests.rs`.
+    #[allow(dead_code)]
     pub fn copier_selection(
         &self,
         id: i64,
@@ -195,12 +200,16 @@ impl Client {
         }
     }
 
-    /// Redemande l'etat complet (le defilement a la molette a besoin de l'historique).
+    /// Redemande l'etat complet. PAS D'APPELANT : l'attache en envoie deja un, et le
+    /// frontend n'a jamais besoin d'en redemander un. Exercee par `tests.rs`.
+    #[allow(dead_code)]
     pub fn redessiner(&self, id: i64, avec_historique: bool) -> Result<(), String> {
         self.faire(Requete::Redessiner { id, avec_historique })
     }
 
-    /// Arrete le service. Les shells meurent avec lui : a ne faire qu'a la demande.
+    /// Arrete le service. Les shells meurent avec lui — l'application ne le fait JAMAIS,
+    /// c'est toute la promesse. Exercee par `tests.rs`.
+    #[allow(dead_code)]
     pub fn arreter(&self) -> Result<(), String> {
         self.faire(Requete::Arreter)
     }

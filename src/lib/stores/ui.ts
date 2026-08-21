@@ -144,8 +144,8 @@ selectedProject.subscribe((name) => { rememberFor = name; });
 
 /// Vrai quand l'onglet affiche vient de la memoire ci-dessus, faux quand l'utilisateur l'a
 /// demande. TerminalTab le consomme au montage : un onglet Terminal RESTAURE ne doit pas
-/// creer de session tmux d'office, sinon parcourir trois projets laisses sur cet onglet en
-/// ouvre trois que personne n'a demandees.
+/// ouvrir un shell d'office, sinon parcourir trois projets laisses sur cet onglet en
+/// ouvre trois que personne n'a demandes.
 let tabRestored = false;
 
 activeTab.subscribe((tab) => {
@@ -185,7 +185,7 @@ export function selectProject(name: string | null) {
   activeTab.set(tab);
   // Les deux lignes qui suivent sont ecrites APRES le set, et pas laissees a la
   // souscription : un writable ne notifie pas quand la valeur ne change pas (deux projets
-  // sur le meme onglet), et c'est justement ce cas qui multipliait les sessions tmux.
+  // sur le meme onglet), et c'est justement ce cas qui multipliait les sessions.
   tabByProject.set(name, tab);
   tabRestored = remembered !== undefined;
 }

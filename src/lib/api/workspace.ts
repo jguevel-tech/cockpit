@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TerminalInfo, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
+import type { TerminalInfo, TerminalSearchResult, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults } from "../types";
 
 // Terminaux integres
 export const createTerminal = (project: string, cwd: string, cols: number, rows: number, initCommand?: string) =>
@@ -8,14 +8,13 @@ export const writeTerminal = (id: number, data: string) => invoke("write_termina
 export const resizeTerminal = (id: number, cols: number, rows: number) =>
   invoke("resize_terminal", { id, cols, rows });
 export const closeTerminal = (id: number) => invoke("close_terminal", { id });
-// Presse-papier systeme (copie OSC 52 depuis tmux)
+// Presse-papier systeme (menu clic droit, clic molette, OSC 52 d'un programme)
 export const setClipboard = (text: string) => invoke("set_clipboard", { text });
 export const getClipboard = () => invoke<string>("get_clipboard");
-// Copie la selection copy-mode tmux du terminal (clic droit > Copier)
-export const terminalCopySelection = (id: number) => invoke("terminal_copy_selection", { id });
+// Branche la sortie du terminal sur l'interface. Sans effet s'il l'est deja : re-brancher
+// redemanderait un redessin complet, donc un clignotement a chaque changement d'onglet.
 export const attachTerminal = (id: number, cols: number, rows: number) =>
-  invoke<string>("attach_terminal", { id, cols, rows });
-export const detachTerminal = (id: number) => invoke("detach_terminal", { id });
+  invoke("attach_terminal", { id, cols, rows });
 export const renameTerminal = (id: number, name: string) => invoke("rename_terminal", { id, name });
 export const listTerminals = (project: string) => invoke<TerminalInfo[]>("list_terminals", { project });
 export const listAllTerminals = () => invoke<TerminalInfo[]>("list_all_terminals");
@@ -40,10 +39,10 @@ export const openUrl = (url: string) => invoke("open_url", { url });
 
 export const recordCommand = (project: string, command: string) =>
   invoke("record_command", { project, command });
-export const terminalAltScreen = (id: number) => invoke<boolean>("terminal_alt_screen", { id });
-// Recherche dans l'historique (copy-mode tmux : surlignage et compteur natifs)
+// Recherche dans le terminal, historique compris. Le serveur n'a pas d'ecran a peindre :
+// il rend OU se trouve l'occurrence, c'est le terminal qui defile et surligne.
 export const terminalSearch = (id: number, action: "start" | "next" | "prev" | "cancel", query = "") =>
-  invoke("terminal_search", { id, action, query });
+  invoke<TerminalSearchResult>("terminal_search", { id, action, query });
 export const searchCommandHistory = (query: string, limit?: number) =>
   invoke<HistoryEntry[]>("search_command_history", { query, limit: limit ?? null });
 

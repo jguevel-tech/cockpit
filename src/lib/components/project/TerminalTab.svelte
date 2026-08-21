@@ -10,23 +10,19 @@
 
   /// POOL PERSISTANT — LE COEUR DE L'ARCHITECTURE TERMINAUX (NE PAS RE-LOCALISER).
   ///
-  /// Les instances xterm ET les clients tmux SURVIVENT au demontage de l'onglet. Changer de
-  /// projet ou d'onglet ne detache plus rien : on gare les elements DOM dans un conteneur
-  /// invisible et on les re-adopte au retour. Le switch est un pur masquer/montrer.
+  /// Les instances xterm SURVIVENT au demontage de l'onglet. Changer de projet ou d'onglet
+  /// ne detache rien : on gare les elements DOM dans un conteneur invisible et on les
+  /// re-adopte au retour. Le switch est un pur masquer/montrer.
   ///
-  /// Pourquoi c'est indispensable, et pas une optimisation (prouve le 2026-08-13) :
-  /// tmux FABRIQUE lui-meme des evenements focus (in/out) vers l'application du pane a CHAQUE
-  /// attache/detache de client — meme avec `focus-events off`, qui ne gouverne que le focus
-  /// venant du terminal exterieur. Demonstration en isolation : un cycle attache/tue/rattache
-  /// SANS AUCUNE entree fait emettre a claude sa reaction focus (`ESC(B SI CSI<u CSI>1u
-  /// CSI>4;2m` + re-render), et ce re-render laisse regulierement une ligne vide a l'ecran.
-  /// Trois correctifs (0.6.5, 0.6.7) ont vise d'autres maillons sans eteindre le symptome :
-  /// la seule solution est de NE PLUS churner les clients. Benefice annexe : switch instantane.
+  /// Pourquoi c'est indispensable, et pas une optimisation : un xterm re-cree part vide, et
+  /// le faire remplir exige de redemander au serveur un redessin complet — ecran ET
+  /// historique. C'est cher, ca clignote, et ca ramene l'utilisateur en bas du defilement a
+  /// chaque aller-retour entre deux onglets. Cote serveur, `attachTerminal` est d'ailleurs
+  /// sans effet quand le terminal est deja branche, pour exactement la meme raison.
   ///
-  /// L'ancienne doctrine « attach = client tmux frais obligatoirement » (sequence d'init,
-  /// molette, redraw) reste vraie pour un xterm NEUF — et c'est exactement pourquoi le pool
-  /// conserve le xterm d'origine : il a deja recu l'init de son client, les deux vieillissent
-  /// ensemble.
+  /// A l'epoque de tmux, la meme regle tenait pour une autre cause : tmux synthetisait des
+  /// evenements focus vers l'application du pane a chaque attache de client, et claude y
+  /// reagissait par un re-render qui laissait une ligne vide. Le pool a survecu a tmux.
   /// `dataSub` : abonnement au flux de frappe (onData).
   ///
   /// Il DOIT etre retenu et libere avant tout nouvel abonnement. Les xterm vivent dans ce
@@ -91,6 +87,8 @@
   // Listeners GLOBAUX, enregistres une fois pour la vie de l'app : la sortie doit continuer
   // d'alimenter les xterm du pool meme quand aucun onglet Terminal n'est monte, sinon on
   // retrouverait un ecran fige au retour.
+  // Sortie brute et redessins arrivent par le MEME evenement : un redessin commence par une
+  // remise a plat (RIS), xterm n'a donc rien de particulier a faire pour l'appliquer.
   listenGlobal<{ id: number; data: string }>("terminal_output", (e) => {
     pool.get(e.payload.id)?.term.write(b64ToBytes(e.payload.data));
   });
@@ -208,7 +206,7 @@
     createTerminal, resizeTerminal, closeTerminal,
     attachTerminal, renameTerminal, listTerminals, listAllTerminals,
     listClaudeSessions, renameClaudeSession, setClipboard, getClipboard,
-    terminalCopySelection, terminalSearch, openUrl,
+    terminalSearch, openUrl,
   } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
@@ -219,7 +217,7 @@
   let sessions: { id: number; alive: boolean; name: string }[] = $state([]);
   let activeId: number | null = $state(null);
   let container: HTMLDivElement | undefined = $state(undefined);
-  // Menu contextuel Copier/Coller du terminal (remplace celui de tmux, retire)
+  // Menu contextuel Copier/Coller du terminal
   let ctxMenu: { x: number; y: number } | null = $state(null);
   let renamingId: number | null = $state(null);
   let renameValue = $state("");
@@ -266,34 +264,21 @@
 
   /// REPONSES du terminal, a ne PAS renvoyer au PTY (NE PAS RETIRER).
   ///
-  /// Un client tmux interroge le terminal a son demarrage : attributs (DA1 `ESC[c`,
-  /// DA2 `ESC[>c`), position du curseur (`ESC[6n`), etat. xterm.js repond par le MEME canal
-  /// `onData` que les frappes. En regime etabli la reponse est consommee par le client qui a
-  /// pose la question, et tout va bien.
+  /// Un redessin du serveur contient des sequences auxquelles xterm REPOND (identification
+  /// DA1 `ESC[c`, DA2 `ESC[>c`, position du curseur `ESC[6n`), et il repond par le MEME
+  /// canal `onData` que les frappes. Ces reponses ne s'adressent pas au shell : renvoyees
+  /// telles quelles, elles atterrissent dans l'invite (`1;2c0;276;0c` tape tout seul).
+  /// L'emulateur du serveur repond deja pour de vrai a ce que le PROGRAMME demande.
   ///
-  /// Mais `attach` TUE l'ancien client et en lance un neuf — indispensable, seul un client
-  /// frais renvoie la sequence d'initialisation complete. Les reponses aux questions de
-  /// l'ANCIEN client arrivent apres coup et partent dans le PTY du NOUVEAU, qui n'a rien
-  /// demande. tmux ne les reconnait donc pas comme des reponses et les transmet au pane : le
-  /// shell affiche `^[[?1;2c^[[>0;276;0c`, et `1;2c0;276;0c` atterrit dans l'invite.
+  /// Diagnostique du temps de tmux (2026-08-13) PAR INSTRUMENTATION : le journal ne montrait
+  /// aucun `resize` apres les `attach`, ce qui a elimine l'hypothese d'un repaint du a un
+  /// changement de taille — hypothese qu'on aurait autrement "corrigee" a tort.
   ///
-  /// Diagnostique le 2026-08-13 PAR INSTRUMENTATION : le log ne montrait aucun `resize` apres
-  /// les `attach`, ce qui a elimine l'hypothese d'un repaint du a un changement de taille —
-  /// hypothese qu'on aurait autrement "corrigee" a tort.
-  ///
-  /// tmux ne perd rien : les capacites qu'il tirait de ces sondages sont declarees
-  /// explicitement dans `terminal-features` (conf generee, terminal/tmux.rs).
-  ///
-  /// Les evenements de focus (`ESC[I` / `ESC[O`) sont AUSSI filtres — revirement documente.
-  /// Une premiere version les laissait passer (« ils sont destines a l'application »). Or
-  /// c'est exactement eux qui causaient le saut de ligne au changement de terminal :
-  /// - pipe-pane sur la session reelle pendant un switch : la SEULE entree recue par claude
-  ///   etait blur+focus, et sa reaction capturee octet par octet (`ESC(B SI CSI<u CSI>1u
-  ///   CSI>4;2m` + re-render) ;
-  /// - les sauts de ligne coincidaient 1:1 avec les switchs, toutes les autres causes ayant
-  ///   ete eliminees par mesure (taille constante 177x41, churn d'attach innocente en labo).
-  /// Un changement d'onglet dans Cockpit n'est de toute facon pas une perte de focus du point
-  /// de vue de l'utilisateur. Cout : les TUI ne peuvent plus attenuer leur bordure au blur.
+  /// Les evenements de focus (`ESC[I` / `ESC[O`) sont AUSSI filtres — revirement documente :
+  /// c'est eux qui causaient un saut de ligne au changement de terminal (claude re-rendait
+  /// son interface sur un simple blur+focus). Un changement d'onglet dans Cockpit n'est de
+  /// toute facon pas une perte de focus du point de vue de l'utilisateur. Cout : les TUI ne
+  /// peuvent plus attenuer leur bordure au blur.
   const TERMINAL_REPLY =
     /^(?:\x1b\[(?:\?[0-9;]*c|>[0-9;]*c|[0-9;]*R|[0-9;]*n|\?[0-9;]*\$y|[IO])|\x1bP[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))+$/;
 
@@ -336,7 +321,7 @@
       if (activeId !== null) return;
       // Onglet REPOSE par la memoire par projet (simple retour sur le projet) : on n'ouvre
       // rien d'office. Sinon parcourir trois projets laisses sur l'onglet Terminal creerait
-      // trois sessions tmux que personne n'a demandees — et elles survivent a l'app.
+      // trois shells que personne n'a demandes — et ils survivent a l'app.
       // L'etat vide et son bouton prennent le relais.
       if (sessions.length === 0) {
         if (!restaure) await addTerminal();
@@ -368,10 +353,9 @@
       dropOver = false;
       resizeObserver?.disconnect();
       unlisteners.forEach((u) => u());
-      // NI detach, NI dispose : clients tmux et xterm restent vivants dans le pool.
-      // Detacher/rattacher ferait synthetiser par tmux des evenements focus vers les
-      // applications (voir le commentaire du pool) — c'etait la cause du saut de ligne.
-      // On gare simplement les elements DOM hors du document visible.
+      // NI detach, NI dispose : les xterm restent vivants dans le pool et le serveur
+      // continue de leur envoyer la sortie. On gare simplement les elements DOM hors du
+      // document visible (voir le commentaire du pool).
       parkAll();
       mounted.clear();
     };
@@ -417,7 +401,7 @@
   /// souvent d'etre creee a l'instant par une voie qui ne passe pas par ici — commande
   /// rapide, `docker exec` de l'onglet Docker, palette Ctrl+K appellent tous
   /// `create_terminal` puis posent l'id. Tester la seule liste locale rejetait donc
-  /// exactement les cas pour lesquels ce magasin existe : la session tmux etait bien creee
+  /// exactement les cas pour lesquels ce magasin existe : la session etait bien creee
   /// (elle apparaissait dans la barre laterale) mais l'onglet n'affichait rien et l'id
   /// restait coince dans le magasin. D'ou : on RECHARGE avant de conclure.
   async function honorerDemande(wanted: number): Promise<boolean> {
@@ -454,10 +438,9 @@
   ///
   /// Le terminal est cree ICI, et pas chez l'appelant : `addTerminal` MESURE le conteneur
   /// avant d'ouvrir le PTY. Une TUI lancee par `init_command` (k9s, htop, top) se dessine a
-  /// la taille du PTY et rien ne la redimensionne apres coup — le rattachement de l'onglet
-  /// reutilise le client tmux vivant, donc la taille qu'il demande est ignoree cote Rust.
-  /// Ces appelants creaient la session en 80x24 : la TUI restait dans un petit carre en
-  /// haut a gauche d'un conteneur large (issue #14).
+  /// la taille du PTY et rien ne la redimensionne apres coup. Ces appelants creaient la
+  /// session en 80x24 : la TUI restait dans un petit carre en haut a gauche d'un conteneur
+  /// large (issue #14).
   async function honorerCommande(demande: { project: string; command: string }): Promise<boolean> {
     // Demande deja traitee, ou remplacee par une autre depuis : on ne la rejoue pas.
     if (get(pendingTerminalCommand) !== demande) return false;
@@ -482,27 +465,36 @@
     pool.forEach(({ term }) => (term.options.theme = XTERM_THEMES[t]));
   });
 
-  // --- Copier / Coller (clic droit) ---
-  // Copie la selection : locale xterm (Shift+glisser) en priorite, sinon la
-  // selection copy-mode tmux (surlignage bleu). Chemin souris uniquement.
+  // --- Copier / Coller ---
+  /// Copie la selection du terminal dans le presse-papier systeme. Source unique : le menu
+  /// clic droit ET le Ctrl+C avec selection passent par ici.
+  ///
+  /// La selection appartient a xterm — c'est lui qui tient l'ecran et tout l'historique de
+  /// defilement. Du temps de tmux elle appartenait au serveur (copy-mode) et il fallait la
+  /// lui demander ; ce detour a disparu avec lui.
   async function copySelection() {
-    if (activeId === null) {
+    const entry = activeId === null ? undefined : pool.get(activeId);
+    if (!entry) {
       notify($trad("term.noTerminalOpen"));
       return;
     }
-    const entry = pool.get(activeId);
-    if (entry?.term.hasSelection()) {
-      const sel = entry.term.getSelection();
-      entry.term.clearSelection();
-      if (sel) {
-        try { await setClipboard(sel); }
-        catch (e) { signalerErreur("terminal.copie", String(e)); }
-      }
-    } else {
-      try { await terminalCopySelection(activeId); }
-      catch (e) { signalerErreur("terminal.copieSelection", String(e)); }
+    const sel = entry.term.hasSelection() ? entry.term.getSelection() : "";
+    // Rien de selectionne : on le DIT. Un « Copier » qui ne fait rien est vecu comme une
+    // panne, et l'utilisateur ne sait pas que son geste de selection n'a pas pris.
+    if (!sel) {
+      notify($trad("term.nothingSelected"));
+      entry.term.focus();
+      return;
     }
-    entry?.term.focus();
+    try {
+      await setClipboard(sel);
+      entry.term.clearSelection();
+      notify($trad("term.copied"), "success");
+    } catch (e) {
+      signalerErreur("terminal.copie", String(e));
+      notify(String(e));
+    }
+    entry.term.focus();
   }
 
   /// Colle le presse-papier SYSTEME dans le terminal actif. Source unique de tout collage
@@ -541,8 +533,15 @@
       // Les paliers de zoom sont derives de cette valeur (ZOOM_LEVELS dans ui.ts) pour
       // que la police tombe toujours sur des pixels entiers : la changer ici suffit.
       fontSize: TERMINAL_FONT_SIZE,
-      scrollback: 5000,
+      // 10 000 lignes : c'est LA molette. Le serveur en garde autant de son cote (il en
+      // renvoie l'integralite a chaque redessin), le terminal doit pouvoir les tenir.
+      scrollback: 10000,
       rescaleOverlappingGlyphs: true,
+      // Surlignage de l'occurrence trouvee : `registerMarker` et `registerDecoration`
+      // sont des API « proposees » d'xterm, refusees sans ce drapeau — et le refus est une
+      // exception a l'appel, pas un retour vide (constate au banc, 2026-08-21 : la
+      // recherche affichait « You must set the allowProposedApi option to true »).
+      allowProposedApi: true,
       theme: XTERM_THEMES[$themeBase],
     });
     const fit = new FitAddon();
@@ -558,7 +557,7 @@
     }
 
     // Liens cliquables : Ctrl+clic (ou Cmd) ouvre l'URL dans le navigateur.
-    // Le clic simple reste a tmux (selection souris) — pas de conflit.
+    // Le clic simple reste a la selection souris — pas de conflit.
     term.loadAddon(
       new WebLinksAddon((event, uri) => {
         if (event.ctrlKey || event.metaKey) {
@@ -567,9 +566,7 @@
       })
     );
 
-    // COPIE : la selection souris est geree par tmux (mouse on), pas par xterm.
-    // Avec `set-clipboard on`, tmux emet la selection en OSC 52 (base64) au
-    // relachement du clic -> on la pousse dans le presse-papier systeme via Rust.
+    // OSC 52 : un programme qui demande a poser du texte dans le presse-papier systeme.
     // Chemin de SORTIE uniquement (parser), aucune surcouche sur la frappe.
     term.parser.registerOscHandler(52, (data) => {
       const semi = data.indexOf(";");
@@ -586,6 +583,19 @@
       return true;
     });
 
+    // Ctrl+C COPIE QUAND UNE SELECTION EST AFFICHEE, sinon il interrompt (SIGINT).
+    // C'est le geste qu'on avait du temps de tmux, ou le copy-mode s'en chargeait. Ce
+    // n'est PAS une surcouche sur le chemin de frappe : `onData` n'est pas touche, on
+    // decide seulement, AVANT qu'xterm ne traduise la touche, de ne pas la lui donner.
+    term.attachCustomKeyEventHandler((e) => {
+      const copie =
+        e.type === "keydown" && e.ctrlKey && !e.shiftKey && !e.altKey &&
+        (e.key === "c" || e.key === "C") && term.hasSelection();
+      if (!copie) return true;
+      void copySelection();
+      return false;
+    });
+
     // FIX ESSENTIEL (accents) : sous WebKitGTK, le textarea cache d'xterm ne se
     // vide pas apres une composition (dead-key). Il accumule "è","èè","èèè"...
     // et xterm reenvoie tout le buffer a chaque frappe -> caracteres/espaces en
@@ -599,10 +609,8 @@
     }
 
     // FIX ESSENTIEL (clic molette) : le clic molette colle le presse-papier, exactement
-    // comme « Coller » du menu clic droit — meme fonction, meme source. Trois
-    // comportements se disputent ce clic, il n'en reste qu'un :
-    //  - tmux colle de lui-meme sur MouseDown2Pane (`paste-buffer -p`, binding par
-    //    defaut de sa table root) : desactive dans notre conf (terminal/tmux.rs) ;
+    // comme « Coller » du menu clic droit — meme fonction, meme source. Deux
+    // comportements se disputaient ce clic, il n'en reste qu'un :
     //  - le WebView colle, lui aussi, dans le textarea cache d'xterm : annule ici ;
     //  - notre propre collage, le seul qui reste.
     //
@@ -710,19 +718,67 @@
     });
   }
 
-  // --- Recherche dans l'historique (copy-mode tmux) ---
-  // Le scrollback vit dans TMUX, pas dans xterm (ecran alternatif du client) : c'est donc
-  // la recherche NATIVE du copy-mode qui cherche, surligne et compte (n/N dans le pane).
-  // Aucune interception du chemin de frappe : la barre a son propre input, et le seul
+  // --- Recherche dans le terminal, historique compris ---
+  //
+  // C'est le SERVEUR qui cherche : c'est lui qui tient la grille et son historique, et il
+  // sait recoller une ligne trop longue coupee par la largeur du terminal (« --no-bundle »
+  // a cheval sur deux rangees se trouve). Il n'a pas d'ecran a peindre : il rend OU se
+  // trouve l'occurrence, et c'est ici qu'on defile et qu'on surligne.
+  //
+  // Aucune interception du chemin de frappe : la barre a son propre champ, et le seul
   // raccourci (Ctrl+Maj+F) est capte en phase capture sur window, AVANT xterm.
   let searchOpen = $state(false);
   let searchQuery = $state("");
   let searchStarted = $state(false);
+  let searchTotal = $state(0);
+  let searchIndex: number | null = $state(null);
   let searchInputEl: HTMLInputElement | undefined = $state();
+  /// Le surlignage de l'occurrence courante. Un seul a la fois, jete avant le suivant.
+  let surlignage: { dispose(): void } | null = null;
+
+  function effacerSurlignage() {
+    surlignage?.dispose();
+    surlignage = null;
+  }
+
+  /// Amene l'occurrence a l'ecran et la surligne.
+  ///
+  /// `ligne` est l'indice de la grille du serveur : 0 est la premiere ligne VISIBLE, les
+  /// valeurs negatives remontent dans l'historique. Le terminal, lui, numerote depuis le
+  /// haut de son tampon — d'ou `baseY`. Les deux coincident parce qu'ils recoivent les
+  /// memes octets et que le redessin du serveur renvoie tout son historique.
+  function montrerOccurrence(entry: PoolEntry, ligne: number, colonne: number) {
+    effacerSurlignage();
+    const tampon = entry.term.buffer.active;
+    const absolue = tampon.baseY + ligne;
+    if (absolue < 0) return;
+    // `registerMarker` compte depuis la ligne du curseur, et rend undefined sur l'ecran
+    // alternatif (vim, htop) : la, il n'y a de toute facon pas d'historique a surligner.
+    const marqueur = entry.term.registerMarker(ligne - tampon.cursorY);
+    if (marqueur) {
+      surlignage = entry.term.registerDecoration({
+        marker: marqueur,
+        x: colonne,
+        width: Math.max(1, searchQuery.trim().length),
+        backgroundColor: couleurSurlignage(),
+        layer: "top",
+      }) ?? null;
+    }
+    // Centree, pas collee en haut : on veut voir ce qu'il y a autour.
+    entry.term.scrollToLine(Math.max(0, absolue - Math.floor(entry.term.rows / 2)));
+  }
+
+  /// La couleur d'accent de la palette active. Lue dans le theme plutot qu'ecrite ici :
+  /// xterm veut une valeur, pas une variable CSS, mais le surlignage doit suivre la
+  /// palette choisie par l'utilisateur.
+  function couleurSurlignage(): string {
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+    return accent || "#4a9eff";
+  }
 
   function openSearch() {
-    // La recherche est celle du copy-mode tmux : sans terminal actif, il n'y a rien ou
-    // chercher. On le dit plutot que d'avaler le clic (ou le Ctrl+Maj+F).
+    // Sans terminal actif, il n'y a rien ou chercher. On le dit plutot que d'avaler le
+    // clic (ou le Ctrl+Maj+F).
     if (activeId === null) {
       notify($trad("term.noTerminalOpen"));
       return;
@@ -731,21 +787,43 @@
     requestAnimationFrame(() => { searchInputEl?.focus(); searchInputEl?.select(); });
   }
 
+  async function appliquer(id: number, action: "start" | "next" | "prev") {
+    const res = await terminalSearch(id, action, searchQuery.trim());
+    // Des que le serveur a repondu, la recherche EST en cours : le compteur et les fleches
+    // doivent apparaitre meme si le surlignage qui suit echoue.
+    searchStarted = true;
+    searchTotal = res.total;
+    searchIndex = res.index;
+    const entry = pool.get(id);
+    if (entry && res.ligne !== null && res.colonne !== null) {
+      montrerOccurrence(entry, res.ligne, res.colonne);
+    } else {
+      effacerSurlignage();
+    }
+    return res;
+  }
+
   async function runSearch() {
     if (activeId === null || !searchQuery.trim()) return;
+    const id = activeId;
     try {
-      await terminalSearch(activeId, "start", searchQuery.trim());
-      searchStarted = true;
+      // Deja lancee sur ce motif : Entree passe a l'occurrence suivante, comme partout.
+      const res = await appliquer(id, searchStarted ? "next" : "start");
+      // Un resultat vide est une reponse, pas un silence.
+      if (res.total === 0) notify($trad("term.searchNoMatch", { query: searchQuery.trim() }));
     } catch (e) { notify(String(e)); }
   }
 
   async function searchStep(dir: "next" | "prev") {
     if (activeId === null || !searchStarted) return;
-    try { await terminalSearch(activeId, dir); } catch (e) { notify(String(e)); }
+    try { await appliquer(activeId, dir); } catch (e) { notify(String(e)); }
   }
 
   async function closeSearch(forId: number | null = activeId, refocus = true) {
     searchOpen = false;
+    effacerSurlignage();
+    searchTotal = 0;
+    searchIndex = null;
     if (forId !== null && searchStarted) {
       searchStarted = false;
       try { await terminalSearch(forId, "cancel"); } catch { /* best effort */ }
@@ -772,14 +850,13 @@
     activeId = id;
     const existing = pool.get(id);
     if (existing && !mounted.has(id)) {
-      // RE-ADOPTION : le xterm et son client tmux ont surveu au demontage precedent — on
-      // remet simplement l'element dans le conteneur. Aucun detach/attach, donc tmux ne
-      // synthetise aucun evenement focus vers l'application : c'est LE correctif du saut
-      // de ligne au switch (voir le commentaire du pool).
+      // RE-ADOPTION : le xterm a survecu au demontage precedent, avec tout son ecran et
+      // son historique — on remet simplement l'element dans le conteneur. Rien n'est
+      // redemande au serveur, donc rien ne clignote et le defilement ne bouge pas.
       container?.appendChild(existing.el);
       mounted.add(id);
-      // Si le client est mort entre-temps (reboot du serveur tmux), le backend en relance
-      // un ; s'il est vivant, l'appel est un no-op silencieux.
+      // Sans effet si le terminal est deja branche (le cas normal) ; s'il ne l'est plus
+      // — service redemarre — cet appel le rebranche et le serveur renvoie un redessin.
       try { existing.fit.fit(); } catch {}
       try { await attachTerminal(id, existing.term.cols || 80, existing.term.rows || 24); }
       catch (e) { signalerErreur("terminal.reattache", String(e)); }
@@ -802,8 +879,9 @@
     pool.set(id, entry);
     mounted.add(id);
 
-    // Fit AVANT l'attach : le client tmux demarre a la bonne taille et
-    // repeint l'ecran de la session tout seul.
+    // Fit AVANT l'attach : le serveur aligne la session sur cette taille AVANT d'envoyer
+    // son redessin, sinon le premier dessin arrive a l'ancienne taille et se recadre sous
+    // les yeux de l'utilisateur.
     showOnly(id);
     try { entry.fit.fit(); } catch {}
     const cols = entry.term.cols || 80;
@@ -811,16 +889,14 @@
     lastSentSize.set(id, `${cols}x${rows}`);
 
     try {
-      // Le replay retourne est IGNORE volontairement : le client tmux
-      // fraichement attache repeint tout l'ecran lui-meme (source unique).
-      // Rejouer en plus notre buffer creait une course entre les deux sources
-      // (events live vs retour d'invoke) -> affichage dechire/duplique au
-      // retour sur l'onglet, et reponses parasites aux vieilles requetes
-      // DA/CPR ("1;2c0;276;0c" tape dans le shell). L'historique molette
-      // reste complet via le copy-mode tmux (history-limit 10000).
+      // L'attache ne rend RIEN : l'etat retrouve arrive par le meme canal que la suite
+      // (evenement `terminal_output`), sous forme d'un redessin qui porte l'ecran ET les
+      // 10 000 lignes d'historique. Une source unique, donc pas de course entre un
+      // « replay » retourne et le flux vivant — c'est cette course qui dechirait
+      // l'affichage au retour sur l'onglet.
       await attachTerminal(id, cols, rows);
     } catch (e) {
-      // Session morte cote tmux : on retire l'onglet, mais on DIT pourquoi il disparait —
+      // Session morte cote serveur : on retire l'onglet, mais on DIT pourquoi il disparait —
       // un onglet qui s'evapore sous les yeux de l'utilisateur ressemble a une panne.
       mounted.delete(id);
       disposePoolEntry(id);
@@ -979,13 +1055,22 @@
           bind:this={searchInputEl}
           bind:value={searchQuery}
           placeholder={$trad("term.searchPlaceholder")}
+          oninput={() => { searchStarted = false; searchTotal = 0; searchIndex = null; }}
           onkeydown={(e) => {
             if (e.key === "Enter") { e.preventDefault(); runSearch(); }
             else if (e.key === "Escape") closeSearch();
           }}
         />
-        <button class="term-search-btn" onclick={() => searchStep("next")} title={$trad("term.searchOlder")} disabled={!searchStarted}>↑</button>
-        <button class="term-search-btn" onclick={() => searchStep("prev")} title={$trad("term.searchNewer")} disabled={!searchStarted}>↓</button>
+        <!-- Le compteur remplace le « n/N » que tmux affichait dans le coin du pane. -->
+        {#if searchStarted}
+          <span class="term-search-count">
+            {searchTotal === 0
+              ? $trad("term.searchNone")
+              : `${(searchIndex ?? 0) + 1}/${searchTotal}`}
+          </span>
+        {/if}
+        <button class="term-search-btn" onclick={() => searchStep("next")} title={$trad("term.searchOlder")} disabled={!searchStarted || searchTotal === 0}>↑</button>
+        <button class="term-search-btn" onclick={() => searchStep("prev")} title={$trad("term.searchNewer")} disabled={!searchStarted || searchTotal === 0}>↓</button>
         <button class="term-search-btn" onclick={() => closeSearch()} title={$trad("term.searchClose")}>×</button>
       </span>
     {:else}
@@ -1104,6 +1189,10 @@
     width: 15rem; font-size: 0.78rem; padding: 0.2rem 0.45rem;
     border: 1px solid var(--border-color); border-radius: 4px;
     background: var(--bg-primary); color: var(--text-primary);
+  }
+  .term-search-count {
+    font-size: 0.72rem; color: var(--text-muted); font-variant-numeric: tabular-nums;
+    min-width: 3.5rem; text-align: center;
   }
   .term-search-btn {
     padding: 0.2rem 0.4rem; font-size: 0.8rem; cursor: pointer;

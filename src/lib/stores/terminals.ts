@@ -4,7 +4,7 @@ import { listAllTerminals } from "../api/workspace";
 import type { TerminalInfo } from "../types";
 import { signalerErreur } from "./errors";
 
-// Terminaux vivants (toutes sessions tmux), pour la sidebar et le dashboard.
+// Terminaux vivants (toutes sessions du serveur), pour la sidebar et le dashboard.
 export const terminals = writable<TerminalInfo[]>([]);
 
 export async function loadTerminals() {
@@ -22,5 +22,6 @@ listen("terminal_exit", () => {
 });
 
 // Le flag `llm` (agent IA en cours dans la session) evolue pendant la vie du
-// terminal : refresh periodique leger (1 appel tmux + 1 ps cote backend).
+// terminal : refresh periodique leger (une question au service, qui construit UN seul
+// arbre de process pour toutes les sessions).
 setInterval(loadTerminals, 5000);

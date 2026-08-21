@@ -1,18 +1,17 @@
 //! L'interface que Cockpit demande a un serveur de terminaux, et RIEN de plus.
 //!
-//! Elle est ecrite depuis les besoins du frontend (les commandes Tauri de `lib.rs`), pas
-//! depuis ce que tmux sait faire : c'est tout l'objet de l'etape A du chantier
-//! (`docs/portabilite/plan-terminaux.md`). Chaque operation porte ci-dessous si elle est un
-//! BESOIN de Cockpit ou un CONTOURNEMENT de tmux — les seconds sont a ne pas reproduire
-//! dans le service maison.
+//! Elle est ecrite depuis les besoins du frontend (les commandes Tauri de `lib.rs`). Les
+//! deux operations qui n'existaient que pour contourner tmux — `detacher` et
+//! `ecran_alternatif` — ont disparu avec lui a l'etape C du chantier
+//! (`docs/portabilite/plan-terminaux.md`) : elles n'avaient aucun appelant.
 //!
-//! Deux dependances traversent l'interface et ne sont pas des details :
-//! - `AppHandle` : la sortie d'un terminal remonte au webview par un evenement Tauri. Toute
-//!   implementation qui attache doit pouvoir emettre. Besoin reel.
-//! - `&Database` : aujourd'hui l'identite d'un terminal (`id` -> nom de session tmux) vit en
-//!   SQLite, donc presque chaque operation relit la base pour savoir a QUI parler. Un service
-//!   qui tient ses propres metadonnees n'en aurait besoin que pour lister — c'est le point a
-//!   trancher a l'etape B, pas ici.
+//! Ce qui traverse encore l'interface, et pourquoi :
+//! - `AppHandle` seulement dans `preparer` : la sortie remonte au webview par un evenement
+//!   Tauri, et l'implementation garde le handle une fois pour toutes. Ni `creer` ni
+//!   `attacher` n'en ont besoin.
+//! - `&Database` : le NOM d'onglet et le PROJET vivent en SQLite, parce qu'eux doivent
+//!   survivre au redemarrage de la machine — le service, non. Le rowid est donc la seule
+//!   identite qui traverse un reboot, et c'est lui que le service recoit.
 
 use crate::storage::Database;
 use serde::Serialize;
@@ -37,6 +36,22 @@ pub struct TerminalInfo {
 pub struct Taille {
     pub colonnes: u16,
     pub lignes: u16,
+}
+
+/// Ce qu'un geste de recherche a trouve. Traverse l'IPC vers `terminalSearch`.
+///
+/// Le serveur ne PEINT rien — il n'a pas d'ecran : il rend ou se trouve l'occurrence, et
+/// c'est le terminal du frontend qui defile et surligne. `ligne` suit la convention de la
+/// grille : 0 est la premiere ligne visible, les valeurs negatives remontent dans
+/// l'historique.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResultatRecherche {
+    /// Nombre d'occurrences du motif.
+    pub total: u32,
+    /// Indice de l'occurrence courante, de la plus ancienne a la plus recente.
+    pub index: Option<u32>,
+    pub ligne: Option<i32>,
+    pub colonne: Option<u16>,
 }
 
 /// Tout ce qu'il faut pour ouvrir un terminal.
@@ -86,15 +101,16 @@ impl ActionRecherche {
 pub trait Terminaux: Send + Sync {
     /// Appelee UNE FOIS au demarrage de l'application, avant toute autre operation.
     ///
-    /// BESOIN REEL, mais un seul : reconcilier ce que le serveur tient et ce que la base
-    /// dit (lignes sans session, sessions sans ligne). Des qu'un etat survit a l'app, les
-    /// deux divergent. Tout le reste de ce que l'implementation tmux fait ici — deployer un
-    /// binaire, reposer 41 options sur un serveur deja vivant — est un CONTOURNEMENT qui
-    /// disparaitra avec elle.
+    /// Deux choses, et deux seulement : mettre le serveur en route, et reconcilier ce
+    /// qu'il tient avec ce que la base dit (lignes sans session, sessions sans ligne). Des
+    /// qu'un etat survit a l'application, les deux divergent.
+    ///
+    /// C'est aussi le seul endroit ou l'implementation recoit un `AppHandle` : elle le
+    /// garde pour emettre la sortie des terminaux.
     fn preparer(&self, app: &AppHandle, db: &Database);
 
     /// Ouvre un terminal et rend son identifiant.
-    fn creer(&self, app: AppHandle, db: &Database, demande: Creation) -> Result<i64, String>;
+    fn creer(&self, db: &Database, demande: Creation) -> Result<i64, String>;
 
     /// Envoie de la frappe au shell. BESOIN REEL, et le chemin le plus chaud de tout le
     /// projet : aucune allocation superflue, aucun fork, aucune lecture de base ici.
@@ -109,19 +125,13 @@ pub trait Terminaux: Send + Sync {
     /// Branche l'interface sur un terminal existant : a partir de la, sa sortie remonte par
     /// l'evenement `terminal_output`.
     ///
-    /// NE REND RIEN. L'implementation tmux rendait un « replay » que le frontend ignorait
-    /// depuis le passage au pool de xterm (course replay/live -> ecran dechire) ; la notion
-    /// n'a donc pas sa place dans l'interface. Un service qui redessine l'ecran au retour le
-    /// fera par le meme canal que le reste, pas par un retour de fonction.
-    fn attacher(&self, app: AppHandle, db: &Database, id: i64, taille: Taille) -> Result<(), String>;
-
-    /// Cesse de remonter la sortie de ce terminal (le shell continue de tourner).
-    ///
-    /// CONTOURNEMENT — et meme du code mort aujourd'hui : depuis la doctrine du pool
-    /// persistant (2026-08-13) le frontend n'appelle jamais `detach_terminal`, les xterm
-    /// vivent dans un pool au niveau module et les ecouteurs sont globaux. Conserve parce que
-    /// la commande Tauri existe encore ; a supprimer avec elle, pas a reimplementer.
-    fn detacher(&self, id: i64);
+    /// NE REND RIEN, et doit etre GRATUITE quand le terminal est deja branche : le frontend
+    /// l'appelle a chaque retour sur un onglet, et re-brancher declencherait un redessin
+    /// complet — clignotement et retour en bas de l'historique a chaque changement d'onglet.
+    /// L'etat retrouve arrive par le meme canal que la suite (`terminal_output`), jamais par
+    /// un retour de fonction : le « replay » de l'ancienne implementation etait ignore
+    /// depuis le pool de xterm (course replay/live -> ecran dechire).
+    fn attacher(&self, db: &Database, id: i64, taille: Taille) -> Result<(), String>;
 
     /// Renomme un terminal (libelle d'onglet). BESOIN REEL, purement metadonnee.
     fn renommer(&self, db: &Database, id: i64, nom: &str) -> Result<(), String>;
@@ -133,31 +143,19 @@ pub trait Terminaux: Send + Sync {
     /// reponse chere se paierait immediatement.
     fn lister(&self, db: &Database, projet: Option<&str>) -> Vec<TerminalInfo>;
 
-    /// Le programme qui tourne dans le terminal occupe-t-il tout l'ecran (vim, claude...) ?
-    ///
-    /// CONTOURNEMENT PUR, et mort lui aussi : le client tmux met TOUJOURS le terminal hote en
-    /// ecran alternatif, donc xterm ne peut pas repondre et il faut poser la question a tmux
-    /// (un fork+exec par question). Un service maison tient la reponse en memoire, dans la
-    /// grille — cette operation ne doit pas etre reimplementee comme une question distante.
-    /// Aucun appelant cote frontend depuis que la molette est laissee au copy-mode.
-    fn ecran_alternatif(&self, db: &Database, id: i64) -> bool;
-
     /// Cherche dans le terminal, historique compris. BESOIN REEL.
     ///
     /// Le motif est une SOUS-CHAINE LITTERALE, pas une regex : c'est une recherche
-    /// d'utilisateur, « 1.2.3 » ne doit pas trouver « 1x2y3 ».
+    /// d'utilisateur, « 1.2.3 » ne doit pas trouver « 1x2y3 ». Rend OU se trouve
+    /// l'occurrence : le serveur n'a pas d'ecran a peindre, c'est le terminal du frontend
+    /// qui defile et surligne.
     fn chercher(
         &self,
         db: &Database,
         id: i64,
         action: ActionRecherche,
         motif: &str,
-    ) -> Result<(), String>;
-
-    /// Copie la selection courante vers le presse-papier systeme. BESOIN REEL (clic droit >
-    /// Copier), mais aujourd'hui paye en cinq maillons parce que la selection appartient a
-    /// tmux : le service maison la possede, ce sera un appel.
-    fn copier_selection(&self, db: &Database, id: i64) -> Result<(), String>;
+    ) -> Result<ResultatRecherche, String>;
 }
 
 #[cfg(test)]
