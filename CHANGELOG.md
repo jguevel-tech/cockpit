@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.46.0] — 2026-08-21
+
 ### Added
 
 - **Un compte Cockpit, pour retrouver ses projets sur une autre machine.** À la première
