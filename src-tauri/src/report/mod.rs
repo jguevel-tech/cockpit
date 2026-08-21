@@ -4,9 +4,9 @@
 //! POURQUOI CE MODULE EXISTE
 //! -------------------------
 //! Plusieurs correctifs ont demande des allers-retours avec des utilisateurs pour apprendre
-//! des choses que la machine savait deja : la version de `pw-record`, le serveur audio
-//! reellement actif, la distribution. Un diagnostic invente a meme ete affiche a la place
-//! d'une cause reelle. Une erreur doit donc arriver avec la fiche de la machine qui l'a
+//! des choses que la machine savait deja : quel appareil audio etait retenu, dans quel
+//! format, la distribution. Un diagnostic invente a meme ete affiche a la place d'une
+//! cause reelle. Une erreur doit donc arriver avec la fiche de la machine qui l'a
 //! produite.
 //!
 //! DEUX SORTIES, DANS CET ORDRE
@@ -21,7 +21,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use crate::commande::SansConsole;
 
 /// Cle de reglage : "on" / "off". Absente = la question n'a pas encore ete posee.
 pub const CONSENT_KEY: &str = "error_reporting";
@@ -41,10 +40,12 @@ pub struct MachineInfo {
     pub app_version: String,
     /// "Ubuntu 24.04" — lu dans /etc/os-release.
     pub distro: String,
-    /// Serveur audio REELLEMENT actif ("pulseaudio", "pipewire", "aucun") : c'est
-    /// l'information qui manquait pour comprendre l'echec d'un enregistrement.
-    pub audio_server: String,
-    pub pw_record: String,
+    /// Ce que la capture retiendrait ICI ET MAINTENANT : host, appareil et format natif
+    /// des deux pistes. C'est l'information qui manquait pour comprendre l'echec d'un
+    /// enregistrement. Elle a remplace le serveur audio devine par `pactl` et la version
+    /// de `pw-record` : ces deux programmes ne servent plus a rien depuis que la capture
+    /// est dans notre processus, et ceci est portable.
+    pub audio: String,
     /// "appimage" ou "binaire" : les fuites d'environnement de l'AppImage ont deja
     /// explique des pannes absentes du binaire nu.
     pub packaging: String,
@@ -103,27 +104,6 @@ pub fn transport_acceptable_avec(url: &str, http_autorise: bool) -> bool {
     false
 }
 
-/// Version de pw-record.
-///
-/// `pw-record --version` repond sur trois lignes dont la premiere est le nom du programme :
-/// la prendre telle quelle donnait « pw-record » au lieu du numero, et c'est justement ce
-/// numero qui a explique une panne (l'option `-P` n'existe pas avant 0.3.5x).
-pub fn pw_record_version(sortie: &str) -> String {
-    for ligne in sortie.lines() {
-        let l = ligne.trim();
-        if let Some(reste) = l.strip_prefix("Compiled with libpipewire") {
-            return reste.trim().to_string();
-        }
-    }
-    // Rien de reconnu : on renvoie la premiere ligne utile, faute de mieux.
-    sortie
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty() && *l != "pw-record")
-        .unwrap_or("")
-        .to_string()
-}
-
 /// Valeur d'une cle de /etc/os-release.
 fn os_release_value(contenu: &str, cle: &str) -> Option<String> {
     contenu.lines().find_map(|l| {
@@ -159,47 +139,13 @@ fn systeme_lisible() -> String {
     sysinfo::System::long_os_version().unwrap_or_else(|| "inconnue".to_string())
 }
 
-/// Serveur audio actif, d'apres la sortie de `pactl info`.
-///
-/// Sur les systemes ou PipeWire remplace PulseAudio, `pactl` repond « PulseAudio (on
-/// PipeWire 1.0.5) » : c'est bien PipeWire qui tient l'audio. Distinguer les deux est
-/// exactement ce qui manquait pour comprendre un echec d'enregistrement.
-pub fn audio_server_from_pactl(sortie: &str) -> String {
-    let ligne = sortie
-        .lines()
-        .find(|l| l.starts_with("Server Name:"))
-        .unwrap_or("")
-        .to_lowercase();
-    if ligne.contains("pipewire") {
-        "pipewire".to_string()
-    } else if ligne.contains("pulseaudio") {
-        "pulseaudio".to_string()
-    } else {
-        "aucun".to_string()
-    }
-}
-
-fn sortie_commande(programme: &str, args: &[&str]) -> String {
-    std::process::Command::new(programme)
-        .sans_console()
-        .args(args)
-        .output()
-        .map(|o| {
-            let mut texte = String::from_utf8_lossy(&o.stdout).to_string();
-            texte.push_str(&String::from_utf8_lossy(&o.stderr));
-            texte
-        })
-        .unwrap_or_default()
-}
-
-/// Fiche de la machine, calculee une seule fois : elle interroge des commandes externes.
+/// Fiche de la machine, calculee une seule fois : elle interroge le serveur audio.
 pub fn machine_info() -> &'static MachineInfo {
     static INFO: OnceLock<MachineInfo> = OnceLock::new();
     INFO.get_or_init(|| MachineInfo {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         distro: systeme_lisible(),
-        audio_server: audio_server_from_pactl(&sortie_commande("pactl", &["info"])),
-        pw_record: pw_record_version(&sortie_commande("pw-record", &["--version"])),
+        audio: crate::recorder::capture::fiche_audio(),
         packaging: if std::env::var_os("APPDIR").is_some() {
             "appimage".to_string()
         } else {
@@ -270,8 +216,7 @@ pub fn build_payload(
                 "message": borne(message),
                 "version": info.app_version,
                 "distro": info.distro,
-                "audio": info.audio_server,
-                "pw_record": info.pw_record,
+                "audio": info.audio,
                 "packaging": info.packaging,
                 "utilisateur": utilisateur,
             }
@@ -350,41 +295,6 @@ mod tests {
     }
 
     #[test]
-    fn serveur_audio_pulseaudio_reconnu() {
-        // Le cas qui a coute des allers-retours : PipeWire installe, PulseAudio aux
-        // commandes.
-        assert_eq!(
-            audio_server_from_pactl("Server Name: pulseaudio\nServer Version: 15.99.1\n"),
-            "pulseaudio"
-        );
-    }
-
-    #[test]
-    fn serveur_audio_pipewire_reconnu_derriere_la_compatibilite_pulse() {
-        assert_eq!(
-            audio_server_from_pactl("Server Name: PulseAudio (on PipeWire 1.0.5)\n"),
-            "pipewire"
-        );
-    }
-
-    #[test]
-    fn sans_serveur_audio_on_le_dit() {
-        assert_eq!(audio_server_from_pactl(""), "aucun");
-    }
-
-    #[test]
-    fn version_de_pw_record_extraite_et_non_le_nom_du_programme() {
-        let sortie = "pw-record\nCompiled with libpipewire 0.3.48\nLinked with libpipewire 0.3.48\n";
-        assert_eq!(pw_record_version(sortie), "0.3.48");
-    }
-
-    #[test]
-    fn version_de_pw_record_absente_ne_rend_pas_le_nom() {
-        assert_eq!(pw_record_version("pw-record\n"), "");
-        assert_eq!(pw_record_version(""), "");
-    }
-
-    #[test]
     fn ligne_de_journal_tient_sur_une_ligne() {
         let ligne = format_log_line("2026-08-19 14:00:00", "git.commit", "echec\nsur deux lignes");
         assert!(!ligne.trim_end().contains('\n'), "{ligne}");
@@ -396,8 +306,7 @@ mod tests {
         let info = MachineInfo {
             app_version: "0.28.1".into(),
             distro: "Ubuntu 22.04".into(),
-            audio_server: "pulseaudio".into(),
-            pw_record: "0.3.48".into(),
+            audio: "micro = Micro sur pulseaudio (48000 Hz, 2 canaux, I32)".into(),
             packaging: "appimage".into(),
         };
         let long = "x".repeat(5000);
@@ -411,13 +320,15 @@ mod tests {
         let info = MachineInfo {
             app_version: "0.28.1".into(),
             distro: "Ubuntu 22.04".into(),
-            audio_server: "pulseaudio".into(),
-            pw_record: "0.3.48".into(),
+            audio: "micro = Micro sur pulseaudio (48000 Hz, 2 canaux, I32)".into(),
             packaging: "appimage".into(),
         };
         let payload = build_payload("site", "recorder.start", "no node available", &info, "gilles");
         let data = &payload["payload"]["data"];
-        assert_eq!(data["audio"], "pulseaudio");
+        assert_eq!(
+            data["audio"],
+            "micro = Micro sur pulseaudio (48000 Hz, 2 canaux, I32)"
+        );
         assert_eq!(data["distro"], "Ubuntu 22.04");
         assert_eq!(data["packaging"], "appimage");
         assert_eq!(data["utilisateur"], "gilles");

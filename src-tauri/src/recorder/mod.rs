@@ -5,6 +5,7 @@
 //! L'audio est supprime apres succes, conserve en cas d'echec (retry possible).
 
 pub mod capture;
+pub mod pcm;
 pub mod summarize;
 pub mod transcribe;
 pub mod wav;
@@ -43,6 +44,9 @@ pub struct RecordingStatus {
     /// Piste perdue au demarrage : "mic" ou "system". Un CODE, pas une phrase : c'est
     /// l'interface qui l'affiche, dans la langue choisie.
     pub lost_track: Option<String>,
+    /// Piste qui n'a recu QUE du silence : "mic", "system" ou "both". Connu seulement a
+    /// l'arret, et distinct de `lost_track` : la piste a bien tourne, elle n'a rien recu.
+    pub mute_track: Option<String>,
 }
 
 /// Quelle piste manque, quand l'enregistrement demarre quand meme.
@@ -77,6 +81,17 @@ fn compose_note(
         note.push_str(&format!("\n## Transcription\n\n{transcription}"));
     }
     note
+}
+
+/// Ligne de journal technique : jamais affichee, jamais notifiee.
+fn journaliser(app: &AppHandle, message: &str) {
+    if let Ok(dir) = app.path().app_data_dir() {
+        let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        crate::report::append_log(
+            &dir,
+            &crate::report::format_log_line(&horodatage, "reunion.capture", message),
+        );
+    }
 }
 
 fn emit_status(app: &AppHandle, status: &RecordingStatus) {
@@ -118,7 +133,7 @@ pub async fn start(
     let dir = recordings_root(&app)?.join(format!("rec_{}", rec.id));
     db.set_recording_dir(rec.id, &dir.to_string_lossy())?;
 
-    let mut handles = match capture::start_capture(&dir).await {
+    let handles = match capture::start_capture(&dir).await {
         Ok(h) => h,
         Err(e) => {
             let _ = db.delete_recording(rec.id);
@@ -127,11 +142,11 @@ pub async fn start(
         }
     };
 
-    // start_capture a deja laisse le temps aux enregistreurs de s'attacher, et bascule
-    // sur PulseAudio toute piste que PipeWire n'a pas su demarrer.
+    // start_capture a attendu que chaque piste tranche : elle enregistre, ou elle a
+    // essaye tous ses appareils.
     let (mic_ok, sys_ok) = handles.alive_tracks();
     if !mic_ok && !sys_ok {
-        // Ce que pw-record a dit AVANT de nettoyer : le dossier part juste apres.
+        // Ce que la capture a constate AVANT de nettoyer : le dossier part juste apres.
         let why = handles.startup_error();
         let _ = handles.stop().await;
         let _ = db.delete_recording(rec.id);
@@ -150,6 +165,7 @@ pub async fn start(
         error: None,
         started_at: started_at.clone(),
         lost_track,
+        mute_track: None,
     };
 
     {
@@ -174,7 +190,13 @@ pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result
     };
 
     let ActiveRecording { recording_id, project, started_at, dir, handles } = active;
-    handles.stop().await?;
+    let bilan = handles.stop().await;
+    // Ce que la capture a constate, appareil par appareil : c'est cette fiche qui a
+    // manque pendant plusieurs corrections. Journal technique seulement, rien d'affiche.
+    journaliser(
+        &app,
+        &format!("{} | {}", bilan.micro.resume(), bilan.systeme.resume()),
+    );
 
     let duration = track_duration_secs(&dir.join("mic.raw"))
         .max(track_duration_secs(&dir.join("system.raw")));
@@ -190,6 +212,10 @@ pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result
             error: None,
             started_at,
             lost_track: None,
+            // Une piste qui a tourne sans recevoir un seul echantillon non nul : le dire
+            // MAINTENANT, sinon l'utilisateur l'apprend par un « aucune parole detectee »
+            // qui l'envoie chercher au mauvais endroit.
+            mute_track: bilan.muette_code().map(str::to_string),
         },
     );
 
@@ -206,6 +232,7 @@ pub fn active_status(state: &RecorderState) -> Option<RecordingStatus> {
         error: None,
         started_at: a.started_at.clone(),
             lost_track: None,
+        mute_track: None,
     })
 }
 
@@ -228,6 +255,7 @@ pub fn retry(app: AppHandle, db: Database, recording_id: i64) -> Result<(), Stri
             error: None,
             started_at: rec.started_at,
             lost_track: None,
+            mute_track: None,
         },
     );
     tauri::async_runtime::spawn(run_pipeline(app, db, recording_id));
@@ -277,6 +305,7 @@ async fn run_pipeline(app: AppHandle, db: Database, recording_id: i64) {
             error: error.map(String::from),
             started_at: rec.started_at.clone(),
             lost_track: None,
+            mute_track: None,
         },
     );
 }
@@ -311,6 +340,25 @@ async fn pipeline_inner(
     let dir = PathBuf::from(&rec.dir);
     let mic_path = dir.join("mic.raw");
     let sys_path = dir.join("system.raw");
+    // Des pistes ENTIEREMENT nulles ne sont pas une reunion silencieuse : elles n'ont
+    // jamais recu un echantillon utile. Le dire avant d'appeler Whisper, qui repondrait
+    // « aucune parole detectee » et enverrait chercher au mauvais endroit.
+    let etats = [
+        transcribe::etat_piste(&mic_path),
+        transcribe::etat_piste(&sys_path),
+    ];
+    let presentes: Vec<_> = etats
+        .iter()
+        .filter(|e| **e != transcribe::EtatPiste::Absente)
+        .collect();
+    if !presentes.is_empty()
+        && presentes
+            .iter()
+            .all(|e| **e == transcribe::EtatPiste::Muette)
+    {
+        return Err(transcribe::message_silence_total());
+    }
+
     let (mic_res, sys_res) = futures::join!(
         transcribe::transcribe_track(&client, &api_key, &mic_path),
         transcribe::transcribe_track(&client, &api_key, &sys_path),
@@ -332,6 +380,7 @@ async fn pipeline_inner(
             error: None,
             started_at: rec.started_at.clone(),
             lost_track: None,
+            mute_track: None,
         },
     );
 
@@ -435,7 +484,7 @@ mod tests {
 
     #[test]
     fn aucune_piste_n_est_pas_un_avertissement() {
-        // C'est une erreur, remontee ailleurs avec la sortie de pw-record.
+        // C'est une erreur, remontee ailleurs avec le constat de la capture.
         assert_eq!(lost_track_code(false, false), None);
     }
 

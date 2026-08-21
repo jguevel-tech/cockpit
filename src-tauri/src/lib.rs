@@ -948,8 +948,15 @@ fn whoami_fallback() -> String {
 #[tauri::command]
 /// Fiche technique de la machine, telle qu'elle accompagne les erreurs.
 /// Sert aussi a l'afficher a l'utilisateur : il doit pouvoir voir ce qui serait envoye.
-fn machine_report() -> report::MachineInfo {
-    report::machine_info().clone()
+///
+/// `async fn` et non `fn` : la fiche interroge le serveur audio pour dire quel appareil
+/// serait retenu, et une commande sans `async` s'execute EN LIGNE dans la boucle
+/// principale GTK — l'interface ne repeint plus pendant ce temps. C'etait deja vrai
+/// avant, avec deux `Command::new` (`pactl`, `pw-record`) au meme endroit.
+async fn machine_report() -> report::MachineInfo {
+    tauri::async_runtime::spawn_blocking(|| report::machine_info().clone())
+        .await
+        .unwrap_or_else(|_| report::machine_info().clone())
 }
 
 #[tauri::command]

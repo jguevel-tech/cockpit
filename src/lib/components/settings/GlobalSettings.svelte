@@ -309,8 +309,7 @@
             <div class="field-row">
               <span class="field-label">{$trad("settings.reporting.machine")}</span>
               <span class="field-value mono-value"
-                >{machine.distro} · {machine.audio_server} · pw-record {machine.pw_record || "—"} ·
-                {machine.packaging}</span>
+                >{machine.distro} · {machine.audio} · {machine.packaging}</span>
             </div>
           {/if}
         </section>

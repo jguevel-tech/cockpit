@@ -1,6 +1,43 @@
 # Capture audio des reunions sur Linux, macOS, Windows
 
-Etude en lecture seule. Aucun code modifie.
+Etude en lecture seule (2026-08-20), suivie de sa mise en oeuvre.
+
+---
+
+## FAIT le 2026-08-21 — ce que le banc a tranche
+
+La capture est passee a `cpal` dans le processus (`recorder/capture.rs`), avec la mise au
+format dans `recorder/pcm.rs`. Ce que l'etude laissait ouvert, mesure sur la machine :
+
+- **Le nom en `.monitor` tient.** `default_output_device()` rend l'identifiant
+  `alsa_output.pci-0000_00_1f.3.analog-stereo`, la source
+  `alsa_output.pci-0000_00_1f.3.analog-stereo.monitor` existe dans `devices()`, un flux
+  d'entree se construit dessus et rend le son joue : ton de 440 Hz a 8 000 d'amplitude
+  envoye sur la sortie, retrouve dans `system.raw` a **440,0 Hz et 7 999 d'amplitude**.
+  La strategie « aucune bibliotheque C de plus » n'a donc pas eu besoin d'etre revue.
+  **ATTENTION** : c'est `Device::id()` qui porte cette convention, pas `Display` — ce
+  dernier rend la DESCRIPTION (« Monitor of Built-in Audio »).
+- **Ce que l'etude a rate : sous Linux, cpal depend d'`alsa-sys` sans condition.** Le host
+  ALSA n'est pas derriere une feature (`[target.'cfg(linux)'.dependencies] alsa`,
+  `alsa-sys`). Il faut donc `libasound2-dev` au build et `libasound.so.2` a l'execution :
+  une bibliotheque C de plus dans l'AppImage, ce que le choix du host PulseAudio visait
+  justement a eviter. Le risque reste bien plus faible que celui de la libwayland — rien
+  d'exterieur ne se lie a NOTRE libasound, et elle ne charge ses greffons qu'a l'ouverture
+  d'un peripherique ALSA, ce que le chemin PulseAudio ne fait jamais. La feature
+  `pipewire` ajouterait libpipewire EN PLUS de celle-la.
+- **Le format natif n'est pas `f32`** : la machine du banc livre **48 000 Hz, 2 canaux,
+  I32**. `en_flottants` couvre donc les douze formats de `SampleFormat`, et un format
+  inconnu est refuse a l'OUVERTURE (un rappel audio ne peut rien remonter).
+- **Un appareil de sortie refuse `default_input_config()`** (WASAPI : « Device does not
+  support input »). La forme du flux de loopback se demande par `default_output_config()`.
+  D'ou `config_capture()`, qui essaie les deux dans cet ordre.
+- **Le reechantillonnage est fait a la main** (sinc fenetre Blackman, `pcm.rs`) plutot
+  qu'avec `rubato` 5, dont l'API est passee aux adaptateurs `audioadapter` et qui aurait
+  tire rustfft. ~80 lignes, aucune dependance, dix tests dont l'attenuation d'un ton de
+  10 kHz (rien de mesurable en regime etabli) et l'egalite entre un traitement d'un bloc
+  et le meme decoupe en lots de 137 trames.
+- **macOS reste non verifie** : pas de machine, pas de signature. Le code y prend le meme
+  chemin que Windows (`default_output_device()` + flux d'entree).
 
 ---
 

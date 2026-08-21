@@ -240,6 +240,11 @@ export interface RecordingStatus {
   started_at: string;
   /** Piste perdue au demarrage : "mic" ou "system". Un code, traduit a l'affichage. */
   lost_track?: "mic" | "system" | null;
+  /**
+   * Piste qui n'a recu QUE du silence, connue seulement a l'arret. Distinct de
+   * `lost_track` : la piste a bien tourne, elle n'a rien recu.
+   */
+  mute_track?: "mic" | "system" | "both" | null;
 }
 
 export interface TerminalInfo {
@@ -417,9 +422,12 @@ export interface DockerImage {
 export interface MachineReport {
   app_version: string;
   distro: string;
-  /** Serveur audio reellement actif : "pipewire", "pulseaudio" ou "aucun". */
-  audio_server: string;
-  pw_record: string;
+  /**
+   * Ce que la capture retiendrait : host audio, appareil et format natif des deux
+   * pistes. Remplace l'ancien couple serveur audio + version de pw-record, disparus
+   * avec les programmes externes.
+   */
+  audio: string;
   /** "appimage" ou "binaire". */
   packaging: string;
 }

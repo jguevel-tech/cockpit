@@ -212,8 +212,10 @@ logs. En cas d'echec de CI : `gh run view <id> --log-failed`.
   remonte rien, ce qu'un banc a demontre sur le modal de creation de projet. Toute erreur est
   ecrite dans `<app_data>/logs/cockpit.log` (toujours, sans consentement) et envoyee au
   serveur de suivi si l'utilisateur l'a accepte, avec la fiche de la machine (distribution,
-  serveur audio actif, version de pw-record, AppImage ou binaire). C'est cette fiche
-  qui a manque pendant plusieurs corrections.
+  appareils audio que la capture retiendrait et leur format natif, AppImage ou binaire).
+  C'est cette fiche qui a manque pendant plusieurs corrections. Le serveur audio devine par
+  `pactl` et la version de `pw-record` en ont disparu le 2026-08-21 avec les programmes
+  externes ; `capture::fiche_audio()` les remplace, et elle est portable.
 - **Tout overlay `position: fixed` (modal, menu contextuel, panneau, toast) doit porter
   `use:portal`** (actions/portal.ts, le deplace dans `<body>`). Raison : en mode image de fond,
   les conteneurs structurels portent `isolation: isolate` (components.css) — chacun est un
@@ -344,14 +346,19 @@ nous. Toute autre occurrence de tmux dans le code est un commentaire d'historiqu
 | Scan fichiers | ignore 0.4 | walker gitignore-aware (celui de ripgrep) |
 | Dates | chrono 0.4 | titres de notes reunion |
 | Terminal frontend | @xterm/xterm | + addon-fit + addon-webgl + addon-web-links (Ctrl+clic) |
+| Capture audio | cpal 0.18 (feature `pulseaudio`) | micro + son systeme, DANS le processus, sur les trois systemes. Host PulseAudio sous Linux (Rust pur), WASAPI loopback sous Windows, process taps sous macOS |
 | Presse-papier | arboard 3 | copie OSC 52 des terminaux -> systeme |
 | Go-to-definition | LSP (intelephense, rust-analyzer...) | client stdio maison (`src-tauri/src/lsp/`) |
 | Coloration code | shiki | bundle fin ~30 langages (`src/lib/shiki.ts`) |
 | Markdown rendu | marked | (frontend) |
 | HTML -> Markdown | turndown | (frontend, pour editeur WYSIWYG) |
 
-Dependances systeme runtime : `pw-record`/PipeWire (enregistrement reunions), `git` (onglet Git),
-CLI `claude` (connexion abonnement + sessions). **Les terminaux n'en ont AUCUNE** : Cockpit tient
+Dependances systeme runtime : `git` (onglet Git), CLI `claude` (connexion abonnement +
+sessions). **L'enregistrement de reunions n'en a plus AUCUNE** depuis le 2026-08-21 : la
+capture est dans le processus (`cpal`), `pw-record` et `parecord` ne sont plus appeles.
+Sous Linux elle a besoin d'un serveur audio (PulseAudio ou PipeWire, presents partout) et
+de `libasound.so.2`, que cpal lie de toute facon — voir « CPAL SOUS LINUX » dans les
+Pieges connus. **Les terminaux n'en ont AUCUNE** : Cockpit tient
 lui-meme les shells (`terminal/service/`), il n'y a plus rien a installer ni a embarquer dans
 l'AppImage. `tmux` etait cette dependance jusqu'a la v0.38 ; il ne reste rien de lui dans le code,
 et les sessions `ckpt_*` qu'un ancien Cockpit a laissees tournent toujours de leur cote
@@ -401,7 +408,8 @@ COCKPIT_DB=/chemin/vers/data.db ./src-tauri/target/release/cockpit
 ## Dependances systeme (Linux)
 
 ```bash
-sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf \
+  libasound2-dev
 ```
 
 ## Architecture
@@ -479,9 +487,12 @@ ai-workforce/
 │       │   ├── terminals.rs        # Metadonnees terminaux persistants (projet, nom d'onglet)
 │       ├── recorder/
 │       │   ├── mod.rs              # Pipeline reunion (recording -> transcribing -> summarizing -> done/error)
-│       │   ├── capture.rs          # 2x pw-record (micro + monitor sink), PCM brut s16 mono 16 kHz
+│       │   ├── capture.rs          # Capture cpal DANS le processus (micro + son systeme),
+│       │   │                       #   un thread par piste, repli d'appareil au constat
+│       │   ├── pcm.rs              # Format materiel -> s16le mono 16 kHz (melange, sinc, i16), 11 tests
 │       │   ├── wav.rs              # WAV en memoire par chunk, detection silence (2 tests)
-│       │   ├── transcribe.rs       # OpenAI whisper-1 (chunks 10 min), fusion dialogue Moi/Eux (3 tests)
+│       │   ├── transcribe.rs       # OpenAI whisper-1 (chunks 10 min), fusion dialogue Moi/Eux,
+│       │   │                       #   `etat_piste` (absente / muette / sonore)
 │       │   └── summarize.rs        # OpenAI chat completions, prompt systeme editable
 │       ├── terminal/
 │       │   ├── mod.rs              # Racine : re-exports + `terminaux()`, LE seul endroit qui choisit
@@ -1117,7 +1128,9 @@ Migrations automatiques au demarrage via `storage/db.rs`. Mode WAL + foreign key
 ## Events Tauri (backend -> frontend)
 
 - `status_update` : emis toutes les 5s par le monitor apres refresh des statuts Docker
-- `recording_status` : emis a chaque changement d'etat du pipeline reunion (recording_id, project, state, error, started_at)
+- `recording_status` : emis a chaque changement d'etat du pipeline reunion (recording_id,
+  project, state, error, started_at, lost_track, mute_track — les deux derniers sont des
+  CODES, traduits par l'interface)
 - `terminal_output` : octets du PTY encodes base64 ({id, data}), consommes par xterm.js
 - `terminal_exit` : id de la session dont le shell s'est termine
 - `claude_login_output` / `claude_login_done` : sortie et fin du flow `claude setup-token`
@@ -1281,7 +1294,21 @@ Menu a gauche, 4 vues (store `dashboardView`), un composant par vue dans `dashbo
 ## Enregistrement de reunions
 
 Bouton ⏺ dans l'en-tete de la vue projet. Pipeline :
-1. Capture 2 pistes via `pw-record` (PipeWire) : micro + monitor du sink par defaut (son systeme). PCM brut s16 mono 16 kHz dans `<app_data>/recordings/rec_<id>/`
+1. Capture 2 pistes par `cpal`, DANS le processus (`recorder/capture.rs`, un thread par
+   piste) : micro + son systeme. PCM brut s16 mono 16 kHz dans
+   `<app_data>/recordings/rec_<id>/` — **c'est la frontiere du module**, `recorder/pcm.rs`
+   ramene le format natif du materiel (48 kHz, 2 canaux, I32 sur une machine ordinaire) a
+   ce format-la, et tout l'aval en depend a l'octet pres.
+   - Le son systeme se capte sur un appareil de SORTIE : source `<sink>.monitor` sous
+     Linux (host PulseAudio), drapeau de loopback WASAPI sous Windows, « process tap »
+     sous macOS. Meme expression dans notre code, trois mecanismes systeme.
+   - Repli AU CONSTAT, piste par piste : on essaie un appareil, on attend son premier lot
+     (1 s), et on passe au suivant s'il ne vient pas. Une seule piste vivante suffit pour
+     enregistrer (`lost_track`, code traduit par l'interface).
+   - Une piste qui a tourne sans recevoir un seul echantillon NON NUL est signalee a
+     l'arret (`mute_track` : "mic" / "system" / "both") et arrete le pipeline avant
+     l'appel a Whisper. C'est le symptome d'un tap macOS sans autorisation, et il ne doit
+     pas ressortir en « aucune parole detectee ».
 2. Transcription OpenAI `whisper-1` par piste (chunks de 10 min < 25 Mo, `verbose_json`, langue fr, filtre silence + no_speech_prob)
 3. Fusion chronologique en dialogue "Moi" (micro) / "Eux" (son systeme)
 4. Resume via chat completions (modele et prompt systeme configurables dans Parametres globaux, override par projet)
@@ -1371,6 +1398,61 @@ Le backend (`system/metrics.rs`) collecte :
 
 ## Pieges connus (lecons apprises)
 
+- **CPAL SOUS LINUX TIRE `alsa-sys` SANS CONDITION**, meme quand on ne se sert que du host
+  PulseAudio. Le host ALSA n'est pas derriere une feature (`[target.'cfg(linux)']
+  dependencies alsa, alsa-sys` dans le Cargo.toml de cpal 0.18.2). Consequences, decouvertes
+  le 2026-08-21 en construisant la capture audio :
+  - au BUILD, il faut `libasound2-dev` (sinon `Package alsa was not found in the pkg-config
+    search path`). Ajoute a `release.yml` et aux dependances systeme de ce fichier. Sans les
+  droits root : `apt-get download libasound2-dev`, `dpkg-deb -x` dans un prefixe, y copier
+    `libasound.so.2*` du systeme (le `.so` du paquet dev est un lien qui pointe dessus), puis
+    `PKG_CONFIG_PATH=<prefixe>/usr/lib/x86_64-linux-gnu/pkgconfig
+    PKG_CONFIG_SYSROOT_DIR=<prefixe>` — c'est `SYSROOT_DIR` qui redirige le `-L` absolu du
+    fichier `.pc` vers le prefixe ;
+  - a l'EXECUTION, `libasound.so.2` est liee au binaire, donc EMBARQUEE dans l'AppImage par
+    linuxdeploy. C'est la famille de pannes de la libwayland, en plus benin : rien
+    d'exterieur ne se lie a NOTRE copie, et libasound ne charge ses greffons qu'a
+    l'ouverture d'un peripherique ALSA — ce que le chemin PulseAudio ne fait jamais. Le
+    repli ALSA du micro, lui, le fait : c'est la seule voie par laquelle ce risque peut se
+    reveiller. **Ne pas ajouter la feature `pipewire` de cpal** : elle ajouterait
+    libpipewire EN PLUS de libasound, sans rien apporter (le host PulseAudio couvre les
+    machines PipeWire par `pipewire-pulse`).
+- **`Device::id()` et `Display` ne rendent PAS la meme chose dans cpal**, et c'est
+  l'identifiant qui porte la convention `.monitor`. `Display` (donc `to_string()`) rend la
+  DESCRIPTION lisible du host PulseAudio (« Monitor of Built-in Audio Stéréo analogique »),
+  `id().id()` rend le nom du serveur (`alsa_output.pci-0000_00_1f.3.analog-stereo.monitor`).
+  Chercher le suffixe dans le mauvais des deux ne trouve jamais le monitor. Mesure du
+  2026-08-21 : `default_output_device()` + `.monitor` trouve la source, un ton de 440 Hz a
+  8 000 d'amplitude joue sur la sortie ressort dans `system.raw` a 440,0 Hz et 7 999.
+- **UN APPAREIL DE SORTIE REFUSE `default_input_config()`.** C'est pourtant sur lui qu'on
+  construit le flux d'entree pour capter le son systeme (loopback WASAPI, tap Core Audio) :
+  WASAPI rend `UnsupportedOperation / Device does not support input`, et la forme du flux
+  se demande alors par `default_output_config()` (c'est le format du MELANGE qui sort).
+  D'ou `config_capture()` dans capture.rs, qui essaie les deux dans cet ordre. Le monitor
+  PulseAudio, lui, est une SOURCE : c'est le premier appel qui repond.
+- **Le materiel ne livre pas du `f32`.** Sur la machine du banc, micro et monitor livrent
+  **48 000 Hz, 2 canaux, I32**. Un code qui ferait `data.as_slice::<f32>().unwrap()`
+  paniquerait dans le rappel audio, et `unwrap_or_default()` rendrait une piste muette sans
+  rien dire. `en_flottants` couvre les douze formats de `SampleFormat` (qui est
+  `#[non_exhaustive]`), et un format inconnu est refuse a l'OUVERTURE — un rappel audio ne
+  peut remonter aucune erreur.
+- **`cpal::Stream` n'est pas `Send`** sur la plupart des systemes, alors que les handles de
+  capture vivent dans l'etat partage de Tauri. D'ou un thread par piste, qui construit le
+  flux, l'ecoute et le relache sans jamais le faire sortir de la (`recorder/capture.rs`).
+  Le rappel audio ne fait que convertir en flottants et deposer dans une file : le melange
+  des canaux, le reechantillonnage et l'ecriture disque sont de l'autre cote.
+- **Mesurer un repliement sur TOUT le signal mesure les bords, pas le repliement.** Un ton
+  de 10 kHz reechantillonne a 16 kHz ressortait a 0,127 d'amplitude alors que le filtre est
+  parfait : les 400 premiers echantillons portent la reponse transitoire de l'attaque du
+  signal de test (et autant a la coupure), et le regime etabli est a ZERO. Un test qui
+  prend la crete globale conclut a un filtre defaillant et fait chercher un bug qui n'existe
+  pas (2026-08-21, `pcm.rs`).
+- **Verifier l'audio sans lancer l'application** : `cargo test --lib capture_reelle --
+  --ignored --nocapture` enregistre 2 s par les vrais appareils et affiche, piste par
+  piste, l'appareil retenu, le format natif, la taille obtenue, la crete et la frequence
+  dominante. Jouer un ton connu a cote (`pw-play` sur un WAV a 440 Hz) rend le resultat
+  concluant : « des octets sont arrives » et « le son est juste » ne sont pas la meme
+  chose. Le test est `#[ignore]` parce qu'il demande une carte son, qu'un runner n'a pas.
 - **COMPILATION CROISEE WINDOWS : `rustup target add` ne suffit pas, il faut un compilateur C
   croise.** `cargo check --target x86_64-pc-windows-gnu` echoue d'abord sur
   `failed to find tool "x86_64-w64-mingw32-gcc"` — ce n'est pas notre code, c'est
@@ -1537,6 +1619,9 @@ Le backend (`system/metrics.rs`) collecte :
   poll (deux appels tmux ~7 ms a l'epoque, `ps -e -o pid=,ppid=,args=` 47,6 ms sur 1074
   process). A faire : toute commande qui lance un process externe est
   `async fn` ; et un `async fn` avec `tauri::State<'_, _>` doit rendre un `Result`.
+  Meme faute trouvee et corrigee le 2026-08-21 sur `machine_report` : un `fn` qui lancait
+  `pactl info` et `pw-record --version`, puis qui a interroge le serveur audio — elle est
+  passee `async fn` avec le travail sur `spawn_blocking`.
 - **Enumerer tous les process de la machine pour en regarder trois** : la detection des
   agents LLM lancait `ps -e -o pid=,ppid=,args=` a chaque passe, des qu'une commande de
   premier plan n'etait pas un nom de LLM — c'est-a-dire toujours, puisque argv mentait sur

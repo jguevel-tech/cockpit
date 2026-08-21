@@ -25,4 +25,12 @@ listen<RecordingStatus>("recording_status", (e) => {
   if (s.lost_track) {
     notify(translate(s.lost_track === "mic" ? "rec.lostMic" : "rec.lostSystem"), "info");
   }
+  // Une piste qui a tourne sans recevoir un seul echantillon non nul : ce n'est pas une
+  // reunion calme, c'est une capture qui n'a rien capte. Le dire des l'arret, sinon
+  // l'utilisateur l'apprend par un « aucune parole detectee » qui ne montre pas la cause.
+  if (s.mute_track) {
+    const cle =
+      s.mute_track === "both" ? "rec.muteBoth" : s.mute_track === "mic" ? "rec.muteMic" : "rec.muteSystem";
+    notify(translate(cle), "error");
+  }
 });

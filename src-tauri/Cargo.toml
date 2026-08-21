@@ -29,6 +29,16 @@ chrono = "0.4"
 portable-pty = "0.9"
 base64 = "0.22"
 ignore = "0.4"
+# Capture audio des reunions, DANS notre processus : le meme code sur les trois systemes,
+# et plus aucun programme externe (`pw-record`/`parecord` avant aout 2026).
+# La feature `pulseaudio` est ce qui rend le son SYSTEME captable sous Linux : le host ALSA
+# (celui par defaut) ne sait pas lire un monitor, et la feature `pipewire` tirerait des
+# liaisons vers libpipewire — donc une bibliotheque C de plus dans l'AppImage, exactement
+# la famille de pannes de la libwayland. Le host PulseAudio, lui, reimplemente le protocole
+# en Rust pur, et couvre les machines PipeWire (via pipewire-pulse) comme PulseAudio.
+# ATTENTION : sous Linux, cpal depend de toute facon d'`alsa-sys` (host par defaut, pas
+# derriere une feature) — d'ou `libasound2-dev` au build.
+cpal = { version = "0.18", features = ["pulseaudio"] }
 futures = "0.3"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 regex = "1.13.1"

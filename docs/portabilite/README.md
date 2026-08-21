@@ -16,9 +16,10 @@ affirmé dedans est mesuré sur la machine ou vérifié dans les sources — pas
 **Tauri n'est pas la limite.** Tout ce que Tauri fournit — fenêtre, webview, IPC,
 updater, empaquetage — marche déjà sur les trois systèmes. Ce qui ne se porte pas, c'est
 ce que nous avons écrit nous-mêmes pour aller chercher ce que Tauri ne fournit pas :
-tmux pour la persistance des terminaux, `pw-record` pour les réunions, `/proc` pour le
-détail mémoire, `SIGTERM` pour arrêter un processus, `GTK_IM_MODULE` pour le bug des
-accents.
+tmux pour la persistance des terminaux (remplacé par notre service en août 2026),
+`pw-record` pour les réunions (remplacé par une capture `cpal` dans le processus le
+2026-08-21), `/proc` pour le détail mémoire, `SIGTERM` pour arrêter un processus,
+`GTK_IM_MODULE` pour le bug des accents.
 
 **La couche PTY est déjà portable.** `portable-pty`, déjà une dépendance, contient déjà
 ConPTY pour Windows. Seul le multiplexeur ne l'est pas.

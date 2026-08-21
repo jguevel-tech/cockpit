@@ -40,6 +40,14 @@ le script de release.
 - Paramètres → Claude & IA : quand le statut de connexion n'a pas pu être **déterminé**
   (fichier de jetons illisible, dossier personnel introuvable), l'écran le dit au lieu
   d'afficher « non connecté » et de proposer une connexion qui ne changera rien.
+- **L'enregistrement de réunions marche maintenant sur Windows**, micro et son système
+  compris, sans rien installer. Sur Linux, il n'a plus besoin de `pw-record` ni de
+  `parecord` : Cockpit enregistre lui-même, ce qui règle du même coup les machines où
+  PipeWire répondait sans exposer le moindre micro. Sur macOS, la capture demande une
+  autorisation liée à la signature de l'application : sans elle, les pistes ressortent
+  entièrement muettes, et Cockpit le **dit** désormais au lieu d'annoncer qu'aucune parole
+  n'a été détectée.
+- Amélioration des journaux techniques.
 
 ## [0.37.1] — 2026-08-20
 

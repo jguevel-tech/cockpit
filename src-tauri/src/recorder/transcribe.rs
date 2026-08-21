@@ -82,6 +82,67 @@ async fn transcribe_chunk(
     Ok(parsed.segments.unwrap_or_default())
 }
 
+/// Ce qu'on sait d'une piste avant de la transcrire.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EtatPiste {
+    /// Fichier absent ou vide : la piste n'a jamais demarre (deja dit au demarrage).
+    Absente,
+    /// Des octets, mais tous nuls : la piste n'a jamais recu un seul echantillon utile.
+    Muette,
+    Sonore,
+}
+
+/// Une piste ENTIEREMENT a zero n'est pas une piste calme.
+///
+/// C'est le symptome d'un tap macOS sans autorisation TCC : le flux tourne, les rappels
+/// arrivent, tout est nul, et aucune erreur n'est levee. Sans cette distinction, le filtre
+/// de silence sautait tous les chunks et le pipeline finissait sur « Aucune parole
+/// detectee » — un message qui envoie chercher au mauvais endroit.
+///
+/// Lecture en flot avec sortie au premier octet non nul : sur une piste normale, ca
+/// s'arrete au premier bloc.
+pub fn etat_piste(raw_path: &Path) -> EtatPiste {
+    use std::io::Read;
+    let Ok(fichier) = std::fs::File::open(raw_path) else {
+        return EtatPiste::Absente;
+    };
+    let mut lecteur = std::io::BufReader::new(fichier);
+    let mut tampon = [0u8; 64 * 1024];
+    let mut vu = false;
+    while let Ok(lu) = lecteur.read(&mut tampon) {
+        if lu == 0 {
+            break;
+        }
+        vu = true;
+        if tampon[..lu].iter().any(|o| *o != 0) {
+            return EtatPiste::Sonore;
+        }
+    }
+    if vu {
+        EtatPiste::Muette
+    } else {
+        EtatPiste::Absente
+    }
+}
+
+/// Message d'echec quand tout ce qui a ete capte est a zero strict.
+///
+/// Il NOMME la cause au lieu de parler de parole non detectee : sur macOS c'est une
+/// autorisation qui manque, et l'utilisateur n'a aucun moyen de le deviner.
+pub fn message_silence_total() -> String {
+    let mut message = "Aucun son n'a ete capte : les pistes audio sont entierement vides \
+         (pas un seul echantillon non nul)."
+        .to_string();
+    if cfg!(target_os = "macos") {
+        message.push_str(
+            " Sur macOS, la capture audio passe par une autorisation liee a la signature \
+             de l'application : une application non signee obtient des pistes muettes, \
+             sans erreur.",
+        );
+    }
+    message
+}
+
 /// Transcrit une piste PCM brute complete : decoupe en chunks, saute les silences,
 /// filtre les hallucinations, decale les timestamps par chunk.
 pub async fn transcribe_track(
@@ -189,6 +250,36 @@ mod tests {
         assert!(is_hallucination("Merci d'avoir regardé cette vidéo !"));
         assert!(is_hallucination("Voir une autre vidéo ..."));
         assert!(!is_hallucination("On regarde la vidéo du client ensemble demain"));
+    }
+
+    #[test]
+    fn une_piste_de_zeros_est_muette_et_non_absente() {
+        let dir = std::env::temp_dir().join(format!("cockpit-etat-piste-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let muette = dir.join("muette.raw");
+        std::fs::write(&muette, vec![0u8; 32_000]).unwrap();
+        assert_eq!(etat_piste(&muette), EtatPiste::Muette);
+
+        let sonore = dir.join("sonore.raw");
+        let mut octets = vec![0u8; 32_000];
+        // Un seul echantillon non nul, tout a la fin : la lecture doit aller jusqu'au bout
+        // avant de conclure au silence.
+        octets[31_999] = 3;
+        std::fs::write(&sonore, octets).unwrap();
+        assert_eq!(etat_piste(&sonore), EtatPiste::Sonore);
+
+        let vide = dir.join("vide.raw");
+        std::fs::write(&vide, Vec::<u8>::new()).unwrap();
+        assert_eq!(etat_piste(&vide), EtatPiste::Absente);
+        assert_eq!(etat_piste(&dir.join("jamais-creee.raw")), EtatPiste::Absente);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn le_message_de_silence_total_ne_parle_pas_de_parole_non_detectee() {
+        let m = message_silence_total();
+        assert!(m.contains("entierement vides"), "{m}");
+        assert!(!m.to_lowercase().contains("parole"), "{m}");
     }
 
     #[test]

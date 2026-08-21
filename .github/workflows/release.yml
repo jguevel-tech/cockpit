@@ -65,8 +65,12 @@ jobs:
             return 1
           }
           apt_reessai update
+          # `libasound2-dev` : cpal (capture audio des reunions) depend d'`alsa-sys` sans
+          # condition sous Linux — le host ALSA n'est pas derriere une feature, meme quand
+          # on ne se sert que du host PulseAudio. Sans ce paquet, `alsa-sys` echoue sur
+          # « Package alsa was not found in the pkg-config search path ».
           apt_reessai install -y --no-install-recommends \
-            libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+            libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf libasound2-dev
 
       - uses: actions/setup-node@v4
         with:
