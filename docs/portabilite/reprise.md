@@ -4,9 +4,9 @@
 
 ## En une phrase
 
-**La v0.38.0 est taguée et poussée** : elle emporte le remplacement de tmux par notre
-service de terminaux, le portage Windows et la capture audio dans le processus. Le chantier
-de portabilité est terminé côté code.
+**La v0.39.0 est publiée** : elle emporte le remplacement de tmux par notre service de
+terminaux et la capture audio dans le processus, pour Linux et macOS. **Windows ne part
+pas** — le code compile, les terminaux n'y marchent pas encore.
 
 ## Ce qui a été vérifié avant le tag, à la main
 
@@ -39,12 +39,28 @@ Les deux suivent la même recette : `apt-get download`, `dpkg-deb -x` dans un pr
 
 Recettes complètes dans les Pièges connus du `CLAUDE.md`.
 
-## Ce qui reste
+## Windows : ce que le premier vrai passage a dit (v0.38.0)
 
-- **Windows compile, mais n'a jamais tourné.** Cinq essais du service tapent dans le shell
-  (`printf`, `cat`, `for i in $(seq …)`) : ils portent `#[cfg(unix)]`, parce que `cmd.exe`
-  ne connaît aucune des trois. Ce que le terminal fait vraiment dans un ConPTY se saura en
-  lançant l'installeur produit par la CI, pas en écrivant un essai à l'aveugle.
+La compilation croisée rendait 0 erreur et 0 avertissement. Le runner a fait tomber
+**treize** essais. Donc : `--all-targets` n'exerce rien, il compile.
+
+| Constat | Portée |
+|---|---|
+| **Écrire dans le PTY échoue** — « The operation completed successfully. (os error 0) », et créer une session « The handle is invalid. (os error 6) » | **Bloquant.** C'est le cœur du produit. Ne se trouvera pas en lisant : il faut une machine. |
+| Un socket local n'est pas un fichier sous Windows, c'est un tuyau nommé (`\\.\pipe\`) | **Corrigé.** Le code de production le savait, les essais non. |
+| Cinq essais tapent `printf` / `cat` / `for i in $(seq …)` dans le shell — `cmd.exe` n'en connaît aucun | **Corrigé** par `#[cfg(unix)]`, avec sur place ce qui reste couvert. |
+| « le shell ne meurt pas », et un `assert_eq!` de `workspace` (séparateurs de chemin) | À reprendre. |
+
+**Décision** : Windows est **sorti** de la matrice de `release.yml` et de
+`PLATEFORMES_ATTENDUES`, et prend son propre `.github/workflows/windows.yml`, sur
+`workflow_dispatch`, qui produit l'installeur en artefact **sans rien publier**
+(`gh workflow run windows.yml`). Deux raisons, aucune n'est le temps : un installeur dont
+les terminaux sont morts est pire que pas d'installeur ; et une matrice rouge à chaque
+release rend invisible le jour où l'échec est une vraie régression — la leçon exacte de la
+v0.32.0. Le remettre dans `release.yml` demande de **rajouter `windows-` à
+`PLATEFORMES_ATTENDUES`**, sinon son absence redevient silencieuse.
+
+## Ce qui reste
 - **macOS : la capture audio rendra du silence** sans certificat Apple — décision prise, pas
   de certificat. Le cas est maintenant **dit** (`mute_track`, le pipeline s'arrête avant
   Whisper) au lieu de finir en « aucune parole détectée ».
