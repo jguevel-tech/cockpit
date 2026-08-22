@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.46.1] — 2026-08-22
+
 ### Fixed
 
 - **Une mise à jour qui échoue dit maintenant pourquoi.** Le message était « Installation de la
