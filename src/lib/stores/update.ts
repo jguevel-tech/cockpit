@@ -4,8 +4,13 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
 import { notify } from "./toast";
 import { pushNotice, removeNoticesByPrefix } from "./notifications";
-import { translate, type Catalog } from "../i18n";
+import { translate } from "../i18n";
 import { signalerErreur } from "./errors";
+import { cleErreurMaj, detailErreurMaj } from "./updateErreurs";
+
+// Reexportes : les composants les importaient deja d'ici avant que ces regles soient
+// sorties dans leur propre module, essayable sous node.
+export { cleErreurMaj, detailErreurMaj };
 
 /// Etat du telechargement, pour la barre de progression du modal.
 export type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "installing" | "error";
@@ -65,14 +70,6 @@ const versionReady = getVersion()
  * Une CLE et non un texte : le message reste alors reactif au changement de langue la ou il
  * est affiche. Le detail technique n'est pas perdu, il part dans le journal.
  */
-export function cleErreurMaj(brut: string): keyof Catalog | null {
-  if (/platforms` object/.test(brut)) return "update.notReady";
-  if (/error sending request|dns error|timed out|timeout|connection|connect |unreachable|network/i.test(brut)) {
-    return "update.offline";
-  }
-  return null;
-}
-
 /// Interroge la Release GitHub la plus recente. Silencieux par defaut : au demarrage on ne
 /// veut pas d'un toast d'erreur parce que la machine est hors ligne.
 export async function checkForUpdate(opts: { silent?: boolean } = {}) {

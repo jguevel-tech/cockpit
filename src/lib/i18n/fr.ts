@@ -142,6 +142,7 @@ export const fr = {
   "update.notReady": "La nouvelle version n'est pas encore prête pour ton système — réessaie dans quelques minutes.",
   "update.offline": "Serveur de mises à jour injoignable — vérifie ta connexion.",
   "update.checkFailed": "Vérification des mises à jour impossible.",
+  "update.moved": "Cockpit ne retrouve plus son fichier d'installation : il a été déplacé ou renommé depuis. Relance Cockpit depuis son emplacement actuel, ou réinstalle-le depuis la page des versions.",
   "update.installFailed": "Installation de la mise à jour impossible.",
 
   // Alertes systeme

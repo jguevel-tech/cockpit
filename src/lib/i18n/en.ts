@@ -137,6 +137,7 @@ export const en: Catalog = {
   "update.notReady": "The new version is not ready for your system yet — try again in a few minutes.",
   "update.offline": "Update server unreachable — check your connection.",
   "update.checkFailed": "Could not check for updates.",
+  "update.moved": "Cockpit can no longer find its own installed file: it was moved or renamed since. Launch Cockpit from where it now lives, or reinstall it from the releases page.",
   "update.installFailed": "Could not install the update.",
 
   "alerts.diskFull": "Disk almost full — {mount}",

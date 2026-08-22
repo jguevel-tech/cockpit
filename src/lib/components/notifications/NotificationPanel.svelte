@@ -1,7 +1,7 @@
 <script lang="ts">
   import { marked } from "marked";
   import { notices, markAllRead, dismiss } from "../../stores/notifications";
-  import { checkForUpdate, cleErreurMaj, updateState } from "../../stores/update";
+  import { checkForUpdate, cleErreurMaj, updateState, detailErreurMaj} from "../../stores/update";
   import { notify } from "../../stores/toast";
   import { portal } from "../../actions/portal";
   import { trad } from "../../i18n";
@@ -106,9 +106,13 @@
             {:else if n.kind === "update" && $updateState.phase === "installing"}
               <p class="status">{$trad("notif.installing")}</p>
             {:else if n.kind === "update" && $updateState.error}
+              {@const detail = detailErreurMaj($updateState.error)}
               <p class="status error">
                 {$trad(cleErreurMaj($updateState.error) ?? "update.installFailed")}
               </p>
+              <!-- La raison brute quand on n'a pas su la nommer : sans elle, l'utilisateur n'a
+                   rien a rapporter et nous rien a diagnostiquer. -->
+              {#if detail}<p class="status detail">{detail}</p>{/if}
             {/if}
           </div>
         </li>
@@ -198,4 +202,11 @@
   .bar { height: 100%; background: var(--accent); transition: width 0.2s ease; }
   .status { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.3rem; }
   .status.error { color: var(--error); }
+  /* La raison technique se lit sans crier : elle sert a rapporter, pas a inquieter. */
+  .status.detail {
+    color: var(--text-muted);
+    font-family: var(--font-mono, monospace);
+    font-size: 0.68rem;
+    overflow-wrap: anywhere;
+  }
 </style>
