@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Une mise à jour qui échoue dit maintenant pourquoi.** Le message était « Installation de la
+  mise à jour impossible », sans rien de plus : il n'y avait rien à faire de cette phrase. Le cas
+  le plus courant est nommé — Cockpit a été déplacé ou renommé depuis son installation, donc il ne
+  retrouve plus son propre fichier — avec ce qu'il faut faire pour s'en sortir. Et quand la cause
+  n'est pas reconnue, elle s'affiche sous le message plutôt que de finir seulement dans un journal.
+
 ## [0.46.0] — 2026-08-21
 
 ### Added
