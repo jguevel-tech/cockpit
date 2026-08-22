@@ -12,6 +12,24 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Un bouton de compte en haut à droite.** On voit d'un coup d'œil si on est connecté et sous
+  quel compte — avant, rien ne le disait. Un clic donne accès au profil et à la déconnexion.
+- **Un profil, dans l'application.** Votre nom, votre image, où en est la synchronisation et
+  quelles machines sont connectées, sans avoir à ouvrir un navigateur.
+- **Un nom affiché et une image de profil.** Ils suivent le compte, donc ils sont les mêmes sur
+  toutes vos machines. Sans image, ce sont vos initiales qui s'affichent.
+
+### Changed
+
+- **La création de compte demande une confirmation du mot de passe** et propose de choisir un
+  nom affiché. Une faute de frappe sur un champ qu'on ne voit pas se découvrait sinon à la
+  première connexion.
+- **Le bouton de connexion par le navigateur dit ce qu'il fait.** Il n'annonce Google que si le
+  serveur sait vraiment le faire ; sinon il propose simplement de se connecter dans le
+  navigateur, ce qui marche dans les deux cas.
+
 ## [0.46.1] — 2026-08-22
 
 ### Fixed

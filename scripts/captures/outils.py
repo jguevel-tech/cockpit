@@ -84,25 +84,46 @@ def cliquer(x: int, y: int) -> None:
 
 
 def taper(texte: str, entree: bool = True) -> None:
+    """Frappe un texte, majuscules et symboles compris.
+
+    Le piege : un caractere ne suffit pas a designer une touche. Sur un clavier francais, « @ »
+    partage sa touche avec « 2 », et une frappe sans modificateur produit « 2 ». On demande donc
+    au serveur X ou vit chaque symbole, et on presse Maj — ou AltGr — quand il faut.
+    """
     from Xlib import X, XK
     from Xlib.ext import xtest
 
     d = _ecran()
-    speciaux = {" ": "space", "-": "minus", ".": "period", "/": "slash", "\n": "Return"}
+    noms = {" ": "space", "-": "minus", ".": "period", "/": "slash", "@": "at",
+            ":": "colon", "_": "underscore", "\n": "Return"}
 
-    def code(car: str) -> int:
-        return d.keysym_to_keycode(XK.string_to_keysym(speciaux.get(car, car)))
+    def touche(car: str):
+        sym = XK.string_to_keysym(noms.get(car, car))
+        if not sym:
+            return None
+        for code, rang in d.keysym_to_keycodes(sym):
+            # rang 0 = touche nue, 1 = avec Maj, 2/3 = avec AltGr (troisieme niveau).
+            if rang in (0, 1, 2, 3):
+                return code, rang
+        return None
+
+    maj = d.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
+    altgr = d.keysym_to_keycode(XK.string_to_keysym("ISO_Level3_Shift"))
 
     for car in texte + ("\n" if entree else ""):
-        k = code(car)
-        if not k:
+        trouve = touche(car)
+        if trouve is None:
             continue
-        xtest.fake_input(d, X.KeyPress, k)
-        d.sync()
+        code, rang = trouve
+        modificateur = maj if rang == 1 else (altgr if rang in (2, 3) else None)
+
+        if modificateur:
+            xtest.fake_input(d, X.KeyPress, modificateur); d.sync(); time.sleep(0.02)
+        xtest.fake_input(d, X.KeyPress, code); d.sync(); time.sleep(0.03)
+        xtest.fake_input(d, X.KeyRelease, code); d.sync(); time.sleep(0.02)
+        if modificateur:
+            xtest.fake_input(d, X.KeyRelease, modificateur); d.sync()
         time.sleep(0.03)
-        xtest.fake_input(d, X.KeyRelease, k)
-        d.sync()
-        time.sleep(0.04)
 
 
 # ── Base de demonstration ─────────────────────────────────────────────────────────────────────

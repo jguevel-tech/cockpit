@@ -30,6 +30,12 @@ const CLE_SERVEUR: &str = "compte_serveur";
 const CLE_JETON: &str = "compte_jeton";
 const CLE_EMAIL: &str = "compte_email";
 const CLE_NOM: &str = "compte_nom";
+const CLE_INITIALES: &str = "compte_initiales";
+/// L'avatar est garde EN LOCAL, sous forme d'adresse `data:`.
+///
+/// Pointer l'image du serveur marcherait tant qu'on est connecte, et afficherait un cadre vide
+/// des qu'on ne l'est plus — sur un logiciel dont la promesse est de fonctionner hors ligne.
+const CLE_AVATAR: &str = "compte_avatar";
 const CLE_APPAREIL: &str = "compte_appareil";
 
 /// Au-dela, on rend la main : mieux vaut dire « le serveur ne repond pas » que laisser un
@@ -44,6 +50,7 @@ pub mod motif {
     pub const IDENTIFIANTS: &str = "identifiants_invalides";
     pub const TROP_DE_TENTATIVES: &str = "trop_de_tentatives";
     pub const APPAIRAGE_EXPIRE: &str = "appairage_expire";
+    pub const PAS_CONNECTE: &str = "pas_connecte";
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -51,6 +58,11 @@ pub struct EtatCompte {
     pub connecte: bool,
     pub email: Option<String>,
     pub nom: Option<String>,
+    /// Une ou deux lettres, toujours presentes : sans image, il faut afficher quelque chose
+    /// plutot qu'un rond vide, qui se lirait comme un defaut.
+    pub initiales: Option<String>,
+    /// Adresse `data:` de l'image, ou `None`.
+    pub avatar: Option<String>,
     pub serveur: String,
     /// Nom que cette machine annonce au serveur. Affiche pour qu'on reconnaisse ses machines
     /// dans la liste du compte.
@@ -81,6 +93,14 @@ struct ReponseCompte {
 struct ProfilDistant {
     email: String,
     nom: Option<String>,
+    initiales: Option<String>,
+    /// Adresse de l'image sur le serveur. On la telecharge pour la garder ici.
+    avatar: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ReponseProfil {
+    compte: ProfilDistant,
 }
 
 #[derive(Deserialize)]
@@ -141,10 +161,14 @@ pub fn systeme() -> &'static str {
 }
 
 fn etat(db: &Database) -> EtatCompte {
+    let vide = |c: &str| db.get_setting(c).filter(|v| !v.trim().is_empty());
+
     EtatCompte {
         connecte: jeton(db).is_some(),
         email: db.get_setting(CLE_EMAIL),
-        nom: db.get_setting(CLE_NOM).filter(|v| !v.trim().is_empty()),
+        nom: vide(CLE_NOM),
+        initiales: vide(CLE_INITIALES),
+        avatar: vide(CLE_AVATAR),
         serveur: serveur(db),
         appareil: nom_machine(),
     }
@@ -188,12 +212,18 @@ async fn ouvrir_une_session(
     chemin: &str,
     email: &str,
     mot_de_passe: &str,
+    nom: Option<&str>,
 ) -> Result<EtatCompte, String> {
-    let corps = serde_json::json!({
+    let mut corps = serde_json::json!({
         "email": email,
         "mot_de_passe": mot_de_passe,
         "appareil": bloc_appareil(db)?,
     });
+    // Le nom n'accompagne que l'inscription : l'envoyer a la connexion ecraserait celui que
+    // l'utilisateur a pu changer depuis, avec ce que ce poste-ci se rappelle.
+    if let Some(nom) = nom.filter(|n| !n.trim().is_empty()) {
+        corps["nom"] = serde_json::Value::String(nom.trim().to_string());
+    }
 
     let reponse = client()
         .post(format!("{}{chemin}", serveur(db)))
@@ -211,14 +241,85 @@ async fn ouvrir_une_session(
         motif::SERVEUR.to_string()
     })?;
 
-    enregistrer_la_session(db, &recue)
+    enregistrer_la_session(db, &recue).await
 }
 
-fn enregistrer_la_session(db: &Database, recue: &ReponseCompte) -> Result<EtatCompte, String> {
+async fn enregistrer_la_session(db: &Database, recue: &ReponseCompte) -> Result<EtatCompte, String> {
     db.set_setting(CLE_JETON, &recue.jeton)?;
-    db.set_setting(CLE_EMAIL, &recue.compte.email)?;
-    db.set_setting(CLE_NOM, recue.compte.nom.as_deref().unwrap_or(""))?;
+    rapatrier_l_avatar(db, recue.compte.avatar.as_deref()).await;
+    enregistrer_le_profil(db, &recue.compte)
+}
+
+/// Range ce que le serveur dit du compte, image comprise.
+fn enregistrer_le_profil(db: &Database, profil: &ProfilDistant) -> Result<EtatCompte, String> {
+    db.set_setting(CLE_EMAIL, &profil.email)?;
+    db.set_setting(CLE_NOM, profil.nom.as_deref().unwrap_or(""))?;
+    db.set_setting(CLE_INITIALES, profil.initiales.as_deref().unwrap_or(""))?;
     Ok(etat(db))
+}
+
+/// Telecharge l'avatar et le garde en local.
+///
+/// Separe du reste parce qu'il peut echouer sans que ce soit grave : sans image on retombe sur
+/// les initiales. Une panne ici ne doit pas faire echouer une connexion.
+async fn rapatrier_l_avatar(db: &Database, adresse: Option<&str>) {
+    let Some(adresse) = adresse else {
+        let _ = db.set_setting(CLE_AVATAR, "");
+        return;
+    };
+
+    match client().get(adresse).send().await {
+        Ok(reponse) if reponse.status().is_success() => {
+            let type_ = reponse
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("image/png")
+                .to_string();
+            match reponse.bytes().await {
+                Ok(octets) => {
+                    use base64::Engine;
+                    let encode = base64::engine::general_purpose::STANDARD.encode(&octets);
+                    let _ = db.set_setting(CLE_AVATAR, &format!("data:{type_};base64,{encode}"));
+                }
+                Err(e) => log::warn!("compte : avatar illisible — {e}"),
+            }
+        }
+        Ok(reponse) => log::warn!("compte : avatar indisponible ({})", reponse.status()),
+        Err(e) => log::warn!("compte : avatar injoignable — {e}"),
+    }
+}
+
+#[derive(Deserialize)]
+struct Capacites {
+    google: bool,
+}
+
+/// Ce que le serveur sait faire.
+///
+/// Rend `false` quand on ne peut pas lui demander : mieux vaut ne pas proposer un bouton que
+/// d'en proposer un qui mene a une page ou le choix n'existe pas.
+#[tauri::command]
+pub async fn compte_google_disponible(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<bool, String> {
+    let reponse = match client()
+        .get(format!("{}/api/capacites", serveur(&state.db)))
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => r,
+        Ok(r) => {
+            log::warn!("compte : capacites indisponibles ({})", r.status());
+            return Ok(false);
+        }
+        Err(e) => {
+            log::warn!("compte : capacites injoignables — {e}");
+            return Ok(false);
+        }
+    };
+
+    Ok(reponse.json::<Capacites>().await.map(|c| c.google).unwrap_or(false))
 }
 
 #[tauri::command]
@@ -230,9 +331,10 @@ pub async fn compte_etat(state: tauri::State<'_, crate::AppState>) -> Result<Eta
 pub async fn compte_inscription(
     email: String,
     mot_de_passe: String,
+    nom: Option<String>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
-    ouvrir_une_session(&state.db, "/api/inscription", &email, &mot_de_passe).await
+    ouvrir_une_session(&state.db, "/api/inscription", &email, &mot_de_passe, nom.as_deref()).await
 }
 
 #[tauri::command]
@@ -241,7 +343,7 @@ pub async fn compte_connexion(
     mot_de_passe: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
-    ouvrir_une_session(&state.db, "/api/connexion", &email, &mot_de_passe).await
+    ouvrir_une_session(&state.db, "/api/connexion", &email, &mot_de_passe, None).await
 }
 
 /// Demande un appairage : le logiciel ouvrira l'adresse rendue dans le navigateur.
@@ -293,7 +395,7 @@ pub async fn compte_appairage_etat(
                 log::warn!("compte : reponse d'appairage illisible — {e}");
                 motif::SERVEUR.to_string()
             })?;
-            Ok(EtatAppairage::Accorde { compte: enregistrer_la_session(&state.db, &recue)? })
+            Ok(EtatAppairage::Accorde { compte: enregistrer_la_session(&state.db, &recue).await? })
         }
         _ => Err(refus(reponse).await),
     }
@@ -329,7 +431,147 @@ pub async fn compte_deconnexion(
     db.set_setting(CLE_JETON, "")?;
     db.set_setting(CLE_EMAIL, "")?;
     db.set_setting(CLE_NOM, "")?;
+    db.set_setting(CLE_INITIALES, "")?;
+    db.set_setting(CLE_AVATAR, "")?;
     Ok(etat(db))
+}
+
+/// Appelle l'API du compte avec le jeton, et range le profil rendu.
+///
+/// Publique parce que les commandes Tauri ne s'essaient pas : elles demandent un `State` et une
+/// fenetre. Les commandes ci-dessous ne sont que des adaptateurs vers ces fonctions-ci, qui
+/// prennent une base et rien d'autre.
+pub async fn appeler_le_profil(
+    db: &Database,
+    methode: reqwest::Method,
+    chemin: &str,
+    corps: Option<serde_json::Value>,
+    image: Option<Vec<u8>>,
+) -> Result<EtatCompte, String> {
+    let Some(jeton) = jeton(db) else {
+        return Err(motif::PAS_CONNECTE.to_string());
+    };
+
+    let mut demande = client()
+        .request(methode, format!("{}{chemin}", serveur(db)))
+        .bearer_auth(jeton);
+    if let Some(corps) = corps {
+        demande = demande.json(&corps);
+    }
+    if let Some(image) = image {
+        demande = demande
+            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+            .body(image);
+    }
+
+    let reponse = demande.send().await.map_err(panne_reseau)?;
+    if !reponse.status().is_success() {
+        return Err(refus(reponse).await);
+    }
+
+    let recue: ReponseProfil = reponse.json().await.map_err(|e| {
+        log::warn!("compte : profil illisible — {e}");
+        motif::SERVEUR.to_string()
+    })?;
+
+    rapatrier_l_avatar(db, recue.compte.avatar.as_deref()).await;
+    enregistrer_le_profil(db, &recue.compte)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Machine {
+    pub id: String,
+    pub nom: String,
+    pub systeme: String,
+    pub vu_le: String,
+}
+
+#[derive(Deserialize)]
+struct ReponseMoi {
+    appareils: Vec<Machine>,
+    /// L'identifiant de la machine COURANTE, pour que l'interface puisse la distinguer des
+    /// autres — deconnecter celle sur laquelle on est n'a pas le meme sens.
+    appareil: Option<String>,
+}
+
+/// La liste des machines du compte, et laquelle est celle-ci.
+#[tauri::command]
+pub async fn compte_machines(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(Vec<Machine>, Option<String>), String> {
+    let db = &state.db;
+    let Some(jeton) = jeton(db) else {
+        return Err(motif::PAS_CONNECTE.to_string());
+    };
+
+    let reponse = client()
+        .get(format!("{}/api/moi", serveur(db)))
+        .bearer_auth(jeton)
+        .send()
+        .await
+        .map_err(panne_reseau)?;
+
+    if !reponse.status().is_success() {
+        return Err(refus(reponse).await);
+    }
+
+    let recue: ReponseMoi = reponse.json().await.map_err(|e| {
+        log::warn!("compte : liste des machines illisible — {e}");
+        motif::SERVEUR.to_string()
+    })?;
+
+    Ok((recue.appareils, recue.appareil))
+}
+
+pub async fn definir_le_nom(db: &Database, nom: &str) -> Result<EtatCompte, String> {
+    appeler_le_profil(
+        db,
+        reqwest::Method::PATCH,
+        "/api/moi",
+        Some(serde_json::json!({ "nom": nom })),
+        None,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn compte_definir_nom(
+    nom: String,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<EtatCompte, String> {
+    definir_le_nom(&state.db, &nom).await
+}
+
+/// Depose une image choisie sur le disque.
+///
+/// Le fichier est lu ICI et non cote interface : passer une image par l'IPC la ferait encoder
+/// en JavaScript puis reevaluer, pour rien.
+pub async fn deposer_un_avatar(db: &Database, chemin: &str) -> Result<EtatCompte, String> {
+    let image = std::fs::read(chemin).map_err(|e| {
+        log::warn!("compte : image illisible ({chemin}) — {e}");
+        "avatar_illisible".to_string()
+    })?;
+
+    appeler_le_profil(db, reqwest::Method::PUT, "/api/moi/avatar", None, Some(image)).await
+}
+
+pub async fn retirer_l_avatar(db: &Database) -> Result<EtatCompte, String> {
+    appeler_le_profil(db, reqwest::Method::DELETE, "/api/moi/avatar", None, None).await
+}
+
+#[tauri::command]
+pub async fn compte_deposer_avatar(
+    chemin: String,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<EtatCompte, String> {
+    deposer_un_avatar(&state.db, &chemin).await
+}
+
+#[tauri::command]
+pub async fn compte_retirer_avatar(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<EtatCompte, String> {
+    retirer_l_avatar(&state.db).await
 }
 
 #[tauri::command]

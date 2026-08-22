@@ -22,14 +22,32 @@
   } from "../../stores/compte";
   import { openUrl } from "../../api/workspace";
   import { signalerErreur } from "../../stores/errors";
-  import { onDestroy } from "svelte";
+  import { texteDuRefus } from "../../stores/refusCompte";
+  import { googleDisponible } from "../../api/compte";
+  import { onDestroy, onMount } from "svelte";
 
   let { onClose }: { onClose: () => void } = $props();
 
   let mode: "connexion" | "inscription" = $state("connexion");
   let email = $state("");
   let motDePasse = $state("");
+  let confirmation = $state("");
+  let nom = $state("");
   let enCours = $state(false);
+  /// Refus verifie ICI et non par le serveur : une faute de frappe sur un champ qu'on ne voit
+  /// pas ne doit pas couter un aller-retour, ni etre decouverte a la premiere connexion.
+  let refusLocal: "mots_de_passe_differents" | null = $state(null);
+  /// Le serveur sait-il faire Google ? On lui demande : proposer le bouton sans le savoir mene
+  /// a une page ou ce choix n'existe pas. Faux tant qu'on n'a pas la reponse.
+  let googleActif = $state(false);
+
+  onMount(async () => {
+    try {
+      googleActif = await googleDisponible();
+    } catch {
+      // Deja journalise cote Rust ; ici l'absence de reponse veut dire « ne le propose pas ».
+    }
+  });
 
   /** La demande d'appairage en cours, si l'utilisateur est parti par le navigateur. */
   let attente: { code: string; url: string } | null = $state(null);
@@ -40,46 +58,34 @@
 
   const refus = $derived($dernierRefus);
 
-  /**
-   * Chaque motif rendu par le serveur a sa phrase. Une TABLE et non une cle construite a la
-   * volee : le catalogue est type, donc ecrire les cles en toutes lettres fait verifier par le
-   * compilateur qu'elles existent — dans les deux langues. Une cle assemblee passerait la
-   * verification et manquerait a l'affichage.
-   *
-   * Un motif inconnu tombe sur un message general : le serveur peut en ajouter avant que le
-   * logiciel les connaisse, et afficher une cle technique serait pire que rien.
-   */
-  const REFUS = {
-    identifiants_invalides: "compte.refus.identifiants_invalides",
-    adresse_deja_prise: "compte.refus.adresse_deja_prise",
-    adresse_invalide: "compte.refus.adresse_invalide",
-    mot_de_passe_trop_court: "compte.refus.mot_de_passe_trop_court",
-    trop_de_tentatives: "compte.refus.trop_de_tentatives",
-    reseau: "compte.refus.reseau",
-    appairage_expire: "compte.refus.appairage_expire",
-  } as const;
-
-  const texteDuRefus = $derived(
-    refus === null
-      ? null
-      : refus in REFUS
-        ? $trad(REFUS[refus as keyof typeof REFUS])
-        : $trad("compte.refus.serveur"),
-  );
+  const texteDuRefusAffiche = $derived(texteDuRefus(refusLocal ?? refus));
 
   async function valider(e: Event) {
     e.preventDefault();
     if (enCours) return;
+
+    refusLocal = null;
+    if (mode === "inscription" && motDePasse !== confirmation) {
+      refusLocal = "mots_de_passe_differents";
+      return;
+    }
+
     enCours = true;
     try {
       const ok =
         mode === "inscription"
-          ? await sInscrire(email.trim(), motDePasse)
+          ? await sInscrire(email.trim(), motDePasse, nom.trim() || null)
           : await seConnecter(email.trim(), motDePasse);
       if (ok) onClose();
     } finally {
       enCours = false;
     }
+  }
+
+  /// Changer d'onglet efface le refus : il portait sur l'autre formulaire.
+  function basculer(vers: "connexion" | "inscription") {
+    mode = vers;
+    refusLocal = null;
   }
 
   async function parGoogle() {
@@ -134,7 +140,7 @@
         class:actif={mode === "connexion"}
         role="tab"
         aria-selected={mode === "connexion"}
-        onclick={() => (mode = "connexion")}
+        onclick={() => basculer("connexion")}
       >
         {$trad("compte.seConnecter")}
       </button>
@@ -143,17 +149,25 @@
         class:actif={mode === "inscription"}
         role="tab"
         aria-selected={mode === "inscription"}
-        onclick={() => (mode = "inscription")}
+        onclick={() => basculer("inscription")}
       >
         {$trad("compte.creer")}
       </button>
     </div>
 
-    {#if texteDuRefus}
-      <p class="refus">{texteDuRefus}</p>
+    {#if texteDuRefusAffiche}
+      <p class="refus">{$trad(texteDuRefusAffiche)}</p>
     {/if}
 
     <form onsubmit={valider}>
+      {#if mode === "inscription"}
+        <label class="field">
+          <span>{$trad("compte.nom")}</span>
+          <input class="input" type="text" bind:value={nom} maxlength="120"
+                 autocomplete="nickname" placeholder={$trad("compte.nomExemple")} />
+        </label>
+        <p class="aide">{$trad("compte.nomAide")}</p>
+      {/if}
       <label class="field">
         <span>{$trad("compte.email")}</span>
         <!-- svelte-ignore a11y_autofocus -->
@@ -171,6 +185,11 @@
       </label>
       {#if mode === "inscription"}
         <p class="aide">{$trad("compte.longueurMinimale")}</p>
+        <label class="field">
+          <span>{$trad("compte.confirmation")}</span>
+          <input class="input" type="password" bind:value={confirmation}
+                 autocomplete="new-password" required />
+        </label>
       {/if}
       <button class="btn primary large" type="submit" disabled={enCours}>
         {mode === "inscription" ? $trad("compte.creer") : $trad("compte.seConnecter")}
@@ -180,7 +199,7 @@
     <div class="separateur"><span>{$trad("compte.ou")}</span></div>
 
     <button class="btn large" onclick={parGoogle} disabled={enCours}>
-      {$trad("compte.parGoogle")}
+      {googleActif ? $trad("compte.parGoogle") : $trad("compte.parLeNavigateur")}
     </button>
 
     <button class="btn lien" onclick={onClose}>{$trad("compte.sansCompte")}</button>

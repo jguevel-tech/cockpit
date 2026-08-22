@@ -50,8 +50,8 @@ async function tenter(action: () => Promise<EtatCompte>): Promise<boolean> {
   }
 }
 
-export const sInscrire = (email: string, motDePasse: string) =>
-  tenter(() => api.inscription(email, motDePasse));
+export const sInscrire = (email: string, motDePasse: string, nom: string | null = null) =>
+  tenter(() => api.inscription(email, motDePasse, nom));
 
 export const seConnecter = (email: string, motDePasse: string) =>
   tenter(() => api.connexion(email, motDePasse));
@@ -59,6 +59,10 @@ export const seConnecter = (email: string, motDePasse: string) =>
 export const seDeconnecter = () => tenter(() => api.deconnexion());
 
 export const definirServeur = (url: string) => tenter(() => api.definirServeur(url));
+
+export const definirNom = (nom: string) => tenter(() => api.definirNom(nom));
+export const deposerAvatar = (chemin: string) => tenter(() => api.deposerAvatar(chemin));
+export const retirerAvatar = () => tenter(() => api.retirerAvatar());
 
 /** Intervalle de scrutation : assez court pour que ce soit immediat a l'oeil, assez espace
  *  pour ne pas marteler le serveur pendant qu'on remplit un formulaire dans le navigateur. */

@@ -1597,6 +1597,11 @@ pub fn run() {
             compte::compte_appairage_etat,
             compte::compte_deconnexion,
             compte::compte_definir_serveur,
+            compte::compte_definir_nom,
+            compte::compte_machines,
+            compte::compte_google_disponible,
+            compte::compte_deposer_avatar,
+            compte::compte_retirer_avatar,
             compte::synchro::synchro_maintenant,
             compte::synchro::synchro_etat,
             // Docker

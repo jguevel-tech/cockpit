@@ -5,6 +5,10 @@ export type EtatCompte = {
   connecte: boolean;
   email: string | null;
   nom: string | null;
+  /** Une ou deux lettres, a afficher quand il n'y a pas d'image. */
+  initiales: string | null;
+  /** Adresse `data:` de l'avatar, gardee en local pour marcher hors connexion. */
+  avatar: string | null;
   serveur: string;
   /** Nom sous lequel cette machine apparait dans la liste du compte. */
   appareil: string;
@@ -22,8 +26,26 @@ export type EtatAppairage =
 
 export const etatCompte = () => invoke<EtatCompte>("compte_etat");
 
-export const inscription = (email: string, motDePasse: string) =>
-  invoke<EtatCompte>("compte_inscription", { email, motDePasse });
+/** Ce que le serveur sait faire. Faux quand on ne peut pas lui demander. */
+export const googleDisponible = () => invoke<boolean>("compte_google_disponible");
+
+export const inscription = (email: string, motDePasse: string, nom: string | null) =>
+  invoke<EtatCompte>("compte_inscription", { email, motDePasse, nom });
+
+export type Machine = {
+  id: string;
+  nom: string;
+  systeme: string;
+  vu_le: string;
+};
+
+/** Rend la liste des machines et l'identifiant de celle-ci. */
+export const machines = () => invoke<[Machine[], string | null]>("compte_machines");
+
+export const definirNom = (nom: string) => invoke<EtatCompte>("compte_definir_nom", { nom });
+export const deposerAvatar = (chemin: string) =>
+  invoke<EtatCompte>("compte_deposer_avatar", { chemin });
+export const retirerAvatar = () => invoke<EtatCompte>("compte_retirer_avatar");
 
 export const connexion = (email: string, motDePasse: string) =>
   invoke<EtatCompte>("compte_connexion", { email, motDePasse });
