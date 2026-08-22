@@ -5,6 +5,7 @@
   import { notify } from "../../stores/toast";
   import { portal } from "../../actions/portal";
   import { trad } from "../../i18n";
+  import { titresEnLangue } from "../../stores/notesDeVersion";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -84,7 +85,9 @@
               <time>{relativeTime(n.createdAt)}</time>
             </div>
             {#if n.body}
-              <div class="body">{@html marked.parse(n.body, { async: false })}</div>
+              <div class="body">
+                {@html marked.parse(titresEnLangue(n.body, $trad), { async: false })}
+              </div>
             {/if}
             <div class="actions">
               {#if n.action}

@@ -12,6 +12,11 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Les notes d'une mise à jour s'affichent entièrement dans la langue de lecture.** Les titres
+  de section restaient en anglais : « Added » au-dessus de puces françaises.
+
 ## [0.47.0] — 2026-08-22
 
 ### Added

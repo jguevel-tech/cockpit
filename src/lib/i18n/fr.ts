@@ -137,6 +137,13 @@ export const fr = {
   "update.upToDate": "Cockpit est à jour",
   "update.nonePending": "Aucune mise à jour en attente — relance la vérification.",
   "update.install": "Mettre à jour",
+  // Titres de section des notes de version (convention Keep a Changelog).
+  "changelog.added": "Ajouts",
+  "changelog.changed": "Changements",
+  "changelog.deprecated": "Bientôt retiré",
+  "changelog.removed": "Retraits",
+  "changelog.fixed": "Corrections",
+  "changelog.security": "Sécurité",
   "update.available": "Mise à jour disponible — {from} → {to}",
   "update.availableShort": "Mise à jour disponible — {version}",
   "update.notReady": "La nouvelle version n'est pas encore prête pour ton système — réessaie dans quelques minutes.",
