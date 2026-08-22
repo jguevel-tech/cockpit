@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.47.0] — 2026-08-22
+
 ### Added
 
 - **Un bouton de compte en haut à droite.** On voit d'un coup d'œil si on est connecté et sous
