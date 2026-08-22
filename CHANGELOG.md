@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.47.1] — 2026-08-22
+
 ### Fixed
 
 - **Les notes d'une mise à jour s'affichent entièrement dans la langue de lecture.** Les titres
