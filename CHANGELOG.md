@@ -16,6 +16,9 @@ le script de release.
 
 - **Les notes d'une mise à jour s'affichent entièrement dans la langue de lecture.** Les titres
   de section restaient en anglais : « Added » au-dessus de puces françaises.
+- **Fermer un terminal le ferme vraiment, même quand le programme qui y tourne refuse de
+  partir.** Avant, l'onglet affichait « le shell n'a pas rendu la main » et le programme
+  continuait de tourner en arrière-plan.
 
 ## [0.47.0] — 2026-08-22
 

@@ -484,18 +484,51 @@ impl Session {
     /// geste parfaitement normal remontait une erreur a l'utilisateur.
     pub fn fermer(&self) -> Result<(), String> {
         self.tueur.lock().map_err(|_| "terminal deja ferme")?.kill().ok();
+        // On laisse d'abord le shell partir de lui-meme : il en profite pour ecrire son
+        // historique. Le cas ordinaire tient en 10 a 25 ms, mesure localement.
+        if self.attendre_la_fin(DELAI_FERMETURE) {
+            return Ok(());
+        }
+        self.insister();
+        if self.attendre_la_fin(DELAI_FERMETURE) {
+            return Ok(());
+        }
+        Err(format!(
+            "le shell n'a pas rendu la main en {} s",
+            DELAI_FERMETURE.as_secs() * 2
+        ))
+    }
+
+    /// Attend que le shell soit parti, au plus `delai`. Rend `true` s'il est parti.
+    fn attendre_la_fin(&self, delai: std::time::Duration) -> bool {
         let debut = std::time::Instant::now();
-        while self.vivant() && debut.elapsed() < DELAI_FERMETURE {
+        while self.vivant() && debut.elapsed() < delai {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        if self.vivant() {
-            return Err(format!(
-                "le shell n'a pas rendu la main en {} s",
-                DELAI_FERMETURE.as_secs()
-            ));
-        }
-        Ok(())
+        !self.vivant()
     }
+
+    /// Le coup de grace, quand la demande polie est restee sans effet.
+    ///
+    /// `portable-pty` envoie un SIGHUP sous Unix, et son propre commentaire le dit : le
+    /// processus est tue « SAUF s'il a installe un gestionnaire ». Un shell a parfaitement le
+    /// droit de l'ignorer (`trap "" HUP`, et certains programmes plein ecran le font). Sans
+    /// cette insistance, fermer un onglet rendait une erreur a l'utilisateur ET laissait le
+    /// process tourner — dans un service qui, lui, tourne des jours.
+    #[cfg(unix)]
+    fn insister(&self) {
+        if let Some(pid) = self.pid {
+            // SIGKILL ne se refuse pas. On ne regarde pas le retour : un echec peut vouloir
+            // dire « deja parti », ce qui est exactement le resultat cherche. Comme partout
+            // dans ce fichier, c'est `vivant` qui tranche, pas un code de retour.
+            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+        }
+    }
+
+    /// Sous Windows, le premier coup est deja un `TerminateProcess` : il ne se refuse pas, et
+    /// il n'existe pas de signal a envoyer par-dessus.
+    #[cfg(not(unix))]
+    fn insister(&self) {}
 }
 
 /// Boucle du thread lecteur : du PTY vers l'ecran, et rien d'autre.
@@ -950,6 +983,38 @@ mod tests {
     ///
     /// `exit` est la seule commande de ce fichier qui vaille sur les trois systemes (les
     /// shells POSIX et `cmd.exe` la connaissent), donc cet essai n'a pas besoin de garde.
+    /// Fermer un onglet doit fermer le terminal, meme quand le shell refuse de partir.
+    ///
+    /// `portable-pty` envoie un SIGHUP, et son propre commentaire le dit : « le processus est
+    /// tue SAUF s'il a installe un gestionnaire ». Un shell qui l'ignore survivait donc a la
+    /// fermeture de son onglet : l'utilisateur voyait une erreur, et le processus restait —
+    /// dans un service qui tourne des jours.
+    ///
+    /// Reserve a Unix : le SIGHUP n'existe pas ailleurs, et sous Windows `TerminateProcess`
+    /// ne se refuse pas.
+    #[cfg(unix)]
+    #[test]
+    fn un_shell_qui_ignore_le_signal_est_ferme_quand_meme() {
+        // Le marqueur est CONSTRUIT par le shell : tel quel, on le trouverait dans l'echo de
+        // la frappe, avant meme que le `trap` soit pose.
+        let s = session(Some("trap \"\" HUP; echo sour\"d\"-au-signal"));
+        attendre(&s, "le shell devenu sourd", |vu| vu.contains("sourd-au-signal"));
+        let pid = s.pid.expect("le shell a un pid");
+        s.fermer().expect("fermer un shell qui ignore le signal");
+        assert!(!s.vivant(), "la session se croit encore vivante");
+        // On CONSTATE la disparition du process, on ne croit pas un code de retour.
+        let debut = std::time::Instant::now();
+        while std::path::Path::new(&format!("/proc/{pid}")).exists()
+            && debut.elapsed() < std::time::Duration::from_secs(5)
+        {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            !std::path::Path::new(&format!("/proc/{pid}")).exists(),
+            "le shell {pid} tourne toujours apres fermer()"
+        );
+    }
+
     #[test]
     fn fermer_un_shell_deja_termine_n_est_pas_une_erreur() {
         let s = session(None);
