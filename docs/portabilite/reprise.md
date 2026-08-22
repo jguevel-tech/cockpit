@@ -64,12 +64,24 @@ Recettes complètes dans les Pièges connus du `CLAUDE.md`.
 La surveillance des issues, qui ne survit pas à la session :
 
 ```
-Monitor: while true; do node scripts/issues-nouveautes.mjs --brut --marquer \
-  --repere=../.claude/issues-vues-surveillance.json 2>&1 | grep -E "^(ISSUE #|⚠)" || true; sleep 60; done
+Monitor: echecs=0; while true; do
+  sortie=$(node scripts/issues-nouveautes.mjs --brut --marquer \
+    --repere=../.claude/issues-vues-surveillance.json 2>&1)
+  if printf '%s' "$sortie" | grep -qiE "error connecting|ENOTFOUND|ETIMEDOUT|EAI_AGAIN"; then
+    echecs=$((echecs + 1))
+    [ "$echecs" -eq 5 ] && echo "⚠ GitHub injoignable depuis cinq minutes"
+  else
+    echecs=0; printf '%s' "$sortie" | grep -E "^(ISSUE #|⚠)" || true
+  fi
+  sleep 60
+done
 ```
 
-Sans elle, une réponse d'auteur passe inaperçue — c'est arrivé trois fois le 2026-08-20, et c'est
-Le mainteneur qui a dû le signaler chaque fois.
+Le comptage d'échecs n'est pas décoratif : un hoquet réseau n'est pas un événement — il n'y a rien
+à en faire — mais un silence complet ferait passer une panne durable pour « rien de neuf ».
+
+Sans cette surveillance, une réponse d'auteur passe inaperçue : c'est arrivé trois fois le
+2026-08-20, et il a fallu à chaque fois qu'on nous le signale.
 
 ## Issues ouvertes
 
