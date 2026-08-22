@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.47.2] — 2026-08-22
+
 ### Fixed
 
 - **Le changelog des Paramètres s'affiche aussi dans la langue de lecture.** Ses titres de
