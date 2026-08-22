@@ -26,8 +26,13 @@
   // celui de la version installee — pas celui d'une branche distante.
   import changelogRaw from "../../../../CHANGELOG.md?raw";
   import { demanderConfirmation } from "../../stores/confirm";
+  import { titresEnLangue } from "../../stores/notesDeVersion";
 
-  const changelogHtml = marked.parse(changelogRaw, { async: false });
+  // `$derived` et non `const` : les titres de section suivent la langue, qui se change sans
+  // redemarrage.
+  const changelogHtml = $derived(
+    marked.parse(titresEnLangue(changelogRaw, $trad), { async: false }),
+  );
 
   type SettingsView = "general" | "appearance" | "agents" | "claude" | "meetings" | "projects";
   let view: SettingsView = $state("general");

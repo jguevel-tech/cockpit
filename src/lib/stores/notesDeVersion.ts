@@ -11,8 +11,10 @@
  */
 import type { Catalog } from "../i18n/fr";
 
-/// Les six sections de Keep a Changelog, en minuscules, vers leur cle d'affichage.
+/// Les sections de Keep a Changelog, en minuscules, vers leur cle d'affichage. `unreleased`
+/// est du meme registre : c'est un nom fixe de la convention, pas un contenu.
 const SECTIONS: Record<string, keyof Catalog> = {
+  unreleased: "changelog.unreleased",
   added: "changelog.added",
   changed: "changelog.changed",
   deprecated: "changelog.deprecated",
@@ -41,7 +43,10 @@ export function titresEnLangue(notes: string, dire: (cle: keyof Catalog) => stri
         return ligne;
       }
       if (dansUnBloc) return ligne;
-      const titre = /^(#{1,6})\s+([A-Za-z]+)\s*$/.exec(ligne);
+      // Les crochets sont optionnels : la convention ecrit « ## [Unreleased] » mais
+      // « ### Added ». Un titre de VERSION porte aussi des crochets et n'est pas touche,
+      // parce que son texte n'est pas un nom de section connu.
+      const titre = /^(#{1,6})\s+\[?([A-Za-z]+)\]?\s*$/.exec(ligne);
       if (!titre) return ligne;
       const cle = SECTIONS[titre[2].toLowerCase()];
       return cle ? `${titre[1]} ${dire(cle)}` : ligne;

@@ -133,6 +133,7 @@ export const en: Catalog = {
   "update.nonePending": "No pending update — run the check again.",
   "update.install": "Update",
   // Release-notes section headings (Keep a Changelog convention).
+  "changelog.unreleased": "Unreleased",
   "changelog.added": "Added",
   "changelog.changed": "Changed",
   "changelog.deprecated": "Deprecated",

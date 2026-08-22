@@ -138,6 +138,7 @@ export const fr = {
   "update.nonePending": "Aucune mise à jour en attente — relance la vérification.",
   "update.install": "Mettre à jour",
   // Titres de section des notes de version (convention Keep a Changelog).
+  "changelog.unreleased": "À venir",
   "changelog.added": "Ajouts",
   "changelog.changed": "Changements",
   "changelog.deprecated": "Bientôt retiré",

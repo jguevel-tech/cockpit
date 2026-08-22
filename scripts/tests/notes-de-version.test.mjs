@@ -50,6 +50,17 @@ test("le contenu des notes n'est pas touche", () => {
   assert.ok(rendu.endsWith("\nFixed"));
 });
 
+test("le titre « Unreleased » passe en langue, crochets compris", () => {
+  assert.equal(titresEnLangue("## [Unreleased]", dire), "## <changelog.unreleased>");
+  assert.equal(titresEnLangue("## Unreleased", dire), "## <changelog.unreleased>");
+});
+
+test("un titre de VERSION n'est jamais reecrit, malgre ses crochets", () => {
+  for (const ligne of ["## [0.47.1] — 2026-08-22", "## [1.0.0]", "## [0.47.1] - 2026-08-22"]) {
+    assert.equal(titresEnLangue(ligne, dire), ligne);
+  }
+});
+
 test("un titre qui n'est pas une section reste tel quel", () => {
   assert.equal(titresEnLangue("### Notes", dire), "### Notes");
   assert.equal(titresEnLangue("### Added later", dire), "### Added later");

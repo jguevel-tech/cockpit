@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Le changelog des Paramètres s'affiche aussi dans la langue de lecture.** Ses titres de
+  section restaient en anglais, sur tout l'historique — la correction précédente ne portait que
+  sur la fenêtre de mise à jour.
+
 ## [0.47.1] — 2026-08-22
 
 ### Fixed
