@@ -5,11 +5,14 @@
   import GlobalSettings from "../settings/GlobalSettings.svelte";
   import SystemMonitor from "../system/SystemMonitor.svelte";
   import DocsView from "../docs/DocsView.svelte";
+  import PageCompte from "../compte/PageCompte.svelte";
 </script>
 
 <main>
   {#if $activeView === "settings"}
     <GlobalSettings />
+  {:else if $activeView === "compte"}
+    <PageCompte />
   {:else if $activeView === "docs"}
     <DocsView />
   {:else if $activeView === "system"}

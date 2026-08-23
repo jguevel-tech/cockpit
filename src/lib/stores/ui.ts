@@ -5,7 +5,7 @@ const READING_KEY = "cockpit-notes-reading";
 
 /// Vue top-niveau unique : une seule source de verite pour la navigation.
 /// Ajouter une vue = ajouter une entree ici + un case dans MainPanel.
-export type ActiveView = "dashboard" | "project" | "settings" | "system" | "docs";
+export type ActiveView = "dashboard" | "project" | "settings" | "system" | "docs" | "compte";
 
 export const activeView = writable<ActiveView>("dashboard");
 export const selectedProject = writable<string | null>(null);
@@ -225,6 +225,9 @@ export function selectProject(name: string | null) {
 }
 
 export const openSettings = () => openView("settings");
+/// Le compte est une VUE et non une fenetre : on y reste, on y revient, et on peut y naviguer
+/// depuis ailleurs. Une fenetre par-dessus l'application ne se prete a rien de tout ca.
+export const openCompte = () => openView("compte");
 export const openDocs = () => openView("docs");
 export const openSystem = () => openView("system");
 export const goHome = () => openView("dashboard");

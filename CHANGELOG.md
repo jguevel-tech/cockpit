@@ -12,6 +12,27 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **La documentation intégrée explique le compte** : à quoi il sert, où il se trouve, ce que la
+  page contient, et ce qui se passe hors connexion. Elle n'en parlait pas du tout.
+
+### Changed
+
+- **Le compte est une page, comme les Paramètres, et non plus une fenêtre par-dessus
+  l'application.** On y reste, on y revient, et on peut y aller depuis les Paramètres.
+- **Tout ce qui touche au compte est au même endroit.** L'état de la synchronisation, la
+  déconnexion et l'adresse du serveur étaient à la fois dans les Paramètres et dans le profil :
+  il fallait se souvenir lequel des deux écrans portait quoi.
+- **Les Paramètres s'ouvrent bien plus vite.** Ils affichaient l'historique complet des
+  versions à chaque ouverture ; ils montrent maintenant les dernières, avec un bouton pour
+  dérouler le reste.
+
+### Fixed
+
+- **Les informations de la carte « Compte » des Paramètres sont alignées** comme le reste de la
+  page. Leur mise en forme ne s'y appliquait pas.
+
 ## [0.47.2] — 2026-08-22
 
 ### Fixed

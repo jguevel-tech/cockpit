@@ -235,6 +235,25 @@ html.has-wallpaper:root input[type="color"] {
 }
 .stack > .card:first-child { border-top: none; }
 
+/* --- En-tete et lignes d'une section ---
+   Ici et pas dans un composant, pour la meme raison que le padding ci-dessus : une section
+   peut venir d'un composant ENFANT, que les styles scopes du parent n'atteignent pas. Ces
+   classes ont vecu dans GlobalSettings, donc la carte « Compte » les portait sans effet — les
+   lignes tenaient sur un rang par la seule mise en forme par defaut, sans colonne alignee. */
+.card-head { margin-bottom: 1.1rem; }
+.card-head h3 { margin: 0 0 0.25rem; font-size: 1rem; }
+.card-head p { margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }
+.field-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.field-row:last-child { margin-bottom: 0; }
+.field-label { width: 130px; flex-shrink: 0; color: var(--text-muted); }
+.field-value { color: var(--text-secondary); }
+
 /* Sous image de fond, c'est le PANNEAU qui porte le verre depoli, plus chaque carte —
    sinon on empile deux couches translucides et le rendu devient sale.
    Translucide via `--surface-alpha` et non opaque : sinon le `backdrop-filter` ne sert a rien

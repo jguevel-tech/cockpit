@@ -9,7 +9,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { titresEnLangue } from "../../src/lib/stores/notesDeVersion.ts";
+import { titresEnLangue, couperLesNotes } from "../../src/lib/stores/notesDeVersion.ts";
 
 /// Faux traducteur : rend la cle, ce qui rend visible CE QUI a ete traduit.
 const dire = (cle) => `<${cle}>`;
@@ -71,4 +71,54 @@ test("un exemple cite dans un bloc de code reste un exemple", () => {
   const rendu = titresEnLangue(notes, dire).split("\n");
   assert.equal(rendu[0], "### <changelog.added>");
   assert.equal(rendu[3], "### Added", "le titre dans le bloc de code a ete reecrit");
+});
+
+// ── Decoupage : ce qui est rendu tout de suite, et ce qui attend qu'on le demande.
+
+const NOTES = [
+  "# Changelog",
+  "",
+  "Un preambule.",
+  "",
+  "## [Unreleased]",
+  "",
+  "## [0.3.0] — 2026-01-03",
+  "- trois",
+  "",
+  "## [0.2.0] — 2026-01-02",
+  "- deux",
+  "",
+  "## [0.1.0] — 2026-01-01",
+  "- un",
+  "",
+].join("\n");
+
+test("le debut garde le preambule et les premieres versions", () => {
+  const { tete, reste } = couperLesNotes(NOTES, 2);
+  assert.ok(tete.startsWith("# Changelog"), "le preambule doit rester en tete");
+  assert.ok(tete.includes("## [Unreleased]"));
+  assert.ok(tete.includes("## [0.3.0] — 2026-01-03"));
+  assert.ok(!tete.includes("0.2.0"), "0.2.0 devait partir dans le reste");
+  assert.ok(reste.startsWith("## [0.2.0]"), "le reste commence a la coupure");
+  assert.ok(reste.includes("0.1.0"));
+});
+
+test("recolles, les deux morceaux redonnent les notes a l'identique", () => {
+  for (const combien of [0, 1, 2, 3, 4, 10]) {
+    const { tete, reste } = couperLesNotes(NOTES, combien);
+    assert.equal(tete + reste, NOTES, `perte de contenu a ${combien}`);
+  }
+});
+
+test("rien a couper quand il n'y a pas assez de versions", () => {
+  const { tete, reste } = couperLesNotes(NOTES, 99);
+  assert.equal(tete, NOTES);
+  assert.equal(reste, "");
+});
+
+test("un titre de version cite dans le texte ne coupe pas", () => {
+  // Les `##` doivent etre en DEBUT de ligne : une mention au fil du texte n'est pas un titre.
+  const notes = "# Changelog\n\nvoir ## [0.9.0] plus bas\n\n## [0.9.0]\n- neuf\n";
+  const { tete } = couperLesNotes(notes, 1);
+  assert.ok(tete.includes("- neuf"), "la seule vraie section a ete coupee trop tot");
 });

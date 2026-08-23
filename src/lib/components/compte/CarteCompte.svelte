@@ -1,70 +1,19 @@
 <script lang="ts">
   /**
-   * La carte « Compte » des reglages : etat de la connexion, machine, serveur.
+   * La carte « Compte » des reglages : elle DIT l'etat, et renvoie a la page du compte.
    *
-   * Elle dit toujours ce qu'il en est, y compris quand il n'y a pas de compte — un ecran qui
-   * se contente de ne rien afficher laisse croire a une panne.
+   * Elle portait avant les memes commandes que le profil — etat de la synchronisation, bouton
+   * de synchronisation, deconnexion, adresse du serveur. Deux ecrans pour la meme chose font
+   * chercher la difference qui n'existe pas, et obligent a se souvenir lequel porte quoi. Tout
+   * cela vit maintenant dans la page du compte ; il reste ici de quoi savoir ou on en est sans
+   * la quitter des yeux, et un chemin pour y aller.
+   *
+   * Elle dit toujours ce qu'il en est, y compris quand il n'y a pas de compte — un ecran qui se
+   * contente de ne rien afficher laisse croire a une panne.
    */
   import { trad } from "../../i18n";
-  import {
-    compte,
-    seDeconnecter,
-    definirServeur,
-    dernierRefus,
-    etatSynchro,
-    synchroEnCours,
-    synchroniser,
-    rafraichirEtatSynchro,
-  } from "../../stores/compte";
-  import { demanderConfirmation } from "../../stores/confirm";
-  import { notify } from "../../stores/toast";
-  import EcranConnexion from "./EcranConnexion.svelte";
-
-  let ecranOuvert = $state(false);
-
-  // L'etat n'est lu qu'a l'ouverture des reglages : c'est le seul moment ou il est regarde,
-  // et l'interroger en permanence n'apprendrait rien de plus.
-  $effect(() => {
-    if ($compte?.connecte) void rafraichirEtatSynchro();
-  });
-
-  const dateDuDernierPassage = $derived(
-    $etatSynchro?.dernier_passage
-      ? new Date($etatSynchro.dernier_passage).toLocaleString()
-      : null,
-  );
-  let serveur = $state("");
-  let serveurCharge = false;
-
-  // La valeur du champ suit celle du backend tant que personne n'y a touche : sans ca, le champ
-  // resterait vide apres un rechargement et donnerait l'impression qu'aucun serveur n'est
-  // configure.
-  $effect(() => {
-    const etat = $compte;
-    if (etat && !serveurCharge) {
-      serveur = etat.serveur;
-      serveurCharge = true;
-    }
-  });
-
-  async function deconnecter() {
-    const daccord = await demanderConfirmation({
-      message: $trad("settings.compte.confirmerDeconnexion"),
-      action: $trad("settings.compte.seDeconnecter"),
-      danger: true,
-    });
-    if (!daccord) return;
-    if (await seDeconnecter()) notify($trad("settings.compte.deconnecte"), "success");
-  }
-
-  async function enregistrerServeur() {
-    if (await definirServeur(serveur)) {
-      serveurCharge = false;
-      notify($trad("settings.compte.serveurEnregistre"), "success");
-    } else if ($dernierRefus === "serveur_non_chiffre") {
-      notify($trad("settings.compte.serveurNonChiffre"), "error");
-    }
-  }
+  import { compte } from "../../stores/compte";
+  import { openCompte } from "../../stores/ui";
 </script>
 
 <section class="card">
@@ -76,54 +25,20 @@
   {#if $compte?.connecte}
     <div class="field-row">
       <span class="field-label">{$trad("settings.compte.connecteEnTant")}</span>
-      <span class="valeur">{$compte.email}</span>
-    </div>
-    <div class="field-row">
-      <span class="field-label">{$trad("settings.compte.machine")}</span>
-      <span class="valeur">{$compte.appareil}</span>
-    </div>
-    <div class="field-row">
-      <span class="field-label">{$trad("settings.compte.synchro")}</span>
-      <span class="valeur">
-        {#if $synchroEnCours}
-          {$trad("settings.compte.synchroEnCours")}
-        {:else if dateDuDernierPassage}
-          {dateDuDernierPassage}
-        {:else}
-          {$trad("settings.compte.synchroJamais")}
-        {/if}
-        {#if ($etatSynchro?.en_attente ?? 0) > 0}
-          <span class="attente">{$trad("settings.compte.enAttente")} : {$etatSynchro?.en_attente}</span>
-        {/if}
-      </span>
+      <span class="field-value">{$compte.email}</span>
     </div>
     <div class="actions">
-      <button class="btn" onclick={() => void synchroniser()} disabled={$synchroEnCours}>
-        {$trad("settings.compte.synchroniser")}
-      </button>
-      <button class="btn danger" onclick={deconnecter}>{$trad("settings.compte.seDeconnecter")}</button>
+      <button class="btn" onclick={openCompte}>{$trad("settings.compte.ouvrirLaPage")}</button>
     </div>
-    <p class="aide">{$trad("settings.compte.cheminsAide")}</p>
   {:else}
     <p class="etat">{$trad("settings.compte.aucun")}</p>
     <div class="actions">
-      <button class="btn primary" onclick={() => (ecranOuvert = true)}>
+      <button class="btn primary" onclick={openCompte}>
         {$trad("settings.compte.seConnecter")}
       </button>
     </div>
   {/if}
-
-  <div class="field-row">
-    <span class="field-label">{$trad("settings.compte.serveur")}</span>
-    <input class="input" type="url" bind:value={serveur} placeholder="https://…" />
-    <button class="btn" onclick={enregistrerServeur}>{$trad("common.save")}</button>
-  </div>
-  <p class="aide">{$trad("settings.compte.serveurAide")}</p>
 </section>
-
-{#if ecranOuvert}
-  <EcranConnexion onClose={() => (ecranOuvert = false)} />
-{/if}
 
 <style>
   .etat {
@@ -131,27 +46,9 @@
     color: var(--text-secondary);
     font-size: 0.86rem;
   }
-  .valeur {
-    color: var(--text-primary);
-    font-size: 0.88rem;
-  }
   .actions {
     display: flex;
     gap: 0.5rem;
-    margin: 0.4rem 0 1rem;
-  }
-  .attente {
-    margin-left: 0.6rem;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-  }
-  .aide {
-    margin: 0.35rem 0 0;
-    color: var(--text-muted);
-    font-size: 0.78rem;
-  }
-  .field-row .input {
-    flex: 1;
-    min-width: 12rem;
+    margin-top: 0.9rem;
   }
 </style>

@@ -8,7 +8,7 @@
    */
   type SectionId =
     | "demarrer" | "terminaux" | "fichiers" | "git" | "docker"
-    | "taches" | "palette" | "dashboard" | "apparence" | "maj" | "raccourcis";
+    | "taches" | "palette" | "dashboard" | "apparence" | "compte" | "maj" | "raccourcis";
 
   const MENU: { id: SectionId; labelKey: Parameters<typeof translate>[0]; icon: string }[] = [
     { id: "demarrer", labelKey: "docs.menu.start", icon: "🚀" },
@@ -20,6 +20,7 @@
     { id: "taches", labelKey: "docs.menu.tasks", icon: "✓" },
     { id: "palette", labelKey: "docs.menu.palette", icon: "⌘" },
     { id: "apparence", labelKey: "docs.menu.appearance", icon: "🎨" },
+    { id: "compte", labelKey: "docs.menu.account", icon: "👤" },
     { id: "maj", labelKey: "docs.menu.updates", icon: "🔔" },
     { id: "raccourcis", labelKey: "docs.menu.shortcuts", icon: "⌨" },
   ];
@@ -432,6 +433,37 @@
         <div class="demo">
           <div class="d-tabs"><span class="d-btn small">🔔</span><span class="d-btn small">−</span><span class="d-muted">115 %</span><span class="d-btn small">+</span><span class="d-btn small"><i>i</i></span><span class="d-btn small">⚙</span><span class="d-btn small">◑</span></div>
         </div>
+      </div>
+
+    {:else if section === "compte"}
+      <h3>{$trad("docs.account.heading")}</h3>
+
+      <div class="block">
+        <p>{@html $trad("docs.account.what")}</p>
+      </div>
+
+      <div class="block">
+        <p>{@html $trad("docs.account.where")}</p>
+        <div class="demo">
+          <div class="d-row">
+            <span class="d-muted">{$trad("docs.account.headerDemo")}</span>
+            <span class="d-btn small">{$trad("docs.account.initialsDemo")}</span>
+          </div>
+          <div class="d-note">{$trad("docs.account.menuDemo")}</div>
+        </div>
+      </div>
+
+      <div class="block">
+        <p>{@html $trad("docs.account.page")}</p>
+        <div class="demo">
+          <div class="d-row"><strong>{$trad("compte.profil.nom")}</strong><span class="d-muted">{$trad("docs.account.nameDemo")}</span></div>
+          <div class="d-row"><strong>{$trad("compte.profil.synchro")}</strong><span class="d-muted">{$trad("docs.account.syncDemo")}</span></div>
+          <div class="d-row"><strong>{$trad("compte.profil.machines")}</strong><span class="d-muted">{$trad("docs.account.machinesDemo")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <p>{@html $trad("docs.account.offline")}</p>
       </div>
 
     {:else if section === "maj"}

@@ -53,3 +53,26 @@ export function titresEnLangue(notes: string, dire: (cle: keyof Catalog) => stri
     })
     .join("\n");
 }
+
+/**
+ * Coupe les notes apres les `combien` premieres sections de version.
+ *
+ * Pourquoi : le changelog est affiche en entier dans les Parametres, et il ne fait que
+ * grossir — 85 versions, 57 Ko, ~40 ms de rendu et 62 Ko de HTML poses dans la page a chaque
+ * ouverture. Les deux dernieres versions font 1 % du fichier. On rend donc le debut, et le
+ * reste seulement si on le demande.
+ *
+ * Rend `reste` vide quand il n'y a pas assez de sections : l'appelant n'a alors rien de plus a
+ * proposer.
+ */
+export function couperLesNotes(notes: string, combien: number): { tete: string; reste: string } {
+  const debuts: number[] = [];
+  let position = 0;
+  for (const ligne of notes.split("\n")) {
+    if (/^## \[/.test(ligne)) debuts.push(position);
+    position += ligne.length + 1;
+  }
+  if (debuts.length <= combien) return { tete: notes, reste: "" };
+  const coupure = debuts[combien];
+  return { tete: notes.slice(0, coupure), reste: notes.slice(coupure) };
+}

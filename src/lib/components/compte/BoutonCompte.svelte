@@ -11,13 +11,12 @@
   import { notify } from "../../stores/toast";
   import { trad } from "../../i18n";
   import { portal } from "../../actions/portal";
+  import { openCompte } from "../../stores/ui";
   import Portrait from "./Portrait.svelte";
   import EcranConnexion from "./EcranConnexion.svelte";
-  import ProfilCompte from "./ProfilCompte.svelte";
 
   let menuOuvert = $state(false);
   let connexionOuverte = $state(false);
-  let profilOuvert = $state(false);
 
   const connecte = $derived($compte?.connecte === true);
   const nom = $derived($compte?.nom || $compte?.email || "");
@@ -29,7 +28,7 @@
 
   function ouvrirLeProfil() {
     menuOuvert = false;
-    profilOuvert = true;
+    openCompte();
   }
 
   async function partir() {
@@ -77,9 +76,6 @@
 
 {#if connexionOuverte}
   <EcranConnexion onClose={() => (connexionOuverte = false)} />
-{/if}
-{#if profilOuvert}
-  <ProfilCompte onClose={() => (profilOuvert = false)} />
 {/if}
 
 <style>

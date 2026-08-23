@@ -26,13 +26,35 @@
   // celui de la version installee — pas celui d'une branche distante.
   import changelogRaw from "../../../../CHANGELOG.md?raw";
   import { demanderConfirmation } from "../../stores/confirm";
-  import { titresEnLangue } from "../../stores/notesDeVersion";
+  import { titresEnLangue, couperLesNotes } from "../../stores/notesDeVersion";
+
+  /// Combien de sections du changelog sont rendues d'emblee. Le fichier compte 85 versions et
+  /// ne fait que grossir : le rendre en entier coutait ~40 ms et posait 62 Ko de HTML dans la
+  /// page a CHAQUE ouverture des Parametres, pour un historique que personne ne deroule.
+  const SECTIONS_VISIBLES = 6;
+  const MORCEAUX = couperLesNotes(changelogRaw, SECTIONS_VISIBLES);
+
+  let toutLHistorique = $state(false);
+
+  /// Rendus deja calcules, par langue et par morceau. Au niveau du MODULE et non du composant :
+  /// les Parametres se montent et se demontent a chaque visite, et c'est justement la repetition
+  /// qu'on veut cesser de payer.
+  const RENDUS = new Map<string, string>();
+
+  function rendre(md: string, quoi: string, langue: string): string {
+    if (!md) return "";
+    const cle = `${langue}|${quoi}`;
+    const deja = RENDUS.get(cle);
+    if (deja !== undefined) return deja;
+    const html = marked.parse(titresEnLangue(md, $trad), { async: false }) as string;
+    RENDUS.set(cle, html);
+    return html;
+  }
 
   // `$derived` et non `const` : les titres de section suivent la langue, qui se change sans
-  // redemarrage.
-  const changelogHtml = $derived(
-    marked.parse(titresEnLangue(changelogRaw, $trad), { async: false }),
-  );
+  // redemarrage. La langue fait partie de la cle, donc chaque langue est calculee une fois.
+  const changelogHtml = $derived(rendre(MORCEAUX.tete, "tete", $locale));
+  const resteHtml = $derived(toutLHistorique ? rendre(MORCEAUX.reste, "reste", $locale) : "");
 
   type SettingsView = "general" | "appearance" | "agents" | "claude" | "meetings" | "projects";
   let view: SettingsView = $state("general");
@@ -328,6 +350,13 @@
             <p>{$trad("settings.changelog.subtitle")}</p>
           </div>
           <div class="changelog">{@html changelogHtml}</div>
+          {#if MORCEAUX.reste && !toutLHistorique}
+            <button class="btn small" onclick={() => (toutLHistorique = true)}>
+              {$trad("settings.changelog.toutVoir")}
+            </button>
+          {:else if resteHtml}
+            <div class="changelog">{@html resteHtml}</div>
+          {/if}
         </section>
 
         <section class="card">
@@ -537,9 +566,7 @@
   }
   /* Fond, bordure, rayon et padding viennent desormais de `.stack` (components.css) : les
      sections forment un panneau continu au lieu d'ilots separes par des interstices. */
-  .card-head { margin-bottom: 1.1rem; }
-  .card-head h3 { margin: 0 0 0.25rem; font-size: 1rem; }
-  .card-head p { margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }
+  /* .card-head : remonte dans components.css, voir le commentaire la-bas. */
   .count {
     font-size: 0.75rem; background: var(--accent); color: white;
     padding: 0.1rem 0.5rem; border-radius: 10px; vertical-align: middle; margin-left: 0.3rem;
@@ -557,10 +584,7 @@
   .field input.mono, .inline-row input.mono { font-family: monospace; font-size: 0.8rem; }
   .field textarea { resize: vertical; font-family: inherit; line-height: 1.5; }
   .field-hint { display: block; margin-top: 0.3rem; font-size: 0.72rem; color: var(--text-muted); }
-  .field-row { display: flex; align-items: baseline; gap: 0.8rem; margin-bottom: 0.5rem; font-size: 0.85rem; }
-  .field-row:last-child { margin-bottom: 0; }
-  .field-label { width: 130px; flex-shrink: 0; color: var(--text-muted); }
-  .field-value { color: var(--text-secondary); }
+  /* .field-row, .field-label, .field-value : remontes dans components.css. */
   .mono-value {
     font-family: monospace; font-size: 0.78rem; background: var(--bg-tertiary);
     padding: 0.15rem 0.45rem; border-radius: 4px; word-break: break-all;
