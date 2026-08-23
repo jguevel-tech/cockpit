@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.49.0] — 2026-08-23
+
 ### Added
 
 - **Une image de profil se cadre avant d'être envoyée.** Glissez-la pour la placer, agrandissez-la
