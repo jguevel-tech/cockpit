@@ -834,7 +834,7 @@ mod tests {
         // repartirait avant que le shell ait ecrit un seul octet (constate le 2026-08-21 :
         // il ne mesurait alors que le redessin de l'attache).
         s.ecrire(b"seq 1 200000; printf 'rafale%s\n' -finie\r").unwrap();
-        attendre(&s, "la fin de la rafale", |vu| vu.contains("rafale-finie"));
+        let ecran = attendre(&s, "la fin de la rafale", |vu| vu.contains("rafale-finie"));
         std::thread::sleep(std::time::Duration::from_millis(200));
         s.fermer().unwrap();
 
@@ -873,16 +873,32 @@ mod tests {
         // sans aucun regroupement (~85 octets par envoi), et 3 047 sur le runner macOS quand
         // la regle ne se declenchait jamais (~295 octets). Un seuil a 1 Ko de moyenne les
         // attrape tous les deux et laisse passer toute machine, quelle que soit sa vitesse.
+        // CETTE ASSERTION VIENT EN PREMIER, ET C'EST DELIBERE. Le contenu doit arriver
+        // VRAIMENT — c'est lui qui remplit le tampon de defilement du frontend, donc ce qui
+        // fait marcher la molette. Mais surtout : si le shell n'a pas produit sa rafale (il
+        // arrive qu'il n'ait pas pu lancer `seq`, machine chargee), la moyenne se calcule sur
+        // quelques centaines d'octets et la borne suivante accuse le regroupement d'une panne
+        // qui n'existe pas. Constate : « 24 octets par envoi : le regroupement ne fait plus
+        // son travail » pour 897 octets transmis en tout. Un essai doit designer la BONNE
+        // cause, sinon il envoie chercher ailleurs.
+        assert!(
+            total > 900 * 1024,
+            "{total} octets seulement : la rafale n'a pas eu lieu, il n'y a rien a mesurer. \
+             Dernieres lignes de l'ecran :\n{}",
+            // Les lignes VIDES sont ecartees : sous le curseur la grille est blanche, et
+            // prendre betement la fin ne montrait rien du tout.
+            ecran
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .rev()
+                .take(4)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
         assert!(
             lot_moyen > 1024,
             "{lot_moyen} octets par envoi ({envois} envois pour {total} octets) : \
              le regroupement ne fait plus son travail"
-        );
-        // Et le contenu, lui, arrive VRAIMENT : c'est ce qui remplit le tampon de
-        // defilement du terminal du frontend, donc ce qui fait marcher la molette.
-        assert!(
-            total > 900 * 1024,
-            "{total} octets seulement : la rafale n'a pas ete transmise"
         );
     }
 
