@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.51.0] — 2026-08-23
+
 ### Changed
 
 - **Cockpit a une vraie adresse : cockpitdesktop.com.** La synchronisation passe désormais par
