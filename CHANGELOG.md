@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.48.0] — 2026-08-23
+
 ### Added
 
 - **La documentation intégrée explique le compte** : à quoi il sert, où il se trouve, ce que la
