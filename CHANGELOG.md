@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.50.0] — 2026-08-23
+
 ### Added
 
 - **L'écran du compte dit ce que le dernier échange a déplacé** — combien est parti, combien est
