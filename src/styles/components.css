@@ -254,6 +254,47 @@ html.has-wallpaper:root input[type="color"] {
 .field-label { width: 130px; flex-shrink: 0; color: var(--text-muted); }
 .field-value { color: var(--text-secondary); }
 
+/* --- Bouton d'en-tete ---
+   Ici et pas dans Header.svelte : le bouton du compte vit dans un composant ENFANT, que les
+   styles scopes du parent n'atteignent pas. Il se retrouvait donc SANS AUCUN style — un
+   `<button>` nu, au fond clair que le navigateur lui donne par defaut, en plein en-tete
+   sombre. C'est le meme piege que `.card-head` plus haut. */
+.header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.header-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* --- Curseurs ---
+   LE RENDU NATIF N'EST PAS FORCEMENT VISIBLE : le systeme choisit la couleur du rail, et sur un
+   theme sombre la partie VIDE disparait — il ne reste qu'un point flottant, sans rien qui dise
+   jusqu'ou on peut aller. La partie neutre se tire donc du TEXTE, jamais d'un `--bg-*`.
+
+   Par `background-image` et non `background-color` : la couche image de fond remet le
+   `background-color` natif de ces `input` en `!important` (voir plus haut). */
+input[type="range"] {
+  accent-color: var(--accent);
+  background-image: linear-gradient(var(--border-strong), var(--border-strong));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 4px;
+  border-radius: 2px;
+}
+
 /* Sous image de fond, c'est le PANNEAU qui porte le verre depoli, plus chaque carte —
    sinon on empile deux couches translucides et le rendu devient sale.
    Translucide via `--surface-alpha` et non opaque : sinon le `backdrop-filter` ne sert a rien

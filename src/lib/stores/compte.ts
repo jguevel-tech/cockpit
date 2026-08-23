@@ -58,6 +58,11 @@ export const seConnecter = (email: string, motDePasse: string) =>
 
 export const seDeconnecter = () => tenter(() => api.deconnexion());
 
+/// AUCUN CONTROLE NE L'APPELLE, ET C'EST VOULU : tout le monde passe par le serveur du projet.
+/// Son adresse n'apprend rien a l'utilisateur et expose l'hebergement, donc elle ne s'affiche
+/// pas. Le mecanisme reste en place pour le jour ou d'autres hebergements s'ouvriront.
+export const deposerImage = (donnees: string) => tenter(() => api.deposerImage(donnees));
+
 export const definirServeur = (url: string) => tenter(() => api.definirServeur(url));
 
 export const definirNom = (nom: string) => tenter(() => api.definirNom(nom));

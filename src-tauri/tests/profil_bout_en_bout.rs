@@ -2,9 +2,9 @@
 //!
 //! Ce que les essais unitaires ne peuvent pas montrer : que ce que le logiciel ENVOIE
 //! correspond a ce que le serveur ATTEND. Un nom de champ qui differe d'un cote et de l'autre
-//! passe toutes les verifications separees et ne casse qu'a l'usage — et ici, le chemin de
-//! l'avatar n'est pas essayable par l'interface, le selecteur de fichier passant par le portail
-//! du bureau.
+//! passe toutes les verifications separees et ne casse qu'a l'usage. Et le depot d'un avatar
+//! demande, par l'interface, de passer par le selecteur de fichier du bureau : essayable a la
+//! main quand un portail repond, mais pas de facon reproductible.
 //!
 //! Marque `ignore` : demande un serveur en marche. Voir `synchro_bout_en_bout.rs` pour la
 //! recette, et **un serveur fraichement demarre** — les tentatives de connexion sont comptees
@@ -131,8 +131,8 @@ async fn changer_son_nom_change_ses_initiales() {
     assert_eq!(etat.initiales.as_deref(), Some("CM"));
 }
 
-/// Le chemin que l'interface ne peut pas essayer : le selecteur de fichier passe par le portail
-/// du bureau, absent d'un environnement isole.
+/// Le chemin qui, par l'interface, demande le selecteur de fichier du bureau : essayable a la
+/// main quand un portail repond, mais pas de facon reproductible. D'ou cet essai.
 #[tokio::test]
 #[ignore = "demande un serveur en marche : voir l'en-tete du fichier"]
 async fn deposer_une_image_la_garde_en_local_pour_l_afficher_hors_ligne() {
@@ -156,6 +156,42 @@ async fn deposer_une_image_la_garde_en_local_pour_l_afficher_hors_ligne() {
     assert!(vide.avatar.is_none(), "retirer l'image doit aussi vider ce qui est garde ici");
 
     std::fs::remove_file(&fichier).ok();
+}
+
+/// L'autre chemin de depot : l'image RECADREE par l'interface, qui arrive en `data:` URL parce
+/// que c'est ce que produit un canvas. Ce que le logiciel envoie doit correspondre a ce que le
+/// serveur attend, et un decodage rate ne se verrait qu'a l'usage.
+#[tokio::test]
+#[ignore = "demande un serveur en marche : voir l'en-tete du fichier"]
+async fn une_image_recadree_arrive_aussi_bien_qu_un_fichier() {
+    let db = poste(&format!("cadre-{}@exemple.test", uuid::Uuid::new_v4().simple())).await;
+
+    use base64::Engine;
+    let encode = base64::engine::general_purpose::STANDARD.encode(png(200));
+    let url = format!("data:image/png;base64,{encode}");
+
+    let octets = cockpit_lib::compte::octets_d_une_data_url(&url).expect("decodage");
+    let etat = cockpit_lib::compte::deposer_une_image(&db, octets)
+        .await
+        .expect("le serveur doit accepter l'image recadree");
+
+    assert!(
+        etat.avatar.is_some_and(|a| a.starts_with("data:image/")),
+        "le portrait doit etre garde en local, comme pour un fichier"
+    );
+}
+
+/// Une image vide n'atteint jamais le serveur : la refuser ici evite un aller-retour et un
+/// message technique venu d'ailleurs.
+#[tokio::test]
+#[ignore = "demande un serveur en marche : voir l'en-tete du fichier"]
+async fn une_image_vide_est_refusee_avant_le_reseau() {
+    let db = poste(&format!("vide-{}@exemple.test", uuid::Uuid::new_v4().simple())).await;
+
+    assert_eq!(
+        cockpit_lib::compte::deposer_une_image(&db, Vec::new()).await.unwrap_err(),
+        "avatar_vide"
+    );
 }
 
 #[tokio::test]

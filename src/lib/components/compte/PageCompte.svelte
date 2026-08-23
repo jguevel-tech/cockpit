@@ -3,9 +3,12 @@
    * Le compte, en PAGE et non en fenetre par-dessus l'application.
    *
    * Une fenetre modale convient a un geste qu'on finit tout de suite. Ici on lit, on change son
-   * nom, on regarde ses machines, on revient : c'est un endroit, pas une interruption. La page
-   * est aussi le SEUL endroit du compte — l'adresse du serveur y a rejoint le reste, pour qu'on
-   * n'ait pas a chercher entre deux ecrans lequel porte quoi.
+   * nom, on regarde ses machines, on revient : c'est un endroit, pas une interruption.
+   *
+   * PAS DE CHOIX DE SERVEUR ICI. Tout le monde passe par le serveur du projet, et son adresse
+   * n'a rien a faire sous les yeux de l'utilisateur : elle ne lui apprend rien et elle expose
+   * l'hebergement. Le mecanisme existe toujours cote Rust (`compte_definir_serveur`), pour le
+   * jour ou l'on ouvrira d'autres hebergements — il n'a simplement aucun controle.
    *
    * Ce qui se change ici passe par le SERVEUR : le nom et l'image suivent le compte, pas la
    * machine. Une modification locale qui ne remonterait pas donnerait deux visages selon le
@@ -13,13 +16,13 @@
    */
   import Portrait from "./Portrait.svelte";
   import EcranConnexion from "./EcranConnexion.svelte";
+  import RecadrerImage from "./RecadrerImage.svelte";
   import { trad } from "../../i18n";
   import {
     compte,
     dernierRefus,
     definirNom,
-    definirServeur,
-    deposerAvatar,
+    deposerImage,
     retirerAvatar,
     seDeconnecter,
     etatSynchro,
@@ -27,7 +30,7 @@
     synchroniser,
     rafraichirEtatSynchro,
   } from "../../stores/compte";
-  import { machines as listerMachines, type Machine } from "../../api/compte";
+  import { machines as listerMachines, lireImage, type Machine } from "../../api/compte";
   import { demanderConfirmation } from "../../stores/confirm";
   import { notify } from "../../stores/toast";
   import { signalerErreur } from "../../stores/errors";
@@ -35,26 +38,26 @@
   import { open as ouvrirUnFichier } from "@tauri-apps/plugin-dialog";
 
   let nom = $state("");
-  let serveur = $state("");
   let enCours = $state(false);
   let ecranOuvert = $state(false);
   let mesMachines: Machine[] = $state([]);
   let machineCourante: string | null = $state(null);
   let machinesLues = $state(false);
+  /// L'image choisie, en attente de cadrage. `null` = pas de cadrage en cours.
+  let aCadrer: string | null = $state(null);
 
   const SYSTEMES: Record<string, string> = { linux: "Linux", macos: "macOS", windows: "Windows" };
 
   const connecte = $derived($compte?.connecte === true);
 
-  // Les deux champs sont recopies UNE fois, a l'arrivee de l'etat. Les relier au magasin en
-  // continu ecraserait la frappe en cours des que la synchronisation rafraichit le compte.
-  let champsRemplis = false;
+  // Le champ est recopie UNE fois, a l'arrivee de l'etat. Le relier au magasin en continu
+  // ecraserait la frappe en cours des que la synchronisation rafraichit le compte.
+  let nomRempli = false;
   $effect(() => {
     const etat = $compte;
-    if (!etat || champsRemplis) return;
+    if (!etat || nomRempli) return;
     nom = etat.nom ?? "";
-    serveur = etat.serveur;
-    champsRemplis = true;
+    nomRempli = true;
   });
 
   // Un seul passage, des que le compte est CONNU. Pas `onMount` : l'etat du compte est lu de
@@ -93,15 +96,6 @@
     }
   }
 
-  async function enregistrerLeServeur() {
-    if (await definirServeur(serveur)) {
-      champsRemplis = false;
-      notify($trad("settings.compte.serveurEnregistre"), "success");
-    } else if ($dernierRefus === "serveur_non_chiffre") {
-      notify($trad("settings.compte.serveurNonChiffre"), "error");
-    }
-  }
-
   async function changerLImage() {
     if (enCours) return;
     const choix = await ouvrirUnFichier({
@@ -115,9 +109,25 @@
     });
     if (typeof choix !== "string") return;
 
+    // L'image est LUE avant d'etre envoyee : on la montre, on la cadre, puis on l'envoie. Une
+    // lecture qui echoue le dit tout de suite, plutot qu'au moment de l'envoi.
     enCours = true;
     try {
-      if (await deposerAvatar(choix)) {
+      aCadrer = await lireImage(choix);
+    } catch (e) {
+      const cle = texteDuRefus(String(e));
+      notify($trad(cle ?? "compte.refus.serveur"), "error");
+      void signalerErreur("compte.lireImage", String(e));
+    } finally {
+      enCours = false;
+    }
+  }
+
+  async function envoyerLImageCadree(donnees: string) {
+    aCadrer = null;
+    enCours = true;
+    try {
+      if (await deposerImage(donnees)) {
         notify($trad("compte.profil.avatarEnregistre"), "success");
       } else {
         const cle = texteDuRefus($dernierRefus);
@@ -265,19 +275,6 @@
       </section>
     {/if}
 
-    <!-- L'adresse du serveur vit ICI et nulle part ailleurs : c'est une donnee de compte, et la
-         chercher entre deux ecrans faisait perdre du temps. -->
-    <section class="card">
-      <div class="card-head">
-        <h3>{$trad("settings.compte.serveur")}</h3>
-        <p>{$trad("settings.compte.serveurAide")}</p>
-      </div>
-      <div class="ligne-serveur">
-        <input class="input" type="url" bind:value={serveur} placeholder="https://…" />
-        <button class="btn" onclick={enregistrerLeServeur}>{$trad("common.save")}</button>
-      </div>
-    </section>
-
     {#if connecte}
       <section class="card">
         <div class="actions">
@@ -292,6 +289,10 @@
 
 {#if ecranOuvert}
   <EcranConnexion onClose={() => (ecranOuvert = false)} />
+{/if}
+
+{#if aCadrer}
+  <RecadrerImage source={aCadrer} onValider={envoyerLImageCadree} onClose={() => (aCadrer = null)} />
 {/if}
 
 <style>
@@ -335,15 +336,6 @@
   }
   .champ .input {
     width: 100%;
-  }
-  .ligne-serveur {
-    display: flex;
-    gap: 0.5rem;
-    max-width: 34rem;
-  }
-  .ligne-serveur .input {
-    flex: 1;
-    min-width: 12rem;
   }
   .actions {
     display: flex;

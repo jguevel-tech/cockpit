@@ -542,17 +542,79 @@ pub async fn compte_definir_nom(
     definir_le_nom(&state.db, &nom).await
 }
 
-/// Depose une image choisie sur le disque.
+/// Ce qu'on accepte de lire pour un avatar. Meme borne que le serveur : refuser ici evite de
+/// faire traverser des mega-octets a l'interface pour qu'elle les refuse ensuite.
+pub const AVATAR_TAILLE_MAXIMALE: usize = 4 * 1024 * 1024;
+
+/// Reconnait le type d'une image A SES OCTETS, jamais a son extension : un fichier renomme
+/// nous ferait sinon annoncer un type faux, et c'est le type annonce qui decide du decodage
+/// cote interface comme cote serveur.
+fn type_d_image(octets: &[u8]) -> Option<&'static str> {
+    match octets {
+        [0x89, b'P', b'N', b'G', ..] => Some("image/png"),
+        [0xFF, 0xD8, 0xFF, ..] => Some("image/jpeg"),
+        [b'G', b'I', b'F', b'8', ..] => Some("image/gif"),
+        // WEBP : « RIFF » puis quatre octets de taille, puis « WEBP ».
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some("image/webp"),
+        _ => None,
+    }
+}
+
+/// Lit une image du disque et la rend en `data:` URL.
+///
+/// Sert au RECADRAGE : l'interface doit pouvoir montrer l'image avant de l'envoyer. C'est le
+/// seul cas ou une image traverse l'IPC dans ce sens, et c'est pour cela que la taille est
+/// bornee ici — un JPEG d'appareil photo fait plusieurs dizaines de mega-octets.
+pub fn lire_une_image(chemin: &str) -> Result<String, String> {
+    let octets = std::fs::read(chemin).map_err(|e| {
+        log::warn!("compte : image illisible ({chemin}) — {e}");
+        "avatar_illisible".to_string()
+    })?;
+    if octets.len() > AVATAR_TAILLE_MAXIMALE {
+        return Err("avatar_trop_gros".to_string());
+    }
+    let type_ = type_d_image(&octets).ok_or_else(|| "avatar_format_refuse".to_string())?;
+
+    use base64::Engine;
+    let encode = base64::engine::general_purpose::STANDARD.encode(&octets);
+    Ok(format!("data:{type_};base64,{encode}"))
+}
+
+/// Envoie des octets d'image au serveur, qui les reencode avant de les garder.
+pub async fn deposer_une_image(db: &Database, octets: Vec<u8>) -> Result<EtatCompte, String> {
+    if octets.is_empty() {
+        return Err("avatar_vide".to_string());
+    }
+    if octets.len() > AVATAR_TAILLE_MAXIMALE {
+        return Err("avatar_trop_gros".to_string());
+    }
+    appeler_le_profil(db, reqwest::Method::PUT, "/api/moi/avatar", None, Some(octets)).await
+}
+
+/// Depose une image choisie sur le disque, telle quelle.
 ///
 /// Le fichier est lu ICI et non cote interface : passer une image par l'IPC la ferait encoder
-/// en JavaScript puis reevaluer, pour rien.
+/// en JavaScript puis reevaluer, pour rien. Le chemin du recadrage, lui, n'a pas le choix.
 pub async fn deposer_un_avatar(db: &Database, chemin: &str) -> Result<EtatCompte, String> {
     let image = std::fs::read(chemin).map_err(|e| {
         log::warn!("compte : image illisible ({chemin}) — {e}");
         "avatar_illisible".to_string()
     })?;
 
-    appeler_le_profil(db, reqwest::Method::PUT, "/api/moi/avatar", None, Some(image)).await
+    deposer_une_image(db, image).await
+}
+
+/// Decode une `data:` URL produite par l'interface (le resultat du recadrage).
+pub fn octets_d_une_data_url(donnees: &str) -> Result<Vec<u8>, String> {
+    let base = donnees
+        .split_once(";base64,")
+        .map(|(_, b)| b)
+        .ok_or_else(|| "avatar_format_refuse".to_string())?;
+
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(base)
+        .map_err(|_| "avatar_illisible".to_string())
 }
 
 pub async fn retirer_l_avatar(db: &Database) -> Result<EtatCompte, String> {
@@ -565,6 +627,22 @@ pub async fn compte_deposer_avatar(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
     deposer_un_avatar(&state.db, &chemin).await
+}
+
+#[tauri::command]
+pub fn compte_lire_image(chemin: String) -> Result<String, String> {
+    lire_une_image(&chemin)
+}
+
+/// Depose l'image RECADREE par l'interface. Elle arrive en `data:` URL parce que c'est ce que
+/// produit un canvas, et que le convertir en binaire cote interface ne gagnerait rien.
+#[tauri::command]
+pub async fn compte_deposer_image(
+    donnees: String,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<EtatCompte, String> {
+    let octets = octets_d_une_data_url(&donnees)?;
+    deposer_une_image(&state.db, octets).await
 }
 
 #[tauri::command]
@@ -595,6 +673,67 @@ pub async fn compte_definir_serveur(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Un fichier renomme ne doit pas nous faire annoncer un type faux : c'est le type annonce
+    /// qui decide du decodage, ici comme sur le serveur.
+    #[test]
+    fn le_type_d_image_se_lit_sur_les_octets() {
+        assert_eq!(type_d_image(b"\x89PNG\r\n\x1a\n reste"), Some("image/png"));
+        assert_eq!(type_d_image(b"\xFF\xD8\xFF\xE0 reste"), Some("image/jpeg"));
+        assert_eq!(type_d_image(b"GIF89a reste"), Some("image/gif"));
+        assert_eq!(type_d_image(b"RIFF\x20\x00\x00\x00WEBPVP8 "), Some("image/webp"));
+        // Un RIFF qui n'est pas du WEBP (un WAV, par exemple) est refuse.
+        assert_eq!(type_d_image(b"RIFF\x20\x00\x00\x00WAVEfmt "), None);
+        assert_eq!(type_d_image(b"<html>"), None);
+        assert_eq!(type_d_image(b""), None);
+    }
+
+    #[test]
+    fn une_image_absente_ou_trop_grosse_est_refusee() {
+        let dossier = std::env::temp_dir().join(format!("ckpt-av-{}", std::process::id()));
+        std::fs::create_dir_all(&dossier).unwrap();
+
+        assert_eq!(
+            lire_une_image(&dossier.join("rien.png").to_string_lossy()),
+            Err("avatar_illisible".to_string())
+        );
+
+        let gros = dossier.join("gros.png");
+        std::fs::write(&gros, vec![0u8; AVATAR_TAILLE_MAXIMALE + 1]).unwrap();
+        assert_eq!(
+            lire_une_image(&gros.to_string_lossy()),
+            Err("avatar_trop_gros".to_string())
+        );
+
+        // Sous la borne mais pas une image : refuse sur le TYPE, pas sur la taille.
+        let faux = dossier.join("faux.png");
+        std::fs::write(&faux, b"pas une image").unwrap();
+        assert_eq!(
+            lire_une_image(&faux.to_string_lossy()),
+            Err("avatar_format_refuse".to_string())
+        );
+
+        let vrai = dossier.join("vrai.png");
+        std::fs::write(&vrai, b"\x89PNG\r\n\x1a\nsuite").unwrap();
+        let rendu = lire_une_image(&vrai.to_string_lossy()).unwrap();
+        assert!(rendu.starts_with("data:image/png;base64,"), "rendu : {rendu}");
+
+        std::fs::remove_dir_all(&dossier).ok();
+    }
+
+    #[test]
+    fn une_data_url_se_decode_et_un_texte_nu_est_refuse() {
+        assert_eq!(octets_d_une_data_url("data:image/png;base64,QUJD").unwrap(), b"ABC");
+        // Sans le prefixe, on ne devine pas : on refuse.
+        assert_eq!(
+            octets_d_une_data_url("QUJD"),
+            Err("avatar_format_refuse".to_string())
+        );
+        assert_eq!(
+            octets_d_une_data_url("data:image/png;base64,ce n'est pas du base64"),
+            Err("avatar_illisible".to_string())
+        );
+    }
 
     #[test]
     fn la_cle_de_la_machine_ne_change_pas() {

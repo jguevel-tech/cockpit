@@ -12,6 +12,24 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Une image de profil se cadre avant d'être envoyée.** Glissez-la pour la placer, agrandissez-la
+  si besoin : ce qui est dans le rond est ce qui sera gardé. Avant, seul le centre de l'image
+  était retenu — et un visage n'est presque jamais au centre.
+
+### Removed
+
+- **L'adresse du serveur ne s'affiche plus.** Tout le monde passe par le serveur du projet : la
+  voir n'apprenait rien et exposait l'hébergement.
+
+### Fixed
+
+- **Le bouton du compte ressemble enfin aux autres boutons de l'en-tête.** Il s'affichait sur un
+  fond clair, en plein en-tête sombre.
+- **Le rail des curseurs est visible sur un thème sombre.** Quand le curseur était tout à gauche,
+  il ne restait qu'un point flottant, sans rien qui dise jusqu'où on pouvait aller.
+
 ## [0.48.0] — 2026-08-23
 
 ### Added

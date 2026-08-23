@@ -1601,6 +1601,8 @@ pub fn run() {
             compte::compte_machines,
             compte::compte_google_disponible,
             compte::compte_deposer_avatar,
+            compte::compte_lire_image,
+            compte::compte_deposer_image,
             compte::compte_retirer_avatar,
             compte::synchro::synchro_maintenant,
             compte::synchro::synchro_etat,

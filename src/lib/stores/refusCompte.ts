@@ -20,7 +20,6 @@ const REFUS = {
   reseau: "compte.refus.reseau",
   appairage_expire: "compte.refus.appairage_expire",
   pas_connecte: "compte.refus.pas_connecte",
-  serveur_non_chiffre: "settings.compte.serveurNonChiffre",
   avatar_trop_gros: "compte.refus.avatar_trop_gros",
   avatar_format_refuse: "compte.refus.avatar_format_refuse",
   avatar_dimensions_refusees: "compte.refus.avatar_trop_grande",

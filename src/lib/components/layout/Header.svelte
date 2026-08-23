@@ -68,13 +68,7 @@
   }
   .logo-btn:hover { color: var(--accent); }
   .header-right { display: flex; gap: 0.5rem; align-items: center; }
-  .header-btn {
-    background: none; border: 1px solid var(--border-color); color: var(--text-secondary);
-    width: 32px; height: 32px; border-radius: var(--radius-sm); cursor: pointer; font-size: 1rem;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-  }
-  .header-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-strong); }
+  /* .header-btn : remonte dans components.css, voir le commentaire la-bas. */
   .docs-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; }
   /* Cloche permanente : discrete au repos, accentuee des qu'il y a du non-lu. */
   .bell-btn { position: relative; }

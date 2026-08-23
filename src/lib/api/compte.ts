@@ -56,6 +56,11 @@ export const demarrerAppairage = () => invoke<DemandeAppairage>("compte_appairag
 
 export const etatAppairage = (id: string) => invoke<EtatAppairage>("compte_appairage_etat", { id });
 
+/// Rend l'image du disque en `data:` URL, pour la MONTRER avant de l'envoyer (recadrage).
+export const lireImage = (chemin: string) => invoke<string>("compte_lire_image", { chemin });
+/// Envoie l'image une fois recadree, telle que le canvas l'a produite.
+export const deposerImage = (donnees: string) =>
+  invoke<EtatCompte>("compte_deposer_image", { donnees });
 export const definirServeur = (url: string) => invoke<EtatCompte>("compte_definir_serveur", { url });
 
 export type ResultatSynchro = {
