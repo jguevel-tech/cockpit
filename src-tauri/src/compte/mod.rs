@@ -22,9 +22,15 @@ use std::time::Duration;
 
 /// Serveur interroge par defaut.
 ///
-/// Modifiable dans les reglages : quelqu'un qui heberge le sien n'a pas a recompiler. La valeur
-/// n'est pas un secret — c'est l'adresse publique du site.
-pub const SERVEUR_PAR_DEFAUT: &str = "https://cockpit.86.253.219.203.sslip.io";
+/// UN SOUS-DOMAINE DEDIE, et non le domaine du site : des milliers d'installations gardent cette
+/// adresse, donc la changer casse la synchronisation de celles qui ne se mettent pas a jour. Le
+/// site, lui, doit pouvoir demenager sans rien casser — d'ou deux adresses distinctes des le
+/// depart. L'ancienne (`cockpit.86.253.219.203.sslip.io`) reste servie par le meme serveur, le
+/// temps que les installations plus anciennes soient passees : la retirer les laisserait sans
+/// synchronisation, sans message et sans recours.
+///
+/// La valeur n'est pas un secret — c'est une adresse publique.
+pub const SERVEUR_PAR_DEFAUT: &str = "https://api.cockpitdesktop.com";
 
 const CLE_SERVEUR: &str = "compte_serveur";
 const CLE_JETON: &str = "compte_jeton";

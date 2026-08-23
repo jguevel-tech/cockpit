@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Cockpit a une vraie adresse : cockpitdesktop.com.** La synchronisation passe désormais par
+  `api.cockpitdesktop.com`. L'ancienne adresse continue de fonctionner : rien à faire, et les
+  versions plus anciennes ne perdent pas leur compte.
+
 ## [0.50.0] — 2026-08-23
 
 ### Added
