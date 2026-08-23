@@ -18,6 +18,10 @@ use tauri::Emitter;
 const CLE_CURSEUR: &str = "compte_synchro_curseur";
 /// Reglage ou vit l'instant du dernier passage reussi.
 const CLE_DERNIER_PASSAGE: &str = "compte_synchro_dernier";
+/// Ce que le dernier passage a REELLEMENT deplace. Sans ca, l'ecran n'affiche qu'une date : on
+/// ne peut pas distinguer « tout va bien, rien a faire » de « ca ne marche pas ».
+const CLE_DERNIERS_ENVOYES: &str = "compte_synchro_envoyes";
+const CLE_DERNIERS_RECUS: &str = "compte_synchro_recus";
 
 /// Plafond d'un envoi. Le serveur en impose un ; le depasser ferait refuser tout le lot.
 const ENVOI_MAXIMUM: usize = 500;
@@ -41,6 +45,10 @@ pub struct EtatSynchro {
     pub actif: bool,
     pub en_attente: usize,
     pub dernier_passage: Option<i64>,
+    /// Ce que le dernier passage a deplace. Deux zeros veulent dire « il n'y avait rien a
+    /// echanger », ce qui est le cas ordinaire et non une panne.
+    pub derniers_envoyes: usize,
+    pub derniers_recus: usize,
 }
 
 #[derive(Serialize)]
@@ -252,6 +260,15 @@ pub async fn passer(db: &Database) -> Result<Resultat, String> {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
     db.set_setting(CLE_DERNIER_PASSAGE, &maintenant.to_string())?;
+    db.set_setting(CLE_DERNIERS_ENVOYES, &total.envoyes.to_string())?;
+    db.set_setting(CLE_DERNIERS_RECUS, &total.recus.to_string())?;
+
+    // Le profil ne voyage pas par le journal : il vit sur le serveur, pas dans les tables. On
+    // le relit ici, sinon un nom ou une image changes ailleurs n'arriveraient qu'a la prochaine
+    // connexion. Une panne ne fait pas echouer le passage : les donnees, elles, sont passees.
+    if let Err(e) = super::relire_le_profil(db).await {
+        log::warn!("synchro : profil non relu — {e}");
+    }
 
     Ok(total)
 }
@@ -281,5 +298,7 @@ pub async fn synchro_etat(state: tauri::State<'_, crate::AppState>) -> Result<Et
         actif: jeton(db).is_some(),
         en_attente: db.changements_en_attente().map(|c| c.len()).unwrap_or(0),
         dernier_passage: db.get_setting(CLE_DERNIER_PASSAGE).and_then(|v| v.parse().ok()),
+        derniers_envoyes: db.get_setting(CLE_DERNIERS_ENVOYES).and_then(|v| v.parse().ok()).unwrap_or(0),
+        derniers_recus: db.get_setting(CLE_DERNIERS_RECUS).and_then(|v| v.parse().ok()).unwrap_or(0),
     })
 }

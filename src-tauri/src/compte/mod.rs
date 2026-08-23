@@ -36,6 +36,9 @@ const CLE_INITIALES: &str = "compte_initiales";
 /// Pointer l'image du serveur marcherait tant qu'on est connecte, et afficherait un cadre vide
 /// des qu'on ne l'est plus — sur un logiciel dont la promesse est de fonctionner hors ligne.
 const CLE_AVATAR: &str = "compte_avatar";
+/// L'adresse de l'image deja rangee. Elle porte un numero de version, donc la comparer suffit
+/// a savoir si l'image a change ailleurs — sans la telecharger pour rien a chaque passage.
+const CLE_AVATAR_ADRESSE: &str = "compte_avatar_adresse";
 const CLE_APPAREIL: &str = "compte_appareil";
 
 /// Au-dela, on rend la main : mieux vaut dire « le serveur ne repond pas » que laisser un
@@ -246,6 +249,7 @@ async fn ouvrir_une_session(
 
 async fn enregistrer_la_session(db: &Database, recue: &ReponseCompte) -> Result<EtatCompte, String> {
     db.set_setting(CLE_JETON, &recue.jeton)?;
+
     rapatrier_l_avatar(db, recue.compte.avatar.as_deref()).await;
     enregistrer_le_profil(db, &recue.compte)
 }
@@ -265,8 +269,18 @@ fn enregistrer_le_profil(db: &Database, profil: &ProfilDistant) -> Result<EtatCo
 async fn rapatrier_l_avatar(db: &Database, adresse: Option<&str>) {
     let Some(adresse) = adresse else {
         let _ = db.set_setting(CLE_AVATAR, "");
+        let _ = db.set_setting(CLE_AVATAR_ADRESSE, "");
         return;
     };
+
+    // Rien a faire si c'est la MEME adresse et qu'on a deja l'image : le numero de version
+    // qu'elle porte change des que l'image change. Sans cette comparaison, un passage de
+    // synchronisation retelechargerait 85 Ko toutes les trois minutes pour rien.
+    let deja = db.get_setting(CLE_AVATAR_ADRESSE).unwrap_or_default();
+    let garde = db.get_setting(CLE_AVATAR).unwrap_or_default();
+    if deja == adresse && !garde.is_empty() {
+        return;
+    }
 
     match client().get(adresse).send().await {
         Ok(reponse) if reponse.status().is_success() => {
@@ -281,6 +295,7 @@ async fn rapatrier_l_avatar(db: &Database, adresse: Option<&str>) {
                     use base64::Engine;
                     let encode = base64::engine::general_purpose::STANDARD.encode(&octets);
                     let _ = db.set_setting(CLE_AVATAR, &format!("data:{type_};base64,{encode}"));
+                    let _ = db.set_setting(CLE_AVATAR_ADRESSE, adresse);
                 }
                 Err(e) => log::warn!("compte : avatar illisible — {e}"),
             }
@@ -441,6 +456,15 @@ pub async fn compte_deconnexion(
 /// Publique parce que les commandes Tauri ne s'essaient pas : elles demandent un `State` et une
 /// fenetre. Les commandes ci-dessous ne sont que des adaptateurs vers ces fonctions-ci, qui
 /// prennent une base et rien d'autre.
+/// Relit le profil tel que le serveur le connait : nom, initiales, image.
+///
+/// Sans ca, ces trois choses n'arrivaient qu'a la CONNEXION. Changez votre image sur une
+/// machine, l'autre — deja connectee — gardait l'ancienne pour toujours. Appele a chaque
+/// passage de synchronisation, ou l'image ne se retelecharge que si son adresse a change.
+pub async fn relire_le_profil(db: &Database) -> Result<EtatCompte, String> {
+    appeler_le_profil(db, reqwest::Method::GET, "/api/moi", None, None).await
+}
+
 pub async fn appeler_le_profil(
     db: &Database,
     methode: reqwest::Method,

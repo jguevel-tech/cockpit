@@ -12,6 +12,21 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **L'écran du compte dit ce que le dernier échange a déplacé** — combien est parti, combien est
+  arrivé, et que l'échange se fait tout seul toutes les trois minutes. Une date seule ne
+  permettait pas de savoir si ça marchait.
+
+### Fixed
+
+- **Ce qu'une machine possédait déjà part enfin vers les autres.** Si vous utilisiez Cockpit
+  avant d'avoir un compte, vos projets, notes et tâches ne quittaient jamais ce poste : une
+  seconde machine ne recevait rien, et rien ne l'expliquait. Tout est mis en file au prochain
+  démarrage, sans rien faire.
+- **Le nom affiché et l'image de profil arrivent sur les autres machines.** Ils n'étaient lus
+  qu'à la connexion : changés ici, l'autre poste gardait les anciens indéfiniment.
+
 ## [0.49.0] — 2026-08-23
 
 ### Added

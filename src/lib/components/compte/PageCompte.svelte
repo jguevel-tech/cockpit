@@ -17,7 +17,7 @@
   import Portrait from "./Portrait.svelte";
   import EcranConnexion from "./EcranConnexion.svelte";
   import RecadrerImage from "./RecadrerImage.svelte";
-  import { trad } from "../../i18n";
+  import { trad, tradN } from "../../i18n";
   import {
     compte,
     dernierRefus,
@@ -235,6 +235,20 @@
             {:else}
               {$trad("settings.compte.synchroJamais")}
             {/if}
+          </span>
+        </div>
+        <!-- Une date seule ne dit pas si ca MARCHE. Ce qui a bouge, si. -->
+        <div class="field-row">
+          <span class="field-label">{$trad("compte.profil.dernierEchange")}</span>
+          <span class="field-value">
+            {#if !dernierPassage}
+              —
+            {:else if ($etatSynchro?.derniers_envoyes ?? 0) + ($etatSynchro?.derniers_recus ?? 0) === 0}
+              {$trad("compte.profil.rienAEchanger")}
+            {:else}
+              {$tradN("compte.profil.envoyes", $etatSynchro?.derniers_envoyes ?? 0)},
+              {$tradN("compte.profil.recus", $etatSynchro?.derniers_recus ?? 0)}
+            {/if}
             {#if ($etatSynchro?.en_attente ?? 0) > 0}
               <span class="attente"
                 >{$trad("settings.compte.enAttente")} : {$etatSynchro?.en_attente}</span
@@ -247,6 +261,7 @@
             {$trad("settings.compte.synchroniser")}
           </button>
         </div>
+        <p class="aide">{$trad("compte.profil.cadence")}</p>
         <p class="aide">{$trad("settings.compte.cheminsAide")}</p>
       </section>
 

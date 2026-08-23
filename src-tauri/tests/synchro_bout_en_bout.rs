@@ -29,6 +29,15 @@ fn adresse() -> String {
 ///
 /// `creer` dit lequel des deux : tenter la creation puis se rabattre couterait un appel de
 /// plus, et le serveur compte les tentatives par adresse — la suite s'epuiserait elle-meme.
+/// Une image minuscule mais VALIDE : le serveur la decode vraiment avant de la garder, donc un
+/// tableau d'octets au hasard serait refuse. Huit pixels de cote suffisent.
+const PNG_ESSAI: &[u8] = &[
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 8, 0, 0, 0, 8, 8, 2,
+    0, 0, 0, 75, 109, 41, 220, 0, 0, 0, 20, 73, 68, 65, 84, 120, 156, 99, 188, 19, 165, 193,
+    128, 13, 48, 97, 21, 29, 180, 18, 0, 22, 127, 1, 110, 204, 247, 28, 110, 0, 0, 0, 0, 73, 69,
+    78, 68, 174, 66, 96, 130
+];
+
 async fn machine(email: &str, nom: &str, creer: bool) -> Database {
     let db = Database::new(":memory:").unwrap();
     let adresse = adresse();
@@ -62,6 +71,116 @@ async fn machine(email: &str, nom: &str, creer: bool) -> Database {
     db.set_setting("compte_jeton", recue["jeton"].as_str().unwrap()).unwrap();
     db.set_setting("compte_serveur", &adresse).unwrap();
     db
+}
+
+/// LE DEFAUT QUI A FAIT CROIRE QUE LA SYNCHRONISATION NE MARCHAIT PAS.
+///
+/// Une machine qui a servi AVANT que la synchronisation existe a une identite pour chaque
+/// element et un journal vide : les declencheurs ne voient que ce qui change, et rien n'a
+/// change. Elle n'envoyait donc jamais son contenu, et la seconde machine ne recevait rien —
+/// pour toujours. Constate sur une vraie installation : 248 identites, 0 en file, 0 au serveur.
+#[tokio::test]
+#[ignore = "demande un serveur en marche : voir l'en-tete du fichier"]
+async fn le_contenu_d_avant_le_compte_arrive_sur_l_autre_machine() {
+    let email = format!("avant-{}@exemple.test", uuid::Uuid::new_v4().simple());
+
+    // ── Machine A, telle qu'elle etait avant cette fonctionnalite : des donnees, pas de
+    // declencheurs, et le drapeau d'amorcage absent.
+    let a = machine(&email, "poste-a", true).await;
+    {
+        let conn = a.conn();
+        let noms: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+            .unwrap()
+            .query_map([], |l| l.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        for nom in noms {
+            conn.execute_batch(&format!("DROP TRIGGER {nom}")).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO projects (name, path) VALUES ('projet-d-avant', '/tmp/avant')",
+            [],
+        )
+        .unwrap();
+    }
+    a.set_setting("sync_journal_amorce", "").unwrap();
+    a.conn()
+        .execute("DELETE FROM settings WHERE key = 'sync_journal_amorce'", [])
+        .unwrap();
+
+    // Le demarrage suivant repose les declencheurs ET met le contenu en file.
+    a.preparer_la_synchro().unwrap();
+    assert_eq!(
+        a.changements_en_attente().unwrap().len(),
+        1,
+        "le contenu d'avant doit etre en file au demarrage"
+    );
+
+    let envoi = cockpit_lib::compte::synchro::passer(&a).await.unwrap();
+    assert_eq!(envoi.envoyes, 1, "il devait partir");
+
+    // ── Machine B, neuve, meme compte.
+    let b = machine(&email, "poste-b", false).await;
+    let recu = cockpit_lib::compte::synchro::passer(&b).await.unwrap();
+    assert!(recu.recus >= 1, "la machine neuve doit recevoir le projet d'avant");
+
+    let noms: Vec<String> = b
+        .conn()
+        .prepare("SELECT name FROM projects")
+        .unwrap()
+        .query_map([], |l| l.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(
+        noms.iter().any(|n| n == "projet-d-avant"),
+        "le projet d'avant devait arriver ; recu : {noms:?}"
+    );
+}
+
+/// L'image de profil ne voyage pas par le journal : elle vit sur le serveur. Elle n'arrivait
+/// donc qu'a la CONNEXION — changez-la sur une machine, l'autre gardait l'ancienne pour
+/// toujours. C'est le passage de synchronisation qui relit le profil.
+#[tokio::test]
+#[ignore = "demande un serveur en marche : voir l'en-tete du fichier"]
+async fn une_image_changee_ailleurs_arrive_sans_se_reconnecter() {
+    let email = format!("img-{}@exemple.test", uuid::Uuid::new_v4().simple());
+
+    let a = machine(&email, "poste-a", true).await;
+    let b = machine(&email, "poste-b", false).await;
+
+    // B n'a pas d'image au depart.
+    assert!(
+        b.get_setting("compte_avatar").unwrap_or_default().is_empty(),
+        "aucune image ne devrait etre rangee avant d'en poser une"
+    );
+
+    // A pose une image.
+    cockpit_lib::compte::deposer_une_image(&a, PNG_ESSAI.to_vec()).await.expect("depot");
+    let sur_a = a.get_setting("compte_avatar").unwrap_or_default();
+    assert!(sur_a.starts_with("data:image/"), "A doit avoir son image");
+
+    // B ne se reconnecte pas : un simple passage suffit.
+    cockpit_lib::compte::synchro::passer(&b).await.expect("passage");
+    let sur_b = b.get_setting("compte_avatar").unwrap_or_default();
+    assert!(sur_b.starts_with("data:image/"), "B devait recevoir l'image");
+    assert_eq!(sur_a, sur_b, "les deux machines doivent montrer la MEME image");
+
+    // Un second passage ne retelecharge rien : l'adresse porte la version, elle n'a pas bouge.
+    let adresse_avant = b.get_setting("compte_avatar_adresse").unwrap_or_default();
+    assert!(!adresse_avant.is_empty(), "l'adresse vue doit etre gardee");
+    cockpit_lib::compte::synchro::passer(&b).await.expect("second passage");
+    assert_eq!(b.get_setting("compte_avatar_adresse").unwrap_or_default(), adresse_avant);
+
+    // A retire l'image : B la perd aussi, toujours sans se reconnecter.
+    cockpit_lib::compte::retirer_l_avatar(&a).await.expect("retrait");
+    cockpit_lib::compte::synchro::passer(&b).await.expect("passage");
+    assert!(
+        b.get_setting("compte_avatar").unwrap_or_default().is_empty(),
+        "le retrait doit se voir aussi"
+    );
 }
 
 #[tokio::test]

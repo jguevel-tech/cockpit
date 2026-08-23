@@ -74,6 +74,9 @@ export type EtatSynchro = {
   actif: boolean;
   en_attente: number;
   dernier_passage: number | null;
+  /// Ce que le dernier passage a deplace. Deux zeros = il n'y avait rien a echanger.
+  derniers_envoyes: number;
+  derniers_recus: number;
 };
 
 export const synchroMaintenant = () => invoke<ResultatSynchro>("synchro_maintenant");

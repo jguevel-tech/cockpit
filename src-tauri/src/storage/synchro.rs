@@ -55,6 +55,9 @@ const UUID_SQL: &str = "lower(\
 /// pas. L'arbitrage entre deux machines se joue parfois a moins d'une seconde.
 const MAINTENANT_SQL: &str = "CAST((julianday('now') - 2440587.5) * 86400000.0 AS INTEGER)";
 
+/// Marque que le contenu deja present a ete mis en file, une fois pour toutes.
+const CLE_AMORCE: &str = "sync_journal_amorce";
+
 impl Database {
     /// Cree les tables et les declencheurs, et rattrape les lignes deja presentes.
     pub fn preparer_la_synchro(&self) -> Result<()> {
@@ -99,6 +102,21 @@ impl Database {
         for (type_, table) in TYPES {
             poser_les_declencheurs(&conn, type_, table)?;
             rattraper_les_lignes_existantes(&conn, type_, table)?;
+        }
+        drop(conn);
+
+        // UNE SEULE FOIS PAR INSTALLATION. Le rattrapage ci-dessus donne une identite a ce qui
+        // existait deja, mais ne met rien en file : une installation qui a servi avant cette
+        // fonctionnalite n'envoyait donc jamais son contenu, et une seconde machine ne recevait
+        // rien — pour toujours. Le drapeau evite de tout renvoyer a chaque demarrage.
+        if self.get_setting(CLE_AMORCE).is_none() {
+            let n = self.amorcer_le_journal()?;
+            self.set_setting(CLE_AMORCE, "1").map_err(|e| {
+                rusqlite::Error::ToSqlConversionFailure(Box::<dyn std::error::Error + Send + Sync>::from(e))
+            })?;
+            if n > 0 {
+                log::info!("synchro : {n} elements deja presents mis en file d'envoi");
+            }
         }
 
         Ok(())
@@ -190,6 +208,38 @@ impl Database {
             rusqlite::params![type_, uuid, modifie_le, supprime_le],
         )?;
         Ok(())
+    }
+
+    /// Met en file d'envoi TOUT ce que cette machine possede deja.
+    ///
+    /// ## Pourquoi c'est indispensable
+    ///
+    /// Les declencheurs ne voient que ce qui CHANGE. Une installation qui a servi avant qu'un
+    /// compte existe a donc une identite pour chaque element, et un journal vide : rien ne part
+    /// jamais, et une seconde machine ne recoit rien — pour toujours, jusqu'a ce qu'on retouche
+    /// chaque element a la main. Constate sur une vraie installation : 248 identites, 0 ligne de
+    /// journal, 0 element sur le serveur.
+    ///
+    /// Appele quand une session s'ouvre, donc a la connexion comme a l'inscription.
+    ///
+    /// `ON CONFLICT DO NOTHING` : ce qui attend deja porte une revision plus fraiche, on n'y
+    /// touche pas. Relancer cette fonction est donc sans effet, et c'est voulu — elle passe a
+    /// chaque ouverture de session.
+    pub fn amorcer_le_journal(&self) -> Result<usize> {
+        Ok(self.conn().execute(
+            "INSERT INTO sync_journal (type, uuid, rev, modifie_le, supprime_le)
+                 SELECT i.type, i.uuid,
+                        (SELECT IFNULL(MAX(rev), 0) FROM sync_journal)
+                            + ROW_NUMBER() OVER (ORDER BY i.rowid),
+                        CAST((julianday('now') - 2440587.5) * 86400000.0 AS INTEGER),
+                        NULL
+                 FROM sync_identite i
+                 -- `WHERE true` n'est pas decoratif : sans lui SQLite ne sait pas si le
+                 -- `ON CONFLICT` appartient au SELECT ou a l'INSERT, et refuse la requete.
+                 WHERE true
+             ON CONFLICT(type, uuid) DO NOTHING",
+            [],
+        )?)
     }
 }
 
@@ -288,6 +338,110 @@ mod tests {
         let db = Database::new(":memory:").unwrap();
         db.preparer_la_synchro().unwrap();
         db
+    }
+
+    /// Le defaut qui a fait croire que la synchronisation ne marchait pas : une installation
+    /// qui existait AVANT le compte n'envoyait jamais rien. Les declencheurs ne voient que ce
+    /// qui change, et rien n'avait change depuis.
+    #[test]
+    fn ce_qui_existait_avant_le_compte_part_quand_meme() {
+        let db = Database::new(":memory:").unwrap();
+
+        // On se remet dans l'etat d'AVANT la synchronisation : plus de declencheurs, puis des
+        // donnees. C'est l'histoire de toute installation qui a servi avant cette version.
+        {
+            let conn = db.conn();
+            let noms: Vec<String> = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+                .unwrap()
+                .query_map([], |l| l.get(0))
+                .unwrap()
+                .collect::<Result<_>>()
+                .unwrap();
+            for nom in noms {
+                conn.execute_batch(&format!("DROP TRIGGER {nom}")).unwrap();
+            }
+            conn.execute("INSERT INTO projects (name, path) VALUES ('avant', '/tmp/a')", [])
+                .unwrap();
+        }
+
+        // La montee de version repose les declencheurs et rattrape les identites...
+        db.preparer_la_synchro().unwrap();
+        assert!(db.uuid_de("projet", 1).is_some(), "l'identite doit etre rattrapee");
+        assert_eq!(
+            db.changements_en_attente().unwrap().len(),
+            0,
+            "...mais elle ne met RIEN en file : c'est exactement le defaut constate"
+        );
+
+        let amorces = db.amorcer_le_journal().unwrap();
+        assert!(amorces >= 1, "l'element existant devait etre mis en file");
+        let attente = db.changements_en_attente().unwrap();
+        assert_eq!(attente.len(), amorces, "tout ce qui a une identite doit attendre");
+        assert!(attente.iter().all(|c| c.supprime_le.is_none()), "rien n'est supprime ici");
+    }
+
+    /// Le rattrapage doit se voir SANS y toucher : une base qui existait avant la
+    /// synchronisation part en file toute seule au demarrage suivant.
+    #[test]
+    fn une_base_d_avant_la_synchro_se_met_en_file_au_demarrage() {
+        let fichier = std::env::temp_dir().join(format!("ckpt-amorce-{}.db", std::process::id()));
+        std::fs::remove_file(&fichier).ok();
+        let chemin = fichier.to_string_lossy().to_string();
+
+        {
+            let db = Database::new(&chemin).unwrap();
+            let conn = db.conn();
+            let noms: Vec<String> = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+                .unwrap()
+                .query_map([], |l| l.get(0))
+                .unwrap()
+                .collect::<Result<_>>()
+                .unwrap();
+            for nom in noms {
+                conn.execute_batch(&format!("DROP TRIGGER {nom}")).unwrap();
+            }
+            conn.execute("INSERT INTO projects (name, path) VALUES ('avant', '/tmp/a')", [])
+                .unwrap();
+            drop(conn);
+            // On efface le drapeau : l'installation date d'avant qu'il existe.
+            db.conn()
+                .execute("DELETE FROM settings WHERE key = ?1", [CLE_AMORCE])
+                .unwrap();
+        }
+
+        // Un demarrage suffit.
+        let db = Database::new(&chemin).unwrap();
+        assert_eq!(
+            db.changements_en_attente().unwrap().len(),
+            1,
+            "le contenu d'avant doit etre en file des le demarrage"
+        );
+
+        // Et le demarrage SUIVANT ne renvoie pas tout une seconde fois.
+        drop(db);
+        let db = Database::new(&chemin).unwrap();
+        assert_eq!(db.changements_en_attente().unwrap().len(), 1, "pas de second envoi");
+
+        std::fs::remove_file(&fichier).ok();
+    }
+
+    /// L'amorcage passe a CHAQUE ouverture de session : il ne doit rien abimer.
+    #[test]
+    fn amorcer_deux_fois_ne_duplique_ni_ne_rajeunit_rien() {
+        let db = base();
+        creer_un_projet(&db, "deja-la");
+
+        let avant = db.changements_en_attente().unwrap();
+        assert_eq!(avant.len(), 1, "le declencheur a deja mis l'element en file");
+
+        assert_eq!(db.amorcer_le_journal().unwrap(), 0, "rien de neuf a mettre en file");
+        let apres = db.changements_en_attente().unwrap();
+        assert_eq!(apres, avant, "ce qui attendait deja ne doit pas bouger");
+
+        assert_eq!(db.amorcer_le_journal().unwrap(), 0);
+        assert_eq!(db.changements_en_attente().unwrap(), avant);
     }
 
     fn creer_un_projet(db: &Database, nom: &str) -> i64 {

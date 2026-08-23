@@ -43,6 +43,11 @@ mod tests {
         assert_eq!(db.get_setting("k").unwrap(), "v1");
         db.set_setting("k", "v2").unwrap();
         assert_eq!(db.get_setting("k").unwrap(), "v2");
-        assert_eq!(db.get_all_settings().unwrap().len(), 1);
+
+        // On compte NOTRE cle, pas la table : le demarrage y range ses propres reglages, et
+        // un total fige transforme chaque ajout legitime en essai casse.
+        let miennes = db.get_all_settings().unwrap();
+        let pour_k = miennes.iter().filter(|(cle, _)| cle.as_str() == "k").count();
+        assert_eq!(pour_k, 1, "une seule ligne pour `k`");
     }
 }
