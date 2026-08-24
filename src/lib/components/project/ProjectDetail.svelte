@@ -116,6 +116,12 @@
     try {
       const cmds = await getProjectCommands(name);
       if (cmds.length === 0) {
+        // On EMMENE la ou ca se regle, au lieu d'indiquer un chemin. Le message d'avant
+        // disait « Parametres -> Commandes » : or DEUX ecrans portent le nom « Parametres »
+        // (celui de l'application et cet onglet-ci) et la section s'appelle « Commandes
+        // rapides ». Un utilisateur a cherche dans les reglages globaux, n'a rien trouve, et
+        // a conclu que l'option n'existait pas. Signale le 2026-08-24.
+        activeTab.set("settings");
         notify($trad("project.noQuickCommand"), "info");
         return;
       }

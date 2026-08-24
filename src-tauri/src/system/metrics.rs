@@ -53,6 +53,53 @@ pub struct MemoryMetrics {
     pub detail: Option<MemoryDetail>,
 }
 
+/// Assemble les nombres de memoire tels que le systeme les donne.
+///
+/// ## « Utilise » se DEMANDE, il ne se calcule pas
+///
+/// Ce code faisait `total - disponible`. C'est juste sous Linux et sous Windows, ou c'est
+/// exactement la definition qu'ils emploient. **Sous macOS, c'est faux** : les deux nombres y
+/// sont calcules separement, a partir de champs differents de `vm_statistics64`, et leur somme
+/// ne fait PAS le total.
+///
+/// - disponible = libre + inactif + purgeable - compresse
+/// - utilise    = actif + verrouille + compresse + speculatif
+///
+/// macOS garde le « libre » tres bas par choix et compresse beaucoup. Quand la memoire
+/// compressee depasse la somme des autres, le « disponible » tombe a zero — et `total - 0`
+/// annonce **100 % en permanence**. C'est ce qu'un utilisateur mac a signale le 2026-08-24 :
+/// une alerte de memoire pleine qui ne s'eteint jamais, alors que `top` dit le contraire.
+///
+/// On demande donc les deux au systeme. Aucun changement sous Linux ni sous Windows, ou
+/// `used_memory()` rend precisement `total - disponible` (verifie dans la source de la crate).
+///
+/// Le pourcentage est BORNE a 100 : sur macOS rien ne garantit que « utilise » reste sous le
+/// total, et une jauge a 103 % se lit comme un bug d'affichage.
+fn assembler_la_memoire(
+    total: u64,
+    used: u64,
+    available: u64,
+    swap_total: u64,
+    swap_used: u64,
+    detail: Option<MemoryDetail>,
+) -> MemoryMetrics {
+    let percent = if total > 0 {
+        (used as f64 / total as f64 * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+
+    MemoryMetrics {
+        total,
+        used,
+        available,
+        percent,
+        swap_total,
+        swap_used,
+        detail,
+    }
+}
+
 /// Le detail memoire de Linux, lu dans `/proc`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryDetail {
@@ -249,24 +296,14 @@ impl Collector {
     }
 
     fn collect_memory(&self) -> MemoryMetrics {
-        let total = self.sys.total_memory();
-        let available = self.sys.available_memory();
-        let used = total.saturating_sub(available);
-        let percent = if total > 0 {
-            used as f64 / total as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        MemoryMetrics {
-            total,
-            used,
-            available,
-            percent,
-            swap_total: self.sys.total_swap(),
-            swap_used: self.sys.used_swap(),
-            detail: lire_detail_memoire(),
-        }
+        assembler_la_memoire(
+            self.sys.total_memory(),
+            self.sys.used_memory(),
+            self.sys.available_memory(),
+            self.sys.total_swap(),
+            self.sys.used_swap(),
+            lire_detail_memoire(),
+        )
     }
 
     fn collect_disks(&mut self) -> Vec<DiskMetrics> {
@@ -389,6 +426,66 @@ fn read_zfs_arc_size() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LE CAS macOS, reproduit avec ses vrais nombres.
+    ///
+    /// Sur un Mac de 16 Gio bien rempli, `sysinfo` rend « utilise » et « disponible »
+    /// separement, et leur somme ne fait pas le total. L'ancien calcul `total - disponible`
+    /// annoncait 100 % alors que le systeme dit 56 %. Cet essai tombe si l'on y revient.
+    #[test]
+    fn le_pourcentage_suit_ce_que_le_systeme_dit_utilise() {
+        let gio = 1024 * 1024 * 1024;
+        // Memoire compressee superieure a libre + inactif + purgeable : « disponible » tombe a
+        // zero, ce qui est la situation ordinaire d'un Mac allume depuis quelques jours.
+        let mesures = assembler_la_memoire(16 * gio, 9 * gio, 0, 0, 0, None);
+
+        assert_eq!(
+            mesures.used,
+            9 * gio,
+            "« utilise » vient du systeme, pas d'une soustraction",
+        );
+        assert!(
+            (mesures.percent - 56.25).abs() < 0.01,
+            "attendu ~56 %, obtenu {} % — le calcul est reparti de « disponible »",
+            mesures.percent,
+        );
+        assert!(
+            mesures.percent < 92.0,
+            "a ce niveau l'alerte de memoire pleine se declenche et ne s'eteint jamais",
+        );
+    }
+
+    /// Sous Linux et sous Windows, `used_memory()` EST `total - disponible`. Le changement ne
+    /// doit donc rien y modifier : meme entree, meme resultat qu'avant.
+    #[test]
+    fn sous_linux_le_resultat_est_inchange() {
+        let gio = 1024 * 1024 * 1024;
+        let total = 32 * gio;
+        let disponible = 20 * gio;
+        let mesures = assembler_la_memoire(total, total - disponible, disponible, 0, 0, None);
+
+        assert_eq!(mesures.used, 12 * gio);
+        assert!((mesures.percent - 37.5).abs() < 0.01);
+    }
+
+    /// Rien ne garantit sous macOS que « utilise » reste sous le total : les deux nombres sont
+    /// independants. Une jauge a 103 % se lit comme un bug d'affichage.
+    #[test]
+    fn le_pourcentage_ne_depasse_jamais_cent() {
+        let gio = 1024 * 1024 * 1024;
+        let mesures = assembler_la_memoire(8 * gio, 9 * gio, 0, 0, 0, None);
+
+        assert_eq!(mesures.percent, 100.0);
+    }
+
+    /// Une machine qui ne rend pas de total ne doit pas provoquer une division par zero, ni un
+    /// `NaN` qui traverserait jusqu'a la jauge.
+    #[test]
+    fn un_total_a_zero_ne_donne_pas_nan() {
+        let mesures = assembler_la_memoire(0, 0, 0, 0, 0, None);
+
+        assert_eq!(mesures.percent, 0.0);
+    }
 
     /// De bout en bout, sur la machine qui fait tourner l'essai : AUCUN disque rendu ne doit
     /// etre un montage en lecture seule. Quand une AppImage tourne, cet essai voit le vrai

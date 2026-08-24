@@ -57,7 +57,7 @@
       forgetProjectTab(name);
       goHome();
     } catch (e) {
-      signalerErreur("settings.deleteProject", String(e)); alert(e); }
+      signalerErreur("settings.deleteProject", String(e)); notify(String(e)); }
     finally { deleting = false; }
   }
 </script>

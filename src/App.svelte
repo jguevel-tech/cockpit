@@ -4,6 +4,7 @@
   import MainPanel from "./lib/components/layout/MainPanel.svelte";
   import Toast from "./lib/components/ui/Toast.svelte";
   import ConfirmDialog from "./lib/components/ui/ConfirmDialog.svelte";
+  import SaisieDialog from "./lib/components/ui/SaisieDialog.svelte";
   import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
   import EcranConnexion from "./lib/components/compte/EcranConnexion.svelte";
   import { reportingConsent, loadReportingSettings, setReportingConsent } from "./lib/stores/errors";
@@ -115,6 +116,7 @@
   </div>
   <Toast />
   <ConfirmDialog />
+  <SaisieDialog />
   <CommandPalette />
   {#if accueilOuvert}
     <EcranConnexion onClose={fermerLAccueil} />

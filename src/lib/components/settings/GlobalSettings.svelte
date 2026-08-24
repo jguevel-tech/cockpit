@@ -160,7 +160,8 @@
 
   async function sendLoginCode() {
     if (!loginCode.trim()) return;
-    try { await claudeLoginInput(loginCode.trim()); loginCode = ""; } catch (e) { alert(e); }
+    try { await claudeLoginInput(loginCode.trim()); loginCode = ""; } catch (e) {
+      signalerErreur("global.sendLoginCode", String(e)); notify(String(e)); }
   }
 
   async function abortLogin() {
@@ -204,7 +205,7 @@
       meetingSaved = true;
       setTimeout(() => { meetingSaved = false; }, 3000);
     } catch (e) {
-      signalerErreur("global.saveMeetingSettings", String(e)); alert(e); }
+      signalerErreur("global.saveMeetingSettings", String(e)); notify(String(e)); }
     finally { meetingSaving = false; }
   }
 
@@ -243,7 +244,7 @@
       await loadDbProjects();
       await loadProjects();
     } catch (e) {
-      signalerErreur("global.doDelete", String(e)); alert(e); }
+      signalerErreur("global.doDelete", String(e)); notify(String(e)); }
   }
 </script>
 

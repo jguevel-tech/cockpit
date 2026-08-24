@@ -10,6 +10,7 @@
   import { onMount } from "svelte";
   import { trad } from "../../i18n";
   import { demanderConfirmation } from "../../stores/confirm";
+  import { demanderTexte } from "../../stores/saisie";
 
   let { project }: { project: string } = $props();
 
@@ -29,15 +30,23 @@
     try { tree = await getNoteTree(project); } catch (e) { notify(String(e)); }
   }
 
+  // Ces deux boutons ne faisaient RIEN sur un Mac : ils appelaient le `prompt()` du
+  // navigateur, qui n'existe pas dans la WebView de macOS et rend `null` sans rien afficher.
   async function addFolder() {
-    const name = prompt($trad("notes.folderNamePrompt"));
-    if (!name) return;
+    const name = await demanderTexte({
+      message: $trad("notes.folderNamePrompt"),
+      action: $trad("common.create"),
+    });
+    if (name === null) return;
     try { await createNoteFolder(project, null, name); await loadTree(); } catch (e) { notify(String(e)); }
   }
 
   async function addFile(folderId: number | null) {
-    const name = prompt($trad("notes.fileNamePrompt"));
-    if (!name) return;
+    const name = await demanderTexte({
+      message: $trad("notes.fileNamePrompt"),
+      action: $trad("common.create"),
+    });
+    if (name === null) return;
     try { await createNoteFile(project, folderId, name); await loadTree(); } catch (e) { notify(String(e)); }
   }
 

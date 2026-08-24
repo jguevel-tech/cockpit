@@ -12,6 +12,24 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS : les boutons « nouveau dossier » et « nouvelle note » ne faisaient rien.** Ils
+  ouvraient une fenêtre de saisie que macOS n'affiche pas. Même cause pour le bouton lien de
+  l'éditeur de notes. Cockpit a maintenant sa propre fenêtre, qui suit le thème et la langue.
+- **macOS : l'alerte « mémoire saturée » se déclenchait à tort et ne s'éteignait plus.** La
+  mémoire utilisée était déduite d'une soustraction qui ne veut rien dire sur macOS ; elle est
+  maintenant demandée au système. Le chiffre affiché dans Monitoring était faux de la même façon.
+- **macOS : certains échecs étaient totalement silencieux** — enregistrer les réglages de
+  réunion, supprimer un projet, envoyer un code de connexion. Le message passe désormais par les
+  notifications de l'application.
+- **Le bouton ▶ Cmd emmène là où les commandes se déclarent** au lieu d'indiquer un chemin.
+  Il renvoyait vers « Paramètres → Commandes », alors que deux écrans portent le nom
+  « Paramètres » et que la section s'appelle « Commandes rapides » : on cherchait au mauvais
+  endroit et on concluait que l'option n'existait pas.
+- **Les alertes de la cloche parlaient français en anglais** : disque, mémoire, processeur, et
+  l'unité « Go » qui restait « Go ».
+
 ## [0.51.0] — 2026-08-23
 
 ### Changed

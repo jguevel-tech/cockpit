@@ -236,6 +236,26 @@ for (const file of files.sort()) {
     ? src.replace(/^[\s\S]*?<script[^>]*>|<\/script>[\s\S]*$/g, blank)
     : src;
   const AFFECTATION = /(?:\b(?:const|let|var)\s+\w+\s*(?::[^=\n]+)?|(?:^|[\s;{}()])[\w.$]+\s*)=\s*(?=["'`])/g;
+
+  // 4bis) Propriete d'objet : `body: "..."`, `title: \`...\``.
+  //
+  // Ce trou a laisse passer les corps des alertes systeme, ecrits en francais dans le code
+  // pendant des semaines pendant que l'audit annoncait zero : la regle ci-dessus exige un `=`,
+  // et une propriete s'ecrit avec `:`. Or les magasins portent des libelles affiches.
+  //
+  // Le nom doit etre en DEBUT DE LIGNE, ou apres `{` ou `,`. Se contenter d'une espace devant
+  // faisait prendre la fin d'une phrase pour un nom de propriete : dans
+  // `console.warn("... impossible :", x)`, le `impossible :` suivi du guillemet FERMANT
+  // ressemble exactement a `nom: "`.
+  const PROPRIETE = /(?:^\s*|[{,]\s*)([A-Za-z_$][\w$]*)\s*:\s*(?=["'`])/gm;
+  for (const m of script.matchAll(PROPRIETE)) {
+    const debut = m.index + m[0].length;
+    const l = LITTERAUX.exec(script.slice(debut, debut + 400));
+    LITTERAUX.lastIndex = 0;
+    if (l && l.index === 0 && !ressembleAuCode(l[0])) {
+      push(debut, "propriete", l[0].slice(1, -1), estPhrase);
+    }
+  }
   for (const m of script.matchAll(AFFECTATION)) {
     const debut = m.index + m[0].length;
     const l = LITTERAUX.exec(script.slice(debut, debut + 400));

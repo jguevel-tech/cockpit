@@ -10,6 +10,8 @@
   import type { NoteFile } from "../../types";
   import { trad, translate } from "../../i18n";
   import { ouvrirLien } from "../../utils/liens";
+  import { analyserLien, SCHEMAS_OUVRABLES } from "../../utils/adresses";
+  import { demanderTexte } from "../../stores/saisie";
 
   let {
     file,
@@ -424,6 +426,38 @@
     return false;
   }
 
+  /// Insere un lien sur la selection.
+  ///
+  /// Ce bouton ne faisait RIEN sur un Mac : il appelait le `prompt()` du navigateur, absent de
+  /// la WebView de macOS. En passant par notre fenetre, un piege apparait : **elle prend le
+  /// focus, donc la selection est perdue**. On la CLONE avant d'ouvrir et on la repose avant
+  /// d'agir — sinon `createLink` n'a plus rien a habiller. Meme lecon que le repere de lecture.
+  async function insererUnLien() {
+    if (!caretPret()) return;
+    const sel = selectionDansEditeur();
+    const portee = sel ? sel.getRangeAt(0).cloneRange() : null;
+
+    const saisi = await demanderTexte({
+      message: $trad("note.linkUrlPrompt"),
+      action: $trad("note.link"),
+      exemple: "https://",
+    });
+    if (saisi === null) return;
+
+    // La MEME liste blanche que l'ouverture, prise au meme endroit : un lien qu'on refuserait
+    // d'ouvrir n'a pas a etre pose. Sinon le clic suivant ne fait rien, et un clic sans effet
+    // est vecu comme un bug.
+    const cible = analyserLien(saisi);
+    if (cible === "incomplet" || cible === "illisible" || !SCHEMAS_OUVRABLES.includes(cible.protocol)) {
+      notify($trad("note.linkRefused"), "info", 5000, { report: false });
+      return;
+    }
+
+    editorEl?.focus();
+    if (portee) poserSelection(portee);
+    format("createLink", cible.href);
+  }
+
   function format(cmd: string, value: string = "") {
     if (!caretPret()) return;
     document.execCommand(cmd, false, value);
@@ -583,7 +617,7 @@
       <button class="tb" onclick={() => format("formatBlock", "blockquote")} title={$trad("note.quote")}>❝</button>
       <span class="tb-sep"></span>
       <button class="tb" onclick={basculerBlocDeCode} title={$trad("note.codeBlock")}>&lt;/&gt;</button>
-      <button class="tb" onclick={() => { const url = prompt($trad("note.linkUrlPrompt")); if (url) format("createLink", url); }} title={$trad("note.link")}>🔗</button>
+      <button class="tb" onclick={insererUnLien} title={$trad("note.link")}>🔗</button>
     </div>
     <!-- Le bouton reste a la MEME place dans les deux etats : c'est ce qui garantit qu'on
          retrouve le chemin du retour la ou on a replie. -->

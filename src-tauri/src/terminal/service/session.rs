@@ -792,6 +792,81 @@ mod tests {
         session.texte_region((0, 0), (23, 79))
     }
 
+    /// Un pid existe-t-il encore ? Le signal 0 ne fait rien : il ne sert qu'a repondre a cette
+    /// question. Le pere de l'enfant est mort, donc l'orphelin est adopte et ramasse — pas de
+    /// zombie qui repondrait « vivant » alors qu'il ne tourne plus.
+    #[cfg(unix)]
+    fn pid_vivant(pid: i32) -> bool {
+        unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    /// Le filet de l'essai : un `assert!` rate ne doit pas laisser un dormeur derriere lui.
+    /// Sans lui, chaque echec ajoute un processus invisible sur la machine — la falsification
+    /// de cet essai en a laisse un.
+    #[cfg(unix)]
+    struct Faucheuse(i32);
+
+    #[cfg(unix)]
+    impl Drop for Faucheuse {
+        fn drop(&mut self) {
+            if pid_vivant(self.0) {
+                unsafe { libc::kill(self.0, libc::SIGKILL) };
+            }
+        }
+    }
+
+    /// LA QUESTION : fermer un onglet emporte-t-il ce qui TOURNE dedans ?
+    ///
+    /// `claude` n'est pas le shell, c'est son enfant au premier plan. Le coup de grace ne vise
+    /// que le shell — `kill(pid)` et non `kill(-pid)` — donc l'enfant ne meurt pas de la. Ce qui
+    /// l'emporte est le RACCROCHAGE du pseudo-terminal : quand le maitre est relache, le noyau
+    /// envoie SIGHUP au groupe de premier plan de la session.
+    ///
+    /// Cet enchainement se MESURE, il ne se deduit pas : il depend de qui relache le maitre et
+    /// quand. Un enfant qui survivrait tournerait des jours dans un service qui, lui, ne
+    /// s'arrete pas — et personne ne le verrait.
+    #[test]
+    #[cfg(unix)]
+    fn fermer_un_onglet_emporte_ce_qui_tourne_dedans() {
+        let s = session(None);
+
+        // `exec` remplace le sous-shell : le pid annonce est donc bien celui du dormeur, et il
+        // est au premier plan, comme claude. Le marqueur est coupe en deux (`enf""ant`) pour
+        // que le shell le RECONSTRUISE : sinon on retrouve d'abord l'echo de ce qu'on tape.
+        s.ecrire(b"sh -c 'echo enf\"\"ant=$$; exec sleep 600'\r").unwrap();
+        let vu = attendre(&s, "le pid de l'enfant", |v| v.contains("enfant="));
+
+        let pid: i32 = vu
+            .split("enfant=")
+            .nth(1)
+            .and_then(|reste| {
+                let chiffres: String = reste.chars().take_while(|c| c.is_ascii_digit()).collect();
+                chiffres.parse().ok()
+            })
+            .unwrap_or_else(|| panic!("pid de l'enfant introuvable. Ecran :\n{vu}"));
+
+        let _faucheuse = Faucheuse(pid);
+
+        // Sans cette verification, l'essai passerait aussi quand l'enfant n'a jamais demarre :
+        // il chercherait alors une panne qui n'existe pas.
+        assert!(pid_vivant(pid), "l'enfant ({pid}) doit tourner avant qu'on ferme");
+
+        s.fermer().unwrap();
+
+        // Le raccrochage se propage de facon asynchrone : on laisse au noyau le temps de
+        // signaler le groupe de premier plan, sans figer l'essai si c'est deja fait.
+        let debut = std::time::Instant::now();
+        while pid_vivant(pid) && debut.elapsed() < std::time::Duration::from_secs(5) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        assert!(
+            !pid_vivant(pid),
+            "l'enfant ({pid}) tourne encore apres la fermeture de l'onglet : \
+             fermer un terminal ou claude tourne laisserait claude en vie",
+        );
+    }
+
     #[test]
     fn un_shell_repond_a_ce_qu_on_lui_ecrit() {
         let s = session(None);

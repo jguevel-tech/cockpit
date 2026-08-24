@@ -8,6 +8,10 @@
  *   (un pic de compilation n'est pas une alerte) ;
  * - hysteresis : la notice est retiree quand on redescend NETTEMENT sous le seuil,
  *   pas au premier echantillon limite — sinon elle clignoterait.
+ *
+ * Les CORPS des notices etaient ecrits en francais dans le code, unite comprise : la cloche
+ * parlait francais a un utilisateur anglophone. L'audit i18n ne les voyait pas — un audit
+ * vert ne prouve rien.
  */
 import { getSystemMetrics } from "../api/system";
 import { pushNotice, removeNotice } from "./notifications";
@@ -59,7 +63,10 @@ async function check() {
         id,
         kind: "warning",
         title: translate("alerts.diskFull", { mount: d.mount }),
-        body: `**${Math.round(d.percent)} %** utilisés, ${formatGb(d.free)} libres.`,
+        body: translate("alerts.diskBody", {
+          percent: String(Math.round(d.percent)),
+          free: formatGb(d.free),
+        }),
         createdAt: new Date().toISOString(),
         dismissible: true,
         action: { label: translate("alerts.seeMonitoring"), run: openSystem },
@@ -78,7 +85,7 @@ async function check() {
       id: "sys:mem",
       kind: "warning",
       title: translate("alerts.memoryFull"),
-      body: `**${Math.round(m.memory.percent)} %** utilisés depuis plusieurs minutes.`,
+      body: translate("alerts.memoryBody", { percent: String(Math.round(m.memory.percent)) }),
       createdAt: new Date().toISOString(),
       dismissible: true,
       action: { label: translate("alerts.seeMonitoring"), run: openSystem },
@@ -96,7 +103,7 @@ async function check() {
       id: "sys:cpu",
       kind: "warning",
       title: translate("alerts.cpuFull"),
-      body: `**${Math.round(m.cpu.usage_percent)} %** depuis plusieurs minutes — un processus tourne peut-être en boucle.`,
+      body: translate("alerts.cpuBody", { percent: String(Math.round(m.cpu.usage_percent)) }),
       createdAt: new Date().toISOString(),
       dismissible: true,
       action: { label: translate("alerts.seeMonitoring"), run: openSystem },
@@ -107,6 +114,7 @@ async function check() {
   }
 }
 
+/// « Go » n'est pas « GB » : l'unite passe par le catalogue, comme le reste de la phrase.
 function formatGb(bytes: number): string {
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} Go`;
+  return translate("alerts.gigabytes", { n: (bytes / 1024 / 1024 / 1024).toFixed(1) });
 }
