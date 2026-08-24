@@ -101,6 +101,35 @@ async fn list_projects(state: tauri::State<'_, AppState>) -> Result<Vec<ProjectW
     Ok(result)
 }
 
+/// La langue imposee au demarrage, ou `None`.
+///
+/// **Elle existe pour le harnais de captures, et pour rien d'autre.** Le choix de langue vit
+/// dans le `localStorage`, donc DANS la WebView : impossible a poser depuis l'exterieur avant le
+/// premier rendu. Sans cette variable, le harnais devrait piloter les menus pour changer de
+/// langue — or il paie deja cinq pieges de ce genre, et une capture qui depend de la position
+/// d'une entree de menu casse au premier remaniement de l'interface.
+///
+/// Rendue `fn` et non `async fn` : elle lit une variable d'environnement, elle ne touche ni la
+/// base ni un process externe. Une valeur inconnue est traitee comme absente, pour qu'une faute
+/// de frappe ne fasse pas demarrer l'interface dans une langue vide.
+#[tauri::command]
+fn langue_imposee() -> Option<String> {
+    langue_valide(&std::env::var("COCKPIT_LANGUE").ok()?)
+}
+
+/// La langue si elle est connue, `None` sinon.
+///
+/// Separee de la lecture d'environnement pour etre essayable : une variable d'environnement est
+/// un etat GLOBAL, et les essais rust tournent en parallele — l'un poserait la variable pendant
+/// qu'un autre la lit.
+fn langue_valide(valeur: &str) -> Option<String> {
+    match valeur.trim() {
+        "fr" => Some("fr".to_string()),
+        "en" => Some("en".to_string()),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 async fn start_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.orchestrator.start_project(&name).await
@@ -1589,6 +1618,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            langue_imposee,
             // Compte et synchronisation
             compte::compte_etat,
             compte::compte_inscription,
@@ -1794,6 +1824,25 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    /// Une langue inconnue est traitee comme ABSENTE : une faute de frappe dans la variable ne
+    /// doit pas faire demarrer l'interface dans une langue vide, ni faire echouer le harnais de
+    /// captures sur un ecran a moitie traduit.
+    #[test]
+    fn seules_les_deux_langues_connues_sont_acceptees() {
+        assert_eq!(super::langue_valide("fr").as_deref(), Some("fr"));
+        assert_eq!(super::langue_valide("en").as_deref(), Some("en"));
+        // Les espaces autour arrivent des qu'on pose la variable a la main.
+        assert_eq!(super::langue_valide("  en \n").as_deref(), Some("en"));
+
+        for inconnue in ["", "  ", "EN", "de", "fr-FR", "anglais"] {
+            assert_eq!(
+                super::langue_valide(inconnue),
+                None,
+                "« {inconnue} » ne doit pas etre acceptee",
+            );
+        }
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn la_configuration_de_polices_inclut_celle_du_systeme() {

@@ -113,3 +113,17 @@ export const gitCreateBranch = (projectPath: string, name: string) =>
   invoke("git_create_branch", { projectPath, name });
 export const gitDeleteBranch = (projectPath: string, name: string, force: boolean) =>
   invoke("git_delete_branch", { projectPath, name, force });
+
+/**
+ * La langue imposee au demarrage par l'environnement, ou `null`.
+ *
+ * Elle n'existe que pour le harnais de captures : le site vitrine a besoin des memes ecrans en
+ * francais et en anglais, et la langue vit dans le `localStorage` — donc impossible a poser
+ * avant le premier rendu. Piloter les menus pour la changer aurait rendu les captures
+ * dependantes de la position d'une entree de menu.
+ */
+export async function langueImposee(): Promise<"fr" | "en" | null> {
+  const valeur = await invoke<string | null>("langue_imposee");
+
+  return valeur === "fr" || valeur === "en" ? valeur : null;
+}

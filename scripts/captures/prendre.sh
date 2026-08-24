@@ -1,7 +1,16 @@
 #!/bin/bash
 # Refait les captures du logiciel qui illustrent le site.
 #
-#   scripts/captures/prendre.sh <chemin/vers/Cockpit.AppImage> [dossier de sortie]
+#   scripts/captures/prendre.sh <chemin/vers/Cockpit.AppImage> [dossier de sortie] [fr|en]
+#
+# La LANGUE est le troisieme argument, parce que le site vitrine a besoin des memes ecrans dans
+# les deux : un anglophone ne comprend rien a des captures en francais. Elle passe par
+# `COCKPIT_LANGUE`, que le logiciel lit au demarrage — piloter les menus pour changer de langue
+# aurait rendu les captures dependantes de la position d'une entree de menu.
+#
+# Les deux jeux, en une fois :
+#   scripts/captures/prendre.sh Cockpit.AppImage captures/fr fr
+#   scripts/captures/prendre.sh Cockpit.AppImage captures/en en
 #
 # Le logiciel est lance sous ecran virtuel avec une base de DEMONSTRATION : aucune donnee
 # reelle n'apparait sur les images, qui finissent sur un site public.
@@ -20,6 +29,11 @@ set -euo pipefail
 
 APPIMAGE="${1:?chemin vers le fichier AppImage attendu}"
 SORTIE="${2:-captures}"
+LANGUE="${3:-fr}"
+case "$LANGUE" in
+  fr|en) ;;
+  *) echo "langue inconnue : $LANGUE (attendu fr ou en)" >&2; exit 1 ;;
+esac
 TRAVAIL=/tmp/cockpit-captures
 ECRAN=:99
 OUTILS="$(cd "$(dirname "$0")" && pwd)/outils.py"
@@ -83,6 +97,8 @@ export XDG_DATA_HOME="$TRAVAIL/home/.local/share"
 export XDG_CONFIG_HOME="$TRAVAIL/home/.config"
 export XDG_CACHE_HOME="$TRAVAIL/home/.cache"
 export COCKPIT_DB="$TRAVAIL/demo.db"
+# Le logiciel la lit au demarrage et bascule avant le premier rendu utile.
+export COCKPIT_LANGUE="$LANGUE"
 
 nettoyer() {
   pkill -f "dbus-run-session -- $APPIMAGE" 2>/dev/null || true
@@ -128,4 +144,4 @@ clic 813 98 5         # onglet Fichiers
 clic 391 296 4        # un fichier, pour le montrer colore
 prise fichiers
 
-echo "── fait, dans $SORTIE"
+echo "── fait, dans $SORTIE (langue : $LANGUE)"

@@ -12,6 +12,8 @@
   import { getAppSettings, setAppSetting } from "./lib/api/recorder";
   import { signalerErreur } from "./lib/stores/errors";
   import { loadProjects } from "./lib/stores/projects";
+  import { langueImposee } from "./lib/api/workspace";
+  import { setLocale } from "./lib/i18n";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
   import { startTodoDueWatcher } from "./lib/stores/todoAlerts";
@@ -76,7 +78,23 @@
     }
   }
 
+  /// La langue imposee par l'environnement, quand il y en a une.
+  ///
+  /// Elle n'existe que pour le harnais de captures du site vitrine. La bascule se fait au
+  /// premier tour de boucle, donc avant qu'une capture soit prise — le harnais attend de toute
+  /// facon que l'interface soit posee. Sans la variable, rien ne se passe et le choix de
+  /// l'utilisateur, garde dans le `localStorage`, n'est pas touche.
+  async function appliquerLaLangueImposee() {
+    try {
+      const langue = await langueImposee();
+      if (langue) setLocale(langue);
+    } catch (e) {
+      signalerErreur("app.langueImposee", String(e));
+    }
+  }
+
   onMount(() => {
+    void appliquerLaLangueImposee();
     loadProjects();
     void ouvrirLAccueilSiPremierLancement();
     loadWallpaper();
