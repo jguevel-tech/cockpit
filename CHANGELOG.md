@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.51.1] — 2026-08-24
+
 ### Fixed
 
 - **macOS : les boutons « nouveau dossier » et « nouvelle note » ne faisaient rien.** Ils
