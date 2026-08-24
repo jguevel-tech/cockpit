@@ -155,6 +155,8 @@ jobs:
           # la compilation (`option_env!`), pas ecrite dans le depot — il est public, et
           # l'adresse d'un serveur prive n'a pas a y etre indexee. Secrets absents = la
           # remontee est simplement inactive, ce qui est le cas des builds locaux.
+          COCKPIT_GOOGLE_ID: ${{ secrets.COCKPIT_GOOGLE_ID }}
+          COCKPIT_GOOGLE_SECRET: ${{ secrets.COCKPIT_GOOGLE_SECRET }}
           COCKPIT_REPORT_URL: ${{ secrets.COCKPIT_REPORT_URL }}
           COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
           # Serveur maison sans certificat : le HTTP est assume ici, explicitement.

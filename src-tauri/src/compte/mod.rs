@@ -13,6 +13,7 @@
 //! **Toutes les commandes de ce module sont `async`** : une commande synchrone s'execute dans
 //! la boucle GTK et gele l'interface entiere — ici, le temps d'un aller-retour reseau.
 
+pub mod google;
 pub mod synchro;
 
 use crate::storage::db::Database;
@@ -314,6 +315,11 @@ async fn rapatrier_l_avatar(db: &Database, adresse: Option<&str>) {
 #[derive(Deserialize)]
 struct Capacites {
     google: bool,
+    /// Le chemin direct, sans code a comparer. **Absent = faux** : un serveur plus ancien ne
+    /// connait pas ce champ, et le logiciel doit alors retomber sur l'appairage au lieu
+    /// d'echouer.
+    #[serde(default)]
+    google_logiciel: bool,
 }
 
 /// Ce que le serveur sait faire.
@@ -340,7 +346,43 @@ pub async fn compte_google_disponible(
         }
     };
 
-    Ok(reponse.json::<Capacites>().await.map(|c| c.google).unwrap_or(false))
+    let capacites = reponse.json::<Capacites>().await.unwrap_or(Capacites {
+        google: false,
+        google_logiciel: false,
+    });
+
+    // Le chemin direct n'est propose que si LES DEUX cotes savent le faire : le serveur doit
+    // l'annoncer, et ce binaire doit avoir ete construit avec un client de bureau.
+    Ok(capacites.google || (capacites.google_logiciel && google::configure()))
+}
+
+/// Le chemin DIRECT est-il disponible ?
+///
+/// Separe de la question « y a-t-il un chemin Google » : le bouton s'affiche des qu'il y en a un,
+/// mais le geste au clic n'est pas le meme. Sans cette distinction, un binaire construit sans
+/// client de bureau tenterait le chemin direct et echouerait apres avoir ouvert un navigateur.
+#[tauri::command]
+pub async fn compte_google_direct(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<bool, String> {
+    if !google::configure() {
+        return Ok(false);
+    }
+
+    let reponse = match client()
+        .get(format!("{}/api/capacites", serveur(&state.db)))
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => r,
+        _ => return Ok(false),
+    };
+
+    Ok(reponse
+        .json::<Capacites>()
+        .await
+        .map(|c| c.google_logiciel)
+        .unwrap_or(false))
 }
 
 #[tauri::command]
@@ -365,6 +407,49 @@ pub async fn compte_connexion(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
     ouvrir_une_session(&state.db, "/api/connexion", &email, &mot_de_passe, None).await
+}
+
+/// La connexion Google, sans code a comparer.
+///
+/// Le navigateur s'ouvre, la personne choisit son compte, la fenetre se ferme — et c'est fini.
+/// Le detail de l'echange est dans `google.rs` ; ici on ne fait que porter le jeton d'identite au
+/// serveur, qui rend le notre.
+#[tauri::command]
+pub async fn compte_connexion_google(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<EtatCompte, String> {
+    let identite = google::obtenir_une_identite(|adresse| {
+        // L'ouverture passe par le systeme : c'est le navigateur de la personne qui doit
+        // s'ouvrir, celui ou elle est deja connectee a Google.
+        tauri_plugin_opener::open_url(adresse, None::<&str>).map_err(|e| {
+            log::error!("google : impossible d'ouvrir le navigateur — {e}");
+            "navigateur_indisponible".to_string()
+        })
+    })
+    .await?;
+
+    let corps = serde_json::json!({
+        "jeton_identite": identite.jeton_identite,
+        "appareil": bloc_appareil(&state.db)?,
+    });
+
+    let reponse = client()
+        .post(format!("{}/api/connexion/google", serveur(&state.db)))
+        .json(&corps)
+        .send()
+        .await
+        .map_err(panne_reseau)?;
+
+    if !reponse.status().is_success() {
+        return Err(refus(reponse).await);
+    }
+
+    let recue: ReponseCompte = reponse.json().await.map_err(|e| {
+        log::warn!("compte : reponse illisible apres Google — {e}");
+        motif::SERVEUR.to_string()
+    })?;
+
+    enregistrer_la_session(&state.db, &recue).await
 }
 
 /// Demande un appairage : le logiciel ouvrira l'adresse rendue dans le navigateur.

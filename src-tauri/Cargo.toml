@@ -31,6 +31,10 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 chrono = "0.4"
 portable-pty = "0.9"
 base64 = "0.22"
+# PKCE : l'empreinte du verificateur, et de l'alea pris au systeme. Les deux etaient deja dans
+# l'arbre en transitif (rustls les tire), les declarer ne change donc rien au poids du binaire.
+sha2 = "0.10"
+getrandom = "0.2"
 ignore = "0.4"
 # Capture audio des reunions, DANS notre processus : le meme code sur les trois systemes,
 # et plus aucun programme externe (`pw-record`/`parecord` avant aout 2026).

@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- **La connexion Google se fait sans code.** Le navigateur s'ouvre, vous choisissez votre compte,
+  la fenêtre se ferme et c'est fini. L'ancien écran affichait un code à comparer qui se lisait
+  comme un code à recopier, alors qu'il n'y avait jamais rien à taper.
+
 ## [0.51.1] — 2026-08-24
 
 ### Fixed

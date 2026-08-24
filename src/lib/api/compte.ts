@@ -81,3 +81,22 @@ export type EtatSynchro = {
 
 export const synchroMaintenant = () => invoke<ResultatSynchro>("synchro_maintenant");
 export const synchroEtat = () => invoke<EtatSynchro>("synchro_etat");
+
+/**
+ * La connexion Google DIRECTE : le navigateur s'ouvre, on choisit son compte, c'est fini.
+ *
+ * Aucun code a comparer et rien a recopier. Google renvoie sur un port local que le logiciel
+ * ecoute le temps de la connexion — quelques secondes, sur `127.0.0.1` seulement.
+ */
+export async function connexionGoogle(): Promise<EtatCompte> {
+  return invoke<EtatCompte>("compte_connexion_google");
+}
+
+/**
+ * Ce chemin est-il disponible ? Il faut que le SERVEUR l'annonce et que ce binaire ait ete
+ * construit avec un client de bureau. Faux : on retombe sur l'appairage, qui reste en place pour
+ * les installations plus anciennes.
+ */
+export async function googleDirect(): Promise<boolean> {
+  return invoke<boolean>("compte_google_direct");
+}

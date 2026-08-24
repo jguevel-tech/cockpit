@@ -23,7 +23,7 @@
   import { openUrl } from "../../api/workspace";
   import { signalerErreur } from "../../stores/errors";
   import { texteDuRefus } from "../../stores/refusCompte";
-  import { googleDisponible } from "../../api/compte";
+  import { googleDisponible, googleDirect, connexionGoogle } from "../../api/compte";
   import { onDestroy, onMount } from "svelte";
 
   let { onClose }: { onClose: () => void } = $props();
@@ -36,14 +36,17 @@
   let enCours = $state(false);
   /// Refus verifie ICI et non par le serveur : une faute de frappe sur un champ qu'on ne voit
   /// pas ne doit pas couter un aller-retour, ni etre decouverte a la premiere connexion.
-  let refusLocal: "mots_de_passe_differents" | null = $state(null);
+  let refusLocal: string | null = $state(null);
   /// Le serveur sait-il faire Google ? On lui demande : proposer le bouton sans le savoir mene
   /// a une page ou ce choix n'existe pas. Faux tant qu'on n'a pas la reponse.
   let googleActif = $state(false);
+  /// Le chemin direct, sans code. Faux = on retombe sur l'appairage par le navigateur.
+  let googleSansCode = $state(false);
 
   onMount(async () => {
     try {
       googleActif = await googleDisponible();
+      googleSansCode = await googleDirect();
     } catch {
       // Deja journalise cote Rust ; ici l'absence de reponse veut dire « ne le propose pas ».
     }
@@ -92,6 +95,23 @@
     if (enCours) return;
     enCours = true;
     try {
+      // LE CHEMIN DIRECT : le navigateur s'ouvre, on choisit son compte, on revient. Aucun code
+      // a comparer — l'ancien ecran en affichait un, et il se lisait comme un code a recopier.
+      if (googleSansCode) {
+        try {
+          await connexionGoogle();
+          onClose();
+        } catch (e) {
+          // Le motif rendu par la commande est une CLE, pas une phrase : la table de refus la
+          // traduit, et un motif qu'elle ne connait pas retombe sur un message general plutot
+          // que d'afficher un mot technique. Abandonner n'est pas une panne — mais rester muet
+          // apres un clic en serait une.
+          refusLocal = String(e);
+        }
+        return;
+      }
+
+      // L'ancien chemin, garde pour les serveurs qui ne connaissent pas encore le nouveau.
       const demande = await appairerParLeNavigateur();
       if (!demande) return;
       attente = { code: demande.demande.code, url: demande.demande.url };

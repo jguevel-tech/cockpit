@@ -1623,6 +1623,8 @@ pub fn run() {
             compte::compte_etat,
             compte::compte_inscription,
             compte::compte_connexion,
+            compte::compte_connexion_google,
+            compte::compte_google_direct,
             compte::compte_appairage_demarrer,
             compte::compte_appairage_etat,
             compte::compte_deconnexion,
