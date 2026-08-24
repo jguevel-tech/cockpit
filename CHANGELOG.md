@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.52.0] — 2026-08-24
+
 ### Changed
 
 - **La connexion Google se fait sans code.** Le navigateur s'ouvre, vous choisissez votre compte,
