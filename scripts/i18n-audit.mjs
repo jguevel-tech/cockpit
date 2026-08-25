@@ -149,7 +149,7 @@ function blanchirTraductions(src) {
 // Un libelle affiche ne contient ni option en ligne de commande, ni chemin absolu, ni
 // operateur de shell. C'est ce qui separe `Fichier binaire (${taille})` — un libelle a
 // parametre — de `docker exec -it ${nom} sh -c '...'`, qui est une commande.
-const CODE = /(?:^|\s)(?:-{1,2}[a-zA-Z]|\/[\w.-]+\/|&&|\|\||\$\()/;
+const CODE = /(?:^|\s)(?:-{1,2}[a-zA-Z]|\/[\w.-]+\/|&&|\|\||\$\()|<\/?[a-z][\w-]*[\s/>]|^---$/m;
 const ressembleAuCode = (s) => CODE.test(s);
 
 // Chaines litterales d'un fragment de code (les trois formes de guillemets).
@@ -192,11 +192,15 @@ for (const file of files.sort()) {
 
   // Signale chaque chaine litterale d'un fragment de code (argument d'appel, valeur
   // d'attribut dynamique, initialisation de variable). Filtre `estPhrase` : voir plus haut.
-  const pushLitteraux = (debut, fragment, kind) => {
+  const pushLitteraux = (debut, fragment, kind, filtre = estPhrase) => {
     for (const l of fragment.matchAll(LITTERAUX)) {
-      push(debut + l.index, kind, l[0].slice(1, -1), estPhrase);
+      push(debut + l.index, kind, l[0].slice(1, -1), filtre);
     }
   };
+
+  // Une valeur RENDUE peut etre du balisage ou une commande — jamais un libelle. Les regles
+  // par affectation ecartaient deja le code ; celle du `return` doit le faire aussi.
+  const phraseSansCode = (t) => estPhrase(t) && !ressembleAuCode(t);
 
   // 1) Attributs lisibles. Valeur litterale d'abord — les `{interpolations}` sont
   // tolerees DANS la phrase, seule une valeur qui n'est QUE du code est ignoree.
@@ -255,6 +259,23 @@ for (const file of files.sort()) {
     if (l && l.index === 0 && !ressembleAuCode(l[0])) {
       push(debut, "propriete", l[0].slice(1, -1), estPhrase);
     }
+  }
+  // 4ter) Libelle RENDU par une fonction : `return "..."`. Aucune des regles ci-dessus ne le
+  // voit — ni attribut, ni appel, ni propriete, ni affectation. C'est par ce trou que quatre
+  // libelles d'echeance ("aujourd'hui", "en retard de 3 j") sont restes ecrits en francais
+  // dans un module utilitaire, affiches sur le tableau de bord, pendant que l'audit annoncait
+  // zero. Pour verifier qu'il attrape bien : remettre un de ces libelles en dur, il ressort.
+  // On balaye TOUTE la ligne du `return` et pas seulement la chaine collee au mot-cle : un
+  // `return ok ? "En ligne" : "Injoignable"` cache deux libelles, et n'en regarder qu'un
+  // laissait passer le second.
+  for (const m of script.matchAll(/\breturn\b/g)) {
+    const fin = script.indexOf("\n", m.index);
+    pushLitteraux(
+      m.index,
+      script.slice(m.index, fin < 0 ? script.length : fin),
+      "retour",
+      phraseSansCode,
+    );
   }
   for (const m of script.matchAll(AFFECTATION)) {
     const debut = m.index + m[0].length;
