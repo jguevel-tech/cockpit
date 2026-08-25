@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Des textes restaient en français quand l'interface était en anglais** : les échéances des
+  tâches (« aujourd'hui », « en retard de 2 j »), l'âge d'un commit et des notifications
+  (« il y a 3 min »), l'état d'une adresse surveillée, et les unités de taille de fichier
+  (« 50 o » au lieu de « 50 B »). Les dates courtes suivent aussi la langue : 29/08 en français,
+  08/29 en anglais.
+- **Les tailles de fichier ne s'écrivaient pas pareil d'un écran à l'autre** — « Mo » dans les
+  fichiers d'un projet, « MB » dans les process, quelle que soit la langue choisie.
+
 ## [0.52.0] — 2026-08-24
 
 ### Changed

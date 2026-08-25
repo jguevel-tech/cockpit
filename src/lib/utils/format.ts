@@ -1,11 +1,24 @@
 import { translate } from "../i18n";
 
+/**
+ * Une taille en octets, lisible.
+ *
+ * **Les unites ne s'ecrivent pas pareil dans les deux langues** : « 50 o » et « 1,2 Mo » se
+ * lisent « 50 B » et « 1.2 MB » en anglais. Elles vivent donc dans les catalogues, comme le
+ * reste des libelles.
+ *
+ * Et il n'y a qu'UNE table : la meme existait en quatre exemplaires — deux en francais, deux en
+ * anglais — donc la meme application montrait « 50 o » dans les fichiers et « 50 B » dans les
+ * process, quelle que soit la langue choisie. Deux copies d'une table de libelles finissent
+ * toujours par ne plus dire la meme chose.
+ */
+const UNITES = ["size.b", "size.kb", "size.mb", "size.gb", "size.tb"] as const;
+
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "Ko", "Mo", "Go", "To"];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  if (bytes <= 0) return `0 ${translate(UNITES[0])}`;
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITES.length - 1);
   const v = bytes / Math.pow(1024, i);
-  return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+  return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${translate(UNITES[i])}`;
 }
 
 /**

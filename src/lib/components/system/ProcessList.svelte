@@ -4,6 +4,7 @@
   import { trad } from "../../i18n";
   import { notify } from "../../stores/toast";
   import { demanderConfirmation } from "../../stores/confirm";
+  import { formatBytes } from "../../utils/format";
 
   // `killForced` vient du backend (`kill_is_forced`) et non d'une detection de systeme cote
   // interface : c'est lui qui sait quel signal il peut envoyer. Sous Windows il n'y a que
@@ -17,14 +18,6 @@
   let tab: "cpu" | "memory" = $state("cpu");
   let arretEnCours: number | null = $state(null);
   let libelleArret = $derived($trad(killForced ? "proc.stopForced" : "proc.stop"));
-
-  function formatBytes(bytes: number): string {
-    if (bytes === 0) return "0";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
-  }
 
   async function kill(pid: number) {
     if (!(await demanderConfirmation({ message: $trad("proc.killConfirm", { pid }), action: $trad("proc.stopAction") }))) return;

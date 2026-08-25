@@ -47,8 +47,10 @@
 
   function healthTitle(u: Url): string {
     const h = health.get(u.url);
-    if (!h) return "Statut inconnu";
-    return h.ok ? `En ligne (HTTP ${h.status})` : `Injoignable — ${h.error || `HTTP ${h.status}`}`;
+    if (!h) return $trad("urls.statusUnknown");
+    return h.ok
+      ? $trad("urls.statusUp", { code: h.status })
+      : $trad("urls.statusDown", { cause: h.error || `HTTP ${h.status}` });
   }
 
   async function add() {

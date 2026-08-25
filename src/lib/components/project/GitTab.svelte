@@ -256,9 +256,9 @@
 
   function relativeTime(epoch: number): string {
     const diff = Math.floor(Date.now() / 1000) - epoch;
-    if (diff < 3600) return `il y a ${Math.max(1, Math.floor(diff / 60))} min`;
-    if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
-    if (diff < 86400 * 30) return `il y a ${Math.floor(diff / 86400)} j`;
+    if (diff < 3600) return $trad("time.minutesAgo", { n: Math.max(1, Math.floor(diff / 60)) });
+    if (diff < 86400) return $trad("time.hoursAgo", { n: Math.floor(diff / 3600) });
+    if (diff < 86400 * 30) return $trad("time.daysAgoShort", { n: Math.floor(diff / 86400) });
     return new Date(epoch * 1000).toLocaleDateString();
   }
 

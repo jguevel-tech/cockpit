@@ -34,16 +34,18 @@
   }
 
   /// "il y a 3 min", "hier"... Suffisant ici : pas de dependance de formatage a ajouter.
+  /// Les libelles passent par `$trad` et non par `translate` : lu depuis le balisage, c'est ce
+  /// qui les fait suivre un changement de langue sans attendre un autre rafraichissement.
   function relativeTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     if (Number.isNaN(diff)) return "";
     const min = Math.floor(diff / 60000);
-    if (min < 1) return "à l'instant";
-    if (min < 60) return `il y a ${min} min`;
+    if (min < 1) return $trad("time.justNow");
+    if (min < 60) return $trad("time.minutesAgo", { n: min });
     const h = Math.floor(min / 60);
-    if (h < 24) return `il y a ${h} h`;
+    if (h < 24) return $trad("time.hoursAgo", { n: h });
     const d = Math.floor(h / 24);
-    return d === 1 ? "hier" : `il y a ${d} jours`;
+    return d === 1 ? $trad("time.yesterday") : $trad("time.daysAgo", { n: d });
   }
 
   // Marquer tout comme lu a l'ouverture : ouvrir le panneau, c'est avoir vu.

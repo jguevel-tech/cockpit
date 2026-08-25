@@ -1,18 +1,10 @@
 <script lang="ts">
   import { systemMetrics, metricsLive, refreshMetrics, startLiveMetrics, stopLiveMetrics } from "../../stores/system";
   import ProcessList from "./ProcessList.svelte";
-  import { formatUptime } from "../../utils/format";
+  import { formatBytes, formatUptime } from "../../utils/format";
   import { trad } from "../../i18n";
 
   let isLive: boolean = $derived($metricsLive);
-
-  function formatBytes(bytes: number): string {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
-  }
 </script>
 
 <div class="system">

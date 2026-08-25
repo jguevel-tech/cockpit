@@ -14,6 +14,7 @@
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
   import { demanderConfirmation } from "../../stores/confirm";
+  import { formatBytes } from "../../utils/format";
 
   let { name }: { name: string } = $props();
 
@@ -179,22 +180,16 @@
       fileSize = f.size;
       fileMtime = f.mtime;
       if (f.binary) {
-        fileNotice = $trad("files.binaryNotice", { size: formatSize(f.size) });
+        fileNotice = $trad("files.binaryNotice", { size: formatBytes(f.size) });
         return;
       }
       fileTruncated = f.truncated;
-      if (f.truncated) fileNotice = $trad("files.truncatedNotice", { size: formatSize(f.size) });
+      if (f.truncated) fileNotice = $trad("files.truncatedNotice", { size: formatBytes(f.size) });
       fileRaw = f.content;
       fileHtml = await highlightCode(f.content, langFor(relPath), $themeBase === "dark");
     } catch (e) {
       signalerErreur("files.openFileByPath", String(e)); fileNotice = String(e); }
     finally { loadingFile = false; }
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " Mo";
-    if (bytes > 1024) return (bytes / 1024).toFixed(1) + " Ko";
-    return bytes + " o";
   }
 
   // --- Edition ---
@@ -270,9 +265,9 @@
     fileSize = f.size;
     fileTruncated = f.truncated;
     fileNotice = f.binary
-      ? $trad("files.binaryNotice", { size: formatSize(f.size) })
+      ? $trad("files.binaryNotice", { size: formatBytes(f.size) })
       : f.truncated
-        ? $trad("files.truncatedNotice", { size: formatSize(f.size) })
+        ? $trad("files.truncatedNotice", { size: formatBytes(f.size) })
         : "";
     if (f.binary) { fileRaw = ""; fileHtml = ""; return; }
     if (f.content === fileRaw) return; // mtime touchee sans changement de contenu
@@ -880,7 +875,7 @@
             {#if reloadFlash}<span class="reload-flash">{$trad("files.diskReloaded")}</span>{/if}
             {#if defBusy}<span class="def-busy">{$trad("files.definitionBusy")}</span>{/if}
             {#if fileRaw && !editing}
-              <span class="file-stats">{$trad("files.lines", { count: lineCount })} · {formatSize(fileSize)}</span>
+              <span class="file-stats">{$trad("files.lines", { count: lineCount })} · {formatBytes(fileSize)}</span>
               <button class="icon-mini" class:active={wrapLines} onclick={() => (wrapLines = !wrapLines)} title={$trad("files.wrap")}>⏎</button>
               <button class="icon-mini" onclick={openFind} title={$trad("files.findInFile")}>🔍</button>
             {/if}
