@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.52.1] — 2026-08-25
+
 ### Fixed
 
 - **Des textes restaient en français quand l'interface était en anglais** : les échéances des
