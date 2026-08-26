@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **La liste de choix de la langue était illisible sur un thème sombre** — texte clair sur fond
+  clair, dès qu'une image de fond était active. Les listes déroulantes suivent maintenant le
+  thème, celle qui s'ouvre comprise.
+
 ## [0.53.1] — 2026-08-26
 
 ### Fixed

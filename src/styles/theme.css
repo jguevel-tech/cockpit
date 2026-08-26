@@ -196,6 +196,14 @@ html[data-theme="forest"] { --surface-canvas: #0b1310; --surface-base: #121d18; 
 html[data-theme="ember"] { --surface-canvas: #14100d; --surface-base: #1e1814; --surface-raised: #29211b; }
 html[data-theme="paper"] { --surface-canvas: #f7f4ee; --surface-base: #fffdf8; --surface-raised: #efe9df; }
 
+/* CE QUE LE SYSTEME DOIT SAVOIR DU THEME.
+   Les controles natifs — la liste qui s'ouvre sous un `<select>`, les barres de defilement, le
+   curseur de saisie — sont peints par le moteur, pas par nous. Sans `color-scheme`, il les peint
+   CLAIRS sur un theme sombre. La classe `html.dark` est portee par toutes les palettes sombres
+   (voir plus haut), donc deux lignes suffisent. */
+:root { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);

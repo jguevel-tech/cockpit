@@ -73,6 +73,22 @@
 .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .input::placeholder { color: var(--text-muted); }
 
+/* UNE LISTE DEROULANTE SUIT LE THEME PAR `color-scheme`, PAS PAR SES COULEURS.
+   ==========================================================================================
+   WebKit peint le widget natif d'un `<select>` lui-meme. Sur un theme sombre il le peignait
+   CLAIR — texte clair sur fond clair, illisible : signale sur capture le 2026-08-26, reproduit
+   au banc. Le declencheur est l'image de fond, qui met `--bg-primary` a `transparent` : un fond
+   transparent fait retomber le moteur sur son apparence natine.
+
+   La correction tient dans `color-scheme` (dans `theme.css`), qui dit au moteur quel theme
+   peindre — pour le controle ferme comme pour la liste qui s'ouvre.
+
+   ESSAYE ET RETIRE : `appearance: none` avec notre propre fleche en `background-image`. Le fond
+   devenait correct, mais **la fleche n'etait pas peinte** — ce moteur ne dessine pas l'image de
+   fond d'un `select` — et le controle perdait son seul indicateur, ce qui est pire que le defaut
+   de depart. Ne pas reprendre ce chemin sans un banc de rendu a l'appui.
+   ========================================================================================== */
+
 /* --- Badges --- */
 .badge {
   display: inline-flex; align-items: center; gap: 0.3rem;
