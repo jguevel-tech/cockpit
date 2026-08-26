@@ -12,6 +12,10 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- Amélioration des journaux techniques.
+
 ## [0.53.2] — 2026-08-26
 
 ### Fixed

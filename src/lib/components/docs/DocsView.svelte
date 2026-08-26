@@ -491,13 +491,6 @@
 
       <div class="block">
         <p>{@html $trad("docs.updates.errors")}</p>
-        <div class="demo">
-          <div class="d-row">
-            <strong>{$trad("settings.reporting.title")}</strong>
-            <span class="d-btn small">{$trad("settings.reporting.enabled")}</span>
-            <span class="d-note">{$trad("docs.updates.errorsDemo")}</span>
-          </div>
-        </div>
       </div>
 
       <div class="block">

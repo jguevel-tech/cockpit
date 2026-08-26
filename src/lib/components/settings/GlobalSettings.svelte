@@ -24,8 +24,7 @@
   import { forgetProjectTab } from "../../stores/ui";
   import { updateState, checkForUpdate } from "../../stores/update";
   import { trad, locale, setLocale, LOCALES, type Locale } from "../../i18n";
-  import { signalerErreur, reportingConsent, reportingUser, setReportingConsent, setReportingUser, machineReport } from "../../stores/errors";
-  import type { MachineReport } from "../../types";
+  import { signalerErreur } from "../../stores/errors";
   import { notify } from "../../stores/toast";
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
@@ -105,7 +104,6 @@
     MENU.filter((e) => !e.capacite || !$agentPrefere || $agentPrefere[e.capacite]),
   );
 
-  let machine: MachineReport | null = $state(null);
   let attachTranscript = $state(true);
   let dbProjects: DbProject[] = $state([]);
   let importPath = $state("");
@@ -256,7 +254,6 @@
 
   onMount(async () => {
     await loadDbProjects();
-    await loadMachine();
     // Trois pannes differentes portaient le meme `scope` recopie : il sert justement a situer
     // laquelle a eu lieu.
     try { dbPath = await invoke<string>("get_db_path"); } catch (e) {
@@ -302,10 +299,6 @@
       importFailed = true;
       importResult = `${$trad("common.error")} : ${e}`;
     } finally { importing = false; }
-  }
-
-  async function loadMachine() {
-    try { machine = await machineReport(); } catch (e) { notify(String(e), "error", 4000, { scope: "settings.machine" }); }
   }
 
   async function loadDbProjects() {
@@ -391,37 +384,6 @@
               {/each}
             </select>
           </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h3>{$trad("settings.reporting.title")}</h3>
-            <p>{$trad("settings.reporting.help")}</p>
-          </div>
-          <label class="check-row">
-            <input
-              type="checkbox"
-              checked={$reportingConsent === "on"}
-              onchange={(e) => setReportingConsent((e.currentTarget as HTMLInputElement).checked)}
-            />
-            <span>{$trad("settings.reporting.enabled")}</span>
-          </label>
-          <div class="field-row">
-            <span class="field-label">{$trad("settings.reporting.user")}</span>
-            <input
-              class="input"
-              type="text"
-              value={$reportingUser}
-              onchange={(e) => setReportingUser((e.currentTarget as HTMLInputElement).value)}
-            />
-          </div>
-          {#if machine}
-            <div class="field-row">
-              <span class="field-label">{$trad("settings.reporting.machine")}</span>
-              <span class="field-value mono-value"
-                >{machine.distro} · {machine.audio} · {machine.packaging}</span>
-            </div>
-          {/if}
         </section>
 
         <section class="card">
