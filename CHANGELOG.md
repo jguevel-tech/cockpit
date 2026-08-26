@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.53.2] — 2026-08-26
+
 ### Fixed
 
 - **La liste de choix de la langue était illisible sur un thème sombre** — texte clair sur fond
