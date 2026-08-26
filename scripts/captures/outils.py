@@ -399,6 +399,22 @@ DEMO = {
             (0, "Tests", "npm test"),
             (1, "Serveur", "php -S localhost:8000"),
         ),
+        "notes": (
+            (0, "Refonte du panier", """# Refonte du panier
+
+## Ce qui est decide
+- les frais de port passent a 4,90 EUR des 20 EUR d'achat
+- le tunnel garde une seule page, avec un recapitulatif deroulant
+
+## A verifier avant la mise en ligne
+- [x] calcul des frais sur les articles en promotion
+- [ ] relance du panier abandonne apres 24 h
+- [ ] les tests du panier passent sur la recette
+
+> Le prestataire de paiement demande deux semaines de preavis pour la bascule.
+"""),
+            (0, "Reunion du 24", "# Reunion du 24\n\nBudget valide. Livraison visee fin du mois.\n"),
+        ),
     },
     "en": {
         "dossiers": ("Clients", "Internal"),
@@ -424,6 +440,22 @@ DEMO = {
             (0, "Development", "npm run dev"),
             (0, "Tests", "npm test"),
             (1, "Server", "php -S localhost:8000"),
+        ),
+        "notes": (
+            (0, "Cart rewrite", """# Cart rewrite
+
+## Decided
+- shipping drops to EUR 4.90 above EUR 20
+- checkout stays a single page, with a collapsible summary
+
+## Before it ships
+- [x] shipping cost on discounted items
+- [ ] abandoned-cart reminder after 24 h
+- [ ] the cart tests pass on staging
+
+> The payment provider needs two weeks' notice to switch.
+"""),
+            (0, "Meeting, the 24th", "# Meeting, the 24th\n\nBudget approved. Aiming to ship end of month.\n"),
         ),
     },
 }
@@ -484,6 +516,13 @@ def preparer(base: str, projets: str, langue: str = "fr") -> None:
         x.execute(
             "INSERT INTO project_commands (project, label, command, position) VALUES (?,?,?,?)",
             (noms[projet], libelle, commande, position),
+        )
+
+    for position, (projet, titre, contenu) in enumerate(jeu["notes"]):
+        x.execute(
+            "INSERT INTO note_files (project, folder_id, name, content, position)"
+            " VALUES (?, NULL, ?, ?, ?)",
+            (noms[projet], titre, contenu, position),
         )
 
     c.commit()
