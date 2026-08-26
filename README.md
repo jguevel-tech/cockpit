@@ -7,15 +7,29 @@
 </p>
 
 <p align="center">
+  <a href="https://cockpitdesktop.com"><strong>cockpitdesktop.com</strong></a> ·
+  <a href="https://cockpitdesktop.com/#telecharger">Download</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+<p align="center">
+  <a href="https://cockpitdesktop.com"><img alt="Website" src="https://img.shields.io/badge/website-cockpitdesktop.com-f4531f?style=flat-square"></a>
   <a href="https://github.com/jguevel-tech/cockpit/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/jguevel-tech/cockpit?style=flat-square&color=2f81f7"></a>
   <a href="https://github.com/jguevel-tech/cockpit/actions/workflows/release.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/jguevel-tech/cockpit/release.yml?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20·%20macOS%20·%20Windows-informational?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat-square"></a>
 </p>
 
+<p align="center">
+  <img alt="Cockpit — the dashboard: open tasks across every project" src="docs/captures/taches.png" width="900">
+</p>
+
 ---
 
 ## Install
+
+Every platform's installer is on **[cockpitdesktop.com](https://cockpitdesktop.com/#telecharger)**,
+which reads them straight from the release below — same files, one page, with their sizes.
 
 ### Linux
 
@@ -115,6 +129,8 @@ resumable in one click — from whichever agent you picked in Settings → AI.
 Mouse selection, `Ctrl`+`C` to copy, `Ctrl`+click to open links. Nothing sits between your
 keystrokes and the shell — not even our own shortcuts.
 
+![A terminal inside Cockpit, with the past-conversations button of the chosen AI provider](docs/captures/terminal.png)
+
 ### Files and code
 
 A file browser that respects your `.gitignore`, syntax highlighting for about thirty languages
@@ -125,11 +141,15 @@ Find in file (`Ctrl`+`F`) with highlighted matches, and project-wide search (`Ct
 across folder names, file names and file contents. `Ctrl`+click on a symbol jumps to its
 definition, using whichever LSP servers are installed — with a regex fallback when none is.
 
+![The file browser and a highlighted file, side by side](docs/captures/fichiers.png)
+
 ### Git
 
 The daily loop without leaving the app: status, coloured diff, per-file staging, commit, push,
 pull (fast-forward only — a button never merges behind your back), branch management, and a
 commit history with the full diff of any commit.
+
+![The Git tab: changed files on the left, the coloured diff on the right](docs/captures/git.png)
 
 ### Containers
 
@@ -170,6 +190,19 @@ whichever one it is.
 For providers whose agents install as Claude Code plugins, a marketplace is available per project
 (**Plugins** tab) and globally (Settings → Agents): browse, install, and keep them up to date.
 Sign in with your subscription from the settings — no API key to paste.
+
+### An account, if you want one
+
+**Cockpit works without an account, and keeps working offline.** Syncing is an extra, never a
+condition: with the server unreachable, everything behaves the same — the local database stays the
+truth of this machine.
+
+Create one from the app or on [cockpitdesktop.com](https://cockpitdesktop.com/#compte), sign in
+with a password or with Google, and your projects, notes and tasks follow you to another machine.
+Each machine signs out on its own, and deletions travel — they do not come back at the next round.
+
+What does **not** travel, on purpose: project paths (they do not exist on the other machine, so a
+project arrives without a folder, to be pointed at yours), terminals, and recordings in progress.
 
 ### Monitoring & alerts
 
@@ -234,6 +267,20 @@ On macOS, Xcode Command Line Tools are enough.
 > environment variables the binary comes out in development mode and looks for a Vite server on
 > `localhost:5173`.
 
+### Screenshots
+
+The images in this file and on the website come from the same harness, which drives the app under
+a virtual screen with a demonstration database — no real data, and they can be redone at every
+release:
+
+```sh
+scripts/captures/prendre.sh <path/to/Cockpit.AppImage> docs/captures en
+```
+
+The third argument is the language: the interface, the demo projects, the tasks and the sample
+code all follow it. The harness refuses to finish on two identical images, and reads the tab bar
+on screen instead of clicking fixed coordinates — a translated label is not at the same place.
+
 ### Architecture
 
 ```
@@ -292,3 +339,6 @@ And record it in [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]`, if a user
 ## License
 
 [MIT](LICENSE)
+
+The website also carries the [privacy policy](https://cockpitdesktop.com/privacy) and the
+[terms of use](https://cockpitdesktop.com/terms) that cover the optional account.
