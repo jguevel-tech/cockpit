@@ -12,8 +12,6 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.53.1] — 2026-08-26
-
 ### Fixed
 
 - **Cockpit annonçait « CLI introuvable » pour un agent parfaitement installé.** Une application

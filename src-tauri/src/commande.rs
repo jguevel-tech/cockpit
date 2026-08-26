@@ -218,18 +218,33 @@ mod tests {
         assert_eq!(tokio_cmd.as_std().get_program(), "true");
     }
 
+    /// UN PATH S'ECRIT AVEC LE SEPARATEUR DE LA PLATEFORME : `:` sous Unix, `;` sous Windows.
+    /// Ecrire « /usr/bin:/bin » en dur faisait tomber ces essais sur Windows, ou la chaine
+    /// entiere compte pour UN seul dossier — et la compilation croisee ne le dit pas, elle ne
+    /// prouve que la compilation. On laisse donc la bibliotheque assembler la chaine.
+    fn en_path(morceaux: &[&str]) -> String {
+        std::env::join_paths(morceaux.iter().map(Path::new))
+            .expect("chemins assemblables")
+            .to_string_lossy()
+            .into_owned()
+    }
+
     /// **LE DEFAUT CORRIGE.** Le PATH d'une application lancee depuis un menu de bureau ne
     /// contient pas `~/.local/bin`, ou vivent les CLI installes par l'utilisateur. Sans les
     /// dossiers habituels, un outil present etait annonce absent.
     #[test]
     fn les_dossiers_habituels_completent_le_path_du_processus() {
         let maison = PathBuf::from("/home/moi");
-        let liste = assembler(None, Some("/usr/bin:/bin"), Some(&maison));
+        let liste = assembler(None, Some(&en_path(&["/usr/bin", "/bin"])), Some(&maison));
 
         assert!(liste.contains(&PathBuf::from("/usr/bin")));
+        // La liste des dossiers habituels depend de la plateforme : on verifie que le premier
+        // d'entre eux y est, pas qu'un chemin Unix y est.
+        let attendu = maison.join(DOSSIERS_HABITUELS[0]);
         assert!(
-            liste.contains(&maison.join(".local/bin")),
-            "~/.local/bin doit etre cherche meme absent du PATH : {liste:?}"
+            liste.contains(&attendu),
+            "{} doit etre cherche meme absent du PATH : {liste:?}",
+            attendu.display()
         );
     }
 
@@ -237,7 +252,11 @@ mod tests {
     /// l'installation de la personne.
     #[test]
     fn le_path_du_shell_passe_devant() {
-        let liste = assembler(Some("/opt/outils/bin"), Some("/usr/bin"), None);
+        let liste = assembler(
+            Some(&en_path(&["/opt/outils/bin"])),
+            Some(&en_path(&["/usr/bin"])),
+            None,
+        );
         assert_eq!(liste.first().unwrap(), &PathBuf::from("/opt/outils/bin"));
     }
 
@@ -250,7 +269,7 @@ mod tests {
         unsafe { std::env::set_var("APPDIR", "/tmp/.mount_Cockpit42") };
         let liste = assembler(
             None,
-            Some("/tmp/.mount_Cockpit42/usr/bin:/usr/bin"),
+            Some(&en_path(&["/tmp/.mount_Cockpit42/usr/bin", "/usr/bin"])),
             None,
         );
         unsafe { std::env::remove_var("APPDIR") };
@@ -263,7 +282,11 @@ mod tests {
     /// liste est parcourue pour chaque programme et pour chaque extension.
     #[test]
     fn la_liste_ne_contient_pas_de_doublon() {
-        let liste = assembler(Some("/usr/bin:/bin"), Some("/bin:/usr/bin"), None);
+        let liste = assembler(
+            Some(&en_path(&["/usr/bin", "/bin"])),
+            Some(&en_path(&["/bin", "/usr/bin"])),
+            None,
+        );
         let mut unique = liste.clone();
         unique.dedup();
         assert_eq!(liste.len(), unique.len());
