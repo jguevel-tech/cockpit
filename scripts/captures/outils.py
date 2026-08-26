@@ -80,9 +80,30 @@ def _pixbuf_fenetre():
     return image
 
 
-def capturer(sortie: str, largeur: int = 0) -> None:
+def _pixbuf_ecran():
+    """L'ECRAN entier, fenetre ou pas.
+
+    Sert au seul moment ou il n'y a rien a capturer d'autre : la demonstration de la persistance
+    ferme l'application, et l'image de cet instant EST un ecran sans fenetre. Une capture de la
+    fenetre echouerait, et c'est normal — d'ou ce mode explicite plutot qu'un repli silencieux.
+    """
+    import gi
+
+    gi.require_version("Gdk", "3.0")
+    from gi.repository import Gdk
+
+    ecran = Gdk.get_default_root_window()
+    if ecran is None:
+        sys.exit("aucun ecran a capturer")
+    image = Gdk.pixbuf_get_from_window(ecran, 0, 0, ecran.get_width(), ecran.get_height())
+    if image is None:
+        sys.exit("l'ecran n'a rendu aucun pixel")
+    return image
+
+
+def capturer(sortie: str, largeur: int = 0, racine: bool = False) -> None:
     # La fenetre d'abord : c'est elle qui declare la version de Gdk avant tout import.
-    image = _pixbuf_fenetre()
+    image = _pixbuf_ecran() if racine else _pixbuf_fenetre()
     from gi.repository import GdkPixbuf
 
     largeur_reelle = image.get_width()
@@ -232,7 +253,51 @@ def onglet(nom: str) -> None:
     cliquer((gauche + droite) // 2, (haut + bas) // 2)
 
 
-def arreter(marqueur: str, patience: float = 15.0) -> None:
+def lister_le_service(marqueur: str) -> None:
+    """Dit ce qui tourne encore sous ce marqueur. **Verifier, pas supposer.**
+
+    La demonstration de la persistance repose entierement sur ce qui survit a la fermeture de
+    l'application : si le service ou son shell etaient morts, l'image finale mentirait — et c'est
+    arrive, un patch non applique tuant tout au lieu de la seule application.
+    """
+    for entree in sorted((e for e in os.listdir("/proc") if e.isdigit()), key=int):
+        try:
+            with open(f"/proc/{entree}/environ", "rb") as f:
+                if marqueur.encode() not in f.read():
+                    continue
+            with open(f"/proc/{entree}/cmdline", "rb") as f:
+                ligne = f.read().replace(b"\0", b" ").decode(errors="replace").strip()
+            with open(f"/proc/{entree}/comm", "r") as f:
+                nom = f.read().strip()
+        except OSError:
+            continue
+        print(f"  vivant : {entree:>8}  {nom:<16} {ligne[:80]}")
+
+
+def _descendants(racine: int) -> set:
+    """Les process sous `racine`, racine comprise, en lisant `ppid` dans /proc/<pid>/stat."""
+    parents = {}
+    for entree in os.listdir("/proc"):
+        if not entree.isdigit():
+            continue
+        try:
+            with open(f"/proc/{entree}/stat", "r") as f:
+                champs = f.read().rsplit(") ", 1)[-1].split()
+            parents[int(entree)] = int(champs[1])
+        except (OSError, IndexError, ValueError):
+            continue
+    famille = {racine}
+    change = True
+    while change:
+        change = False
+        for pid, parent in parents.items():
+            if parent in famille and pid not in famille:
+                famille.add(pid)
+                change = True
+    return famille
+
+
+def arreter(marqueur: str, patience: float = 15.0, sauf_service: bool = False) -> None:
     """Arrete l'application lancee par le harnais, et RIEN d'autre.
 
     Le `pkill -f "dbus-run-session -- <AppImage>"` d'avant ne visait que l'enveloppe. Le binaire
@@ -246,7 +311,7 @@ def arreter(marqueur: str, patience: float = 15.0) -> None:
     """
     import signal
 
-    def vises() -> list[int]:
+    def portent_le_marqueur() -> list[int]:
         trouves = []
         for entree in os.listdir("/proc"):
             if not entree.isdigit():
@@ -258,6 +323,23 @@ def arreter(marqueur: str, patience: float = 15.0) -> None:
             except OSError:
                 continue  # process disparu entre-temps, ou pas a nous : rien a arreter.
         return trouves
+
+    # Le SERVICE de terminaux et tout ce qui tourne dessous. Il herite du meme environnement que
+    # l'application, donc le marqueur ne les distingue pas — et ses enfants sont les SHELLS, dont
+    # la survie est justement ce que la demonstration montre.
+    epargnes = set()
+    if sauf_service:
+        for pid in portent_le_marqueur():
+            try:
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    ligne = f.read().replace(b"\0", b" ").decode(errors="replace")
+            except OSError:
+                continue
+            if "--service-terminaux" in ligne:
+                epargnes |= _descendants(pid)
+
+    def vises() -> list[int]:
+        return [pid for pid in portent_le_marqueur() if pid not in epargnes]
 
     premiers = vises()
     for pid in premiers:
@@ -413,13 +495,23 @@ def preparer(base: str, projets: str, langue: str = "fr") -> None:
 if __name__ == "__main__":
     quoi = sys.argv[1]
     if quoi == "capturer":
-        capturer(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 0)
+        options = [a for a in sys.argv[3:] if a.startswith("--")]
+        tailles = [a for a in sys.argv[3:] if not a.startswith("--")]
+        capturer(
+            sys.argv[2],
+            int(tailles[0]) if tailles else 0,
+            racine="--racine" in options,
+        )
     elif quoi == "cliquer":
         cliquer(int(sys.argv[2]), int(sys.argv[3]))
     elif quoi == "taper":
         taper(sys.argv[2])
     elif quoi == "arreter":
-        arreter(sys.argv[2])
+        options = sys.argv[3:]
+        if "--lister-service" in options:
+            lister_le_service(sys.argv[2])
+        else:
+            arreter(sys.argv[2], sauf_service="--sauf-service" in options)
     elif quoi == "onglet":
         onglet(sys.argv[2])
     elif quoi == "preparer":

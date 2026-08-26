@@ -21,6 +21,14 @@
 </p>
 
 <p align="center">
+  <img alt="Close Cockpit, reopen it: the build in the terminal never stopped — the timestamps prove it" src="docs/captures/terminaux-persistants.gif" width="900">
+</p>
+
+<p align="center">
+  <em>Close the window. Your terminals keep running.</em>
+</p>
+
+<p align="center">
   <img alt="Cockpit — the dashboard: open tasks across every project" src="docs/captures/taches.png" width="900">
 </p>
 
@@ -280,6 +288,16 @@ scripts/captures/prendre.sh <path/to/Cockpit.AppImage> docs/captures en
 The third argument is the language: the interface, the demo projects, the tasks and the sample
 code all follow it. The harness refuses to finish on two identical images, and reads the tab bar
 on screen instead of clicking fixed coordinates — a translated label is not at the same place.
+
+The animation at the top of this file is built the same way — it closes the app for real, waits,
+and reopens it:
+
+```sh
+scripts/captures/demo-terminaux.sh <path/to/Cockpit.AppImage> docs/captures en
+```
+
+Every line of that build counter carries a timestamp: the gap while the window was closed is what
+makes the claim checkable instead of merely stated.
 
 ### Architecture
 
