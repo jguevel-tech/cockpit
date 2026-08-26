@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.53.0] — 2026-08-26
+
 ### Added
 
 - **Cockpit n'est plus lié à un seul fournisseur d'IA.** Un nouvel écran, Paramètres → IA, liste
