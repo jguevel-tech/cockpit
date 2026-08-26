@@ -1,9 +1,9 @@
-//! Generation du resume via l'API OpenAI (chat completions).
-
-use serde::Deserialize;
-use serde_json::json;
-
-pub const DEFAULT_MODEL: &str = "gpt-4o";
+//! La consigne du compte rendu de reunion.
+//!
+//! **Elle est a NOUS, pas au fournisseur** : c'est elle qui decide de la forme du compte rendu,
+//! et elle vaut pour n'importe quel modele. L'appel, lui, appartient au fournisseur
+//! (`llm::ModeleTexte`) — et le modele par defaut aussi, puisqu'un nom de modele ne veut rien
+//! dire ailleurs que chez lui.
 
 pub const DEFAULT_PROMPT: &str = "\
 Tu recois la transcription d'une reunion sous forme de dialogue entre \"Moi\" (l'utilisateur, \
@@ -41,58 +41,3 @@ de \"Moi\" : relis toute la transcription et recense TOUT ce que \"Moi\" s'est e
 
 Sois factuel : n'invente rien qui ne soit pas dans la transcription. Ignore uniquement les \
 banalites (salutations, logistique de connexion, problemes de micro).";
-
-#[derive(Deserialize)]
-struct ChatResponse {
-    choices: Vec<Choice>,
-}
-
-#[derive(Deserialize)]
-struct Choice {
-    message: Message,
-}
-
-#[derive(Deserialize)]
-struct Message {
-    content: String,
-}
-
-pub async fn summarize(
-    client: &reqwest::Client,
-    api_key: &str,
-    model: &str,
-    system_prompt: &str,
-    transcript: &str,
-) -> Result<String, String> {
-    let body = json!({
-        "model": model,
-        "messages": [
-            { "role": "system", "content": system_prompt },
-            { "role": "user", "content": transcript },
-        ],
-    });
-
-    let resp = client
-        .post("https://api.openai.com/v1/chat/completions")
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("appel API resume: {}", e))?;
-
-    let status = resp.status();
-    let text = resp.text().await.map_err(|e| e.to_string())?;
-    if !status.is_success() {
-        let short: String = text.chars().take(300).collect();
-        return Err(format!("API resume HTTP {}: {}", status, short));
-    }
-
-    let parsed: ChatResponse =
-        serde_json::from_str(&text).map_err(|e| format!("reponse resume invalide: {}", e))?;
-    parsed
-        .choices
-        .into_iter()
-        .next()
-        .map(|c| c.message.content)
-        .ok_or_else(|| "reponse resume vide".to_string())
-}

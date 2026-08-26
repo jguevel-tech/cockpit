@@ -1,11 +1,15 @@
-//! Transcription via l'API OpenAI (whisper-1) et fusion des deux pistes en dialogue.
+//! Decoupage, filtrage et fusion des deux pistes en dialogue.
+//!
+//! **L'APPEL RESEAU EST LE SEUL MORCEAU QUI APPARTIENNE AU FOURNISSEUR** (`llm::Transcription`).
+//! Tout ce qui est ici a ete paye une fois et sert a tous : le decoupage sous la limite de
+//! taille, le saut des morceaux silencieux, le filtre des phrases que les modeles hallucinent
+//! sur du silence, la fusion chronologique des deux pistes. Le mettre derriere le trait
+//! obligerait chaque nouveau fournisseur a le repayer, et le premier oubli sortirait un compte
+//! rendu ou il manque la moitie de la reunion.
 
 use super::wav;
-use serde::Deserialize;
+use crate::llm::Transcription;
 use std::path::Path;
-
-/// Duree d'un chunk envoye a l'API : 600 s = ~19,2 Mo de WAV, sous la limite de 25 Mo.
-const CHUNK_SECS: usize = 600;
 /// En dessous de cette amplitude max (sur 32767), le chunk est considere silencieux.
 const SILENCE_AMPLITUDE: i32 = 500;
 /// Segments Whisper avec une proba de non-parole au-dela = hallucination probable.
@@ -33,53 +37,6 @@ fn is_hallucination(text: &str) -> bool {
 pub struct Segment {
     pub start: f64,
     pub text: String,
-}
-
-#[derive(Deserialize)]
-struct ApiResponse {
-    segments: Option<Vec<ApiSegment>>,
-}
-
-#[derive(Deserialize)]
-struct ApiSegment {
-    start: f64,
-    text: String,
-    #[serde(default)]
-    no_speech_prob: f64,
-}
-
-async fn transcribe_chunk(
-    client: &reqwest::Client,
-    api_key: &str,
-    wav_bytes: Vec<u8>,
-) -> Result<Vec<ApiSegment>, String> {
-    let part = reqwest::multipart::Part::bytes(wav_bytes)
-        .file_name("chunk.wav")
-        .mime_str("audio/wav")
-        .map_err(|e| e.to_string())?;
-    let form = reqwest::multipart::Form::new()
-        .part("file", part)
-        .text("model", "whisper-1")
-        .text("response_format", "verbose_json")
-        .text("language", "fr");
-
-    let resp = client
-        .post("https://api.openai.com/v1/audio/transcriptions")
-        .bearer_auth(api_key)
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| format!("appel API transcription: {}", e))?;
-
-    let status = resp.status();
-    let body = resp.text().await.map_err(|e| e.to_string())?;
-    if !status.is_success() {
-        return Err(format!("API transcription HTTP {}: {}", status, truncate(&body, 300)));
-    }
-
-    let parsed: ApiResponse =
-        serde_json::from_str(&body).map_err(|e| format!("reponse transcription invalide: {}", e))?;
-    Ok(parsed.segments.unwrap_or_default())
 }
 
 /// Ce qu'on sait d'une piste avant de la transcrire.
@@ -143,17 +100,30 @@ pub fn message_silence_total() -> String {
     message
 }
 
-/// Transcrit une piste PCM brute complete : decoupe en chunks, saute les silences,
-/// filtre les hallucinations, decale les timestamps par chunk.
+/// Combien de secondes d'audio tiennent dans un envoi, chez ce fournisseur.
+///
+/// **La limite vient de LUI**, pas d'une constante ecrite ici : elle valait 600 s tant qu'un
+/// seul fournisseur existait, et le premier plus strict aurait rendu « HTTP 413 » pour toute
+/// explication. On garde un quart de marge pour l'en-tete WAV et les arrondis.
+fn secondes_par_envoi(moteur: &dyn Transcription) -> usize {
+    let utile = moteur.taille_maximale() / 4 * 3;
+    (utile / wav::BYTES_PER_SEC).max(1)
+}
+
+/// Transcrit une piste PCM brute complete : decoupe en morceaux, saute les silences,
+/// filtre les hallucinations, decale les horodatages morceau par morceau.
 pub async fn transcribe_track(
     client: &reqwest::Client,
+    moteur: &dyn Transcription,
     api_key: &str,
     raw_path: &Path,
+    langue: &str,
 ) -> Result<Vec<Segment>, String> {
     let pcm = std::fs::read(raw_path)
         .map_err(|e| format!("lecture {}: {}", raw_path.display(), e))?;
 
-    let chunk_bytes = CHUNK_SECS * wav::BYTES_PER_SEC;
+    let secondes = secondes_par_envoi(moteur);
+    let chunk_bytes = secondes * wav::BYTES_PER_SEC;
     let mut segments = Vec::new();
 
     for (idx, chunk) in pcm.chunks(chunk_bytes).enumerate() {
@@ -161,17 +131,16 @@ pub async fn transcribe_track(
         if chunk.len() < wav::BYTES_PER_SEC / 2 || wav::max_amplitude(chunk) < SILENCE_AMPLITUDE {
             continue;
         }
-        let offset = (idx * CHUNK_SECS) as f64;
-        let api_segments = transcribe_chunk(client, api_key, wav::wav_from_pcm(chunk)).await?;
-        for s in api_segments {
-            let text = s.text.trim();
-            if text.is_empty() || s.no_speech_prob > NO_SPEECH_MAX || is_hallucination(text) {
+        let offset = (idx * secondes) as f64;
+        let recus = moteur
+            .transcrire(client, api_key, wav::wav_from_pcm(chunk), langue)
+            .await?;
+        for s in recus {
+            let text = s.texte.trim();
+            if text.is_empty() || s.non_parole > NO_SPEECH_MAX || is_hallucination(text) {
                 continue;
             }
-            segments.push(Segment {
-                start: s.start + offset,
-                text: text.to_string(),
-            });
+            segments.push(Segment { start: s.debut + offset, text: text.to_string() });
         }
     }
 
@@ -226,13 +195,6 @@ pub fn format_timestamp(secs: f64) -> String {
         format!("{}:{:02}:{:02}", h, m, s)
     } else {
         format!("{:02}:{:02}", m, s)
-    }
-}
-
-fn truncate(s: &str, max: usize) -> &str {
-    match s.char_indices().nth(max) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
     }
 }
 

@@ -19,6 +19,7 @@
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
   import { demanderConfirmation } from "../../stores/confirm";
+  import { agentPrefere } from "../../stores/llm";
 
   let { name }: { name: string } = $props();
   let urls: Url[] = $state([]);
@@ -150,16 +151,32 @@
   }
 
   // Ajouter un onglet = une seule entree ici (+ le type activeTab dans ui.ts)
+  //
+  // `capacite` rend l'onglet CONDITIONNEL : l'onglet Plugins installe des agents au format de
+  // Claude Code, en ecrivant dans la configuration de ce logiciel. Un fournisseur qui n'a pas
+  // ce concept — codex, gemini — n'a rien a y faire, et un onglet vide ferait chercher une
+  // fonctionnalite qui n'existe pas chez lui.
   const tabs = [
     { id: "workspace" as const, labelKey: "tab.workspace" as const, component: WorkspaceTab },
     { id: "docker" as const, labelKey: "tab.docker" as const, component: DockerTab },
     { id: "terminal" as const, labelKey: "tab.terminal" as const, component: TerminalTab },
     { id: "files" as const, labelKey: "tab.files" as const, component: FilesTab },
     { id: "git" as const, labelKey: "tab.git" as const, component: GitTab },
-    { id: "plugins" as const, labelKey: "tab.plugins" as const, component: PluginsTab },
+    { id: "plugins" as const, labelKey: "tab.plugins" as const, component: PluginsTab, capacite: "plugins" as const },
     { id: "settings" as const, labelKey: "tab.settings" as const, component: SettingsTab },
   ];
-  let CurrentTab = $derived(tabs.find((t) => t.id === $activeTab)?.component ?? WorkspaceTab);
+  /// Les onglets affichables : ceux sans condition, plus ceux dont le fournisseur choisi porte
+  /// la capacite. Tant que le catalogue n'est pas lu (`null`), on n'en cache aucun — les faire
+  /// apparaitre apres coup serait plus deroutant qu'un onglet qui rend un message.
+  const ongletsVisibles = $derived(
+    tabs.filter((t) => {
+      const capacite = "capacite" in t ? t.capacite : null;
+      return !capacite || !$agentPrefere || $agentPrefere[capacite];
+    }),
+  );
+  let CurrentTab = $derived(
+    ongletsVisibles.find((t) => t.id === $activeTab)?.component ?? WorkspaceTab,
+  );
 </script>
 
 <div class="detail">
@@ -187,7 +204,7 @@
     {/if}
 
     <div class="tabs">
-      {#each tabs as tab}
+      {#each ongletsVisibles as tab}
         <button
           class="tab" class:active={$activeTab === tab.id}
           onclick={() => activeTab.set(tab.id)}

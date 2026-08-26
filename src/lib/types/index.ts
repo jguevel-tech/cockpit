@@ -387,13 +387,6 @@ export interface FileDiff {
   deletions: number;
 }
 
-export interface ClaudeSession {
-  id: string;
-  label: string;
-  updated_at: number;
-  renamed: boolean;
-}
-
 export interface HistoryEntry {
   command: string;
   last_used: number | null;

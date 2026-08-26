@@ -1,17 +1,25 @@
 //! Reconnaitre un agent IA (claude, codex, gemini...) qui tourne dans un terminal.
 //!
-//! C'est le logo Claude de la barre laterale, et c'est demande toutes les 5 s pour TOUS
-//! les terminaux : la question doit rester bon marche. Rien ici ne connait tmux — extrait
-//! de `tmux.rs` a l'etape B2 du chantier (`docs/portabilite/plan-terminaux.md`), le
-//! service maison pose exactement la meme question sur le pid de son shell.
+//! C'est le repere de la barre laterale, et c'est demande toutes les 5 s pour TOUS les
+//! terminaux : la question doit rester bon marche. Rien ici ne connait tmux — extrait de
+//! `tmux.rs` a l'etape B2 du chantier (`docs/portabilite/plan-terminaux.md`), le service maison
+//! pose exactement la meme question sur le pid de son shell.
+//!
+//! **LA LISTE DES CLI VIENT DU CATALOGUE DE `llm`, elle n'est pas ecrite ici.** Elle l'a ete,
+//! et c'etait un piege : declarer un fournisseur ne suffisait pas a le faire reconnaitre, et
+//! les deux listes divergeaient en silence. Une seule verite pour une seule chaine.
 
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
-/// CLIs d'agents LLM reconnus (basename du binaire ou du script node).
-const COMMANDES_LLM: &[&str] = &[
-    "claude", "codex", "gemini", "aider", "goose", "opencode",
-    "copilot", "cursor-agent", "amp", "qwen", "ollama",
-];
+/// Les CLI reconnus, tires du catalogue une fois pour toutes.
+///
+/// Memorise : cette fonction est appelee par process examine, donc des milliers de fois par
+/// heure. Le catalogue est fixe pour la duree du programme, il n'y a rien a rafraichir.
+fn commandes_llm() -> &'static [&'static str] {
+    static LISTE: OnceLock<Vec<&'static str>> = OnceLock::new();
+    LISTE.get_or_init(crate::llm::commandes_connues)
+}
 
 /// Dernier segment d'un chemin. Coupe sur `/` ET sur `\` : une ligne de commande Windows
 /// s'ecrit `C:\Users\moi\claude.cmd`, et ne couper que sur `/` rendait le chemin entier,
@@ -43,7 +51,7 @@ fn sans_extension(nom: &str) -> &str {
 }
 
 pub fn est_commande_llm(cmd: &str) -> bool {
-    COMMANDES_LLM.contains(&sans_extension(cmd))
+    commandes_llm().contains(&sans_extension(cmd))
 }
 
 /// Le BINAIRE REEL du process est-il un CLI LLM ?

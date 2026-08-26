@@ -12,6 +12,39 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- **Cockpit n'est plus lié à un seul fournisseur d'IA.** Un nouvel écran, Paramètres → IA, liste
+  les fournisseurs et laisse en choisir un : tout le reste suit — les conversations reprises depuis
+  un terminal, les comptes rendus de réunion, les agents. Chaque ligne dit ce que le fournisseur
+  sait faire sur cette machine (CLI installé, clé posée, conversations, abonnement, rédaction,
+  transcription, plugins), et l'interface n'affiche que ce qui existe : plus de bouton qui promet
+  ce que votre fournisseur ne sait pas faire.
+- **Douze fournisseurs reconnus d'emblée** : Claude Code, OpenAI, Codex, Gemini, Aider, Goose,
+  OpenCode, Copilot, Cursor, Amp, Qwen et Ollama. Un agent qui tourne dans un terminal est repéré
+  quel qu'il soit.
+- **La clé d'API se pose par fournisseur**, dans le même écran. Celle d'OpenAI est reprise telle
+  quelle : rien à ressaisir.
+
+### Changed
+
+- **Le bouton des conversations du terminal porte le nom de VOTRE agent**, et disparaît quand
+  celui-ci ne garde pas de conversations passées.
+- **Le repère d'un terminal où un agent travaille ne porte plus de logo de marque.** Il affichait
+  le logo de Claude même quand c'était codex ou gemini qui tournait.
+- **Transcription et compte rendu de réunion suivent le fournisseur choisi**, et l'écran des
+  réunions AFFICHE qui fera le travail. Un fournisseur qui ne sait pas transcrire laisse la main
+  au premier qui sait et qui est configuré — ce n'est plus à découvrir après l'enregistrement.
+- L'onglet Plugins et l'écran Agents n'apparaissent que pour un fournisseur dont les agents
+  s'installent au format de Claude Code.
+
+### Fixed
+
+- **L'écran de connexion à l'abonnement annonçait des « fonctionnalités IA » qui n'existaient
+  pas** (« suggestions de commande »). Il dit maintenant ce qu'il fait vraiment.
+- La date d'expiration d'un jeton s'affichait au format français dans l'interface anglaise, et
+  l'âge d'une conversation restait en français lui aussi.
+
 ## [0.52.1] — 2026-08-25
 
 ### Fixed

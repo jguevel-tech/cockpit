@@ -88,6 +88,7 @@ what's missing) when it is absent:
 | `docker` + `docker compose` | containers tab |
 | LSP servers (`rust-analyzer`, `intelephense`…) | go-to-definition |
 | `tmux` | Claude Code teammates in split panes — that display mode is Claude Code's own, not Cockpit's terminals |
+| an AI agent CLI (`claude`, `codex`, `gemini`, `ollama`…) | the agent features — pick yours in Settings → AI |
 
 ---
 
@@ -107,9 +108,9 @@ anywhere.
 
 Cockpit runs its own terminal service, in a process that outlives the window: close the app and
 your shells keep running — screen and scrollback included — and you pick them back up on the next
-launch. Search the scrollback (`Ctrl`+`Shift`+`F`) with highlighting and a match counter. The Claude logo marks sessions
-where an AI agent is working, and your project's Claude Code conversations are listed and resumable
-in one click.
+launch. Search the scrollback (`Ctrl`+`Shift`+`F`) with highlighting and a match counter. A marker shows
+which sessions have an AI agent working in them, and your project's past conversations are listed and
+resumable in one click — from whichever agent you picked in Settings → AI.
 
 Mouse selection, `Ctrl`+`C` to copy, `Ctrl`+click to open links. Nothing sits between your
 keystrokes and the shell — not even our own shortcuts.
@@ -154,11 +155,21 @@ project automatically. It needs nothing installed on Linux and Windows. On macOS
 tap requires a signed app, so the tracks come out silent — Cockpit says so instead of claiming it
 heard nothing.
 
-### Claude Code agents
+### AI providers, and agents
 
-A marketplace of agents, per project (**Plugins** tab) and globally (Settings → Agents): browse,
-install, and keep them up to date. Sign in with your Claude subscription from the settings — no
-API key to paste.
+**Cockpit is not tied to one AI provider.** One place decides — Settings → AI — and the rest
+follows: the conversations you resume from a terminal, the meeting write-ups, the agents. Each
+provider declares what it can do (past conversations, subscription sign-in, writing,
+transcription, plugins) and the interface only shows what exists: no button promising what your
+provider cannot do.
+
+Adding a provider takes one declaration in the app's catalogue (`src-tauri/src/llm/`), not a
+rewrite. Twelve are recognised out of the box, and an agent running in any terminal is detected
+whichever one it is.
+
+For providers whose agents install as Claude Code plugins, a marketplace is available per project
+(**Plugins** tab) and globally (Settings → Agents): browse, install, and keep them up to date.
+Sign in with your subscription from the settings — no API key to paste.
 
 ### Monitoring & alerts
 
@@ -234,7 +245,8 @@ src/                  Svelte 5 (runes) + TypeScript frontend
 
 src-tauri/src/        Rust backend
   terminal/           Terminal service (shells, screen emulator, search), command history
-  workspace/          File browser, project search, file management, Claude sessions
+  workspace/          File browser, project search, file management
+  llm/                AI providers: catalogue, capabilities (add one = one declaration)
   storage/            SQLite: projects, notes, todos, commands, settings, backup
   gitdiff/            Git status, diff and log parsing
   docker/             Compose orchestration, dependency graph, containers, logs
@@ -242,7 +254,7 @@ src-tauri/src/        Rust backend
   chemins.rs          Home and data directories — never a hardcoded path
   commande.rs         Every external command goes through it (no console flash on Windows)
   urlhealth.rs        Quick-link up/down checks
-  lsp/  system/  agents/  appearance/  claude_auth/  scanner/  report/  plugin/
+  lsp/  system/  agents/  appearance/  scanner/  report/  plugin/
 ```
 
 The terminal service is a **second process**: the same binary launched with

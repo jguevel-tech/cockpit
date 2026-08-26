@@ -5,10 +5,21 @@
   import { backupDatabase } from "../../api/storage";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
   import { getAppSettings, setAppSetting } from "../../api/recorder";
+  import { openUrl } from "../../api/workspace";
   import {
-    claudeAuthStatus, startClaudeLogin, claudeLoginInput, cancelClaudeLogin, openUrl,
-    type ClaudeAuthStatus,
-  } from "../../api/workspace";
+    abonnementLlm,
+    demarrerConnexionLlm,
+    entrerConnexionLlm,
+    annulerConnexionLlm,
+    choisirLlm,
+    poserCleLlm,
+    reunionsLlm,
+    EVENEMENT_CONNEXION_SORTIE,
+    EVENEMENT_CONNEXION_FIN,
+    type EtatAbonnement,
+    type AffectationsReunion,
+  } from "../../api/llm";
+  import { catalogue, agentPrefere, rafraichirLlm } from "../../stores/llm";
   import { loadProjects } from "../../stores/projects";
   import { forgetProjectTab } from "../../stores/ui";
   import { updateState, checkForUpdate } from "../../stores/update";
@@ -56,17 +67,43 @@
   const changelogHtml = $derived(rendre(MORCEAUX.tete, "tete", $locale));
   const resteHtml = $derived(toutLHistorique ? rendre(MORCEAUX.reste, "reste", $locale) : "");
 
-  type SettingsView = "general" | "appearance" | "agents" | "claude" | "meetings" | "projects";
+  type SettingsView = "general" | "appearance" | "agents" | "ia" | "meetings" | "projects";
   let view: SettingsView = $state("general");
 
-  const MENU: { id: SettingsView; icon: string; labelKey: `settings.menu.${SettingsView}` }[] = [
+
+  /// Le menu des reglages. `capacite` rend une entree conditionnelle : les agents s'installent
+  /// au format de plugins de Claude Code, en ecrivant dans la configuration de ce logiciel-la.
+  /// Un fournisseur qui n'a pas ce concept n'a pas cet ecran, plutot qu'un ecran vide.
+  const MENU: {
+    id: SettingsView;
+    icon: string;
+    labelKey: `settings.menu.${SettingsView}`;
+    capacite?: "plugins";
+  }[] = [
     { id: "general", icon: "⚙", labelKey: "settings.menu.general" },
     { id: "appearance", icon: "◐", labelKey: "settings.menu.appearance" },
-    { id: "agents", icon: "⬡", labelKey: "settings.menu.agents" },
-    { id: "claude", icon: "✳", labelKey: "settings.menu.claude" },
+    { id: "agents", icon: "⬡", labelKey: "settings.menu.agents", capacite: "plugins" },
+    { id: "ia", icon: "✳", labelKey: "settings.menu.ia" },
     { id: "meetings", icon: "⏺", labelKey: "settings.menu.meetings" },
     { id: "projects", icon: "▤", labelKey: "settings.menu.projects" },
   ];
+  /// L'ordre d'affichage : le fournisseur choisi, puis ceux qu'on peut utiliser ici (CLI
+  /// installe ou cle posee), puis le reste. Douze lignes dans un ordre fixe obligeaient a
+  /// faire defiler pour trouver celui dont on se sert.
+  const catalogueTrie = $derived(
+    [...$catalogue].sort((a, b) => rang(a) - rang(b)),
+  );
+
+  function rang(f: { prefere: boolean; cli: boolean; cle_posee: boolean }): number {
+    if (f.prefere) return 0;
+    if (f.cli || f.cle_posee) return 1;
+    return 2;
+  }
+
+  /// Les entrees affichables. Tant que le catalogue n'est pas lu, on n'en cache aucune.
+  const menuVisible = $derived(
+    MENU.filter((e) => !e.capacite || !$agentPrefere || $agentPrefere[e.capacite]),
+  );
 
   let machine: MachineReport | null = $state(null);
   let attachTranscript = $state(true);
@@ -104,14 +141,22 @@
     }
   }
 
-  let apiKey = $state("");
   let summaryModel = $state("");
   let summaryPrompt = $state("");
   let meetingSaving = $state(false);
   let meetingSaved = $state(false);
 
-  // --- Connexion Claude Code ---
-  let claudeStatus: ClaudeAuthStatus | null = $state(null);
+  // --- Fournisseurs d'IA ---
+  //
+  // Le catalogue et le fournisseur choisi viennent du magasin : cet ecran les modifie, les
+  // autres les lisent. Le detail de l'abonnement se demande a la demande — il coute un
+  // lancement de processus pour connaitre la version du CLI.
+  let abonnement: EtatAbonnement | null = $state(null);
+  let affectations: AffectationsReunion | null = $state(null);
+  /// Ce que l'on tape dans les champs de cle, par fournisseur. **La cle posee ne remonte jamais
+  /// du backend** : un champ vide veut dire « inchangee », pas « effacee ».
+  let clesSaisies: Record<string, string> = $state({});
+  let cleEnregistree: string | null = $state(null);
   let loginActive = $state(false);
   let loginLog = $state("");
   let loginCode = $state("");
@@ -128,9 +173,39 @@
     return s.replace(/\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*(\x07|\x1b\\)|\x1b[()][A-Z0-9]|\r/g, "");
   }
 
-  async function refreshClaudeStatus() {
-    try { claudeStatus = await claudeAuthStatus(); } catch (e) {
-      signalerErreur("global.refreshClaudeStatus", String(e));}
+  async function rafraichirAbonnement() {
+    try { abonnement = await abonnementLlm(); } catch (e) {
+      signalerErreur("global.abonnementLlm", String(e)); }
+    try { affectations = await reunionsLlm(); } catch (e) {
+      signalerErreur("global.reunionsLlm", String(e)); }
+  }
+
+  /// Choisit le fournisseur. Tout le reste de l'interface suit par le magasin.
+  async function choisirFournisseur(id: string) {
+    if (id === $agentPrefere?.id) return;
+    try {
+      await choisirLlm(id);
+      await rafraichirLlm();
+      await rafraichirAbonnement();
+    } catch (e) {
+      signalerErreur("global.choisirLlm", String(e));
+      notify(String(e));
+    }
+  }
+
+  async function enregistrerCle(id: string) {
+    const valeur = clesSaisies[id] ?? "";
+    if (!valeur.trim()) return;
+    try {
+      await poserCleLlm(id, valeur.trim());
+      clesSaisies[id] = "";
+      cleEnregistree = id;
+      await rafraichirLlm();
+      await rafraichirAbonnement();
+    } catch (e) {
+      signalerErreur("global.poserCleLlm", String(e));
+      notify(String(e));
+    }
   }
 
   async function beginLogin() {
@@ -138,19 +213,19 @@
     loginCode = "";
     loginActive = true;
     loginUnlisteners.push(
-      await listen<string>("claude_login_output", (e) => {
+      await listen<string>(EVENEMENT_CONNEXION_SORTIE, (e) => {
         loginLog = (loginLog + stripAnsi(e.payload)).slice(-4000);
       })
     );
     loginUnlisteners.push(
-      await listen("claude_login_done", async () => {
+      await listen(EVENEMENT_CONNEXION_FIN, async () => {
         cleanupLoginListeners();
         loginActive = false;
-        await refreshClaudeStatus();
+        await rafraichirAbonnement();
       })
     );
-    try { await startClaudeLogin(); } catch (e) {
-      signalerErreur("global.beginLogin", String(e)); loginLog = String(e); loginActive = false; }
+    try { await demarrerConnexionLlm(); } catch (e) {
+      signalerErreur("global.demarrerConnexionLlm", String(e)); loginLog = String(e); loginActive = false; }
   }
 
   function cleanupLoginListeners() {
@@ -160,19 +235,21 @@
 
   async function sendLoginCode() {
     if (!loginCode.trim()) return;
-    try { await claudeLoginInput(loginCode.trim()); loginCode = ""; } catch (e) {
-      signalerErreur("global.sendLoginCode", String(e)); notify(String(e)); }
+    try { await entrerConnexionLlm(loginCode.trim()); loginCode = ""; } catch (e) {
+      signalerErreur("global.entrerConnexionLlm", String(e)); notify(String(e)); }
   }
 
   async function abortLogin() {
-    try { await cancelClaudeLogin(); } catch (e) {
-      signalerErreur("global.abortLogin", String(e));}
+    try { await annulerConnexionLlm(); } catch (e) {
+      signalerErreur("global.annulerConnexionLlm", String(e));}
     cleanupLoginListeners();
     loginActive = false;
   }
 
+  /// La date suit la LANGUE de l'interface : `fr-FR` etait ecrit en dur, donc un anglophone
+  /// lisait une date a la francaise au milieu d'une page anglaise.
   function expiryLabel(epochSecs: number): string {
-    return new Date(epochSecs * 1000).toLocaleString("fr-FR");
+    return new Date(epochSecs * 1000).toLocaleString($locale === "fr" ? "fr-FR" : "en-US");
   }
 
   onDestroy(() => { cleanupLoginListeners(); });
@@ -180,25 +257,27 @@
   onMount(async () => {
     await loadDbProjects();
     await loadMachine();
+    // Trois pannes differentes portaient le meme `scope` recopie : il sert justement a situer
+    // laquelle a eu lieu.
     try { dbPath = await invoke<string>("get_db_path"); } catch (e) {
-      signalerErreur("global.expiryLabel", String(e));}
+      signalerErreur("global.cheminBase", String(e));}
     try {
       const s = await getAppSettings();
-      apiKey = s.openai_api_key ?? "";
       summaryModel = s.summary_model ?? "";
       summaryPrompt = s.summary_prompt ?? "";
       // Absent = joindre, pour ne pas changer le comportement des comptes rendus existants.
       attachTranscript = s.attach_transcript !== "off";
     } catch (e) {
-      signalerErreur("global.expiryLabel", String(e));}
-    await refreshClaudeStatus();
+      signalerErreur("global.reglagesApplication", String(e));}
+    await rafraichirLlm();
+    await rafraichirAbonnement();
   });
 
   async function saveMeetingSettings() {
     meetingSaving = true;
     meetingSaved = false;
     try {
-      await setAppSetting("openai_api_key", apiKey.trim());
+      // La cle d'API ne se pose plus ici : elle vit dans l'ecran IA, par fournisseur.
       await setAppSetting("summary_model", summaryModel.trim());
       await setAppSetting("summary_prompt", summaryPrompt.trim());
       await setAppSetting("attach_transcript", attachTranscript ? "on" : "off");
@@ -253,7 +332,7 @@
   <div class="settings-layout">
     <nav class="settings-menu">
       <h2 class="menu-title">{$trad("settings.title")}</h2>
-      {#each MENU as item (item.id)}
+      {#each menuVisible as item (item.id)}
         <button
           class="settings-menu-item"
           class:active={view === item.id}
@@ -397,69 +476,141 @@
              a la colonne. `.settings.wide` elargit la page pour lui laisser de l'air. -->
         <div class="embedded-view"><AgentsView /></div>
 
-      {:else if view === "claude"}
-        <section class="card">
-          <div class="card-head">
-            <h3>{$trad("settings.claude.title")}</h3>
-            <p>{$trad("settings.claude.subtitle")}</p>
-          </div>
-          {#if claudeStatus}
-            <div class="claude-status-row">
-              {#if !claudeStatus.cli_installed}
-                <span class="badge off">{$trad("settings.claude.cliMissing")}</span>
-              {:else if claudeStatus.logged_in}
-                <span class="badge on">{$trad("settings.claude.connected")}</span>
-                {#if claudeStatus.subscription_type}
-                  <span class="detail">{$trad("settings.claude.subscription")} <strong>{claudeStatus.subscription_type}</strong></span>
+      {:else if view === "ia"}
+        <!-- LE CHOIX DU FOURNISSEUR, et rien qu'ici. Tout le reste de l'application le lit :
+             le bouton des conversations du terminal, l'onglet Plugins, les comptes rendus de
+             reunion. Chaque ligne dit ce que le fournisseur SAIT FAIRE sur cette machine —
+             cacher ce qu'il ne sait pas faire vaut mieux qu'un bouton qui promet. -->
+        <!-- L'abonnement : seulement pour un fournisseur qui en gere un. Les autres n'ont
+             rien a connecter, et un bouton grise sans explication vaut mieux absent. -->
+        {#if abonnement?.gere_abonnement}
+          <section class="card">
+            <div class="card-head">
+              <h3>{$trad("settings.ia.abonnementTitre", { nom: abonnement.nom })}</h3>
+              <p>{$trad("settings.ia.abonnementSoustitre", { nom: abonnement.nom })}</p>
+            </div>
+            <div class="abonnement-row">
+              {#if !abonnement.cli_installe}
+                <span class="badge off">{$trad("settings.ia.cliMissing", { nom: abonnement.nom })}</span>
+              {:else if abonnement.connecte}
+                <span class="badge on">{$trad("settings.ia.connected")}</span>
+                {#if abonnement.formule}
+                  <span class="detail">{$trad("settings.ia.subscription")} <strong>{abonnement.formule}</strong></span>
                 {/if}
-                {#if claudeStatus.rate_limit_tier}
-                  <span class="detail">{$trad("settings.claude.tier", { tier: claudeStatus.rate_limit_tier })}</span>
+                {#if abonnement.palier}
+                  <span class="detail">{$trad("settings.ia.tier", { tier: abonnement.palier })}</span>
                 {/if}
-                {#if claudeStatus.expires_at}
-                  <span class="detail">{$trad("settings.claude.tokenValidUntil", { date: expiryLabel(claudeStatus.expires_at) })}</span>
+                {#if abonnement.expire_le}
+                  <span class="detail">{$trad("settings.ia.tokenValidUntil", { date: expiryLabel(abonnement.expire_le) })}</span>
                 {/if}
               {:else}
-                <span class="badge off">{$trad("settings.claude.notConnected")}</span>
+                <span class="badge off">{$trad("settings.ia.notConnected")}</span>
               {/if}
-              {#if claudeStatus.cli_version}
-                <span class="detail muted">{claudeStatus.cli_version}</span>
+              {#if abonnement.cli_version}
+                <span class="detail muted">{abonnement.cli_version}</span>
               {/if}
-              {#if claudeStatus.problem}
-                <span class="detail probleme">{$trad("settings.claude.problem")} {claudeStatus.problem}</span>
+              {#if abonnement.probleme}
+                <span class="detail probleme">{$trad("settings.ia.problem")} {abonnement.probleme}</span>
               {/if}
-              <button class="icon-btn" onclick={refreshClaudeStatus} title={$trad("common.refresh")}>↻</button>
+              <button class="icon-btn" onclick={rafraichirAbonnement} title={$trad("common.refresh")}>↻</button>
             </div>
 
-            {#if !loginActive}
-              <button class="btn primary" onclick={beginLogin} disabled={!claudeStatus.cli_installed}>
-                {claudeStatus.logged_in ? $trad("settings.claude.regenerate") : $trad("settings.claude.connect")}
-              </button>
-            {:else}
-              <div class="login-flow">
-                <div class="login-steps">
-                  {$trad("settings.claude.steps")}
+            {#if abonnement.connexion_guidee}
+              {#if !loginActive}
+                <button class="btn primary" onclick={beginLogin} disabled={!abonnement.cli_installe}>
+                  {abonnement.connecte ? $trad("settings.ia.regenerate") : $trad("settings.ia.connect")}
+                </button>
+              {:else}
+                <div class="login-flow">
+                  <div class="login-steps">
+                    {$trad("settings.ia.steps")}
+                  </div>
+                  {#if loginUrl}
+                    <button class="btn primary" onclick={() => openUrl(loginUrl!)}>
+                      {$trad("settings.ia.openBrowser")}
+                    </button>
+                  {/if}
+                  <pre class="login-log">{loginLog || $trad("settings.ia.loginStarting")}</pre>
+                  <div class="inline-row">
+                    <input
+                      type="text"
+                      class="mono"
+                      bind:value={loginCode}
+                      placeholder={$trad("settings.ia.codePlaceholder")}
+                      spellcheck="false"
+                      onkeydown={(e) => e.key === "Enter" && sendLoginCode()}
+                    />
+                    <button class="btn primary" onclick={sendLoginCode}>{$trad("settings.ia.validate")}</button>
+                    <button class="btn danger" onclick={abortLogin}>{$trad("common.cancel")}</button>
+                  </div>
                 </div>
-                {#if loginUrl}
-                  <button class="btn primary" onclick={() => openUrl(loginUrl!)}>
-                    {$trad("settings.claude.openBrowser")}
-                  </button>
-                {/if}
-                <pre class="login-log">{loginLog || $trad("settings.claude.loginStarting")}</pre>
-                <div class="inline-row">
-                  <input
-                    type="text"
-                    class="mono"
-                    bind:value={loginCode}
-                    placeholder={$trad("settings.claude.codePlaceholder")}
-                    spellcheck="false"
-                    onkeydown={(e) => e.key === "Enter" && sendLoginCode()}
-                  />
-                  <button class="btn primary" onclick={sendLoginCode}>{$trad("settings.claude.validate")}</button>
-                  <button class="btn danger" onclick={abortLogin}>{$trad("common.cancel")}</button>
-                </div>
-              </div>
+              {/if}
             {/if}
-          {/if}
+          </section>
+        {/if}
+
+        <section class="card">
+          <div class="card-head">
+            <h3>{$trad("settings.ia.title")}</h3>
+            <p>{$trad("settings.ia.subtitle")}</p>
+          </div>
+
+          <ul class="fournisseurs">
+            {#each catalogueTrie as f (f.id)}
+              <li class="fournisseur" class:choisi={f.prefere}>
+                <label class="fournisseur-choix">
+                  <input
+                    type="radio"
+                    name="fournisseur-ia"
+                    checked={f.prefere}
+                    onchange={() => choisirFournisseur(f.id)}
+                  />
+                  <span class="fournisseur-symbole" style:color={f.couleur}>{f.symbole}</span>
+                  <span class="fournisseur-nom">{f.nom}</span>
+                </label>
+
+                <div class="fournisseur-etat">
+                  {#if f.a_un_cli}
+                    <span class="badge" class:on={f.cli} class:off={!f.cli}>
+                      {f.cli ? $trad("settings.ia.cliPresent") : $trad("settings.ia.cliAbsent")}
+                    </span>
+                  {/if}
+                  {#if f.cle_requise}
+                    <span class="badge" class:on={f.cle_posee} class:off={!f.cle_posee}>
+                      {f.cle_posee ? $trad("settings.ia.clePosee") : $trad("settings.ia.cleAbsente")}
+                    </span>
+                  {/if}
+                </div>
+
+                <div class="fournisseur-capacites">
+                  {#if f.conversations}<span class="capacite">{$trad("settings.ia.capConversations")}</span>{/if}
+                  {#if f.abonnement}<span class="capacite">{$trad("settings.ia.capAbonnement")}</span>{/if}
+                  {#if f.texte}<span class="capacite">{$trad("settings.ia.capTexte")}</span>{/if}
+                  {#if f.transcription}<span class="capacite">{$trad("settings.ia.capTranscription")}</span>{/if}
+                  {#if f.plugins}<span class="capacite">{$trad("settings.ia.capPlugins")}</span>{/if}
+                </div>
+
+                {#if f.cle_requise}
+                  <div class="inline-row cle">
+                    <input
+                      type="password"
+                      class="mono"
+                      bind:value={clesSaisies[f.id]}
+                      placeholder={f.cle_posee ? $trad("settings.ia.clePlaceholderPosee") : $trad("settings.ia.clePlaceholder")}
+                      autocomplete="off"
+                      spellcheck="false"
+                      onkeydown={(e) => e.key === "Enter" && enregistrerCle(f.id)}
+                    />
+                    <button class="btn" onclick={() => enregistrerCle(f.id)} disabled={!clesSaisies[f.id]?.trim()}>
+                      {$trad("common.save")}
+                    </button>
+                    {#if cleEnregistree === f.id}<span class="saved">✓</span>{/if}
+                  </div>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+          <p class="field-hint">{$trad("settings.ia.ajouter")}</p>
         </section>
 
       {:else if view === "meetings"}
@@ -468,11 +619,22 @@
             <h3>{$trad("settings.meetings.title")}</h3>
             <p>{$trad("settings.meetings.subtitle")}</p>
           </div>
-          <label class="field">
-            {$trad("settings.meetings.apiKey")}
-            <input type="text" class="mono" bind:value={apiKey} placeholder="sk-..." autocomplete="off" spellcheck="false" />
-            <span class="field-hint">{$trad("settings.meetings.apiKeyHint")}</span>
-          </label>
+          <!-- QUI FAIT LE TRAVAIL EST AFFICHE, pas devine. Le fournisseur choisi s'il sait
+               transcrire et rediger, sinon le premier capable et configure : choisir Claude et
+               voir la transcription partir ailleurs est normal (il ne transcrit pas), mais ca
+               ne doit pas se decouvrir apres coup. La regle vit cote Rust, une seule fois. -->
+          {#if affectations}
+            <p class="field-hint qui-travaille">
+              {#if affectations.transcription && affectations.redaction}
+                {$trad("settings.meetings.par", {
+                  transcription: affectations.transcription,
+                  redaction: affectations.redaction,
+                })}
+              {:else}
+                <span class="probleme">{$trad("settings.meetings.aucunFournisseur")}</span>
+              {/if}
+            </p>
+          {/if}
           <label class="field">
             {$trad("settings.meetings.model")}
             <input type="text" class="short" bind:value={summaryModel} placeholder="gpt-4o" spellcheck="false" />
@@ -582,7 +744,7 @@
     background: var(--bg-primary); color: var(--text-primary);
   }
   .field input.short { max-width: 260px; }
-  .field input.mono, .inline-row input.mono { font-family: monospace; font-size: 0.8rem; }
+  .inline-row input.mono { font-family: monospace; font-size: 0.8rem; }
   .field textarea { resize: vertical; font-family: inherit; line-height: 1.5; }
   .field-hint { display: block; margin-top: 0.3rem; font-size: 0.72rem; color: var(--text-muted); }
   /* .field-row, .field-label, .field-value : remontes dans components.css. */
@@ -621,11 +783,46 @@
   .badge { font-size: 0.78rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 10px; }
   .badge.on { background: rgba(70, 167, 88, 0.15); color: #46a758; }
   .badge.off { background: rgba(229, 72, 77, 0.12); color: #e5484d; }
-  .claude-status-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+  .abonnement-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
   .detail { font-size: 0.78rem; color: var(--text-secondary); }
   .detail.probleme { color: var(--error); }
   .detail.muted { color: var(--text-muted); }
   .login-flow { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  /* ── La liste des fournisseurs d'IA.
+     Une ligne par fournisseur : le choix, ce qui est installe, ce qu'il sait faire. Les
+     capacites sont ecrites en clair et non devinees : c'est ce qui evite de chercher pourquoi
+     un bouton n'apparait pas ailleurs. */
+  .fournisseurs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .fournisseur {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.35rem 0.8rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+  }
+  .fournisseur.choisi { border-color: var(--accent); background: var(--bg-tertiary); }
+  .fournisseur-choix { display: flex; align-items: center; gap: 0.55rem; cursor: pointer; }
+  .fournisseur-symbole { font-weight: 700; font-size: 1rem; line-height: 1; }
+  .fournisseur-nom { font-weight: 600; }
+  .fournisseur-etat { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+  .fournisseur-capacites { grid-column: 1 / -1; display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .capacite {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+  }
+  .inline-row.cle { grid-column: 1 / -1; }
+  .inline-row.cle input { flex: 1; min-width: 0; }
+  .saved { color: #46a758; font-weight: 700; }
+  .qui-travaille { margin-top: 0; }
+  /* Un fournisseur manquant EMPECHE le compte rendu : ca ne se dit pas en gris clair. */
+  .qui-travaille .probleme { color: var(--error); font-weight: 600; }
   .login-steps { font-size: 0.8rem; color: var(--text-secondary); }
   .login-log {
     max-height: 180px; overflow-y: auto; margin: 0; padding: 0.5rem 0.7rem;

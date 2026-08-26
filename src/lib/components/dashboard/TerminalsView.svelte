@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import claudeLogo from "../../assets/claude-logo.svg";
   import { listAllTerminals } from "../../api/workspace";
   import { selectProject, activeTab, pendingTerminalId } from "../../stores/ui";
   import { groupBy } from "../../utils/reorder";
@@ -51,7 +50,7 @@
         </button>
         {#each group.terminals as t, i (t.id)}
           <button class="term-row" onclick={() => gotoTerminal(t)} title={$trad("terminals.goTo")}>
-            {#if t.llm && t.alive}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" class:dead={!t.alive} title={$trad("sidebar.terminal")}></span>{/if}
+            {#if t.llm && t.alive}<span class="term-llm" title={$trad("sidebar.agentRunning")} aria-label={$trad("sidebar.agentRunning")}>✳</span>{:else}<span class="term-dot" class:dead={!t.alive} title={$trad("sidebar.terminal")}></span>{/if}
             <span class="term-label">{terminalLabel(t, i)}</span>
             {#if !t.alive}<span class="term-state">{$trad("terminals.finished")}</span>{/if}
             <span class="term-go">→</span>
@@ -105,7 +104,15 @@
     width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
     background: var(--text-muted);
   }
-  .term-llm { width: 12px; height: 12px; flex-shrink: 0; }
+  /* Repere neutre : voir la note de Sidebar.svelte. */
+  .term-llm {
+    flex-shrink: 0;
+    width: 12px;
+    font-size: 12px;
+    line-height: 1;
+    text-align: center;
+    color: var(--accent);
+  }
   .term-dot.dead { background: var(--border-strong); }
   .term-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .term-state { font-size: 0.72rem; color: var(--text-muted); font-style: italic; }

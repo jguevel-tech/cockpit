@@ -10,9 +10,6 @@
   import CreateProjectModal from "./CreateProjectModal.svelte";
   import InlineEdit from "../ui/InlineEdit.svelte";
   import ContextMenu from "../ui/ContextMenu.svelte";
-  // Logo officiel Claude (fill terracotta embarque dans le SVG) : affiche quand un agent
-  // IA tourne dans le terminal, a la place de l ancienne pastille verte.
-  import claudeLogo from "../../assets/claude-logo.svg";
   import { notify } from "../../stores/toast";
   import { onMount } from "svelte";
   import { trad, tradN } from "../../i18n";
@@ -683,7 +680,7 @@
           <li>
             {#if renamingTermId === t.id}
               <div class="terminal-item">
-                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
+                {#if t.llm}<span class="term-llm" title={$trad("sidebar.agentRunning")} aria-label={$trad("sidebar.agentRunning")}>✳</span>{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
                 <InlineEdit
                   value={t.name}
                   placeholder={$trad("sidebar.terminalNamePlaceholder")}
@@ -698,7 +695,7 @@
                 oncontextmenu={(e) => openTermContextMenu(e, t)}
                 title={$trad("sidebar.gotoTerminal", { project: t.project })}
               >
-                {#if t.llm}<img class="term-llm" src={claudeLogo} alt="Claude" title={$trad("sidebar.claudeRunning")} />{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
+                {#if t.llm}<span class="term-llm" title={$trad("sidebar.agentRunning")} aria-label={$trad("sidebar.agentRunning")}>✳</span>{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}
                 <span class="terminal-name">{terminalLabel(t)}</span>
                 <span class="terminal-project">{t.project}</span>
               </button>
@@ -833,8 +830,17 @@
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
     background: var(--text-muted);
   }
-  /* Icone Claude (✳) quand un agent IA tourne — plus parlant qu une pastille verte */
-  .term-llm { width: 11px; height: 11px; flex-shrink: 0; }
+  /* UN REPERE NEUTRE, PAS UN LOGO DE MARQUE. Le logo Claude s'affichait des qu'un agent
+     tournait — y compris codex ou gemini, donc il mentait. La detection sait reconnaitre onze
+     CLI ; ce qu'on affiche dit « un agent tourne », ce qui est vrai pour tous. */
+  .term-llm {
+    flex-shrink: 0;
+    width: 11px;
+    font-size: 11px;
+    line-height: 1;
+    text-align: center;
+    color: var(--accent);
+  }
   .terminal-name {
     font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     flex-shrink: 1; min-width: 0;

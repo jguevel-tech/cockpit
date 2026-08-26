@@ -65,6 +65,10 @@ fn lost_track_code(mic_ok: bool, sys_ok: bool) -> Option<&'static str> {
 /// Reglage : joindre la transcription complete au compte rendu ("off" pour ne pas).
 pub const ATTACH_TRANSCRIPT_KEY: &str = "attach_transcript";
 
+/// La langue annoncee au moteur de transcription. Un modele qui la connait se trompe beaucoup
+/// moins qu'un modele qui la devine, et une reunion en francais devinee « en » sort en charabia.
+const LANGUE: &str = "fr";
+
 /// Compose la note de reunion.
 ///
 /// Sortie dans une fonction pure pour etre testee : c'est le contenu que l'utilisateur
@@ -315,10 +319,27 @@ async fn pipeline_inner(
     db: &Database,
     rec: &crate::storage::Recording,
 ) -> Result<(), String> {
-    let api_key = db
-        .get_setting("openai_api_key")
-        .filter(|k| !k.trim().is_empty())
-        .ok_or("Cle API OpenAI non configuree (Parametres globaux > Reunions)")?;
+    // QUI transcrit et QUI resume ne sont pas ecrits ici : c'est le fournisseur choisi dans les
+    // reglages s'il sait faire, sinon le premier du catalogue qui sait faire et qui est
+    // configure. L'ecran des reunions AFFICHE lequel — choisir Claude et voir la transcription
+    // partir ailleurs est normal (il ne transcrit pas), mais ca ne doit pas se decouvrir apres
+    // coup.
+    let (f_transcription, moteur) = crate::llm::pour(db, |f| f.transcription()).ok_or(
+        "Aucun fournisseur d'IA ne sait transcrire, ou sa cle manque (Parametres > IA)",
+    )?;
+    let (f_texte, modele_texte) = crate::llm::pour(db, |f| f.texte()).ok_or(
+        "Aucun fournisseur d'IA ne sait rediger, ou sa cle manque (Parametres > IA)",
+    )?;
+    // Un fournisseur qui ne demande pas de cle (un modele local) n'en a pas : la chaine vide
+    // est alors la bonne valeur, pas une panne.
+    let cle_transcription = crate::llm::cle_api(db, f_transcription.id()).unwrap_or_default();
+    let cle_texte = crate::llm::cle_api(db, f_texte.id()).unwrap_or_default();
+    log::info!(
+        "reunion {} : transcription par {}, redaction par {}",
+        rec.id,
+        f_transcription.nom(),
+        f_texte.nom()
+    );
 
     let system_prompt = db
         .get_project_summary_prompt(&rec.project)
@@ -327,10 +348,11 @@ async fn pipeline_inner(
         .or_else(|| db.get_setting("summary_prompt").filter(|p| !p.trim().is_empty()))
         .unwrap_or_else(|| summarize::DEFAULT_PROMPT.to_string());
 
+    // Un nom de modele appartient au fournisseur : son defaut vient donc de lui.
     let model = db
         .get_setting("summary_model")
         .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| summarize::DEFAULT_MODEL.to_string());
+        .unwrap_or_else(|| modele_texte.modele_par_defaut().to_string());
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600))
@@ -360,8 +382,8 @@ async fn pipeline_inner(
     }
 
     let (mic_res, sys_res) = futures::join!(
-        transcribe::transcribe_track(&client, &api_key, &mic_path),
-        transcribe::transcribe_track(&client, &api_key, &sys_path),
+        transcribe::transcribe_track(&client, moteur, &cle_transcription, &mic_path, LANGUE),
+        transcribe::transcribe_track(&client, moteur, &cle_transcription, &sys_path, LANGUE),
     );
     let (mic, sys) = (mic_res?, sys_res?);
 
@@ -384,7 +406,9 @@ async fn pipeline_inner(
         },
     );
 
-    let summary = summarize::summarize(&client, &api_key, &model, &system_prompt, &transcript).await?;
+    let summary = modele_texte
+        .repondre(&client, &cle_texte, &model, &system_prompt, &transcript)
+        .await?;
 
     let title = note_title(&rec.started_at);
     // La transcription complete est JOINTE PAR NOTRE CODE, pas par le modele : aucune

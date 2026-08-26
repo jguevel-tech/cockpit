@@ -20,6 +20,7 @@
   import { startSystemAlerts } from "./lib/stores/systemAlerts";
   import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
+  import { rafraichirLlm } from "./lib/stores/llm";
 
   // Ctrl+molette = zoom, y compris au-dessus d'un terminal.
   // Capture + passive:false : xterm ecoute aussi `wheel` pour faire defiler son
@@ -95,6 +96,9 @@
 
   onMount(() => {
     void appliquerLaLangueImposee();
+    // Le fournisseur d'IA choisi, lu UNE fois : le bouton des conversations et l'onglet
+    // Plugins le lisent dans le magasin plutot que de le redemander chacun.
+    void rafraichirLlm();
     loadProjects();
     void ouvrirLAccueilSiPremierLancement();
     loadWallpaper();

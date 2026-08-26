@@ -1,5 +1,6 @@
 <script lang="ts">
   import { trad, translate } from "../../i18n";
+  import { agentPrefere } from "../../stores/llm";
   /**
    * Documentation integree (bouton ⓘ du Header). Principe voulu :
    * TRES PEU de texte, surtout des exemples et des illustrations. Les "captures"
@@ -103,7 +104,7 @@
       <div class="block">
         <p>{@html $trad("docs.term.persistent")}</p>
         <div class="demo">
-          <div class="d-tabs"><span class="d-tab active">MON-PROJET - 1 ×</span><span class="d-tab">MON-PROJET - 2 ×</span><span class="d-btn small">+</span><span class="d-btn small">{$trad("term.claudeMenu")}</span><span class="d-btn small">🔍</span></div>
+          <div class="d-tabs"><span class="d-tab active">MON-PROJET - 1 ×</span><span class="d-tab">MON-PROJET - 2 ×</span><span class="d-btn small">+</span><span class="d-btn small">{$agentPrefere?.symbole ?? "✳"} {$agentPrefere?.nom ?? "IA"} ▾</span><span class="d-btn small">🔍</span></div>
           <div class="d-term">$ npm run dev<br />VITE ready in 320 ms ➜ http://localhost:5173</div>
           <div class="d-note">{$trad("docs.term.persistentDemo")}</div>
         </div>
@@ -132,10 +133,10 @@
       </div>
 
       <div class="block">
-        <p>{@html $trad("docs.term.claude")}</p>
+        <p>{@html $trad("docs.term.agent", { nom: $agentPrefere?.nom ?? "" })}</p>
         <div class="demo">
-          <div class="d-row"><span class="d-claude">✳</span> <strong>COCKPIT - 1</strong> <span class="d-muted">{$trad("docs.term.claudeDemo1")}</span></div>
-          <div class="d-row"><span class="d-dot"></span> COCKPIT - 2 <span class="d-muted">{$trad("docs.term.claudeDemo2")}</span></div>
+          <div class="d-row"><span class="d-agent">✳</span> <strong>COCKPIT - 1</strong> <span class="d-muted">{$trad("docs.term.agentDemo1")}</span></div>
+          <div class="d-row"><span class="d-dot"></span> COCKPIT - 2 <span class="d-muted">{$trad("docs.term.agentDemo2")}</span></div>
         </div>
       </div>
 
@@ -608,7 +609,8 @@
   .d-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
   .d-dot.ok { background: var(--success); }
   .d-dot.err { background: var(--error); }
-  .d-claude { color: #d97757; font-weight: 700; }
+  /* Le repere d'un agent qui tourne : la couleur de l'accent, pas celle d'une marque. */
+  .d-agent { color: var(--accent); font-weight: 700; }
   .d-side-head { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); }
   .d-side-head .d-btn { margin-left: 0.2rem; }
   .d-term {

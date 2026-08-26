@@ -221,7 +221,9 @@ def onglet(nom: str) -> None:
     if len(onglets) != len(ONGLETS):
         sys.exit(
             f"{len(onglets)} onglets lus dans la barre au lieu de {len(ONGLETS)} "
-            f"(groupes : {groupes}) : la barre a change, les captures seraient fausses"
+            f"(groupes : {groupes}) : la barre a change, les captures seraient fausses. "
+            "Un onglet peut aussi DEPENDRE du fournisseur d'IA choisi (Plugins) — la base de "
+            "demonstration le fixe pour cette raison."
         )
 
     if nom not in ONGLETS:
@@ -361,6 +363,11 @@ def preparer(base: str, projets: str, langue: str = "fr") -> None:
     # L'ecran d'accueil masquerait la capture, et la remontee d'erreurs n'a rien a faire ici.
     x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('compte_accueil_vu','1')")
     x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('error_reporting','off')")
+    # LE FOURNISSEUR D'IA EST FIXE, parce que la BARRE D'ONGLETS EN DEPEND : l'onglet Plugins
+    # n'existe que pour un fournisseur dont les agents s'installent au format de Claude Code.
+    # Sans cette ligne, changer le defaut du logiciel changerait le nombre d'onglets, et le
+    # clic par nom s'arreterait sur « 6 onglets lus au lieu de 7 » sans qu'on comprenne pourquoi.
+    x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('llm_prefere','claude')")
 
     dossiers = []
     for position, nom in enumerate(jeu["dossiers"]):

@@ -1,11 +1,11 @@
 mod agents;
 mod appearance;
 mod chemins;
-mod claude_auth;
 pub mod compte;
 mod commande;
 mod docker;
 mod gitdiff;
+mod llm;
 mod lsp;
 mod plugin;
 mod report;
@@ -17,7 +17,6 @@ mod terminal;
 mod urlhealth;
 mod workspace;
 
-use commande::SansConsole;
 use docker::orchestrator::Orchestrator;
 use std::sync::Arc;
 use storage::Database;
@@ -36,7 +35,8 @@ pub struct AppState {
     /// Serveur de terminaux, VU PAR LE TRAIT `Terminaux` : les commandes ci-dessous ne
     /// connaissent pas tmux. L'implementation se choisit dans `terminal::terminaux()`.
     pub terminals: Box<dyn terminal::Terminaux>,
-    pub claude_login: claude_auth::ClaudeLoginState,
+    /// La connexion guidee en cours, quel que soit le fournisseur.
+    pub connexion_llm: llm::abonnement::SessionConnexion,
     pub lsp: Arc<lsp::LspState>,
 }
 
@@ -618,50 +618,6 @@ fn set_webview_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), Str
     window.set_zoom(factor).map_err(|e| e.to_string())
 }
 
-// --- Tauri Command: Terminal ---
-
-#[tauri::command]
-async fn open_terminal(path: String) -> Result<(), String> {
-    let path = std::path::Path::new(&path);
-    if !path.is_dir() {
-        return Err("Le repertoire n'existe pas".to_string());
-    }
-    let path_str = path.to_string_lossy().to_string();
-
-    // Try gnome-terminal with two tabs
-    let result = tokio::process::Command::new("gnome-terminal")
-        .sans_console()
-        .arg("--tab")
-        .arg("--title=Terminal")
-        .arg(format!("--working-directory={}", &path_str))
-        .arg("--tab")
-        .arg("--title=Claude Code")
-        .arg(format!("--working-directory={}", &path_str))
-        .arg("--")
-        .arg("bash")
-        .arg("-c")
-        .arg("claude; exec bash")
-        .spawn();
-
-    if result.is_ok() {
-        return Ok(());
-    }
-
-    // Fallback: x-terminal-emulator (single tab)
-    let result = tokio::process::Command::new("x-terminal-emulator")
-        .sans_console()
-        .arg("-e")
-        .arg("bash")
-        .current_dir(&path_str)
-        .spawn();
-
-    if result.is_ok() {
-        return Ok(());
-    }
-
-    Err("Aucun terminal trouve (gnome-terminal, x-terminal-emulator)".to_string())
-}
-
 // --- Tauri Command: Import DB ---
 
 #[tauri::command]
@@ -721,9 +677,14 @@ fn get_app_settings(state: tauri::State<'_, AppState>) -> Result<std::collection
     settings
         .entry("summary_prompt".into())
         .or_insert_with(|| recorder::summarize::DEFAULT_PROMPT.to_string());
-    settings
-        .entry("summary_model".into())
-        .or_insert_with(|| recorder::summarize::DEFAULT_MODEL.to_string());
+    // Le modele par defaut appartient au fournisseur qui redigera : `gpt-4o` ne veut rien dire
+    // ailleurs que chez OpenAI. Aucun fournisseur capable = aucun defaut a proposer, et
+    // l'ecran des reunions le dit deja.
+    if let Some((_, modele)) = llm::pour(&state.db, |f| f.texte()) {
+        settings
+            .entry("summary_model".into())
+            .or_insert_with(|| modele.modele_par_defaut().to_string());
+    }
     Ok(settings)
 }
 
@@ -857,21 +818,72 @@ fn get_clipboard() -> Result<String, String> {
     Ok(guard.as_mut().unwrap().get_text().unwrap_or_default())
 }
 
+// --- Tauri Commands: les fournisseurs d'IA ---
+//
+// Aucune de ces commandes ne nomme un produit : elles s'adressent au fournisseur choisi dans
+// les reglages. C'est ce qui permet d'en declarer un nouveau sans toucher a l'interface.
+
+/// Le catalogue et ce que chacun sait faire. Le frontend s'en sert pour n'afficher que ce qui
+/// existe : un bouton qui promet ce que le fournisseur ne sait pas faire est un mensonge.
 #[tauri::command]
-fn list_claude_sessions(
-    project_path: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<workspace::claude_sessions::ClaudeSession>, String> {
-    workspace::claude_sessions::list_claude_sessions(&state.db, &project_path)
+fn llm_catalogue(state: tauri::State<'_, AppState>) -> Vec<llm::Capacites> {
+    llm::catalogue_pour_le_frontend(&state.db)
 }
 
 #[tauri::command]
-fn rename_claude_session(
-    session_id: String,
-    name: String,
+fn llm_choisir(id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    llm::choisir(&state.db, &id)
+}
+
+#[tauri::command]
+fn llm_poser_cle(id: String, cle: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    llm::poser_cle_api(&state.db, &id, &cle)
+}
+
+/// Les conversations passees du projet, chez le fournisseur choisi.
+#[tauri::command]
+fn llm_conversations(
+    project_path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<llm::Conversation>, String> {
+    llm::conversations::lister(&state.db, llm::prefere(&state.db), &project_path)
+}
+
+#[tauri::command]
+fn llm_renommer_conversation(
+    conversation_id: String,
+    nom: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
-    workspace::claude_sessions::rename_claude_session(&state.db, &session_id, &name)
+    llm::conversations::renommer(
+        &state.db,
+        llm::prefere(&state.db).id(),
+        &conversation_id,
+        &nom,
+    )
+}
+
+/// Les commandes de terminal du fournisseur choisi : reprendre une conversation, en ouvrir une
+/// neuve. **Elles viennent de lui** : `--resume` ne veut rien dire ailleurs.
+#[derive(serde::Serialize)]
+struct CommandesAgent {
+    neuve: String,
+    reprise: Option<String>,
+}
+
+#[tauri::command]
+fn llm_commandes(
+    conversation_id: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<CommandesAgent, String> {
+    let fournisseur = llm::prefere(&state.db);
+    let lecteur = fournisseur
+        .conversations()
+        .ok_or_else(|| format!("{} n'a pas de conversations a reprendre", fournisseur.nom()))?;
+    Ok(CommandesAgent {
+        neuve: lecteur.commande_neuve(),
+        reprise: conversation_id.map(|id| lecteur.commande_de_reprise(&id)),
+    })
 }
 
 #[tauri::command]
@@ -890,26 +902,61 @@ async fn terminal_search(
     state.terminals.chercher(&state.db, id, action, &query)
 }
 
-// --- Tauri Commands: Connexion Claude Code (abonnement) ---
-
-#[tauri::command]
-fn claude_auth_status() -> claude_auth::ClaudeAuthStatus {
-    claude_auth::status()
+/// Qui transcrira et qui redigera le prochain compte rendu de reunion.
+///
+/// **La regle vit cote Rust, une seule fois** : le fournisseur choisi s'il sait faire, sinon le
+/// premier capable et configure. La recopier dans l'interface donnerait deux verites pour une
+/// meme decision, et l'ecran finirait par annoncer un fournisseur pendant qu'un autre travaille.
+#[derive(serde::Serialize)]
+struct AffectationsReunion {
+    transcription: Option<String>,
+    redaction: Option<String>,
 }
 
 #[tauri::command]
-fn start_claude_login(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.claude_login.start(app)
+fn llm_reunions(state: tauri::State<'_, AppState>) -> AffectationsReunion {
+    AffectationsReunion {
+        transcription: llm::pour(&state.db, |f| f.transcription()).map(|(f, _)| f.nom().to_string()),
+        redaction: llm::pour(&state.db, |f| f.texte()).map(|(f, _)| f.nom().to_string()),
+    }
+}
+
+// --- Tauri Commands: abonnement d'un fournisseur ---
+
+/// L'etat de connexion du fournisseur donne, ou du fournisseur choisi.
+#[tauri::command]
+fn llm_abonnement(
+    id: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<llm::EtatAbonnement, String> {
+    let fournisseur = match id {
+        Some(id) => llm::par_id(&id).ok_or_else(|| format!("fournisseur inconnu : {id}"))?,
+        None => llm::prefere(&state.db),
+    };
+    Ok(llm::abonnement::etat(fournisseur))
 }
 
 #[tauri::command]
-fn claude_login_input(data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.claude_login.input(&data)
+fn llm_connexion_demarrer(
+    id: Option<String>,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let fournisseur = match id {
+        Some(id) => llm::par_id(&id).ok_or_else(|| format!("fournisseur inconnu : {id}"))?,
+        None => llm::prefere(&state.db),
+    };
+    state.connexion_llm.demarrer(app, fournisseur)
 }
 
 #[tauri::command]
-fn cancel_claude_login(state: tauri::State<'_, AppState>) {
-    state.claude_login.cancel()
+fn llm_connexion_entrer(data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.connexion_llm.entrer(&data)
+}
+
+#[tauri::command]
+fn llm_connexion_annuler(state: tauri::State<'_, AppState>) {
+    state.connexion_llm.annuler()
 }
 
 /// Schemas d'adresse que l'application accepte de confier au systeme.
@@ -1599,7 +1646,7 @@ pub fn run() {
                 collector,
                 recorder: recorder::RecorderState::default(),
                 terminals: terminaux,
-                claude_login: claude_auth::ClaudeLoginState::default(),
+                connexion_llm: llm::abonnement::SessionConnexion::default(),
                 lsp: Arc::new(lsp::LspState::default()),
             });
 
@@ -1719,8 +1766,6 @@ pub fn run() {
             get_wallpaper,
             clear_wallpaper,
             read_image_as_data_url,
-            // Terminal
-            open_terminal,
             // Migration
             import_database,
             get_db_path,
@@ -1747,18 +1792,23 @@ pub fn run() {
             set_clipboard,
             get_clipboard,
             terminal_search,
-            list_claude_sessions,
-            rename_claude_session,
             record_command,
             search_command_history,
             debug_log,
             report_error,
             machine_report,
-            // Connexion Claude Code
-            claude_auth_status,
-            start_claude_login,
-            claude_login_input,
-            cancel_claude_login,
+            // Fournisseurs d'IA
+            llm_catalogue,
+            llm_choisir,
+            llm_poser_cle,
+            llm_conversations,
+            llm_renommer_conversation,
+            llm_commandes,
+            llm_reunions,
+            llm_abonnement,
+            llm_connexion_demarrer,
+            llm_connexion_entrer,
+            llm_connexion_annuler,
             open_url,
             // Explorateur de fichiers
             list_project_dir,

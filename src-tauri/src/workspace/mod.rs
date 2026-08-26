@@ -1,6 +1,5 @@
 //! Explorateur de fichiers du projet : listing lazy gitignore-aware + lecture de fichiers.
 
-pub mod claude_sessions;
 
 use ignore::WalkBuilder;
 use serde::Serialize;

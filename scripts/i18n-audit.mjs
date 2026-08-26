@@ -37,7 +37,10 @@ const ALLOW = new Set(["px", "ms", "fr", "en", "id", "px)", "%", "OK",
   "· src/utils/timeout.ts", "→ cockpit-sauvegarde-2026-08-14.db",
   // Noms propres, entites HTML, exemples de commande et noms de signaux : identiques
   // dans les deux langues, ils n'ont rien a faire dans un catalogue.
-  "Claude", "&times;", "npm run dev", "SIGTERM", "git push --set-upstream"]);
+  "Claude", "&times;", "npm run dev", "SIGTERM", "git push --set-upstream",
+  // Une pile de polices n'est pas une phrase : ce sont des noms de fichiers de police, et ils
+  // s'ecrivent pareil dans toutes les langues.
+  "'DejaVu Sans Mono', 'Liberation Mono', 'Noto Sans Mono', monospace"]);
 
 // Mots identiques dans les deux langues : sigles, noms d'outils, noms propres. Une phrase
 // qui n'est faite QUE de ces mots n'a rien a traduire ("Uptime {valeur}", "git push"), mais
@@ -116,6 +119,16 @@ function finDuGroupe(src, debut) {
     else if (c === fermant && --profondeur === 0) return i;
   }
   return src.length;
+}
+
+// L'interieur de TOUS les blocs `<script>` d'un composant, le reste blanchi.
+function blocsDeScript(src, blank) {
+  let out = blank(src);
+  for (const m of src.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) {
+    const debut = m.index + m[0].indexOf(">") + 1;
+    out = out.slice(0, debut) + m[1] + out.slice(debut + m[1].length);
+  }
+  return out;
 }
 
 // Blanchit les groupes `{...}` : dans le markup, ce qui est entre accolades est du code.
@@ -236,9 +249,13 @@ for (const file of files.sort()) {
   //
   // Uniquement dans le SCRIPT : dans le markup, `attribut="valeur"` a exactement la meme
   // forme qu'une affectation, et `class="btn btn-small"` serait signale comme un libelle.
-  const script = file.endsWith(".svelte")
-    ? src.replace(/^[\s\S]*?<script[^>]*>|<\/script>[\s\S]*$/g, blank)
-    : src;
+  //
+  // **ON GARDE L'INTERIEUR DE CHAQUE BLOC, PAS DU PREMIER.** Le blanchiment partait du premier
+  // `</script>` jusqu'a la fin du fichier : un composant qui porte un bloc `module` en plus de
+  // son bloc d'instance voyait donc TOUT son script principal echapper a l'audit — 830 lignes
+  // pour TerminalTab, avec trois libelles francais dedans, pendant que l'audit annoncait zero.
+  // Le blanchiment garde les positions, donc les lignes signalees restent justes.
+  const script = file.endsWith(".svelte") ? blocsDeScript(src, blank) : src;
   const AFFECTATION = /(?:\b(?:const|let|var)\s+\w+\s*(?::[^=\n]+)?|(?:^|[\s;{}()])[\w.$]+\s*)=\s*(?=["'`])/g;
 
   // 4bis) Propriete d'objet : `body: "..."`, `title: \`...\``.

@@ -205,12 +205,18 @@
   import {
     createTerminal, resizeTerminal, closeTerminal,
     attachTerminal, renameTerminal, listTerminals, listAllTerminals,
-    listClaudeSessions, renameClaudeSession, setClipboard, getClipboard,
+    setClipboard, getClipboard,
     terminalSearch, openUrl,
   } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
-  import type { ClaudeSession } from "../../types";
+  import {
+    conversationsLlm,
+    renommerConversationLlm,
+    commandesLlm,
+    type ConversationLlm,
+  } from "../../api/llm";
+  import { agentPrefere } from "../../stores/llm";
 
   let { name }: { name: string } = $props();
 
@@ -224,12 +230,13 @@
   // Un fichier survole le terminal : on l'annonce, sinon on ne sait pas que le geste est permis.
   let dropOver = $state(false);
 
-  // Sessions Claude Code
-  let claudeOpen = $state(false);
-  let claudeSessions: ClaudeSession[] = $state([]);
-  let claudeLoading = $state(false);
-  let renamingClaudeId: string | null = $state(null);
-  let renameClaudeValue = $state("");
+  // Conversations passees de l'agent choisi dans les reglages. Le fournisseur vient du
+  // magasin : ce composant ne sait pas lequel c'est, et n'a pas a le savoir.
+  let agentOuvert = $state(false);
+  let conversations: ConversationLlm[] = $state([]);
+  let chargementConversations = $state(false);
+  let renommeId: string | null = $state(null);
+  let renommeValeur = $state("");
 
   const project = $derived($projects.find((p) => p.name === name));
 
@@ -968,53 +975,78 @@
     return s.name || `Terminal ${index + 1}`;
   }
 
-  // --- Sessions Claude ---
+  // --- Conversations passees de l'agent ---
 
-  async function toggleClaude() {
-    claudeOpen = !claudeOpen;
-    renamingClaudeId = null;
-    if (claudeOpen && project?.path) {
-      claudeLoading = true;
-      try { claudeSessions = await listClaudeSessions(project.path); }
-      catch (e) { claudeSessions = []; signalerErreur("terminal.sessionsClaude", String(e)); }
-      finally { claudeLoading = false; }
+  async function basculerAgent() {
+    agentOuvert = !agentOuvert;
+    renommeId = null;
+    if (agentOuvert && project?.path) {
+      chargementConversations = true;
+      try {
+        conversations = await conversationsLlm(project.path);
+      } catch (e) {
+        conversations = [];
+        signalerErreur("terminal.conversationsAgent", String(e));
+      } finally {
+        chargementConversations = false;
+      }
     }
   }
 
-  function startRenameClaude(cs: ClaudeSession) {
-    renamingClaudeId = cs.id;
-    renameClaudeValue = cs.renamed ? cs.label : "";
+  function demarrerRenommage(conversation: ConversationLlm) {
+    renommeId = conversation.id;
+    renommeValeur = conversation.renamed ? conversation.label : "";
   }
 
-  async function commitRenameClaude() {
-    const id = renamingClaudeId;
-    renamingClaudeId = null;
+  async function validerRenommage() {
+    const id = renommeId;
+    renommeId = null;
     if (id === null) return;
     try {
-      await renameClaudeSession(id, renameClaudeValue);
-      if (project?.path) claudeSessions = await listClaudeSessions(project.path);
+      await renommerConversationLlm(id, renommeValeur);
+      if (project?.path) conversations = await conversationsLlm(project.path);
     } catch (e) {
-      signalerErreur("terminal.renommageSessionClaude", String(e));
+      signalerErreur("terminal.renommageConversation", String(e));
     }
   }
 
-  async function resumeClaude(session: ClaudeSession) {
-    claudeOpen = false;
-    await addTerminal(`claude --resume ${session.id}`);
+  /// Ouvre un terminal neuf sur une conversation. **LA COMMANDE VIENT DU FOURNISSEUR** :
+  /// `--resume` ne veut rien dire ailleurs que chez Claude Code, et un fournisseur qui reprend
+  /// ses conversations autrement n'aurait rien a changer ici.
+  async function reprendre(conversation: ConversationLlm) {
+    agentOuvert = false;
+    let commande: string | null = null;
+    try {
+      commande = (await commandesLlm(conversation.id)).reprise;
+    } catch (e) {
+      return signalerErreur("terminal.commandeAgent", String(e));
+    }
+    if (!commande) return;
+    await addTerminal(commande);
     const active = sessions.find((s) => s.id === activeId);
     if (active) {
-      active.name = `Claude · ${session.label.slice(0, 24)}`;
+      const marque = $agentPrefere?.nom ?? "";
+      active.name = `${marque} · ${conversation.label.slice(0, 24)}`;
       try { await renameTerminal(active.id, active.name); }
       catch (e) { signalerErreur("terminal.renommage", String(e)); }
       loadTerminals();
     }
   }
 
-  function relativeTime(epochSecs: number): string {
+  async function nouvelleConversation() {
+    agentOuvert = false;
+    try {
+      await addTerminal((await commandesLlm()).neuve);
+    } catch (e) {
+      signalerErreur("terminal.commandeAgent", String(e));
+    }
+  }
+
+  function tempsRelatif(epochSecs: number): string {
     const diff = Math.floor(Date.now() / 1000) - epochSecs;
-    if (diff < 3600) return `il y a ${Math.max(1, Math.floor(diff / 60))} min`;
-    if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
-    return `il y a ${Math.floor(diff / 86400)} j`;
+    if (diff < 3600) return $trad("time.minutesAgo", { n: Math.max(1, Math.floor(diff / 60)) });
+    if (diff < 86400) return $trad("time.hoursAgo", { n: Math.floor(diff / 3600) });
+    return $trad("time.daysAgoShort", { n: Math.floor(diff / 86400) });
   }
 </script>
 
@@ -1083,53 +1115,59 @@
       <button class="term-search-btn" onclick={openSearch} title={$trad("term.searchHint")}>🔍</button>
     {/if}
 
-    <div class="claude-menu">
-      <button class="term-claude" onclick={toggleClaude} title={$trad("term.claudeMenuHint")}>
-        {$trad("term.claudeMenu")}
-      </button>
-      {#if claudeOpen}
-        <div class="claude-dropdown">
-          <button class="claude-item new" onclick={() => { claudeOpen = false; addTerminal("claude"); }}>
-            {$trad("term.claudeNewSession")}
-          </button>
-          {#if claudeLoading}
-            <div class="claude-item muted">{$trad("common.loading")}</div>
-          {:else if claudeSessions.length === 0}
-            <div class="claude-item muted">{$trad("term.noPastConversation")}</div>
-          {:else}
-            {#each claudeSessions as cs (cs.id)}
-              {#if renamingClaudeId === cs.id}
-                <!-- svelte-ignore a11y_autofocus -->
-                <input
-                  class="claude-rename"
-                  type="text"
-                  bind:value={renameClaudeValue}
-                  placeholder={$trad("term.sessionNamePlaceholder")}
-                  onblur={commitRenameClaude}
-                  onkeydown={(e) => {
-                    if (e.key === "Enter") commitRenameClaude();
-                    if (e.key === "Escape") renamingClaudeId = null;
-                  }}
-                  autofocus
-                />
-              {:else}
-                <div class="claude-row">
-                  <button class="claude-item" onclick={() => resumeClaude(cs)} title={cs.id}>
-                    <span class="claude-label" class:renamed={cs.renamed}>{cs.label}</span>
-                    <span class="claude-time">{relativeTime(cs.updated_at)}</span>
-                  </button>
-                  <button
-                    class="claude-edit"
-                    title={$trad("term.renameSession")}
-                    onclick={(e) => { e.stopPropagation(); startRenameClaude(cs); }}
-                  >✎</button>
-                </div>
-              {/if}
-            {/each}
-          {/if}
-        </div>
-      {/if}
-    </div>
+    <!-- Le bouton n'existe QUE si le fournisseur choisi sait retrouver ses conversations :
+         un bouton qui promet ce qu'il ne sait pas faire est un mensonge. Son libelle vient de
+         lui — symbole et nom — donc aucun nom de produit n'est ecrit ici. -->
+    {#if $agentPrefere?.conversations}
+      <div class="agent-menu">
+        <button class="term-agent" onclick={basculerAgent} title={$trad("term.agentMenuHint", { nom: $agentPrefere.nom })}>
+          <span class="agent-symbole" style:color={$agentPrefere.couleur}>{$agentPrefere.symbole}</span>
+          {$agentPrefere.nom} ▾
+        </button>
+        {#if agentOuvert}
+          <div class="agent-dropdown">
+            <button class="agent-item new" onclick={nouvelleConversation}>
+              {$trad("term.agentNewSession")}
+            </button>
+            {#if chargementConversations}
+              <div class="agent-item muted">{$trad("common.loading")}</div>
+            {:else if conversations.length === 0}
+              <div class="agent-item muted">{$trad("term.noPastConversation")}</div>
+            {:else}
+              {#each conversations as conversation (conversation.id)}
+                {#if renommeId === conversation.id}
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    class="agent-rename"
+                    type="text"
+                    bind:value={renommeValeur}
+                    placeholder={$trad("term.sessionNamePlaceholder")}
+                    onblur={validerRenommage}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") validerRenommage();
+                      if (e.key === "Escape") renommeId = null;
+                    }}
+                    autofocus
+                  />
+                {:else}
+                  <div class="agent-row">
+                    <button class="agent-item" onclick={() => reprendre(conversation)} title={conversation.id}>
+                      <span class="agent-label" class:renamed={conversation.renamed}>{conversation.label}</span>
+                      <span class="agent-time">{tempsRelatif(conversation.updated_at)}</span>
+                    </button>
+                    <button
+                      class="agent-edit"
+                      title={$trad("term.renameSession")}
+                      onclick={(e) => { e.stopPropagation(); demarrerRenommage(conversation); }}
+                    >✎</button>
+                  </div>
+                {/if}
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
@@ -1209,44 +1247,47 @@
   .term-search-btn:disabled { opacity: 0.45; cursor: default; }
   .term-add:hover { color: var(--accent); border-color: var(--accent); }
 
-  .claude-menu { position: relative; margin-left: auto; }
-  .term-claude {
+  .agent-menu { position: relative; margin-left: auto; }
+  .term-agent {
     padding: 0.2rem 0.6rem; font-size: 0.8rem; cursor: pointer;
     border: 1px solid var(--border-color); border-radius: 4px;
     background: var(--bg-secondary); color: var(--text-secondary);
   }
-  .term-claude:hover { color: var(--accent); border-color: var(--accent); }
-  .claude-dropdown {
+  .term-agent:hover { color: var(--accent); border-color: var(--accent); }
+  /* La couleur vient du fournisseur, posee en style en ligne : elle lui appartient et n'a
+     donc pas de token. Le reste du bouton suit le theme. */
+  .agent-symbole { font-weight: 700; }
+  .agent-dropdown {
     position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
     width: 380px; max-height: 320px; overflow-y: auto;
     background: var(--bg-secondary); border: 1px solid var(--border-color);
     border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
     padding: 0.25rem;
   }
-  .claude-item {
+  .agent-item {
     display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem;
     width: 100%; padding: 0.35rem 0.5rem; font-size: 0.78rem;
     background: none; border: none; color: var(--text-secondary);
     cursor: pointer; text-align: left; border-radius: 4px;
   }
-  .claude-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-  .claude-item.muted { color: var(--text-muted); cursor: default; }
-  .claude-item.new { color: var(--accent); font-weight: 600; }
-  .claude-label {
+  .agent-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  .agent-item.muted { color: var(--text-muted); cursor: default; }
+  .agent-item.new { color: var(--accent); font-weight: 600; }
+  .agent-label {
     flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .claude-label.renamed { font-weight: 600; color: var(--text-primary); }
-  .claude-time { flex-shrink: 0; color: var(--text-muted); font-size: 0.7rem; }
-  .claude-row { display: flex; align-items: center; }
-  .claude-row .claude-item { flex: 1; min-width: 0; }
-  .claude-edit {
+  .agent-label.renamed { font-weight: 600; color: var(--text-primary); }
+  .agent-time { flex-shrink: 0; color: var(--text-muted); font-size: 0.7rem; }
+  .agent-row { display: flex; align-items: center; }
+  .agent-row .agent-item { flex: 1; min-width: 0; }
+  .agent-edit {
     flex-shrink: 0; background: none; border: none; cursor: pointer;
     color: var(--text-muted); font-size: 0.75rem; padding: 0 0.4rem;
     opacity: 0; transition: opacity 0.12s;
   }
-  .claude-row:hover .claude-edit { opacity: 1; }
-  .claude-edit:hover { color: var(--accent); }
-  .claude-rename {
+  .agent-row:hover .agent-edit { opacity: 1; }
+  .agent-edit:hover { color: var(--accent); }
+  .agent-rename {
     width: calc(100% - 0.5rem); margin: 0.15rem 0.25rem;
     padding: 0.3rem 0.5rem; font-size: 0.78rem; font-family: monospace;
     border: 1px solid var(--accent); border-radius: 4px;

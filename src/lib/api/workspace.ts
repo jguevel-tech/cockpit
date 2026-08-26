@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TerminalInfo, TerminalSearchResult, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, ClaudeSession, HistoryEntry, GotoDefinitionResult, SearchResults, Worktree } from "../types";
+import type { TerminalInfo, TerminalSearchResult, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, HistoryEntry, GotoDefinitionResult, SearchResults, Worktree } from "../types";
 
 // Terminaux integres
 export const createTerminal = (project: string, cwd: string, cols: number, rows: number, initCommand?: string) =>
@@ -18,30 +18,6 @@ export const attachTerminal = (id: number, cols: number, rows: number) =>
 export const renameTerminal = (id: number, name: string) => invoke("rename_terminal", { id, name });
 export const listTerminals = (project: string) => invoke<TerminalInfo[]>("list_terminals", { project });
 export const listAllTerminals = () => invoke<TerminalInfo[]>("list_all_terminals");
-export const listClaudeSessions = (projectPath: string) =>
-  invoke<ClaudeSession[]>("list_claude_sessions", { projectPath });
-export const renameClaudeSession = (sessionId: string, name: string) =>
-  invoke("rename_claude_session", { sessionId, name });
-// Connexion Claude Code (abonnement)
-export interface ClaudeAuthStatus {
-  cli_installed: boolean;
-  cli_version: string | null;
-  logged_in: boolean;
-  subscription_type: string | null;
-  rate_limit_tier: string | null;
-  expires_at: number | null;
-  /**
-   * Pourquoi le statut n'a pas pu etre determine, quand c'est le cas. « Non connecte » et
-   * « on n'a pas su regarder » sont deux choses differentes : dossier personnel introuvable
-   * ou fichier de jetons illisible affichaient le meme badge, et l'utilisateur relançait une
-   * connexion qui ne changeait rien.
-   */
-  problem: string | null;
-}
-export const claudeAuthStatus = () => invoke<ClaudeAuthStatus>("claude_auth_status");
-export const startClaudeLogin = () => invoke("start_claude_login");
-export const claudeLoginInput = (data: string) => invoke("claude_login_input", { data });
-export const cancelClaudeLogin = () => invoke("cancel_claude_login");
 export const openUrl = (url: string) => invoke("open_url", { url });
 
 export const recordCommand = (project: string, command: string) =>

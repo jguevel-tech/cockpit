@@ -253,13 +253,43 @@ impl Database {
         self.preparer_la_synchro()?;
         let conn = self.conn();
 
-        // Migration: noms personnalises des sessions Claude Code
+        // Migration: noms personnalises des conversations d'un agent, PAR FOURNISSEUR.
+        //
+        // La table d'avant (`claude_session_names`) n'avait qu'un identifiant pour cle, parce
+        // qu'un seul produit existait. Un identifiant de conversation n'a de sens que chez son
+        // fournisseur — un UUID pour l'un, un numero pour l'autre — donc deux conversations
+        // differentes pouvaient porter le meme et echanger leurs noms. Les lignes existantes
+        // sont recopiees comme etant celles de Claude, puis l'ancienne table part : sans la
+        // recopie, les noms poses a la main disparaitraient sans un mot.
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS claude_session_names (
-                session_id TEXT PRIMARY KEY,
-                name       TEXT NOT NULL
+            "CREATE TABLE IF NOT EXISTS noms_conversations (
+                fournisseur     TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                nom             TEXT NOT NULL,
+                PRIMARY KEY (fournisseur, conversation_id)
             );",
         )?;
+        // L'ancienne table n'existe que sur une installation deja en service. Son existence se
+        // verifie ICI et non dans le SQL : une requete qui NOMME une table absente echoue des sa
+        // preparation, quelle que soit la garde qu'on lui ajoute.
+        let ancienne = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='claude_session_names'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if ancienne {
+            // Une seule transaction : un arret entre la recopie et la suppression perdrait les
+            // noms poses a la main.
+            conn.execute_batch(
+                "BEGIN;
+                 INSERT OR IGNORE INTO noms_conversations (fournisseur, conversation_id, nom)
+                     SELECT 'claude', session_id, name FROM claude_session_names;
+                 DROP TABLE claude_session_names;
+                 COMMIT;",
+            )?;
+        }
 
         Ok(())
     }
@@ -297,6 +327,51 @@ mod tests {
         assert_eq!(todos[0].text, "sauvegarde-moi");
 
         let _ = std::fs::remove_file(&dest);
+    }
+
+    /// **LES NOMS POSES A LA MAIN SURVIVENT A LA MIGRATION.** L'ancienne table n'avait qu'un
+    /// identifiant pour cle, parce qu'un seul fournisseur existait ; la nouvelle porte aussi le
+    /// fournisseur. Sans recopie, tous les noms de conversations disparaitraient a la mise a
+    /// jour, sans un mot — c'est la seule donnee de cette table.
+    #[test]
+    fn la_migration_des_noms_de_conversations_ne_perd_rien() {
+        let db = Database::new(":memory:").unwrap();
+        {
+            let conn = db.conn();
+            // On refabrique l'etat d'avant : l'ancienne table, avec un nom dedans.
+            conn.execute_batch(
+                "DROP TABLE IF EXISTS noms_conversations;
+                 CREATE TABLE claude_session_names (
+                    session_id TEXT PRIMARY KEY,
+                    name       TEXT NOT NULL
+                 );
+                 INSERT INTO claude_session_names VALUES ('abc-123', 'audit du forum');",
+            )
+            .unwrap();
+        }
+
+        db.migrate().unwrap();
+
+        let conn = db.conn();
+        let nom: String = conn
+            .query_row(
+                "SELECT nom FROM noms_conversations WHERE fournisseur='claude' AND conversation_id='abc-123'",
+                [],
+                |l| l.get(0),
+            )
+            .expect("le nom doit avoir ete recopie");
+        assert_eq!(nom, "audit du forum");
+
+        // Et l'ancienne table s'en va : deux verites pour une meme chaine finiraient par
+        // diverger.
+        let reste: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='claude_session_names'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(!reste, "l'ancienne table devait etre supprimee");
     }
 
     #[test]
