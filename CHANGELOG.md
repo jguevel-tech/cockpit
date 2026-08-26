@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cockpit annonçait « CLI introuvable » pour un agent parfaitement installé.** Une application
+  lancée depuis un menu de bureau n'hérite pas du `PATH` de votre shell : `~/.local/bin`, où
+  vivent la plupart des CLI installés par un utilisateur, en est absent. Cockpit cherche
+  maintenant aussi là où les outils s'installent vraiment, et lance l'agent par son chemin
+  complet — la connexion à l'abonnement échouait pour la même raison.
+- **Un bouton désactivé ne se lisait pas comme désactivé** : sur une image de fond, un aplat de
+  couleur à moitié transparent ressemble à un bouton tout à fait cliquable.
+
 ## [0.53.0] — 2026-08-26
 
 ### Added

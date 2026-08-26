@@ -117,8 +117,13 @@ pub fn etat(fournisseur: &'static dyn super::Fournisseur) -> EtatAbonnement {
 }
 
 /// Demande sa version a un CLI. Utilitaire pour les implementations.
+///
+/// **Par son chemin COMPLET**, jamais par son nom nu : le dossier ou il vit n'est pas forcement
+/// dans le PATH de l'application, et c'est exactement le cas qu'on vient de corriger — la
+/// detection le trouvait, le lancement echouait.
 pub fn version_par_cli(programme: &str) -> Option<String> {
-    std::process::Command::new(programme)
+    let chemin = crate::commande::chemin_du_programme(programme)?;
+    std::process::Command::new(chemin)
         .sans_console()
         .arg("--version")
         .output()
@@ -162,7 +167,11 @@ impl SessionConnexion {
             .openpty(PtySize { rows: 30, cols: 100, pixel_width: 0, pixel_height: 0 })
             .map_err(|e| format!("openpty: {e}"))?;
 
-        let mut commande = CommandBuilder::new(guidee.programme);
+        // Le chemin complet, pour la meme raison que la version : le nom nu ne se resout pas
+        // dans le PATH d'une application graphique.
+        let programme = crate::commande::chemin_du_programme(guidee.programme)
+            .ok_or_else(|| format!("{} est introuvable sur cette machine", guidee.programme))?;
+        let mut commande = CommandBuilder::new(programme);
         for argument in guidee.arguments {
             commande.arg(argument);
         }

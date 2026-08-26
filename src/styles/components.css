@@ -20,6 +20,16 @@
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 .btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+/* UN BOUTON DESACTIVE NE DOIT PAS SE LIRE COMME L'ACTION PRINCIPALE. L'opacite seule n'y
+   suffit pas : un aplat d'accent a 50 % reste un aplat d'accent, et sur une image de fond il
+   ressemble a un bouton parfaitement cliquable — signale sur capture le 2026-08-26, sur le
+   bouton de connexion a un abonnement. On lui retire donc sa COULEUR, ce qui se lit sur
+   n'importe quel fond. */
+.btn.primary:disabled {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-muted);
+}
 
 .btn.danger { color: var(--error); }
 .btn.danger:hover:not(:disabled) { background: var(--error-soft); border-color: var(--error); }

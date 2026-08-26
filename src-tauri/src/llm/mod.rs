@@ -309,36 +309,17 @@ pub fn catalogue_pour_le_frontend(db: &Database) -> Vec<Capacites> {
         .collect()
 }
 
-/// Ce programme est-il installe ? On PARCOURT `PATH`, on ne le lance pas.
+/// Ce programme est-il installe ? On le CHERCHE, on ne le lance pas.
 ///
-/// Lancer `<cli> --version` pour chaque fournisseur ferait douze processus a chaque ouverture
-/// des reglages — et sous Windows, douze consoles qui clignotent. La version, elle, ne se
-/// demande qu'au fournisseur affiche, et c'est son implementation d'`Abonnement` qui la donne.
+/// Lancer `<cli> --version` pour chaque fournisseur ferait douze processus a chaque ouverture des
+/// reglages — et sous Windows, douze consoles qui clignotent. La version ne se demande qu'au
+/// fournisseur affiche, et c'est son implementation d'`Abonnement` qui la donne.
+///
+/// La recherche ne se limite PAS au PATH du processus : voir `commande::chemin_du_programme`.
+/// Une application lancee depuis un menu de bureau n'a pas `~/.local/bin` dans son PATH, et
+/// annoncait donc « introuvable » un CLI parfaitement installe.
 pub fn dans_le_chemin(programme: &str) -> bool {
-    let Some(chemin) = std::env::var_os("PATH") else {
-        return false;
-    };
-    // Sous Windows un programme s'appelle `claude.cmd` ou `claude.exe` : le nom nu ne
-    // designe aucun fichier. La liste vient de PATHEXT, avec un repli sur les extensions
-    // habituelles quand la variable manque.
-    let suffixes: Vec<String> = if cfg!(windows) {
-        std::env::var("PATHEXT")
-            .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
-            .split(';')
-            .filter(|e| !e.is_empty())
-            .map(|e| e.to_lowercase())
-            .chain(std::iter::once(String::new()))
-            .collect()
-    } else {
-        vec![String::new()]
-    };
-
-    std::env::split_paths(&chemin).any(|dossier| {
-        suffixes.iter().any(|suffixe| {
-            let candidat = dossier.join(format!("{programme}{suffixe}"));
-            candidat.is_file()
-        })
-    })
+    crate::commande::chemin_du_programme(programme).is_some()
 }
 
 #[cfg(test)]

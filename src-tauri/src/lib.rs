@@ -1546,6 +1546,10 @@ pub fn run() {
         }));
     }
 
+    // Ou chercher les programmes de l'utilisateur, calcule UNE fois et en tache de fond : le
+    // PATH d'une application lancee depuis un menu de bureau ne contient pas `~/.local/bin`.
+    commande::precharger_les_chemins();
+
     tauri::Builder::default()
         // UNE SEULE INSTANCE, et ce n'est pas cosmetique : deux Cockpit partagent la meme
         // base ET le meme serveur tmux, or `purge_dead` TUE au demarrage les sessions
