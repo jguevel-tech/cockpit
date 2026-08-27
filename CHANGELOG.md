@@ -12,6 +12,23 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- La fenêtre pouvait se figer définitivement, sans autre issue que de fermer Cockpit de force
+  et de le relancer. Cela se produisait quand le service qui tient les terminaux cessait de
+  répondre : la frappe attendait alors sans limite de temps, et elle attend sur le fil qui
+  dessine l'interface. Les terminaux ouverts n'étaient pas perdus pour autant.
+- Quand le service ne répondait pas, tous les terminaux étaient annoncés éteints sans qu'aucun
+  message ne le dise.
+- Dix-huit actions qui lisent ou écrivent des fichiers s'exécutaient sur le fil qui dessine
+  l'interface : ouvrir un dossier, enregistrer un fichier, poser une image de fond, sauvegarder
+  la base. Instantané sur un disque local, mais un dossier sur un montage réseau qui ne répond
+  plus figeait la fenêtre entière.
+
+### Changed
+
+- Amélioration des journaux techniques.
+
 ## [0.53.3] — 2026-08-26
 
 ### Changed

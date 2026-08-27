@@ -50,6 +50,12 @@ pub struct TerminauxService {
     /// telle quelle et remontee a la premiere operation, plutot que d'echouer au demarrage.
     chemin: Result<PathBuf, String>,
     client: Mutex<Option<Arc<Client>>>,
+    /// Serialise les LANCEMENTS du service. Il existe pour que le verrou de `client` ne soit
+    /// jamais tenu pendant un demarrage — voir `client()`.
+    relance: Mutex<()>,
+    /// La derniere panne CONSIGNEE, pour ne pas remplir le journal toutes les cinq secondes
+    /// tant que la meme panne dure.
+    derniere_panne: Mutex<Option<String>>,
     contexte: Mutex<Option<Contexte>>,
     /// Terminaux dont la sortie remonte deja. Sert a rendre `attacher` gratuit quand
     /// l'onglet revient : re-attacher declencherait un redessin complet, donc un
@@ -62,6 +68,8 @@ impl Default for TerminauxService {
         Self {
             chemin: chemin_socket(),
             client: Mutex::new(None),
+            relance: Mutex::new(()),
+            derniere_panne: Mutex::new(None),
             contexte: Mutex::new(None),
             attaches: Mutex::new(HashSet::new()),
         }
@@ -139,16 +147,62 @@ impl TerminauxService {
         self.chemin.as_deref().map_err(|e| e.clone())
     }
 
+    /// Consigne une panne du service, UNE SEULE FOIS tant qu'elle ne change pas.
+    ///
+    /// Sans borne, l'interrogation periodique de la liste des terminaux ecrirait la meme
+    /// ligne toutes les cinq secondes et noierait le journal — celui-la meme qu'on lira au
+    /// prochain incident.
+    fn consigner_la_panne(&self, panne: &str) {
+        let mut derniere = self.derniere_panne.lock().unwrap_or_else(|e| e.into_inner());
+        if derniere.as_deref() == Some(panne) {
+            return;
+        }
+        *derniere = Some(panne.to_string());
+        if let Some(contexte) = self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            journaliser(&contexte.app, "terminal.service", panne);
+        }
+    }
+
+    fn panne_terminee(&self) {
+        let mut derniere = self.derniere_panne.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(panne) = derniere.take() {
+            if let Some(contexte) = self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+                journaliser(
+                    &contexte.app,
+                    "terminal.service",
+                    &format!("le service repond de nouveau (panne precedente : {panne})"),
+                );
+            }
+        }
+    }
+
+    /// La connexion SI elle est deja etablie et vivante. Le verrou n'est tenu que le temps
+    /// d'un clone : aucune entree-sortie derriere lui.
+    fn deja_connecte(&self) -> Option<Arc<Client>> {
+        let garde = self.client.lock().unwrap_or_else(|e| e.into_inner());
+        match garde.as_ref() {
+            Some(client) if client.vivant() => Some(Arc::clone(client)),
+            _ => None,
+        }
+    }
+
     /// La connexion au service, lancee ou relancee si besoin.
     ///
     /// C'est ici que se tient la promesse « une application qui redemarre retrouve ses
     /// sessions » : le service tourne deja, on se rebranche dessus.
+    ///
+    /// **LE VERROU DE `client` N'EST JAMAIS TENU PENDANT UN LANCEMENT.** Lancer le service
+    /// prend jusqu'a dix secondes, et la frappe prend ce meme verrou depuis la boucle
+    /// graphique : le tenir gelait la fenetre entiere jusqu'au kill. `relance` garantit
+    /// qu'un seul fil lance le service a la fois, sans rien bloquer d'autre.
     fn client(&self) -> Result<Arc<Client>, String> {
-        let mut garde = self.client.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(client) = garde.as_ref() {
-            if client.vivant() {
-                return Ok(Arc::clone(client));
-            }
+        if let Some(client) = self.deja_connecte() {
+            return Ok(client);
+        }
+        let _un_seul_lancement = self.relance.lock().unwrap_or_else(|e| e.into_inner());
+        // Un autre fil a pu reussir pendant qu'on attendait notre tour.
+        if let Some(client) = self.deja_connecte() {
+            return Ok(client);
         }
         let contexte = self
             .contexte
@@ -157,12 +211,14 @@ impl TerminauxService {
             .clone()
             .ok_or("le serveur de terminaux n'est pas encore pret")?;
         let chemin = self.chemin()?.to_path_buf();
+        // Nomme l'attente : si la fenetre se fige pendant ce temps, le journal dira quoi.
+        let _marque = crate::guetteur::marquer("lancement du service de terminaux");
         lancement::demarrer(&chemin)?;
         let client = Client::connecter(&chemin, move |pousse| traiter_poussee(&contexte, pousse))
             .map_err(|e| e.to_string())?;
         // Un service neuf n'a plus aucun abonnement : tout onglet devra se rebrancher.
         self.attaches.lock().unwrap_or_else(|e| e.into_inner()).clear();
-        *garde = Some(Arc::clone(&client));
+        *self.client.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&client));
         Ok(client)
     }
 
@@ -170,7 +226,18 @@ impl TerminauxService {
     /// un service depuis une touche ferait attendre l'utilisateur des secondes pour un
     /// terminal qui, de toute facon, n'existe plus.
     fn client_vivant(&self) -> Result<Arc<Client>, String> {
-        let garde = self.client.lock().unwrap_or_else(|e| e.into_inner());
+        // `try_lock` et NON `lock` : ce chemin est celui de la frappe, portee par une
+        // commande sans `async` — donc executee en ligne sur la boucle graphique. Attendre
+        // ici gele la fenetre entiere. Un verrou occupe signifie qu'une connexion s'etablit :
+        // on le dit tout de suite au lieu de faire attendre l'utilisateur devant une
+        // interface morte.
+        let garde = match self.client.try_lock() {
+            Ok(garde) => garde,
+            Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                return Err("le service de terminaux est occupe a se connecter".into())
+            }
+        };
         match garde.as_ref() {
             Some(client) if client.vivant() => Ok(Arc::clone(client)),
             _ => Err("le service de terminaux ne repond plus".into()),
@@ -286,7 +353,19 @@ impl Terminaux for TerminauxService {
     }
 
     fn lister(&self, db: &Database, projet: Option<&str>) -> Vec<TerminalInfo> {
-        let vivantes = self.client().and_then(|c| c.lister()).unwrap_or_default();
+        // Un echec rendait ici une liste vide EN SILENCE, ce qui faisait passer TOUS les
+        // terminaux pour morts sans qu'une ligne ne le dise nulle part. C'est le genre de
+        // silence qui rend un incident indiagnosticable.
+        let vivantes = match self.client().and_then(|c| c.lister()) {
+            Ok(sessions) => {
+                self.panne_terminee();
+                sessions
+            }
+            Err(e) => {
+                self.consigner_la_panne(&e);
+                Vec::new()
+            }
+        };
         db.get_terminal_rows(projet)
             .unwrap_or_default()
             .into_iter()

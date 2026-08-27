@@ -5,6 +5,7 @@ pub mod compte;
 mod commande;
 mod docker;
 mod gitdiff;
+mod guetteur;
 mod llm;
 mod lsp;
 mod plugin;
@@ -412,12 +413,12 @@ fn move_project_to_folder(project_name: String, folder_id: Option<i64>, state: t
 // --- Tauri Commands: Scanner ---
 
 #[tauri::command]
-fn scan_dir(path: String) -> Result<scanner::ScanResult, String> {
+async fn scan_dir(path: String) -> Result<scanner::ScanResult, String> {
     scanner::scan(&path)
 }
 
 #[tauri::command]
-fn scan_subdirs(path: String) -> Result<Vec<scanner::ScanResult>, String> {
+async fn scan_subdirs(path: String) -> Result<Vec<scanner::ScanResult>, String> {
     scanner::scan_subdirs(&path)
 }
 
@@ -582,22 +583,22 @@ fn app_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-fn set_wallpaper(app: tauri::AppHandle, data_url: String) -> Result<(), String> {
+async fn set_wallpaper(app: tauri::AppHandle, data_url: String) -> Result<(), String> {
     appearance::set_wallpaper(&app_data_dir(&app)?, &data_url)
 }
 
 #[tauri::command]
-fn get_wallpaper(app: tauri::AppHandle) -> Result<Option<String>, String> {
+async fn get_wallpaper(app: tauri::AppHandle) -> Result<Option<String>, String> {
     appearance::get_wallpaper(&app_data_dir(&app)?)
 }
 
 #[tauri::command]
-fn clear_wallpaper(app: tauri::AppHandle) -> Result<(), String> {
+async fn clear_wallpaper(app: tauri::AppHandle) -> Result<(), String> {
     appearance::clear_wallpaper(&app_data_dir(&app)?)
 }
 
 #[tauri::command]
-fn read_image_as_data_url(path: String) -> Result<String, String> {
+async fn read_image_as_data_url(path: String) -> Result<String, String> {
     appearance::read_image_as_data_url(&path)
 }
 
@@ -621,7 +622,7 @@ fn set_webview_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), Str
 // --- Tauri Command: Import DB ---
 
 #[tauri::command]
-fn import_database(path: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
+async fn import_database(path: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
     storage::import::import_from(&state.db, &path)
 }
 
@@ -717,6 +718,12 @@ async fn set_project_summary_prompt(project: String, prompt: Option<String>, sta
 // `async fn`. Restent `fn` celles qui ne touchent que la base ou un champ en memoire, ainsi
 // que `write_terminal` : c'est le chemin de frappe, il ne fait aucun fork et un aller-retour
 // vers le runtime asynchrone lui ajouterait de la latence pour rien.
+//
+// **LE DISQUE COMPTE AUSSI, ET CA A ETE OUBLIE UNE FOIS.** Dix-huit commandes lisaient ou
+// ecrivaient des fichiers sans `async` : un simple `stat` est instantane sur un disque local,
+// et ne revient JAMAIS sur un montage reseau ou FUSE decroche — la fenetre gele alors sans
+// autre issue que de tuer l'application. Une commande qui touche un chemin fourni par
+// l'utilisateur est `async fn`, sans exception.
 
 #[tauri::command]
 async fn create_terminal(
@@ -1043,7 +1050,7 @@ async fn machine_report() -> report::MachineInfo {
 }
 
 #[tauri::command]
-fn debug_log(line: String) {
+async fn debug_log(line: String) {
     use std::io::Write;
     // `temp_dir()` et pas `/tmp` : sous Windows le dossier temporaire est dans le profil de
     // l'utilisateur, et un chemin absolu `/tmp` y designerait la racine du lecteur courant.
@@ -1065,19 +1072,19 @@ fn search_command_history(
 // --- Tauri Commands: Explorateur de fichiers ---
 
 #[tauri::command]
-fn list_project_dir(project_path: String, rel_path: String) -> Result<Vec<workspace::DirEntry>, String> {
+async fn list_project_dir(project_path: String, rel_path: String) -> Result<Vec<workspace::DirEntry>, String> {
     workspace::list_dir(&project_path, &rel_path)
 }
 
 #[tauri::command]
-fn read_project_file(project_path: String, rel_path: String) -> Result<workspace::FileContent, String> {
+async fn read_project_file(project_path: String, rel_path: String) -> Result<workspace::FileContent, String> {
     workspace::read_project_file(&project_path, &rel_path)
 }
 
 /// Etat disque du fichier affiche : sert au suivi des modifications exterieures
 /// (relire 2 Mo toutes les deux secondes serait absurde, un stat ne coute rien).
 #[tauri::command]
-fn stat_project_file(
+async fn stat_project_file(
     project_path: String,
     rel_path: String,
 ) -> Result<Option<workspace::FileStat>, String> {
@@ -1085,37 +1092,37 @@ fn stat_project_file(
 }
 
 #[tauri::command]
-fn write_project_file(project_path: String, rel_path: String, content: String) -> Result<(), String> {
+async fn write_project_file(project_path: String, rel_path: String, content: String) -> Result<(), String> {
     workspace::write_project_file(&project_path, &rel_path, &content)
 }
 
 #[tauri::command]
-fn read_project_image(project_path: String, rel_path: String) -> Result<String, String> {
+async fn read_project_image(project_path: String, rel_path: String) -> Result<String, String> {
     workspace::read_project_image(&project_path, &rel_path)
 }
 
 #[tauri::command]
-fn backup_database(dest: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn backup_database(dest: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.db.backup_to(&dest)
 }
 
 #[tauri::command]
-fn create_project_file(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
+async fn create_project_file(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
     workspace::create_project_file(&project_path, &rel_dir, &name)
 }
 
 #[tauri::command]
-fn create_project_dir(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
+async fn create_project_dir(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
     workspace::create_project_dir(&project_path, &rel_dir, &name)
 }
 
 #[tauri::command]
-fn rename_project_entry(project_path: String, rel_path: String, new_name: String) -> Result<String, String> {
+async fn rename_project_entry(project_path: String, rel_path: String, new_name: String) -> Result<String, String> {
     workspace::rename_project_entry(&project_path, &rel_path, &new_name)
 }
 
 #[tauri::command]
-fn trash_project_entry(project_path: String, rel_path: String) -> Result<(), String> {
+async fn trash_project_entry(project_path: String, rel_path: String) -> Result<(), String> {
     workspace::trash_project_entry(&project_path, &rel_path)
 }
 
@@ -1599,6 +1606,10 @@ pub fn run() {
 
             // Enregistrements restes en plein pipeline a la fermeture -> erreur (retry possible)
             let _ = db.fail_stale_recordings();
+
+            // Le guetteur AVANT la mise en route des terminaux : c'est justement cette
+            // mise en route qui peut prendre des secondes, et on veut qu'un gel la nomme.
+            guetteur::surveiller(app.handle().clone());
 
             // Serveur de terminaux : mise en route (lancement du service s'il ne tourne
             // pas deja, puis reconciliation avec la base) avant toute autre operation.

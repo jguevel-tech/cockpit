@@ -787,3 +787,125 @@ fn zombies_de_ce_processus() -> Vec<i32> {
         })
         .collect()
 }
+
+// --- Le gel : ce qui n'a pas de borne fige la fenetre pour de bon ---
+//
+// Rappel de la mecanique, parce que ces deux essais n'ont de sens qu'avec elle : la liste des
+// terminaux est demandee toutes les 5 s, et la frappe (`write_terminal`) est une commande SANS
+// `async` — elle s'execute donc EN LIGNE sur la boucle graphique. Les deux passent par le meme
+// verrou. Une attente sans borne d'un cote gele la fenetre de l'autre, et seul un kill en sort.
+
+/// Fait faire le travail par un fil et refuse d'attendre plus que `limite`.
+///
+/// Sans cette montre, un essai qui reproduit un gel PENDRAIT au lieu d'echouer : le harnais
+/// resterait bloque et ne dirait rien. Ici, un depassement est un echec nomme.
+fn dans_le_temps<T: Send + 'static>(
+    quoi: &str,
+    limite: Duration,
+    travail: impl FnOnce() -> T + Send + 'static,
+) -> T {
+    let (fini, attente) = channel();
+    std::thread::spawn(move || {
+        let _ = fini.send(travail());
+    });
+    match attente.recv_timeout(limite) {
+        Ok(valeur) => valeur,
+        Err(_) => panic!("{quoi} n'est pas revenu en {limite:?} : l'application resterait figee"),
+    }
+}
+
+/// Un socket qui accepte la connexion mais ne dit JAMAIS rien.
+///
+/// Ce n'est pas un cas theorique : un processus arrete net (SIGSTOP) ou dont la boucle
+/// d'acceptation est coincee laisse le noyau etablir la connexion — plus personne n'ecrit le
+/// preambule. La poignee de main doit renoncer, pas attendre.
+///
+/// **Unix seulement** : `interprocess` refuse tout delai de reception sur un tuyau nomme
+/// Windows (`set_recv_timeout` y rend une erreur). La-bas, la protection est ailleurs — la
+/// boucle graphique ne prend plus ce verrou (voir `client_vivant`).
+#[cfg(unix)]
+#[test]
+fn un_service_muet_ne_gele_pas_l_application() {
+    use interprocess::local_socket::traits::Listener as _;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (dossier, chemin) = emplacement("muet");
+    let ecoute = tuyau::ecouter(&chemin).unwrap();
+    let arret = Arc::new(AtomicBool::new(false));
+    let faux = {
+        let arret = Arc::clone(&arret);
+        std::thread::spawn(move || {
+            if let Ok(flux) = ecoute.accept() {
+                while !arret.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                drop(flux);
+            }
+        })
+    };
+
+    let pour_le_fil = chemin.clone();
+    let erreur = dans_le_temps(
+        "la connexion a un service muet",
+        Duration::from_secs(10),
+        move || Client::connecter(&pour_le_fil, |_| {}).err(),
+    );
+    assert!(erreur.is_some(), "un service muet doit etre refuse, pas attendu indefiniment");
+
+    arret.store(true, Ordering::SeqCst);
+    let _ = faux.join();
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// Un service qui se presente normalement, puis n'accuse plus jamais reception.
+///
+/// C'est le cas d'un service dont le fil qui traite les requetes est coince : le socket reste
+/// vivant, donc rien ne reveille les appelants. Une question doit finir par rendre une erreur.
+#[test]
+fn un_service_qui_n_accuse_jamais_reception_ne_gele_pas_l_application() {
+    use super::protocole::VERSION;
+    use interprocess::local_socket::traits::Listener as _;
+    use std::io::Write;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (dossier, chemin) = emplacement("sourd");
+    let ecoute = tuyau::ecouter(&chemin).unwrap();
+    let arret = Arc::new(AtomicBool::new(false));
+    let faux = {
+        let arret = Arc::clone(&arret);
+        std::thread::spawn(move || {
+            if let Ok(flux) = ecoute.accept() {
+                // Une poignee de main valide : le client accepte donc la conversation.
+                let mut brut = b"CKPTERM\0".to_vec();
+                brut.extend_from_slice(&VERSION.to_be_bytes());
+                let _ = (&flux).write_all(&brut);
+                // Et plus rien : on ne lit meme pas. La requete du client tient dans le
+                // tampon du socket, donc son envoi reussit — et personne ne repondra
+                // jamais, ce qui est exactement le cas a reproduire.
+                //
+                // Surtout, on ne LIT pas : une lecture bloquante ici ne verrait jamais
+                // l'ordre de s'arreter, et c'est le nettoyage de l'essai qui pendrait.
+                while !arret.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                // En fermant, on reveille le fil lecteur du client, qui peut alors finir.
+                drop(flux);
+            }
+        })
+    };
+
+    let client = Client::connecter(&chemin, |_| {}).expect("la poignee de main est valide");
+    let reponse = dans_le_temps(
+        "une question a un service sourd",
+        Duration::from_secs(15),
+        move || client.lister(),
+    );
+    assert!(
+        reponse.is_err(),
+        "un service qui ne repond pas doit rendre une erreur, pas bloquer l'appelant"
+    );
+
+    arret.store(true, Ordering::SeqCst);
+    let _ = faux.join();
+    let _ = std::fs::remove_dir_all(&dossier);
+}

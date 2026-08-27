@@ -13,7 +13,9 @@ use std::io::{BufReader, Write};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use interprocess::local_socket::traits::Stream as _;
 use interprocess::local_socket::Stream;
 
 use super::protocole::{
@@ -21,6 +23,22 @@ use super::protocole::{
     Taille, Trame,
 };
 use super::tuyau;
+
+/// Au-dela, on considere que le service ne repond plus a une question.
+///
+/// Ce n'est PAS une borne de service lent : le service tient tout en memoire et repond sur un
+/// socket local, donc une reponse legitime arrive en quelques millisecondes — meme un redessin
+/// qui porte tout l'historique. C'est une borne de service COINCE. Elle existe parce que la
+/// frappe partage un verrou avec ces appels : sans borne, la fenetre gele pour de bon, et seul
+/// un kill en sort (essai `un_service_qui_n_accuse_jamais_reception_ne_gele_pas_l_application`).
+const DELAI_REPONSE: Duration = Duration::from_secs(5);
+
+/// Au-dela, personne n'ecrit le preambule au bout de ce socket.
+///
+/// Le service ecrit ses dix octets des l'acceptation. Trois secondes couvrent une machine
+/// chargee et refusent le cas qui gele : un processus arrete net laisse le noyau etablir la
+/// connexion, et plus aucun fil n'ecrit jamais.
+const DELAI_POIGNEE: Duration = Duration::from_secs(3);
 
 /// Une conversation ouverte avec le service.
 pub struct Client {
@@ -43,10 +61,19 @@ impl Client {
         sur_poussee: impl Fn(Pousse) + Send + 'static,
     ) -> Result<Arc<Self>, ErreurPoignee> {
         let flux = Arc::new(tuyau::connecter(chemin)?);
+        // Sans borne, cette lecture ne rend JAMAIS la main quand le noyau a etabli la
+        // connexion mais que plus aucun fil du service n'ecrit. Windows n'offre pas ce
+        // reglage — `interprocess` refuse tout delai sur un tuyau nomme — d'ou le `let _`
+        // plutot qu'un `?` : la-bas la protection est le `try_lock` de l'adaptateur, qui
+        // empeche la boucle graphique d'attendre derriere cette poignee de main.
+        let _ = flux.set_recv_timeout(Some(DELAI_POIGNEE));
         // Le service parle en premier : on lit sa version AVANT d'envoyer quoi que ce
         // soit. C'est ce qui permet de dire « ce service est plus ancien que moi » au lieu
         // d'echouer sur un message incomprehensible.
         protocole::lire_preambule(&mut (&*flux))?;
+        // Passe la poignee de main, l'ecoute doit pouvoir attendre sans fin : un terminal
+        // silencieux n'est pas une panne, et un delai ferait rompre la connexion.
+        let _ = flux.set_recv_timeout(None);
         // Et on refuse de confier des frappes a un service qui n'est pas le notre.
         tuyau::verifier_pair(&flux).map_err(ErreurPoignee::Tuyau)?;
 
@@ -96,7 +123,13 @@ impl Client {
     fn envoyer(&self, sequence: u32, requete: Requete) -> Result<(), String> {
         let trame = Trame::Requete { sequence, requete }.encoder();
         let _ecriture = self.ecriture.lock().map_err(|_| "tuyau du service perdu")?;
-        (&*self.flux).write_all(&trame).map_err(|e| e.to_string())
+        (&*self.flux).write_all(&trame).map_err(|e| {
+            // Une ecriture qui echoue a pu partir A MOITIE : le service lit alors une trame
+            // tronquee et tout ce qui suit est decale. Cette connexion ne se rattrape pas,
+            // on la declare morte pour que la suivante soit neuve.
+            self.ferme.store(true, Ordering::SeqCst);
+            e.to_string()
+        })
     }
 
     /// Envoie une requete et attend sa reponse.
@@ -108,8 +141,15 @@ impl Client {
             self.attentes.lock().unwrap_or_else(|e| e.into_inner()).remove(&sequence);
             return Err(e);
         }
-        rx.recv()
-            .map_err(|_| "le service de terminaux ne repond plus".to_string())
+        match rx.recv_timeout(DELAI_REPONSE) {
+            Ok(reponse) => Ok(reponse),
+            Err(_) => {
+                // On retire l'attente : sans ca, une reponse tardive resterait dans la
+                // table pour toujours et celle-ci grossirait a chaque appel perdu.
+                self.attentes.lock().unwrap_or_else(|e| e.into_inner()).remove(&sequence);
+                Err("le service de terminaux ne repond plus".to_string())
+            }
+        }
     }
 
     /// Les reponses qui ne portent qu'un succes ou une erreur.
