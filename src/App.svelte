@@ -21,6 +21,7 @@
   import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
   import { rafraichirLlm } from "./lib/stores/llm";
+  import { surveillerLeRendu } from "./lib/stores/sante";
 
   // Ctrl+molette = zoom, y compris au-dessus d'un terminal.
   // Capture + passive:false : xterm ecoute aussi `wheel` pour faire defiler son
@@ -95,6 +96,9 @@
   }
 
   onMount(() => {
+    // En premier : si la page cesse de se peindre, on veut que le journal le dise, y compris
+    // pour un gel survenu pendant le demarrage.
+    surveillerLeRendu();
     void appliquerLaLangueImposee();
     // Le fournisseur d'IA choisi, lu UNE fois : le bouton des conversations et l'onglet
     // Plugins le lisent dans le magasin plutot que de le redemander chacun.

@@ -1049,6 +1049,14 @@ async fn machine_report() -> report::MachineInfo {
         .unwrap_or_else(|_| report::machine_info().clone())
 }
 
+/// La page rend compte de sa sante : combien d'images elle a dessinees depuis son dernier
+/// passage. Zero avec un appel qui arrive quand meme veut dire que le JavaScript tourne et
+/// que rien n'est peint — voir `guetteur`.
+#[tauri::command]
+async fn sante_page(images: u32) {
+    guetteur::signe_de_la_page(images);
+}
+
 #[tauri::command]
 async fn debug_log(line: String) {
     use std::io::Write;
@@ -1804,6 +1812,7 @@ pub fn run() {
             rename_terminal,
             list_terminals,
             list_all_terminals,
+            sante_page,
             set_clipboard,
             get_clipboard,
             terminal_search,
