@@ -140,6 +140,103 @@ fn path_du_shell() -> Option<String> {
     None
 }
 
+
+// ─── L'environnement du shell de connexion ────────────────────────────────────────────────
+//
+// **MEME FAMILLE QUE LE PATH, ET CA A COUTE DES ERREURS DOCKER CHEZ PLUSIEURS UTILISATEURS.**
+// Une application lancee depuis un menu de bureau n'a pas lu les fichiers de demarrage du
+// shell : les variables que l'utilisateur y exporte n'existent pas pour elle. Mesure du
+// 2026-08-28 sur une application qui tournait : `CCM_SPHINX_DIR`, `NPM_TOKEN` et
+// `COMPOSER_AUTH` etaient dans le `.zshrc`, et ABSENTES des trois. `docker compose` recevait
+// donc un volume `${CCM_SPHINX_DIR}:/mnt/sphinxsearch` avec une variable vide, et refusait :
+// « invalid spec: :/mnt/sphinxsearch: empty section between colons ». La meme commande tapee
+// dans un terminal marchait — d'ou une panne incomprehensible vue de l'utilisateur.
+
+/// Les variables du shell de connexion, demandees une seule fois.
+static ENV_DU_SHELL: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+/// Ce qu'on n'injecte JAMAIS : ces variables decrivent l'etat du shell qui a repondu, pas
+/// l'environnement de travail. `PATH` est traite a part, plus haut dans ce fichier.
+const JAMAIS_INJECTEES: &[&str] = &["PWD", "OLDPWD", "SHLVL", "_", "PATH"];
+
+#[cfg(unix)]
+fn lire_env_du_shell() -> Vec<(String, String)> {
+    let Some(shell) = std::env::var("SHELL").ok().filter(|s| !s.is_empty()) else {
+        return vec![];
+    };
+    // `env -0` et non `env` : une valeur peut contenir un retour a la ligne — `COMPOSER_AUTH`
+    // est du JSON — et un decoupage sur les lignes en perdrait la moitie.
+    let Ok(sortie) = std::process::Command::new(shell)
+        .sans_console()
+        .args(["-lc", "env -0"])
+        .output()
+    else {
+        return vec![];
+    };
+    if !sortie.status.success() {
+        return vec![];
+    }
+    String::from_utf8_lossy(&sortie.stdout)
+        .split('\0')
+        .filter(|entree| !entree.is_empty())
+        .filter_map(|entree| entree.split_once('='))
+        .map(|(nom, valeur)| (nom.to_string(), valeur.to_string()))
+        .collect()
+}
+
+/// Windows n'a pas de shell de connexion qui exporte un environnement : celui du processus est
+/// deja celui de la session.
+#[cfg(windows)]
+fn lire_env_du_shell() -> Vec<(String, String)> {
+    vec![]
+}
+
+/// Ce qu'il faut AJOUTER a notre environnement pour ressembler a celui du shell.
+///
+/// **On ajoute, on ne remplace jamais.** Une variable que nous avons deja posee — `LD_PRELOAD`
+/// pour le contournement de l'AppImage, `GTK_IM_MODULE` pour les accents, `FONTCONFIG_FILE` —
+/// serait ecrasee par celle du shell, et deux contournements documentes tomberaient d'un coup.
+/// Pur, donc verifiable sans lancer de shell.
+fn a_ajouter<'a>(
+    du_shell: &'a [(String, String)],
+    deja_presente: impl Fn(&str) -> bool,
+) -> Vec<(&'a str, &'a str)> {
+    du_shell
+        .iter()
+        .filter(|(nom, _)| !JAMAIS_INJECTEES.contains(&nom.as_str()))
+        .filter(|(nom, _)| !deja_presente(nom))
+        .map(|(nom, valeur)| (nom.as_str(), valeur.as_str()))
+        .collect()
+}
+
+fn env_du_shell() -> &'static [(String, String)] {
+    ENV_DU_SHELL.get().map(|v| v.as_slice()).unwrap_or(&[])
+}
+
+/// Complete l'environnement d'un processus enfant avec ce que le shell de connexion definit et
+/// que nous n'avons pas.
+pub trait EnvDuShell {
+    fn avec_env_du_shell(&mut self) -> &mut Self;
+}
+
+impl EnvDuShell for std::process::Command {
+    fn avec_env_du_shell(&mut self) -> &mut Self {
+        for (nom, valeur) in a_ajouter(env_du_shell(), |n| std::env::var_os(n).is_some()) {
+            self.env(nom, valeur);
+        }
+        self
+    }
+}
+
+impl EnvDuShell for tokio::process::Command {
+    fn avec_env_du_shell(&mut self) -> &mut Self {
+        for (nom, valeur) in a_ajouter(env_du_shell(), |n| std::env::var_os(n).is_some()) {
+            self.env(nom, valeur);
+        }
+        self
+    }
+}
+
 /// A appeler UNE fois au demarrage : remplit la liste en tache de fond.
 ///
 /// Tant qu'elle n'est pas prete, `chemin_du_programme` se debrouille avec le PATH du processus
@@ -153,6 +250,12 @@ pub fn precharger_les_chemins() {
         let liste = assembler(du_shell.as_deref(), du_processus.as_deref(), maison.as_deref());
         if CHEMINS.set(liste).is_err() {
             log::debug!("les chemins de recherche etaient deja connus");
+        }
+        // Le meme fil, une seconde interrogation du shell : les variables qu'il exporte. Sans
+        // elles, un fichier compose qui s'appuie sur une variable d'environnement echoue ici
+        // alors qu'il marche dans un terminal.
+        if ENV_DU_SHELL.set(lire_env_du_shell()).is_err() {
+            log::debug!("l'environnement du shell etait deja connu");
         }
     });
 }
@@ -202,6 +305,47 @@ pub fn chemin_du_programme(nom: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Ce qui protege les contournements documentes : une variable que NOUS avons deja posee
+    /// ne doit jamais etre remplacee par celle du shell. `LD_PRELOAD` (AppImage) et
+    /// `GTK_IM_MODULE` (accents) tomberaient tous les deux, et ce sont huit iterations de
+    /// diagnostic chacun.
+    #[test]
+    fn on_complete_l_environnement_sans_jamais_ecraser_le_notre() {
+        let du_shell = vec![
+            ("CCM_SPHINX_DIR".to_string(), "/srv/sphinx".to_string()),
+            ("LD_PRELOAD".to_string(), "/usr/lib/celui-du-shell.so".to_string()),
+            ("PWD".to_string(), "/home/qui-que-ce-soit".to_string()),
+            ("PATH".to_string(), "/celui-du-shell".to_string()),
+            ("SHLVL".to_string(), "3".to_string()),
+        ];
+        // On fait comme si LD_PRELOAD etait deja posee par nous, et pas les autres.
+        let ajouts = a_ajouter(&du_shell, |nom| nom == "LD_PRELOAD");
+
+        assert!(
+            ajouts.contains(&("CCM_SPHINX_DIR", "/srv/sphinx")),
+            "une variable du shell qui nous manque doit etre ajoutee : {ajouts:?}"
+        );
+        for interdit in ["LD_PRELOAD", "PWD", "PATH", "SHLVL"] {
+            assert!(
+                !ajouts.iter().any(|(nom, _)| *nom == interdit),
+                "{interdit} n'a rien a faire dans les ajouts : {ajouts:?}"
+            );
+        }
+    }
+
+    /// Une valeur peut contenir un retour a la ligne — `COMPOSER_AUTH` est du JSON. C'est la
+    /// raison du `env -0` : un decoupage sur les lignes couperait la valeur en deux.
+    #[test]
+    fn une_valeur_multiligne_reste_entiere() {
+        let du_shell = vec![(
+            "COMPOSER_AUTH".to_string(),
+            "{\n  \"http-basic\": {}\n}".to_string(),
+        )];
+        let ajouts = a_ajouter(&du_shell, |_| false);
+        assert_eq!(ajouts.len(), 1);
+        assert!(ajouts[0].1.contains('\n'), "la valeur a ete tronquee : {:?}", ajouts[0]);
+    }
     use super::*;
 
     /// Le contrat est le meme sur les deux familles de commande, et l'appel doit rester

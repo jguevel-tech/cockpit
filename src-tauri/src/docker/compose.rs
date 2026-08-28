@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
 
-use crate::commande::SansConsole;
+use crate::commande::{EnvDuShell, SansConsole};
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 const PS_TIMEOUT: Duration = Duration::from_secs(30);
@@ -21,27 +21,39 @@ pub struct ContainerStatus {
 #[derive(Debug, Clone)]
 pub struct Compose {
     pub project_dir: PathBuf,
-    pub compose_file: String,
+    /// Ce que l'utilisateur a retenu PARMI les fichiers detectes, ou une chaine vide. Ce n'est
+    /// pas le fichier utilise : celui-la se demande a `fichier()`, qui regarde le disque.
+    pub choix: String,
 }
 
 impl Compose {
-    pub fn new(project_dir: &str, compose_file: &str) -> Self {
-        Self {
-            project_dir: PathBuf::from(project_dir),
-            compose_file: compose_file.to_string(),
-        }
+    /// `choix` est ce que l'utilisateur a retenu PARMI les fichiers detectes, ou une chaine
+    /// vide. Personne ne saisit plus de chemin : la detection decide (`super::detection`).
+    ///
+    /// **Un choix qui ne designe plus rien est ignore, pas honore.** Un fichier renomme ou
+    /// supprime rendait sinon l'onglet inutilisable, avec un message qui renvoyait vers un
+    /// champ de parametres — champ qui n'existe plus.
+    pub fn new(project_dir: &str, choix: &str) -> Self {
+        Self { project_dir: PathBuf::from(project_dir), choix: choix.to_string() }
+    }
+
+    /// Le fichier a utiliser, DEMANDE AU DISQUE a chaque fois.
+    ///
+    /// **Ce n'est pas resolu une fois pour toutes, et c'est deliberе.** Un objet `Compose` vit
+    /// aussi longtemps que l'orchestrateur : figer la reponse a la construction faisait qu'un
+    /// fichier compose cree apres le demarrage de l'application n'etait JAMAIS vu. Un essai le
+    /// tient (`has_compose_suit_l_apparition_du_fichier`), et il a rattrape exactement ca.
+    /// Le cout reste nul dans le cas courant : la detection regarde la racine, et ne memorise
+    /// que la descente.
+    fn fichier(&self) -> Option<String> {
+        Some(self.choix.as_str())
+            .filter(|c| !c.is_empty() && self.project_dir.join(c).is_file())
+            .map(|c| c.to_string())
+            .or_else(|| super::detection::choisir(&self.project_dir))
     }
 
     pub fn has_compose_file(&self) -> bool {
-        if !self.compose_file.is_empty() {
-            return self.project_dir.join(&self.compose_file).exists();
-        }
-        for name in &["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"] {
-            if self.project_dir.join(name).exists() {
-                return true;
-            }
-        }
-        false
+        self.fichier().is_some()
     }
 
     /// Garde a passer AVANT toute commande compose qui AGIT (up/down). Sans elle, docker
@@ -53,24 +65,26 @@ impl Compose {
         if self.has_compose_file() {
             return Ok(());
         }
-        if !self.compose_file.is_empty() {
-            return Err(format!(
-                "fichier compose introuvable : {} (renseigne dans les parametres du projet)",
-                self.project_dir.join(&self.compose_file).display()
-            ));
-        }
         Err(format!(
-            "aucun fichier compose dans {} — placez un docker-compose.yml dans le dossier, \
-             ou indiquez son nom dans Parametres du projet",
+            "aucun fichier compose trouve dans {} — Cockpit cherche les noms de docker \
+             (compose.yml, docker-compose.yml), leurs variantes suffixees \
+             (docker-compose.local.yml) et les sous-dossiers habituels sur trois niveaux",
             self.project_dir.display()
         ))
     }
 
     fn base_args(&self) -> Vec<String> {
         let mut args = vec!["compose".to_string()];
-        if !self.compose_file.is_empty() {
-            args.push("-f".to_string());
-            args.push(self.compose_file.clone());
+        // **Pas de `-f` sur un nom que docker connait deja.** Le passer desactive ses regles a
+        // lui, dont la fusion automatique de `docker-compose.override.yml` : une pile qui
+        // marchait en ligne de commande arriverait ici incomplete, sans que rien ne le dise.
+        if let Some(fichier) = self.fichier() {
+            let canonique =
+                super::detection::NOMS_CANONIQUES.contains(&fichier.to_lowercase().as_str());
+            if !canonique {
+                args.push("-f".to_string());
+                args.push(fichier);
+            }
         }
         args
     }
@@ -82,6 +96,7 @@ impl Compose {
         let output = tokio::time::timeout(COMMAND_TIMEOUT, async {
             Command::new("docker")
                 .sans_console()
+                .avec_env_du_shell()
                 .args(&args)
                 .current_dir(&self.project_dir)
                 .stdout(Stdio::piped())
@@ -107,6 +122,7 @@ impl Compose {
         let output = tokio::time::timeout(COMMAND_TIMEOUT, async {
             Command::new("docker")
                 .sans_console()
+                .avec_env_du_shell()
                 .args(&args)
                 .current_dir(&self.project_dir)
                 .stdout(Stdio::piped())
@@ -132,6 +148,7 @@ impl Compose {
         let output = tokio::time::timeout(PS_TIMEOUT, async {
             Command::new("docker")
                 .sans_console()
+                .avec_env_du_shell()
                 .args(&args)
                 .current_dir(&self.project_dir)
                 .stdout(Stdio::piped())
@@ -190,6 +207,7 @@ pub async fn ps_by_working_dir(project_dir: &std::path::Path) -> Result<Vec<Cont
     let output = tokio::time::timeout(PS_TIMEOUT, async {
         Command::new("docker")
             .sans_console()
+            .avec_env_du_shell()
             .args(["ps", "--format", "json", "--filter", &filter])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -297,11 +315,21 @@ mod tests {
         assert!(err.contains("docker-compose.yml"), "message sans remede : {}", err);
     }
 
+    /// Un choix qui ne designe plus rien ne doit pas condamner l'onglet : la detection reprend
+    /// la main. Avant, le message renvoyait vers un champ des parametres — champ supprime, donc
+    /// un conseil impossible a suivre.
     #[test]
-    fn require_compose_file_signale_un_nom_configure_absent() {
-        let c = Compose::new("/nonexistent", "stack.yml");
-        let err = c.require_compose_file().unwrap_err();
-        assert!(err.contains("stack.yml"), "message sans le nom configure : {}", err);
+    fn un_choix_devenu_faux_est_ignore_et_la_detection_reprend() {
+        let dir = std::env::temp_dir().join(format!("cockpit_choix_faux_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+
+        let c = Compose::new(dir.to_str().unwrap(), "stack-qui-nexiste-plus.yml");
+        assert!(c.require_compose_file().is_ok());
+        assert_eq!(c.fichier().as_deref(), Some("docker-compose.yml"));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

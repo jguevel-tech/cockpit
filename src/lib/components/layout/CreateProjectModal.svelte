@@ -24,7 +24,6 @@
 
   let name = $state("");
   let path = $state("");
-  let composeFile = $state("");
   let description = $state("");
   let dependsOn = $state("");
   let error = $state("");
@@ -33,7 +32,6 @@
   function reset() {
     name = "";
     path = "";
-    composeFile = "";
     description = "";
     dependsOn = "";
     error = "";
@@ -75,7 +73,7 @@
       .filter(d => d.length > 0);
 
     try {
-      await addProject(trimmedName, path.trim(), composeFile.trim(), description.trim(), deps);
+      await addProject(trimmedName, path.trim(), "", description.trim(), deps);
       await loadProjects();
       selectProject(trimmedName);
       // Onglet d'arrivee pose explicitement : un projet neuf n'a ni compose ni depot git, et
@@ -118,10 +116,6 @@
         </div>
       </label>
 
-      <label>
-        <span>{$trad("newProject.composeFile")} <span class="optional">{$trad("common.optional")}</span></span>
-        <input type="text" bind:value={composeFile} placeholder="docker-compose.yml" disabled={!path.trim()} />
-      </label>
 
       <label>
         <span>{$trad("newProject.description")} <span class="optional">{$trad("common.optional")}</span></span>

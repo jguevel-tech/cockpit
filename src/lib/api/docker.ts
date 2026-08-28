@@ -23,3 +23,15 @@ export const removeDockerVolume = (name: string) => invoke("remove_docker_volume
 export const removeDockerImage = (id: string) => invoke("remove_docker_image", { id });
 export const dockerPrune = (target: "containers" | "images" | "images_all" | "volumes" | "builder") =>
   invoke<string>("docker_prune", { target });
+
+export type ComposeDetecte = {
+  /** Le fichier utilise, relatif au dossier du projet. Vide si le projet n'en a aucun. */
+  retenu: string;
+  /** Tout ce qui a ete trouve, le plus probable d'abord. */
+  candidats: string[];
+  /** Le fichier vient-il d'un choix de l'utilisateur, ou de la detection seule ? */
+  choisi_a_la_main: boolean;
+};
+
+export const composeDetecte = (name: string, rafraichir = false) =>
+  invoke<ComposeDetecte>("docker_compose_detecte", { name, rafraichir });

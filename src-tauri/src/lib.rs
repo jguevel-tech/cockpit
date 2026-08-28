@@ -516,6 +516,48 @@ async fn resolve_db_project_name(state: &tauri::State<'_, AppState>, display_nam
     display_name.to_string()
 }
 
+/// Ce que Cockpit a trouve comme fichier compose dans un projet.
+///
+/// Le frontend n'invente rien : il AFFICHE ce que la detection a decide, et ne propose de
+/// changer que parmi ce qui existe reellement sur le disque. C'est ce qui remplace le champ ou
+/// l'on saisissait un chemin — un chemin saisi peut etre faux, une liste detectee non.
+#[derive(serde::Serialize)]
+struct ComposeDetecte {
+    /// Le fichier utilise, relatif au dossier du projet. Vide si le projet n'en a aucun.
+    retenu: String,
+    /// Tout ce qui a ete trouve, le plus probable d'abord.
+    candidats: Vec<String>,
+    /// Le fichier vient-il d'un choix de l'utilisateur, ou de la detection seule ?
+    choisi_a_la_main: bool,
+}
+
+#[tauri::command]
+async fn docker_compose_detecte(
+    name: String,
+    rafraichir: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<ComposeDetecte, String> {
+    let db_name = resolve_db_project_name(&state, &name).await;
+    let projet = state.db.get_project_by_name(&db_name)?;
+    let racine = std::path::PathBuf::from(&projet.path);
+
+    // Un geste explicite de l'utilisateur doit voir l'etat du disque MAINTENANT, pas celui
+    // d'il y a dix secondes : un fichier compose qu'on vient de creer apparait tout de suite.
+    if rafraichir {
+        docker::detection::oublier(&racine);
+    }
+
+    let candidats = docker::detection::candidats(&racine);
+    let choisi = !projet.compose_file.is_empty()
+        && racine.join(&projet.compose_file).is_file();
+    let retenu = if choisi {
+        projet.compose_file.clone()
+    } else {
+        candidats.first().cloned().unwrap_or_default()
+    };
+    Ok(ComposeDetecte { retenu, candidats, choisi_a_la_main: choisi })
+}
+
 #[tauri::command]
 async fn get_project_settings(name: String, state: tauri::State<'_, AppState>) -> Result<storage::Project, String> {
     let db_name = resolve_db_project_name(&state, &name).await;
@@ -1813,6 +1855,7 @@ pub fn run() {
             list_terminals,
             list_all_terminals,
             sante_page,
+            docker_compose_detecte,
             set_clipboard,
             get_clipboard,
             terminal_search,

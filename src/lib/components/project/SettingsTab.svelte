@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getProjectSettings, updateProjectSettings, deleteDbProject } from "../../api/scanner";
+  import { composeDetecte, type ComposeDetecte } from "../../api/docker";
   import { getProjectSummaryPrompt, setProjectSummaryPrompt } from "../../api/recorder";
   import { loadProjects } from "../../stores/projects";
   import { notify } from "../../stores/toast";
@@ -17,6 +18,8 @@
   let settings: DbProject | null = $state(null);
   let path = $state("");
   let composeFile = $state("");
+  let detection: ComposeDetecte | null = $state(null);
+  let relecture = $state(false);
   let description = $state("");
   let dependsOnStr = $state("");
   let summaryPrompt = $state("");
@@ -31,7 +34,24 @@
       dependsOnStr = settings.depends_on.join(", ");
     } catch (e) { notify($trad("projectSettings.loadFailed", { error: String(e) })); }
     try { summaryPrompt = (await getProjectSummaryPrompt(name)) ?? ""; } catch (e) { notify(String(e)); }
+    await relireLaDetection();
   });
+
+  // Ce qui a remplace le champ ou l'on saisissait un chemin : on AFFICHE ce qui a ete trouve, et
+  // on ne propose de changer que parmi ce qui existe vraiment sur le disque.
+  async function relireLaDetection(rafraichir = false) {
+    relecture = rafraichir;
+    try {
+      detection = await composeDetecte(name, rafraichir);
+      // Un ancien chemin saisi a la main qui ne designe plus rien est nettoye : sinon il
+      // repartirait en base a chaque enregistrement, sans jamais servir a personne.
+      if (!detection.choisi_a_la_main) composeFile = "";
+    } catch (e) {
+      signalerErreur("projet.composeDetecte", String(e));
+    } finally {
+      relecture = false;
+    }
+  }
 
   async function save() {
     saving = true;
@@ -72,10 +92,28 @@
         <input type="text" bind:value={path} />
       </label>
 
-      <label>
-        {$trad("projectSettings.composeFile")}
-        <input type="text" bind:value={composeFile} placeholder="docker-compose.yml" />
-      </label>
+      <div class="compose">
+        <span class="compose-titre">{$trad("projectSettings.composeFile")}</span>
+        {#if detection && detection.retenu}
+          <p class="compose-retenu"><code>{detection.retenu}</code></p>
+          {#if detection.candidats.length > 1}
+            <label class="compose-choix">
+              {$trad("projectSettings.composeChoisir")}
+              <select bind:value={composeFile}>
+                <option value="">{$trad("projectSettings.composeAuto", { fichier: detection.candidats[0] })}</option>
+                {#each detection.candidats as candidat (candidat)}
+                  <option value={candidat}>{candidat}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+        {:else}
+          <p class="compose-vide">{$trad("projectSettings.composeAucun")}</p>
+        {/if}
+        <button class="btn-relire" onclick={() => relireLaDetection(true)} disabled={relecture}>
+          {relecture ? $trad("projectSettings.composeRelecture") : $trad("projectSettings.composeRelire")}
+        </button>
+      </div>
 
       <label>
         {$trad("projectSettings.description")}
@@ -130,6 +168,29 @@
     background: var(--bg-secondary); color: var(--text-primary);
   }
   textarea { resize: vertical; }
+  /* Le fichier compose ne se saisit plus : il se constate. Le bloc a la meme place et le
+     meme rythme que les champs voisins, pour que l'oeil ne cherche pas. */
+  .compose { margin-bottom: 0.75rem; }
+  .compose-titre { display: block; font-size: 0.85rem; color: var(--text-secondary); }
+  .compose-retenu { margin: 0.3rem 0 0; }
+  .compose-retenu code {
+    padding: 0.15rem 0.4rem; border-radius: 4px;
+    background: var(--bg-tertiary); color: var(--text-primary); font-size: 0.85rem;
+  }
+  .compose-vide { margin: 0.3rem 0 0; font-size: 0.85rem; color: var(--text-tertiary); }
+  .compose-choix { margin: 0.6rem 0 0; }
+  select {
+    display: block; width: 100%; margin-top: 0.25rem; padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;
+    background: var(--bg-secondary); color: var(--text-primary);
+  }
+  .btn-relire {
+    margin-top: 0.5rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+  }
+  .btn-relire:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
+  .btn-relire:disabled { cursor: default; opacity: 0.6; }
   .btn-save {
     padding: 0.5rem 1.2rem; background: var(--accent); color: white; border: none;
     border-radius: 6px; cursor: pointer; font-size: 0.9rem;

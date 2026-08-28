@@ -12,6 +12,24 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- Plus besoin d'indiquer le fichier compose d'un projet : Cockpit le trouve seul. Il reconnaît
+  les noms de docker, leurs variantes suffixées (`docker-compose.local.yml`) et les
+  sous-dossiers habituels sur trois niveaux. Les paramètres du projet affichent le fichier
+  retenu et permettent d'en choisir un autre quand il y en a plusieurs — parmi ceux qui existent
+  vraiment. Le champ où l'on saisissait un chemin a disparu, à la création comme dans les
+  paramètres.
+
+### Fixed
+
+- Les commandes Docker s'exécutaient sans les variables d'environnement définies dans votre
+  shell. Un fichier compose qui s'appuie sur l'une d'elles échouait donc dans Cockpit alors que
+  la même commande marchait dans un terminal, sur un message incompréhensible du genre
+  « invalid spec: :/mnt/data: empty section between colons ».
+- Deux définitions différentes de « fichier compose » cohabitaient : un projet pouvait être
+  reconnu à sa création, puis déclaré sans compose au moment de le démarrer.
+
 ## [0.53.5] — 2026-08-28
 
 ### Changed

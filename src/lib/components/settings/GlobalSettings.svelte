@@ -626,13 +626,12 @@
             <p>{$trad("settings.projects.subtitle")}</p>
           </div>
           <table>
-            <thead><tr><th>{$trad("settings.projects.colName")}</th><th>{$trad("settings.projects.colPath")}</th><th>{$trad("settings.projects.colCompose")}</th><th></th></tr></thead>
+            <thead><tr><th>{$trad("settings.projects.colName")}</th><th>{$trad("settings.projects.colPath")}</th><th></th></tr></thead>
             <tbody>
               {#each dbProjects as p (p.id)}
                 <tr>
                   <td class="name-cell">{p.name}</td>
                   <td class="path-cell">{p.path}</td>
-                  <td>{p.compose_file || '—'}</td>
                   <td class="actions-cell">
                     <button class="btn danger small" onclick={() => doDelete(p.id, p.name)}>{$trad("common.delete")}</button>
                   </td>

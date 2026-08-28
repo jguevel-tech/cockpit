@@ -10,13 +10,6 @@ pub struct ScanResult {
     pub has_dockerfile: bool,
 }
 
-const COMPOSE_PATTERNS: &[&str] = &[
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yml",
-    "compose.yaml",
-];
-
 pub fn scan(dir_path: &str) -> Result<ScanResult, String> {
     let path = Path::new(dir_path);
     if !path.is_dir() {
@@ -48,19 +41,11 @@ pub fn scan(dir_path: &str) -> Result<ScanResult, String> {
         let fname = entry.file_name().to_string_lossy().to_string();
         let lower = fname.to_lowercase();
 
-        // Standard compose files
-        for pattern in COMPOSE_PATTERNS {
-            if lower == *pattern {
-                result.compose_files.push(fname.clone());
-            }
-        }
-
-        // Compose files with suffix (docker-compose.local.yml, etc.)
-        if lower.starts_with("docker-compose.")
-            && lower != "docker-compose.yml"
-            && lower != "docker-compose.yaml"
-            && (lower.ends_with(".yml") || lower.ends_with(".yaml"))
-        {
+        // **UNE SEULE REGLE DECIDE de ce qu'est un fichier compose**, et elle vit dans
+        // `docker::detection`. Ce fichier en portait une seconde, plus etroite : un projet
+        // reconnu ici pouvait etre declare sans compose par l'onglet Docker, et inversement.
+        // Deux listes pour une meme question, c'est la garantie qu'elles divergent.
+        if crate::docker::detection::est_un_fichier_compose(&fname) {
             result.compose_files.push(fname.clone());
         }
 
@@ -68,6 +53,8 @@ pub fn scan(dir_path: &str) -> Result<ScanResult, String> {
             result.has_dockerfile = true;
         }
     }
+
+    result.compose_files = crate::docker::detection::classer(result.compose_files);
 
     Ok(result)
 }
