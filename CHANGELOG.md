@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.0] — 2026-08-28
+
 ### Changed
 
 - Plus besoin d'indiquer le fichier compose d'un projet : Cockpit le trouve seul. Il reconnaît
