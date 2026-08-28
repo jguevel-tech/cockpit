@@ -1,6 +1,6 @@
 {
   "name": "cockpit",
-  "version": "0.53.4",
+  "version": "0.53.5",
   "private": true,
   "type": "module",
   "scripts": {

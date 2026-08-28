@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.53.5] — 2026-08-28
+
 ### Changed
 
 - Amélioration des journaux techniques.
