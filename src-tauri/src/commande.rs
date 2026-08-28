@@ -115,22 +115,18 @@ fn assembler(du_shell: Option<&str>, du_processus: Option<&str>, maison: Option<
 
 /// Demande son PATH au shell de connexion. `None` quand on n'a pas su.
 ///
-/// UN SEUL lancement de processus, au demarrage et hors du fil de l'interface : un shell de
-/// connexion avec beaucoup de fichiers de configuration met facilement une demi-seconde, et
-/// figer l'interface pour savoir ou vit un programme serait absurde.
+/// Le PATH que le shell de connexion exporte, extrait de son environnement.
+///
+/// Il se lisait par une SECONDE interrogation du shell, en mode non interactif : elle ne voyait
+/// donc pas ce que `~/.zshrc` ajoute au PATH. Une seule interrogation desormais, et elle est
+/// interactive.
 #[cfg(unix)]
 fn path_du_shell() -> Option<String> {
-    let shell = std::env::var("SHELL").ok().filter(|s| !s.is_empty())?;
-    let sortie = std::process::Command::new(shell)
-        .sans_console()
-        .args(["-lc", "printf %s \"$PATH\""])
-        .output()
-        .ok()?;
-    if !sortie.status.success() {
-        return None;
-    }
-    let lu = String::from_utf8_lossy(&sortie.stdout).trim().to_string();
-    (!lu.is_empty()).then_some(lu)
+    env_du_shell()
+        .iter()
+        .find(|(nom, _)| nom == "PATH")
+        .map(|(_, valeur)| valeur.clone())
+        .filter(|v| !v.is_empty())
 }
 
 /// Windows n'a pas de shell de connexion qui exporte un PATH : le PATH du processus est deja
@@ -159,29 +155,104 @@ static ENV_DU_SHELL: OnceLock<Vec<(String, String)>> = OnceLock::new();
 /// l'environnement de travail. `PATH` est traite a part, plus haut dans ce fichier.
 const JAMAIS_INJECTEES: &[&str] = &["PWD", "OLDPWD", "SHLVL", "_", "PATH"];
 
+/// Le marqueur qui separe le bruit de configuration des variables.
+///
+/// Un shell INTERACTIF a le droit d'ecrire : banniere, message de gestionnaire de plugins,
+/// invite. Sans repere, ce bruit se collerait a la premiere variable lue.
+// Sous Windows, rien ne lit ceci : il n'y a pas de shell de connexion a interroger. On garde
+// pourtant le code compile partout, parce que l'analyse est PORTABLE et tenue par des essais qui
+// tournent sur les deux cibles — les faire disparaitre sous Windows y supprimerait leur couverture.
+#[cfg_attr(windows, allow(dead_code))]
+const MARQUEUR: &str = "@@COCKPIT@@";
+
+/// Combien de temps on laisse au shell. Au-dela, on le tue.
+///
+/// Un shell interactif charge beaucoup de choses, et certains gestionnaires de plugins
+/// interrogent le reseau au demarrage. Sans borne, un fil et un processus resteraient coinces
+/// pour toute la duree de la session.
+#[cfg(unix)]
+const DELAI_SHELL: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Analyse ce que le shell a repondu. Pure, donc verifiable sans lancer de shell.
+///
+/// Deux separateurs acceptes : l'octet nul (`env -0`, ce que rend Linux) et le retour a la
+/// ligne (repli pour les `env` qui ignorent `-0`, dont celui de macOS). Une entree qui ne
+/// ressemble pas a `NOM=...` est jetee : c'est ce qui protege du bruit restant.
+#[cfg_attr(windows, allow(dead_code))]
+fn analyser_env(sortie: &[u8]) -> Vec<(String, String)> {
+    let texte = String::from_utf8_lossy(sortie);
+    // Tout ce qui precede le marqueur est du bruit de configuration.
+    let utile = match texte.split_once(MARQUEUR) {
+        Some((_, apres)) => apres,
+        None => texte.as_ref(),
+    };
+    let separateur = if utile.contains('\0') { '\0' } else { '\n' };
+    utile
+        .split(separateur)
+        .filter_map(|entree| entree.split_once('='))
+        .filter(|(nom, _)| {
+            !nom.is_empty()
+                && nom.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !nom.chars().next().is_some_and(|c| c.is_ascii_digit())
+        })
+        .map(|(nom, valeur)| (nom.to_string(), valeur.to_string()))
+        .collect()
+}
+
+/// Demande au shell de connexion, EN MODE INTERACTIF, tout ce qu'il exporte.
+///
+/// **`-lic` ET PAS `-lc`, ET CA A COUTE UNE RELEASE POUR RIEN.** zsh ne lit `~/.zshrc` que
+/// pour un shell INTERACTIF ; un shell de connexion non interactif ne lit que `.zshenv`,
+/// `.zprofile` et `.zlogin`. Or c'est dans `.zshrc` que la plupart des gens ecrivent leurs
+/// `export`. Mesure du 2026-08-28 avec l'environnement reel de l'application : `-lc` rendait
+/// 70 variables et AUCUNE des trois attendues, `-lic` en rendait 97 et les trois. Le meme
+/// piege valait pour la recherche des CLI, qui ne trouvait pas ce que `.zshrc` ajoute au PATH.
 #[cfg(unix)]
 fn lire_env_du_shell() -> Vec<(String, String)> {
     let Some(shell) = std::env::var("SHELL").ok().filter(|s| !s.is_empty()) else {
         return vec![];
     };
-    // `env -0` et non `env` : une valeur peut contenir un retour a la ligne — `COMPOSER_AUTH`
-    // est du JSON — et un decoupage sur les lignes en perdrait la moitie.
-    let Ok(sortie) = std::process::Command::new(shell)
+    // `env -0` d'abord — les valeurs peuvent contenir un retour a la ligne, `COMPOSER_AUTH`
+    // est du JSON — avec un repli sur `env` la ou `-0` n'existe pas.
+    // `command` devant chacun : en mode INTERACTIF les alias et les fonctions du shell sont
+    // actifs, et un alias sur `env` ou `printf` — ca existe — casserait la lecture.
+    let ordre =
+        format!("command printf %s '{MARQUEUR}'; command env -0 2>/dev/null || command env");
+    let mut enfant = match std::process::Command::new(shell)
         .sans_console()
-        .args(["-lc", "env -0"])
-        .output()
-    else {
-        return vec![];
+        .args(["-lic", &ordre])
+        // Un shell interactif ne doit RIEN pouvoir attendre sur son entree.
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    {
+        Ok(enfant) => enfant,
+        Err(_) => return vec![],
     };
-    if !sortie.status.success() {
-        return vec![];
+
+    let debut = std::time::Instant::now();
+    loop {
+        match enfant.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if debut.elapsed() < DELAI_SHELL => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            // Depasse, ou impossible a interroger : on ne laisse pas un shell derriere nous.
+            _ => {
+                let _ = enfant.kill();
+                let _ = enfant.wait();
+                return vec![];
+            }
+        }
     }
-    String::from_utf8_lossy(&sortie.stdout)
-        .split('\0')
-        .filter(|entree| !entree.is_empty())
-        .filter_map(|entree| entree.split_once('='))
-        .map(|(nom, valeur)| (nom.to_string(), valeur.to_string()))
-        .collect()
+
+    let mut sortie = Vec::new();
+    if let Some(mut flux) = enfant.stdout.take() {
+        use std::io::Read;
+        let _ = flux.read_to_end(&mut sortie);
+    }
+    analyser_env(&sortie)
 }
 
 /// Windows n'a pas de shell de connexion qui exporte un environnement : celui du processus est
@@ -244,18 +315,16 @@ impl EnvDuShell for tokio::process::Command {
 /// une fraction de seconde plus tard.
 pub fn precharger_les_chemins() {
     std::thread::spawn(|| {
+        // L'environnement EN PREMIER : les chemins s'y lisent maintenant.
+        if ENV_DU_SHELL.set(lire_env_du_shell()).is_err() {
+            log::debug!("l'environnement du shell etait deja connu");
+        }
         let du_shell = path_du_shell();
         let du_processus = std::env::var("PATH").ok();
         let maison = crate::chemins::dossier_personnel().ok();
         let liste = assembler(du_shell.as_deref(), du_processus.as_deref(), maison.as_deref());
         if CHEMINS.set(liste).is_err() {
             log::debug!("les chemins de recherche etaient deja connus");
-        }
-        // Le meme fil, une seconde interrogation du shell : les variables qu'il exporte. Sans
-        // elles, un fichier compose qui s'appuie sur une variable d'environnement echoue ici
-        // alors qu'il marche dans un terminal.
-        if ENV_DU_SHELL.set(lire_env_du_shell()).is_err() {
-            log::debug!("l'environnement du shell etait deja connu");
         }
     });
 }
@@ -305,6 +374,35 @@ pub fn chemin_du_programme(nom: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Le bruit d'un shell interactif ne doit pas se coller a la premiere variable : c'est le
+    /// role du marqueur, et sans essai on ne saurait pas s'il sert encore.
+    #[test]
+    fn le_bruit_de_configuration_est_jete() {
+        let sortie = format!(
+            "Bienvenue !\nplugins charges\n{MARQUEUR}PATH=/bin\0HOME=/home/qui\0"
+        );
+        let lu = analyser_env(sortie.as_bytes());
+        assert_eq!(lu.len(), 2, "lu : {lu:?}");
+        assert_eq!(lu[0], ("PATH".to_string(), "/bin".to_string()));
+    }
+
+    /// Le repli pour un `env` qui ignore `-0` : on decoupe sur les lignes. Une entree qui ne
+    /// ressemble pas a un nom de variable est jetee plutot que collee a la precedente.
+    #[test]
+    fn le_repli_sur_les_lignes_ne_ramasse_pas_n_importe_quoi() {
+        let sortie = format!("{MARQUEUR}PATH=/bin\nceci n'est pas une variable\nHOME=/home/qui\n");
+        let lu = analyser_env(sortie.as_bytes());
+        assert_eq!(lu.len(), 2, "lu : {lu:?}");
+        assert!(lu.iter().any(|(n, _)| n == "HOME"));
+    }
+
+    /// Une sortie sans marqueur reste lisible : un shell peut tres bien ne rien ecrire.
+    #[test]
+    fn une_sortie_sans_bruit_se_lit_aussi() {
+        let lu = analyser_env(b"PATH=/bin\0HOME=/home/qui\0");
+        assert_eq!(lu.len(), 2, "lu : {lu:?}");
+    }
 
     /// Ce qui protege les contournements documentes : une variable que NOUS avons deja posee
     /// ne doit jamais etre remplacee par celle du shell. `LD_PRELOAD` (AppImage) et

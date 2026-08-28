@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les variables d'environnement de votre shell n'arrivaient toujours pas à Docker : Cockpit
+  interrogeait un shell de connexion **non interactif**, qui ne lit pas `~/.zshrc` — là où la
+  plupart des `export` sont écrits. Mesuré : 0 variable attendue sur 3 avant, 3 sur 3 après. La
+  même correction fait trouver les outils installés dans un dossier ajouté au PATH par `.zshrc`.
+
 ## [0.54.0] — 2026-08-28
 
 ### Changed
