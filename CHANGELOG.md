@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.1] — 2026-08-28
+
 ### Fixed
 
 - Les variables d'environnement de votre shell n'arrivaient toujours pas à Docker : Cockpit
