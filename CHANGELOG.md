@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.4] — 2026-08-31
+
 ### Fixed
 
 - Le retour au chemin d'affichage normal, livré en 0.54.3, restait sans effet : le réglage posé
