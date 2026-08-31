@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- En passant d'un écran à l'autre, la fenêtre restait dessinée à son ancienne taille : un
+  rectangle de contenu dans un coin, du noir autour, et il fallait redémarrer. Cockpit force
+  maintenant le recalcul quand l'écran change de définition.
+
 ## [0.54.5] — 2026-08-31
 
 ### Fixed

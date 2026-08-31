@@ -4,6 +4,7 @@ mod chemins;
 pub mod compte;
 mod commande;
 mod docker;
+mod fenetre;
 mod gitdiff;
 mod guetteur;
 mod llm;
@@ -1630,6 +1631,7 @@ pub fn run() {
                 let _ = fenetre.set_focus();
             }
         }))
+        .on_window_event(fenetre::sur_evenement)
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
