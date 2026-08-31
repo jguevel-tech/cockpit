@@ -1092,12 +1092,12 @@ async fn machine_report() -> report::MachineInfo {
         .unwrap_or_else(|_| report::machine_info().clone())
 }
 
-/// La page rend compte de sa sante : combien d'images elle a dessinees depuis son dernier
-/// passage. Zero avec un appel qui arrive quand meme veut dire que le JavaScript tourne et
-/// que rien n'est peint — voir `guetteur`.
+/// La page rend compte de sa sante : a-t-elle peint depuis son dernier passage, et la fenetre
+/// etait-elle visible. « Pas peint » avec un appel qui arrive quand meme veut dire que le
+/// JavaScript tourne et que rien n'est dessine — voir `guetteur`.
 #[tauri::command]
-async fn sante_page(images: u32, visible: bool) {
-    guetteur::signe_de_la_page(images, visible);
+async fn sante_page(a_peint: bool, visible: bool) {
+    guetteur::signe_de_la_page(a_peint, visible);
 }
 
 #[tauri::command]

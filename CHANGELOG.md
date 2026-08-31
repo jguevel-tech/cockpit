@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Retour en arrière sur la 0.54.2 : l'interface était devenue plus lente et des lettres
+  sautaient en cours de frappe. Deux causes, toutes deux introduites par cette version — un
+  chemin d'affichage de secours imposé aux cartes NVIDIA, qui fait composer la page par le
+  processeur, et une mesure interne qui interrogeait l'affichage soixante fois par seconde.
+  Cockpit reprend le chemin d'affichage normal, et la mesure ne coûte plus rien.
+- Contrepartie assumée : sur les cartes NVIDIA, la fenêtre peut de nouveau cesser de se
+  redessiner. Le journal indique alors quoi faire, et le réglage reste disponible à la main.
+
 ## [0.54.2] — 2026-08-31
 
 ### Fixed

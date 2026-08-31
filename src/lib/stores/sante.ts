@@ -3,34 +3,41 @@ import { signalerErreur } from "./errors";
 
 // Prouver que la page se PEINT, pas seulement qu'elle tourne.
 //
-// Un gel du 2026-08-28 s'est produit alors que tout allait bien cote backend : la boucle
-// graphique repondait, aucune trace nulle part, et la fenetre etait morte a l'ecran. « Le code
-// tourne » et « l'ecran se met a jour » sont deux choses differentes, et rien ne les separait.
+// « Le code tourne » et « l'ecran se met a jour » sont deux choses differentes : un minuteur
+// continue de tomber quand le moteur de rendu a cesse de peindre, une demande d'image NON. C'est
+// ce qui les separe, et c'est ce qui a permis de nommer le gel du 2026-08-31.
 //
-// La demande d'image du navigateur, elle, les separe : un minuteur continue de tomber quand le
-// moteur de rendu a cesse de peindre, une demande d'image NON.
+// **UNE SEULE DEMANDE D'IMAGE PAR PERIODE, ET C'EST UNE CORRECTION.** La premiere version
+// relancait une demande a CHAQUE image, donc soixante fois par seconde, et empechait la page de
+// se reposer : interface plus lente et lettres qui sautaient en cours de frappe. Une demande
+// toutes les cinq secondes repond a la meme question — le moteur peint-il encore ? — pour trois
+// centiemes du cout.
 //
-// **ON PARLE MEME QUAND LA FENETRE EST CACHEE**, en le disant. La premiere version se taisait
-// dans ce cas, et son silence devenait indistinguable d'une panne : le journal du 2026-08-31
-// contient 733 lignes « la page ne parle plus » dont la plupart n'etaient qu'une fenetre passee
-// derriere une autre.
+// **ON PARLE MEME QUAND LA FENETRE EST CACHEE**, en le disant : une page cachee ne peint pas et
+// ce n'est pas une panne. La version qui se taisait rendait son silence indistinguable d'un gel.
 const PERIODE = 5000;
 
-let images = 0;
+let aPeint = false;
+let demandeEnCours = false;
 
-function compter() {
-  images += 1;
-  requestAnimationFrame(compter);
+function demanderUneImage() {
+  if (demandeEnCours) return;
+  demandeEnCours = true;
+  requestAnimationFrame(() => {
+    aPeint = true;
+    demandeEnCours = false;
+  });
 }
 
 export function surveillerLeRendu() {
-  requestAnimationFrame(compter);
+  demanderUneImage();
 
   setInterval(() => {
-    const compte = images;
-    images = 0;
-    santePage(compte, document.visibilityState === "visible").catch((e) =>
+    const peint = aPeint;
+    aPeint = false;
+    santePage(peint, document.visibilityState === "visible").catch((e) =>
       signalerErreur("sante.rendu", String(e)),
     );
+    demanderUneImage();
   }, PERIODE);
 }

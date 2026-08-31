@@ -45,7 +45,14 @@ static REPONSES: AtomicU64 = AtomicU64::new(0);
 
 /// Combien de fois la page a rendu compte, et ce qu'elle a dit la derniere fois.
 static RAPPORTS: AtomicU64 = AtomicU64::new(0);
-static IMAGES: AtomicU64 = AtomicU64::new(0);
+
+/// A-t-elle peint au moins une image depuis son passage precedent ?
+///
+/// Un BOOLEEN et non un compte : la page ne demande plus qu'UNE image par periode. Compter les
+/// images obligeait a en redemander soixante fois par seconde, ce qui ralentissait l'interface
+/// et faisait sauter des lettres en cours de frappe (constate le 2026-08-31). La question posee
+/// est « le moteur peint-il encore », pas « a quelle cadence ».
+static A_PEINT: AtomicBool = AtomicBool::new(true);
 
 /// La fenetre etait-elle visible ? **Une page cachee ne peint pas, et c'est NORMAL** : sans
 /// cette information, passer sur une autre application accusait le moteur de rendu.
@@ -84,10 +91,10 @@ fn ce_qui_tourne() -> String {
     }
 }
 
-/// La page rend compte : depuis son dernier passage elle a dessine `images` images, et la
-/// fenetre etait visible ou non.
-pub fn signe_de_la_page(images: u32, visible: bool) {
-    IMAGES.store(images as u64, Ordering::SeqCst);
+/// La page rend compte : depuis son dernier passage elle a peint ou non, et la fenetre etait
+/// visible ou non.
+pub fn signe_de_la_page(a_peint: bool, visible: bool) {
+    A_PEINT.store(a_peint, Ordering::SeqCst);
     VISIBLE.store(visible, Ordering::SeqCst);
     RAPPORTS.fetch_add(1, Ordering::SeqCst);
 }
@@ -110,7 +117,7 @@ pub fn diagnostiquer(
     tours_sans_reponse: u32,
     tours_sans_rapport: u32,
     visible: bool,
-    images: u64,
+    a_peint: bool,
 ) -> Option<Panne> {
     if tours_sans_reponse >= TOURS_SANS_REPONSE {
         return Some(Panne::BoucleFigee);
@@ -120,7 +127,7 @@ pub fn diagnostiquer(
     }
     // Une fenetre cachee ne peint pas : ce n'est pas une panne. Et on ne juge le rendu que sur
     // un compte rendu FRAIS — un rapport en retard dirait n'importe quoi.
-    if visible && images == 0 && tours_sans_rapport == 0 {
+    if visible && !a_peint && tours_sans_rapport == 0 {
         return Some(Panne::RenduArrete);
     }
     None
@@ -178,7 +185,7 @@ pub fn surveiller(app: AppHandle) {
                 sans_reponse,
                 sans_rapport,
                 VISIBLE.load(Ordering::SeqCst),
-                IMAGES.load(Ordering::SeqCst),
+                A_PEINT.load(Ordering::SeqCst),
             );
 
             if panne != signalee {
@@ -208,27 +215,27 @@ mod tests {
 
     #[test]
     fn une_boucle_occupee_quelques_tours_n_est_pas_un_gel() {
-        assert_eq!(diagnostiquer(0, 0, true, 30), None);
-        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE - 1, 0, true, 30), None);
+        assert_eq!(diagnostiquer(0, 0, true, true), None);
+        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE - 1, 0, true, true), None);
     }
 
     #[test]
     fn une_boucle_qui_ne_repond_plus_est_nommee() {
-        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE, 0, true, 30), Some(Panne::BoucleFigee));
+        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE, 0, true, true), Some(Panne::BoucleFigee));
     }
 
     /// Une boucle figee explique aussi le silence de la page : un seul verdict, celui d'amont.
     #[test]
     fn la_boucle_figee_passe_devant_les_autres_pannes() {
         assert_eq!(
-            diagnostiquer(TOURS_SANS_REPONSE, TOURS_SANS_RAPPORT, true, 0),
+            diagnostiquer(TOURS_SANS_REPONSE, TOURS_SANS_RAPPORT, true, false),
             Some(Panne::BoucleFigee)
         );
     }
 
     #[test]
     fn une_page_qui_ne_peint_plus_accuse_le_moteur_de_rendu() {
-        assert_eq!(diagnostiquer(0, 0, true, 0), Some(Panne::RenduArrete));
+        assert_eq!(diagnostiquer(0, 0, true, false), Some(Panne::RenduArrete));
     }
 
     /// **Le faux positif a ne pas reintroduire.** Passer sur une autre application arrete les
@@ -236,19 +243,19 @@ mod tests {
     /// chaque fois que la fenetre passait derriere une autre.
     #[test]
     fn une_fenetre_cachee_ne_peint_pas_et_ce_n_est_pas_une_panne() {
-        assert_eq!(diagnostiquer(0, 0, false, 0), None);
+        assert_eq!(diagnostiquer(0, 0, false, false), None);
     }
 
     #[test]
     fn une_page_qui_se_tait_est_nommee_autrement() {
-        assert_eq!(diagnostiquer(0, TOURS_SANS_RAPPORT, true, 30), Some(Panne::PageMuette));
+        assert_eq!(diagnostiquer(0, TOURS_SANS_RAPPORT, true, true), Some(Panne::PageMuette));
     }
 
     /// Un retard d'un tour ou deux n'est pas un silence : la page parle toutes les cinq
     /// secondes, le seuil laisse passer trois periodes.
     #[test]
     fn un_retard_de_la_page_n_est_pas_un_silence() {
-        assert_eq!(diagnostiquer(0, 6, true, 30), None);
+        assert_eq!(diagnostiquer(0, 6, true, true), None);
     }
 
     #[test]

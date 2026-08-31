@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/// Ce que la page a dessine depuis son dernier passage, et si la fenetre etait visible.
-export const santePage = (images: number, visible: boolean) =>
-  invoke<void>("sante_page", { images, visible });
+/// La page a-t-elle peint depuis son dernier passage, et la fenetre etait-elle visible ?
+export const santePage = (aPeint: boolean, visible: boolean) =>
+  invoke<void>("sante_page", { aPeint, visible });
