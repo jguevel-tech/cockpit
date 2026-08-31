@@ -40,6 +40,15 @@ const TOURS_SANS_REPONSE: u32 = 5;
 /// seuil laisse passer trois periodes, sinon un simple retard passerait pour une panne.
 const TOURS_SANS_RAPPORT: u32 = 15;
 
+/// Comptes rendus consecutifs sans une seule image avant d'accuser le moteur de rendu.
+///
+/// **UN SEUL NE PROUVE RIEN.** Une fenetre recouverte par une autre garde
+/// `visibilityState = "visible"` et cesse pourtant de produire des images : juger sur un seul
+/// compte rendu accusait donc le moteur de rendu des qu'on travaillait ailleurs. Le journal du
+/// 2026-08-31 en est plein — il alternait « ne peint plus » et « revenu a la normale » toutes
+/// les cinq secondes.
+const RAPPORTS_SANS_IMAGE: u32 = 3;
+
 /// Combien de fois la boucle principale a leve la main.
 static REPONSES: AtomicU64 = AtomicU64::new(0);
 
@@ -116,8 +125,7 @@ pub enum Panne {
 pub fn diagnostiquer(
     tours_sans_reponse: u32,
     tours_sans_rapport: u32,
-    visible: bool,
-    a_peint: bool,
+    rapports_sans_image: u32,
 ) -> Option<Panne> {
     if tours_sans_reponse >= TOURS_SANS_REPONSE {
         return Some(Panne::BoucleFigee);
@@ -125,12 +133,29 @@ pub fn diagnostiquer(
     if tours_sans_rapport >= TOURS_SANS_RAPPORT {
         return Some(Panne::PageMuette);
     }
-    // Une fenetre cachee ne peint pas : ce n'est pas une panne. Et on ne juge le rendu que sur
-    // un compte rendu FRAIS — un rapport en retard dirait n'importe quoi.
-    if visible && !a_peint && tours_sans_rapport == 0 {
+    if rapports_sans_image >= RAPPORTS_SANS_IMAGE {
         return Some(Panne::RenduArrete);
     }
     None
+}
+
+/// Met a jour le compte des rapports sans image. Pur.
+///
+/// Une fenetre cachee ne peint pas et ce n'est PAS une panne : elle remet le compte a zero.
+pub fn compter_sans_image(
+    precedent: u32,
+    rapport_frais: bool,
+    visible: bool,
+    a_peint: bool,
+) -> u32 {
+    if !rapport_frais {
+        // Rien de neuf : on garde ce qu'on savait, sinon le verdict oscille a chaque tour.
+        return precedent;
+    }
+    if !visible || a_peint {
+        return 0;
+    }
+    precedent + 1
 }
 
 fn phrase(panne: Panne) -> String {
@@ -156,6 +181,7 @@ pub fn surveiller(app: AppHandle) {
         let mut vus_rapports = RAPPORTS.load(Ordering::SeqCst);
         let mut sans_reponse = 0u32;
         let mut sans_rapport = 0u32;
+        let mut sans_image = 0u32;
         let mut signalee: Option<Panne> = None;
 
         loop {
@@ -181,12 +207,14 @@ pub fn surveiller(app: AppHandle) {
             sans_rapport = if rapports == vus_rapports { sans_rapport + 1 } else { 0 };
             vus_rapports = rapports;
 
-            let panne = diagnostiquer(
-                sans_reponse,
-                sans_rapport,
+            sans_image = compter_sans_image(
+                sans_image,
+                sans_rapport == 0,
                 VISIBLE.load(Ordering::SeqCst),
                 A_PEINT.load(Ordering::SeqCst),
             );
+
+            let panne = diagnostiquer(sans_reponse, sans_rapport, sans_image);
 
             if panne != signalee {
                 match panne {
@@ -215,47 +243,59 @@ mod tests {
 
     #[test]
     fn une_boucle_occupee_quelques_tours_n_est_pas_un_gel() {
-        assert_eq!(diagnostiquer(0, 0, true, true), None);
-        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE - 1, 0, true, true), None);
+        assert_eq!(diagnostiquer(0, 0, 0), None);
+        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE - 1, 0, 0), None);
     }
 
     #[test]
     fn une_boucle_qui_ne_repond_plus_est_nommee() {
-        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE, 0, true, true), Some(Panne::BoucleFigee));
+        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE, 0, 0), Some(Panne::BoucleFigee));
     }
 
     /// Une boucle figee explique aussi le silence de la page : un seul verdict, celui d'amont.
     #[test]
     fn la_boucle_figee_passe_devant_les_autres_pannes() {
         assert_eq!(
-            diagnostiquer(TOURS_SANS_REPONSE, TOURS_SANS_RAPPORT, true, false),
+            diagnostiquer(TOURS_SANS_REPONSE, TOURS_SANS_RAPPORT, RAPPORTS_SANS_IMAGE),
             Some(Panne::BoucleFigee)
         );
     }
 
     #[test]
-    fn une_page_qui_ne_peint_plus_accuse_le_moteur_de_rendu() {
-        assert_eq!(diagnostiquer(0, 0, true, false), Some(Panne::RenduArrete));
-    }
-
-    /// **Le faux positif a ne pas reintroduire.** Passer sur une autre application arrete les
-    /// images, et ce n'est pas une panne : la premiere version accusait le moteur de rendu
-    /// chaque fois que la fenetre passait derriere une autre.
-    #[test]
-    fn une_fenetre_cachee_ne_peint_pas_et_ce_n_est_pas_une_panne() {
-        assert_eq!(diagnostiquer(0, 0, false, false), None);
-    }
-
-    #[test]
     fn une_page_qui_se_tait_est_nommee_autrement() {
-        assert_eq!(diagnostiquer(0, TOURS_SANS_RAPPORT, true, true), Some(Panne::PageMuette));
+        assert_eq!(diagnostiquer(0, TOURS_SANS_RAPPORT, 0), Some(Panne::PageMuette));
     }
 
     /// Un retard d'un tour ou deux n'est pas un silence : la page parle toutes les cinq
     /// secondes, le seuil laisse passer trois periodes.
     #[test]
     fn un_retard_de_la_page_n_est_pas_un_silence() {
-        assert_eq!(diagnostiquer(0, 6, true, true), None);
+        assert_eq!(diagnostiquer(0, 6, 0), None);
+    }
+
+    #[test]
+    fn le_moteur_de_rendu_n_est_accuse_qu_apres_plusieurs_rapports() {
+        assert_eq!(diagnostiquer(0, 0, RAPPORTS_SANS_IMAGE - 1), None);
+        assert_eq!(diagnostiquer(0, 0, RAPPORTS_SANS_IMAGE), Some(Panne::RenduArrete));
+    }
+
+    /// **LES DEUX FAUX POSITIFS A NE PAS REINTRODUIRE.** Une fenetre recouverte cesse de
+    /// produire des images tout en restant « visible » : elle remet le compte a zero. Et un tour
+    /// sans compte rendu frais ne change RIEN — sinon le verdict oscille a chaque seconde, ce
+    /// qui a rempli le journal du 2026-08-31 d'alternances « ne peint plus / revenu a la
+    /// normale » toutes les cinq secondes.
+    #[test]
+    fn le_compte_des_rapports_sans_image_ne_se_laisse_pas_tromper() {
+        // Un rapport frais sans image, fenetre visible : ca compte.
+        assert_eq!(compter_sans_image(0, true, true, false), 1);
+        assert_eq!(compter_sans_image(1, true, true, false), 2);
+        // La page peint de nouveau : on repart de zero.
+        assert_eq!(compter_sans_image(2, true, true, true), 0);
+        // Fenetre cachee : ce n'est pas une panne.
+        assert_eq!(compter_sans_image(2, true, false, false), 0);
+        // Aucun rapport neuf : on garde ce qu'on savait, sans osciller.
+        assert_eq!(compter_sans_image(2, false, true, false), 2);
+        assert_eq!(compter_sans_image(0, false, true, false), 0);
     }
 
     #[test]

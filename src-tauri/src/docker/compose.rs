@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
@@ -141,81 +142,58 @@ impl Compose {
         Ok(())
     }
 
-    pub async fn ps(&self) -> Result<Vec<ContainerStatus>, String> {
-        let mut args = self.base_args();
-        args.extend(["ps".into(), "--format".into(), "json".into()]);
-
-        let output = tokio::time::timeout(PS_TIMEOUT, async {
-            Command::new("docker")
-                .sans_console()
-                .avec_env_du_shell()
-                .args(&args)
-                .current_dir(&self.project_dir)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output()
-                .await
-        })
-        .await
-        .map_err(|_| format!("docker compose ps timeout in {:?}", self.project_dir))?
-        .map_err(|e| format!("docker compose ps failed in {:?}: {}", self.project_dir, e))?;
-
-        // Un echec (docker.sock inaccessible, docker absent...) laissait stdout vide et
-        // sortait Ok(vec![]) : le projet restait "stopped" sans explication. L'erreur doit
-        // remonter pour etre affichee.
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("docker compose ps: {}", stderr.trim()));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let trimmed = stdout.trim();
-        if trimmed.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // docker compose ps --format json can return JSON array or NDJSON
-        if trimmed.starts_with('[') {
-            let raw: Vec<serde_json::Value> =
-                serde_json::from_str(trimmed).map_err(|e| format!("JSON parse error: {}", e))?;
-            raw.iter().map(parse_container).collect()
-        } else {
-            trimmed
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .map(|line| {
-                    let val: serde_json::Value =
-                        serde_json::from_str(line).map_err(|e| format!("JSON parse error: {}", e))?;
-                    parse_container(&val)
-                })
-                .collect()
-        }
-    }
 }
 
-/// Repli quand aucun fichier compose n'est trouvable dans le dossier : `docker compose up`
-/// etiquette chaque conteneur avec le dossier d'ou il a ete lance
-/// (label com.docker.compose.project.working_dir). On retrouve donc les conteneurs du projet
-/// meme si le fichier porte un nom non standard ou a ete passe en -f depuis ailleurs.
-/// Seuls les conteneurs EN COURS sont listes (pas de -a) : meme semantique que compose ps,
-/// c'est ce que le calcul d'etat attend.
-pub async fn ps_by_working_dir(project_dir: &std::path::Path) -> Result<Vec<ContainerStatus>, String> {
-    let filter = format!(
-        "label=com.docker.compose.project.working_dir={}",
-        project_dir.display()
-    );
+/// `docker ps --format json` sort du NDJSON avec d'autres cles que compose ps
+/// (Names, State, Ports, Labels). Le nom de service est extrait du label compose.
+/// L'etiquette que docker compose pose sur chaque conteneur : le dossier depuis lequel la pile
+/// a ete lancee.
+const ETIQUETTE_DOSSIER: &str = "com.docker.compose.project.working_dir=";
+
+/// Le dossier de travail lu dans les etiquettes d'un conteneur. Pur.
+fn dossier_de_travail(etiquettes: &str) -> Option<String> {
+    etiquettes
+        .split(',')
+        .find_map(|kv| kv.strip_prefix(ETIQUETTE_DOSSIER))
+        .map(|d| d.to_string())
+        .filter(|d| !d.is_empty())
+}
+
+/// Range les lignes de `docker ps` par dossier de travail. Pur, donc verifiable sans docker.
+fn ranger_par_dossier(sortie: &str) -> HashMap<String, Vec<ContainerStatus>> {
+    let mut par_dossier: HashMap<String, Vec<ContainerStatus>> = HashMap::new();
+    for ligne in sortie.lines().filter(|l| !l.trim().is_empty()) {
+        let Ok(val) = serde_json::from_str::<serde_json::Value>(ligne) else { continue };
+        let etiquettes = val.get("Labels").and_then(|v| v.as_str()).unwrap_or("");
+        let Some(dossier) = dossier_de_travail(etiquettes) else { continue };
+        if let Ok(conteneur) = parse_docker_ps_line(ligne) {
+            par_dossier.entry(dossier).or_default().push(conteneur);
+        }
+    }
+    par_dossier
+}
+
+/// Tous les conteneurs compose de la machine, en **UN SEUL** appel a docker, ranges par dossier.
+///
+/// **POURQUOI UN SEUL APPEL.** La surveillance interrogeait docker UNE FOIS PAR PROJET, l'un
+/// apres l'autre, toutes les cinq secondes. Mesure du 2026-08-31 sur une installation de 32
+/// projets : chaque appel coute 100 a 400 ms, soit plus de six secondes par passage — le passage
+/// n'avait jamais fini avant le suivant, docker tournait a 200 % de processeur en permanence, et
+/// tout le poste ralentissait. Les conteneurs portent le dossier de leur pile en etiquette : une
+/// seule question suffit a savoir qui tourne ou.
+pub async fn ps_de_tous_les_projets() -> Result<HashMap<String, Vec<ContainerStatus>>, String> {
     let output = tokio::time::timeout(PS_TIMEOUT, async {
         Command::new("docker")
             .sans_console()
             .avec_env_du_shell()
-            .args(["ps", "--format", "json", "--filter", &filter])
+            .args(["ps", "--format", "json"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
             .await
     })
     .await
-    .map_err(|_| format!("docker ps timeout in {:?}", project_dir))?
+    .map_err(|_| "docker ps timeout".to_string())?
     .map_err(|e| format!("docker ps failed: {}", e))?;
 
     if !output.status.success() {
@@ -223,16 +201,29 @@ pub async fn ps_by_working_dir(project_dir: &std::path::Path) -> Result<Vec<Cont
         return Err(format!("docker ps: {}", stderr.trim()));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(parse_docker_ps_line)
-        .collect()
+    Ok(ranger_par_dossier(&String::from_utf8_lossy(&output.stdout)))
 }
 
-/// `docker ps --format json` sort du NDJSON avec d'autres cles que compose ps
-/// (Names, State, Ports, Labels). Le nom de service est extrait du label compose.
+/// Les conteneurs d'un projet donne, parmi ce que le seul appel a rapporte.
+///
+/// Un dossier de travail EGAL au chemin du projet, ou SITUE DEDANS : le fichier compose peut
+/// vivre dans un sous-dossier (`docker/compose.yml`), et docker pose alors ce sous-dossier.
+pub fn conteneurs_du_projet(
+    par_dossier: &HashMap<String, Vec<ContainerStatus>>,
+    chemin_du_projet: &std::path::Path,
+) -> Vec<ContainerStatus> {
+    let racine = chemin_du_projet.to_string_lossy().to_string();
+    let mut trouves = Vec::new();
+    for (dossier, conteneurs) in par_dossier {
+        let dedans = dossier == &racine
+            || dossier.strip_prefix(&racine).is_some_and(|reste| reste.starts_with('/'));
+        if dedans {
+            trouves.extend(conteneurs.iter().cloned());
+        }
+    }
+    trouves
+}
+
 fn parse_docker_ps_line(line: &str) -> Result<ContainerStatus, String> {
     let val: serde_json::Value =
         serde_json::from_str(line).map_err(|e| format!("JSON parse error: {}", e))?;
@@ -252,52 +243,9 @@ fn parse_docker_ps_line(line: &str) -> Result<ContainerStatus, String> {
     })
 }
 
-fn parse_container(raw: &serde_json::Value) -> Result<ContainerStatus, String> {
-    let get = |keys: &[&str]| -> String {
-        for key in keys {
-            if let Some(s) = raw.get(key).and_then(|v| v.as_str()) {
-                if !s.is_empty() {
-                    return s.to_string();
-                }
-            }
-        }
-        String::new()
-    };
-
-    Ok(ContainerStatus {
-        name: get(&["Name", "name"]),
-        service: get(&["Service", "service"]),
-        status: get(&["State", "state", "Status", "status"]),
-        health: get(&["Health", "health"]),
-        ports: get(&["Ports", "ports", "Publishers"]),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_parse_container_uppercase() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{"Name":"myapp-web-1","Service":"web","State":"running","Health":"healthy","Ports":"0.0.0.0:8080->80/tcp"}"#,
-        ).unwrap();
-        let cs = parse_container(&json).unwrap();
-        assert_eq!(cs.name, "myapp-web-1");
-        assert_eq!(cs.service, "web");
-        assert_eq!(cs.status, "running");
-        assert_eq!(cs.health, "healthy");
-    }
-
-    #[test]
-    fn test_parse_container_lowercase() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{"name":"app-db-1","service":"db","state":"running","health":"","ports":""}"#,
-        ).unwrap();
-        let cs = parse_container(&json).unwrap();
-        assert_eq!(cs.name, "app-db-1");
-        assert_eq!(cs.status, "running");
-    }
 
     #[test]
     fn test_has_compose_file() {
@@ -340,6 +288,51 @@ mod tests {
         let c = Compose::new(dir.to_str().unwrap(), "");
         assert!(c.require_compose_file().is_ok());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// L'appel unique doit ranger chaque conteneur sous le dossier de sa pile, et ignorer ce
+    /// qui n'a pas cette etiquette — un conteneur lance a la main n'appartient a aucun projet.
+    #[test]
+    fn les_conteneurs_se_rangent_par_dossier_de_travail() {
+        let sortie = concat!(
+            r#"{"Names":"web-1","State":"running","Ports":"80/tcp","Labels":"com.docker.compose.project=demo,com.docker.compose.service=web,com.docker.compose.project.working_dir=/srv/demo"}"#, "\n",
+            r#"{"Names":"db-1","State":"running","Ports":"","Labels":"com.docker.compose.service=db,com.docker.compose.project.working_dir=/srv/demo"}"#, "\n",
+            r#"{"Names":"seul","State":"running","Ports":"","Labels":"autre=chose"}"#, "\n",
+            r#"{"Names":"api-1","State":"running","Ports":"","Labels":"com.docker.compose.project.working_dir=/srv/autre/docker"}"#, "\n",
+        );
+        let range = ranger_par_dossier(sortie);
+        assert_eq!(range.len(), 2, "deux dossiers attendus : {range:?}");
+        assert_eq!(range["/srv/demo"].len(), 2);
+        assert_eq!(range["/srv/autre/docker"].len(), 1);
+        assert!(
+            !range.values().flatten().any(|c| c.name == "seul"),
+            "un conteneur sans etiquette de dossier n'appartient a aucun projet"
+        );
+    }
+
+    /// Le fichier compose peut vivre dans un sous-dossier : docker pose alors CE sous-dossier
+    /// en etiquette, et le projet doit quand meme reconnaitre ses conteneurs.
+    #[test]
+    fn un_projet_reconnait_les_conteneurs_de_ses_sous_dossiers() {
+        let mut par_dossier: HashMap<String, Vec<ContainerStatus>> = HashMap::new();
+        let conteneur = |nom: &str| ContainerStatus {
+            name: nom.to_string(),
+            service: String::new(),
+            status: "running".to_string(),
+            health: String::new(),
+            ports: String::new(),
+        };
+        par_dossier.insert("/srv/demo".into(), vec![conteneur("racine")]);
+        par_dossier.insert("/srv/demo/docker".into(), vec![conteneur("sous-dossier")]);
+        // Un voisin dont le nom COMMENCE par le meme texte ne doit pas etre pris : c'est un
+        // autre projet, pas un sous-dossier.
+        par_dossier.insert("/srv/demo-autre".into(), vec![conteneur("voisin")]);
+
+        let a_nous = conteneurs_du_projet(&par_dossier, std::path::Path::new("/srv/demo"));
+        let noms: std::collections::HashSet<&str> = a_nous.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(noms.len(), 2, "attendu racine + sous-dossier, recu {noms:?}");
+        assert!(noms.contains("racine") && noms.contains("sous-dossier"));
+        assert!(!noms.contains("voisin"), "/srv/demo-autre n'est pas dans /srv/demo");
     }
 
     #[test]

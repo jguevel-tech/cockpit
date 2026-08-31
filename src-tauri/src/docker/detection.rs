@@ -143,9 +143,14 @@ static SOUVENIR: std::sync::OnceLock<
     std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, (i64, Vec<String>)>>,
 > = std::sync::OnceLock::new();
 
-/// Duree de validite du souvenir. Assez courte pour qu'un fichier compose qu'on vient de creer
-/// apparaisse sans y penser, assez longue pour que la descente ne soit pas repetee en boucle.
-const VALIDITE_MS: i64 = 10_000;
+/// Duree de validite du souvenir.
+///
+/// **ELLE COUVRE AUSSI LA RACINE, ET C'EST UNE CORRECTION DE PERFORMANCE.** Mesure du
+/// 2026-08-31 sur une installation de 32 projets : interroger le disque a chaque appel coutait
+/// 119 ms, payes a chaque rafraichissement de la liste des projets — c'est-a-dire toutes les cinq
+/// secondes. Un fichier compose qu'on vient de creer n'attend pas pour autant : l'ouverture de
+/// l'onglet Docker et le bouton « chercher de nouveau » appellent `oublier()`.
+const VALIDITE_MS: i64 = 30_000;
 
 fn souvenir() -> &'static std::sync::Mutex<
     std::collections::HashMap<std::path::PathBuf, (i64, Vec<String>)>,
@@ -160,15 +165,10 @@ fn maintenant_ms() -> i64 {
 /// Tous les fichiers compose du projet, le meilleur d'abord. Chemins relatifs, en `/`.
 ///
 /// **La racine est regardee d'abord, et on ne parcourt rien si elle suffit.** C'est le cas de la
-/// quasi-totalite des projets : quelques interrogations du disque, aucune descente.
+/// quasi-totalite des projets : quelques interrogations du disque, aucune descente. Le tout est
+/// memorise — voir `VALIDITE_MS`, cette lecture etait appelee toutes les cinq secondes par
+/// projet.
 pub fn candidats(racine: &Path) -> Vec<String> {
-    // Toujours frais : quelques interrogations du disque, et la promesse « un fichier ajoute
-    // apres coup est vu sans redemarrer » est tenue.
-    let a_la_racine = a_la_racine(racine);
-    if !a_la_racine.is_empty() {
-        return classer(a_la_racine);
-    }
-
     let maintenant = maintenant_ms();
     if let Ok(memoire) = souvenir().lock() {
         if let Some((quand, liste)) = memoire.get(racine) {
@@ -178,7 +178,11 @@ pub fn candidats(racine: &Path) -> Vec<String> {
         }
     }
 
-    let classes = classer(en_descendant(racine));
+    let mut trouves = a_la_racine(racine);
+    if trouves.is_empty() {
+        trouves = en_descendant(racine);
+    }
+    let classes = classer(trouves);
     if let Ok(mut memoire) = souvenir().lock() {
         memoire.insert(racine.to_path_buf(), (maintenant, classes.clone()));
     }
@@ -328,10 +332,12 @@ mod tests {
         // Rien a la racine : on descend et on trouve.
         assert_eq!(choisir(&dossier).as_deref(), Some("docker/compose.yml"));
 
-        // Un fichier ajoute A LA RACINE est vu TOUT DE SUITE : la racine n'est jamais
-        // memorisee, et c'est deliberе — un fichier compose qu'on vient de creer ne doit pas
-        // attendre.
+        // Un fichier ajoute apres coup : le souvenir tient encore, et c'est voulu — la lecture
+        // etait payee toutes les cinq secondes par projet. Un geste explicite l'oublie, et
+        // l'ouverture de l'onglet Docker en fait un.
         std::fs::write(dossier.join("docker-compose.local.yml"), "services: {}").unwrap();
+        assert_eq!(choisir(&dossier).as_deref(), Some("docker/compose.yml"));
+        oublier(&dossier);
         assert_eq!(choisir(&dossier).as_deref(), Some("docker-compose.local.yml"));
 
         let _ = std::fs::remove_dir_all(&dossier);

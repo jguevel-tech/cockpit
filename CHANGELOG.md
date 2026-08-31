@@ -12,6 +12,22 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Cockpit interrogeait Docker **une fois par projet**, l'un après l'autre, toutes les cinq
+  secondes. Mesuré sur une installation de 32 projets : plus de six secondes par passage pour une
+  période de cinq — le passage n'avait jamais fini avant le suivant, Docker tournait en
+  permanence à pleine charge et tout le poste ralentissait. Une seule question suffit désormais,
+  quel que soit le nombre de projets.
+- La recherche du fichier compose lisait le disque à chaque rafraîchissement de la liste des
+  projets, soit 119 ms toutes les cinq secondes sur cette même installation. Le résultat est
+  maintenant retenu ; l'ouverture de l'onglet Docker et le bouton « chercher de nouveau » le
+  relisent immédiatement.
+
+### Changed
+
+- Amélioration des journaux techniques.
+
 ## [0.54.4] — 2026-08-31
 
 ### Fixed

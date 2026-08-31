@@ -550,28 +550,32 @@ impl Orchestrator {
                 .collect()
         };
 
-        // Phase 2: execute docker compose ps outside lock
+        // Phase 2 : UNE SEULE question a docker, hors verrou.
+        //
+        // **CE POINT A COUTE TRES CHER, NE PAS LE ROUVRIR.** Cette boucle interrogeait docker
+        // UNE FOIS PAR PROJET, l'un apres l'autre. Mesure du 2026-08-31 sur une installation de
+        // 32 projets : 100 a 400 ms par appel, soit plus de six secondes par passage pour une
+        // periode de cinq — le passage ne finissait jamais avant le suivant, docker tournait a
+        // 200 % de processeur en permanence et tout le poste ralentissait. Les conteneurs
+        // portent le dossier de leur pile en etiquette : une seule question suffit.
+        let par_dossier = super::compose::ps_de_tous_les_projets().await;
+
         let mut results: Vec<(String, Result<Vec<ContainerStatus>, String>)> = Vec::new();
         for (name, _) in &targets {
-            let composer = {
+            let chemin = {
                 let composers = self.composers.read().await;
-                composers.get(name).cloned()
+                composers.get(name).map(|c| c.project_dir.clone())
             };
-            match composer {
-                Some(c) if c.has_compose_file() => {
-                    let res = c.ps().await;
-                    results.push((name.clone(), res));
+            let resultat = match (&par_dossier, chemin) {
+                // Docker ne repond pas : la panne vaut pour tous les projets, et elle
+                // s'affiche au lieu de laisser croire a des projets arretes.
+                (Err(e), _) => Err(e.clone()),
+                (Ok(par_dossier), Some(chemin)) => {
+                    Ok(super::compose::conteneurs_du_projet(par_dossier, &chemin))
                 }
-                // Un chemin sans fichier compose au nom standard : docker retrouve quand
-                // meme les conteneurs compose lances depuis ce dossier via leur label.
-                Some(c) => {
-                    let res = super::compose::ps_by_working_dir(&c.project_dir).await;
-                    results.push((name.clone(), res));
-                }
-                None => {
-                    results.push((name.clone(), Ok(vec![])));
-                }
-            }
+                (Ok(_), None) => Ok(vec![]),
+            };
+            results.push((name.clone(), resultat));
         }
 
         // Phase 3: apply results under write lock
@@ -758,8 +762,11 @@ mod tests {
         let orch = orch_with(dir.to_str().unwrap());
         assert!(!orch.get_project("demo").await.unwrap().has_compose);
 
-        // Le fichier ajoute apres coup doit etre vu sans redemarrer l'app.
+        // Le fichier ajoute apres coup doit etre vu sans redemarrer l'app. La detection est
+        // memorisee — la lecture du disque etait payee toutes les cinq secondes par projet —
+        // donc on l'oublie, exactement comme le fait l'ouverture de l'onglet Docker.
         std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        super::super::detection::oublier(std::path::Path::new(dir.to_str().unwrap()));
         assert!(orch.get_project("demo").await.unwrap().has_compose);
         assert!(orch.get_projects().await[0].has_compose);
 
