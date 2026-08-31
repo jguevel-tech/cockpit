@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Le retour au chemin d'affichage normal, livré en 0.54.3, restait sans effet : le réglage posé
+  par la 0.54.2 se transmettait à la nouvelle version, parce que la mise à jour relance
+  l'application depuis l'ancien processus. Cockpit remet désormais cet état à plat à chaque
+  démarrage. Si l'interface était lente et que des lettres sautaient, c'est réglé — et il n'y a
+  rien à faire de votre côté.
+
 ## [0.54.3] — 2026-08-31
 
 ### Fixed

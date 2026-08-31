@@ -25,6 +25,17 @@
 #[cfg(target_os = "linux")]
 const VARIABLE: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
 
+/// Notre propre reglage, celui qu'on demande a l'utilisateur de poser.
+///
+/// **POURQUOI PAS DIRECTEMENT CELLE DE WEBKIT.** La 0.54.2 posait la variable de WebKit sur
+/// elle-meme ; la mise a jour relance l'application depuis l'ancien processus, donc la 0.54.3 —
+/// qui devait justement revenir en arriere — l'a HERITEE et l'a prise pour un choix de
+/// l'utilisateur. Le retour en arriere etait annule sans que personne ne s'en apercoive :
+/// constate le 2026-08-31 dans le journal, « pose par l'utilisateur » alors que personne ne
+/// l'avait posee. Une variable a NOUS ne peut pas etre confondue avec une fuite.
+#[cfg(target_os = "linux")]
+const NOTRE_REGLAGE: &str = "COCKPIT_SANS_DMABUF";
+
 /// Ce qui a ete decide, pour que le journal le dise au lieu de le laisser deviner.
 static MODE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
@@ -38,29 +49,28 @@ fn pilote_nvidia_proprietaire() -> bool {
     std::path::Path::new("/sys/module/nvidia").exists()
 }
 
-/// **A appeler AVANT toute initialisation de GTK.** WebKitGTK lit cette variable au demarrage du
+/// **A appeler AVANT toute initialisation de GTK.** WebKitGTK lit sa variable au demarrage du
 /// moteur : la poser apres n'a aucun effet, et l'echec serait silencieux.
 ///
-/// **ON NE COUPE PLUS RIEN TOUT SEUL, ET C'EST UN RETOUR EN ARRIERE ASSUME.** La version 0.54.2
-/// desactivait le chemin DMA-BUF des qu'elle voyait le pilote NVIDIA. Le contournement est reel
-/// et documente en amont, mais son PRIX ne l'etait pas : sans ce chemin, la page est composee par
-/// le processeur, et le mainteneur a constate le jour meme une interface plus lente et des
-/// lettres qui s'effacaient en cours de frappe. Un gel occasionnel se recupere en relancant ;
-/// une frappe qui saute rend le logiciel inutilisable a la minute.
-///
-/// La variable reste donc entre les mains de qui la pose, et le mode retenu est ECRIT au
-/// demarrage : c'est ce qui permettra de comparer les deux, journal en main, au lieu de choisir
-/// pour tout le monde sans mesure.
+/// **L'ETAT EST TOUJOURS REMIS A PLAT**, dans un sens comme dans l'autre. Laisser une valeur
+/// telle quelle laissait une variable HERITEE decider a notre place — c'est ainsi que le retour
+/// en arriere de la 0.54.3 s'est retrouve sans effet.
 #[cfg(target_os = "linux")]
 pub fn decider() {
-    let mode = match std::env::var(VARIABLE) {
-        Ok(pose) => format!("rendu : {VARIABLE}={pose} (pose par l'utilisateur)"),
-        Err(_) if pilote_nvidia_proprietaire() => {
-            "rendu : chemin normal, pilote NVIDIA proprietaire present — si la fenetre cesse de \
-             se redessiner, lancer avec WEBKIT_DISABLE_DMABUF_RENDERER=1"
-                .to_string()
+    let demande = std::env::var_os(NOTRE_REGLAGE).is_some_and(|v| v != "0");
+    let mode = if demande {
+        std::env::set_var(VARIABLE, "1");
+        format!("rendu : DMA-BUF desactive ({NOTRE_REGLAGE} demande)")
+    } else {
+        std::env::remove_var(VARIABLE);
+        if pilote_nvidia_proprietaire() {
+            format!(
+                "rendu : chemin normal, pilote NVIDIA proprietaire present — si la fenetre cesse \
+                 de se redessiner, relancer avec {NOTRE_REGLAGE}=1"
+            )
+        } else {
+            "rendu : chemin normal".to_string()
         }
-        Err(_) => "rendu : chemin normal".to_string(),
     };
     let _ = MODE.set(mode);
 }
@@ -79,6 +89,36 @@ pub fn mode() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Les deux sens de la decision, dans UN SEUL essai : ils touchent l'environnement du
+    /// processus, et deux essais qui le modifient en parallele se marcheraient dessus.
+    ///
+    /// **LE FAUX POSITIF A NE PAS REINTRODUIRE.** Une variable de WebKit heritee d'une version
+    /// precedente ne doit pas decider a notre place : la mise a jour relance l'application depuis
+    /// l'ancien processus, donc tout ce qu'une version avait pose sur elle-meme se transmet.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn l_etat_est_toujours_remis_a_plat() {
+        // Ce qu'une version precedente aurait laisse derriere elle, sans que personne ne l'ait
+        // demande.
+        std::env::remove_var(NOTRE_REGLAGE);
+        std::env::set_var(VARIABLE, "1");
+        decider();
+        assert!(
+            std::env::var_os(VARIABLE).is_none(),
+            "la valeur heritee devait etre retiree, elle vaut {:?}",
+            std::env::var_os(VARIABLE)
+        );
+
+        // Et notre reglage, lui, est honore.
+        std::env::set_var(NOTRE_REGLAGE, "1");
+        decider();
+        assert_eq!(std::env::var(VARIABLE).as_deref(), Ok("1"));
+
+        // On remet les lieux en etat : d'autres essais lisent cet environnement.
+        std::env::remove_var(NOTRE_REGLAGE);
+        std::env::remove_var(VARIABLE);
+    }
 
     /// La decision doit etre prise et NOMMEE : un mode inconnu dans le journal ne renseigne
     /// personne, et c'est ce journal qui jugera si le contournement a servi.
