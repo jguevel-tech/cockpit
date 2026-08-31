@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.6] — 2026-08-31
+
 ### Fixed
 
 - En passant d'un écran à l'autre, la fenêtre restait dessinée à son ancienne taille : un
