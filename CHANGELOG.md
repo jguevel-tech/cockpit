@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.5] — 2026-08-31
+
 ### Fixed
 
 - Cockpit interrogeait Docker **une fois par projet**, l'un après l'autre, toutes les cinq
