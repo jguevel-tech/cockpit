@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- La fenêtre se figeait au hasard, sans autre issue que de fermer Cockpit de force : l'écran
+  cessait d'être redessiné alors que l'application, elle, fonctionnait toujours. C'est un défaut
+  connu du moteur d'affichage avec le pilote NVIDIA propriétaire ; Cockpit détecte ce pilote et
+  emprunte l'autre chemin d'affichage. Sur les autres cartes, rien ne change.
+
+### Changed
+
+- Amélioration des journaux techniques.
+
 ## [0.54.1] — 2026-08-28
 
 ### Fixed

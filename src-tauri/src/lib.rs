@@ -11,6 +11,7 @@ mod lsp;
 mod plugin;
 mod report;
 mod recorder;
+mod rendu;
 mod scanner;
 pub mod storage;
 mod system;
@@ -1095,8 +1096,8 @@ async fn machine_report() -> report::MachineInfo {
 /// passage. Zero avec un appel qui arrive quand meme veut dire que le JavaScript tourne et
 /// que rien n'est peint — voir `guetteur`.
 #[tauri::command]
-async fn sante_page(images: u32) {
-    guetteur::signe_de_la_page(images);
+async fn sante_page(images: u32, visible: bool) {
+    guetteur::signe_de_la_page(images, visible);
 }
 
 #[tauri::command]
@@ -1556,6 +1557,12 @@ pub fn run() {
     // Doit etre pose AVANT l'init GTK (donc avant le Builder).
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_IM_MODULE", "gtk-im-context-simple");
+
+    // Le mode de rendu de la vue web, pour la meme raison : WebKitGTK lit sa variable au
+    // demarrage du moteur, donc AVANT le Builder. Voir `rendu` : le chemin DMA-BUF ne marche pas
+    // de facon fiable avec le pilote proprietaire NVIDIA, et c'est la panne que le guetteur a
+    // mesuree le 2026-08-31 — la page parle et ne peint plus rien.
+    rendu::decider();
 
     // L'AppImage embarque la libwayland-client de sa machine de construction (Ubuntu
     // 22.04 -> 1.20). Sur une distro plus recente, le pilote graphique du systeme

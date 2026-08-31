@@ -1,68 +1,70 @@
-//! Le guetteur de la boucle graphique.
+//! Le guetteur : la fenetre repond-elle, et l'ecran se met-il a jour ?
 //!
-//! **Pourquoi il existe.** Un gel ne laissait AUCUNE trace : l'utilisateur tuait
-//! l'application, la relancait, et il ne restait rien a lire. Impossible de dire si la
-//! fenetre s'etait figee parce que du code attendait un verrou, ou parce que le moteur de
-//! rendu avait cesse de peindre. Deux causes, deux corrections opposees, aucune preuve.
+//! **Pourquoi il existe.** Un gel ne laissait AUCUNE trace : l'utilisateur tuait l'application,
+//! la relancait, et il ne restait rien a lire. Impossible de dire si la fenetre s'etait figee
+//! parce que du code attendait un verrou, ou parce que le moteur de rendu avait cesse de
+//! peindre. Deux causes, deux corrections opposees, aucune preuve.
 //!
-//! **Ce qu'il fait.** Il demande a la boucle principale de lever la main une fois par
-//! seconde. Quand elle ne la leve plus, il ecrit une ligne dans le journal local : depuis
-//! combien de temps, et ce que le backend etait en train de faire. Il ne corrige rien — il
-//! rend le prochain incident lisible.
+//! **Ce qu'il mesure.** La boucle principale doit lever la main chaque seconde, et la page doit
+//! rendre compte de ses images. Trois pannes se distinguent alors, et elles ne se corrigent pas
+//! au meme endroit : la boucle ne repond plus (notre code attend), la page ne peint plus (le
+//! moteur de rendu), la page ne parle plus (son JavaScript est arrete).
 //!
-//! **Ce qu'il ne fait pas.** Il ne tue rien et ne relance rien. Une application figee qui se
-//! ferme d'elle-meme emporterait le travail en cours sans rien expliquer.
+//! **AUCUNE HORLOGE ICI, ET C'EST DELIBERE.** La premiere version comptait en heure murale :
+//! une mise en veille de 53 minutes lui a fait annoncer un gel de 3 180 secondes qui n'avait
+//! jamais eu lieu (constate le 2026-08-31). On compte donc des TOURS et des REPONSES — pendant
+//! une veille le fil ne tourne pas, donc rien ne s'accumule.
+//!
+//! **ET ON N'ECRIT QU'AU CHANGEMENT D'ETAT.** Se reperer sur le MESSAGE, qui portait un nombre
+//! de secondes, a fait ecrire 733 lignes pour une poignee d'episodes : chaque seconde produisait
+//! un message different, donc « nouveau ». Le repere est l'ETAT.
+//!
+//! Il ne corrige rien et ne tue rien : une application figee qui se fermerait d'elle-meme
+//! emporterait le travail en cours sans rien expliquer.
 
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 
-/// Cadence des demandes. Une par seconde : assez fin pour situer un gel, assez rare pour ne
-/// rien couter a la boucle qu'on surveille.
+/// Cadence des demandes. Une par seconde : assez fin pour situer un gel, assez rare pour ne rien
+/// couter a la boucle qu'on surveille.
 const CADENCE: Duration = Duration::from_secs(1);
 
-/// En dessous, ce n'est pas un gel mais une boucle occupee : un gros rendu, une ouverture de
-/// projet. Au-dela, l'utilisateur voit une fenetre morte.
-const SEUIL: Duration = Duration::from_secs(5);
+/// Tours sans reponse de la boucle principale avant de parler. En dessous, ce n'est pas un gel
+/// mais une boucle occupee : un gros rendu, une ouverture de projet.
+const TOURS_SANS_REPONSE: u32 = 5;
 
-/// Tant que le gel dure, on ne reecrit qu'a cet intervalle : sans ca, une fenetre figee
-/// pendant dix minutes remplirait le journal qu'on veut lire.
-const RAPPEL: Duration = Duration::from_secs(30);
+/// Tours sans compte rendu de la page avant de parler. Elle parle toutes les cinq secondes : le
+/// seuil laisse passer trois periodes, sinon un simple retard passerait pour une panne.
+const TOURS_SANS_RAPPORT: u32 = 15;
 
-/// Dernier signe de vie de la boucle principale, en millisecondes depuis l'epoque.
-static DERNIER_SIGNE: AtomicI64 = AtomicI64::new(0);
+/// Combien de fois la boucle principale a leve la main.
+static REPONSES: AtomicU64 = AtomicU64::new(0);
 
-/// Dernier compte rendu de la PAGE : quand, et combien d'images elle a dessinees depuis le
-/// precedent.
+/// Combien de fois la page a rendu compte, et ce qu'elle a dit la derniere fois.
+static RAPPORTS: AtomicU64 = AtomicU64::new(0);
+static IMAGES: AtomicU64 = AtomicU64::new(0);
+
+/// La fenetre etait-elle visible ? **Une page cachee ne peint pas, et c'est NORMAL** : sans
+/// cette information, passer sur une autre application accusait le moteur de rendu.
+static VISIBLE: AtomicBool = AtomicBool::new(true);
+
+/// Ce que le backend est en train de faire, pose par les chemins qui peuvent attendre longtemps.
+/// Un gel nomme vaut dix hypotheses.
+static EN_COURS: Mutex<Option<(&'static str, u64)>> = Mutex::new(None);
+
+/// Marque une operation en cours. Le nom reapparait dans le journal si la fenetre se fige
+/// pendant ce temps.
 ///
-/// **Pourquoi la page doit parler separement.** Le 2026-08-28, un gel a eu lieu alors que la
-/// boucle principale repondait normalement : le guetteur n'avait donc rien a dire, et son
-/// silence ne prouvait rien. Or « la boucle tourne » et « l'ecran se met a jour » sont deux
-/// choses differentes — un moteur de rendu qui ne peint plus laisse une fenetre morte sous une
-/// application en parfaite sante. Les minuteurs JavaScript continuent de tomber dans ce cas, la
-/// demande d'image NON : c'est ce qui les separe.
-static DERNIER_SIGNE_PAGE: AtomicI64 = AtomicI64::new(0);
-static IMAGES_PAGE: AtomicI64 = AtomicI64::new(0);
-
-/// Ce que le backend est en train de faire, pose par les chemins qui peuvent attendre
-/// longtemps. Un gel nomme vaut dix hypotheses.
-static EN_COURS: Mutex<Option<(&'static str, i64)>> = Mutex::new(None);
-
-fn maintenant_ms() -> i64 {
-    chrono::Local::now().timestamp_millis()
-}
-
-/// Marque une operation en cours. Le nom reapparait dans le journal si la boucle graphique
-/// se fige pendant ce temps.
-///
-/// La marque se retire toute seule (`Drop`) : un chemin qui rend une erreur en plein milieu
-/// ne doit pas laisser un nom colle la pour le reste de la session.
+/// La marque se retire toute seule (`Drop`) : un chemin qui rend une erreur en plein milieu ne
+/// doit pas laisser un nom colle la pour le reste de la session.
 pub struct Marque;
 
 pub fn marquer(quoi: &'static str) -> Marque {
-    *EN_COURS.lock().unwrap_or_else(|e| e.into_inner()) = Some((quoi, maintenant_ms()));
+    *EN_COURS.lock().unwrap_or_else(|e| e.into_inner()) =
+        Some((quoi, REPONSES.load(Ordering::SeqCst)));
     Marque
 }
 
@@ -72,134 +74,119 @@ impl Drop for Marque {
     }
 }
 
-/// Ce que le backend faisait, pret a ecrire.
 fn ce_qui_tourne() -> String {
     match *EN_COURS.lock().unwrap_or_else(|e| e.into_inner()) {
         Some((quoi, depuis)) => {
-            format!("{quoi} depuis {} ms", (maintenant_ms() - depuis).max(0))
+            let tours = REPONSES.load(Ordering::SeqCst).saturating_sub(depuis);
+            format!("{quoi}, commence il y a {tours} tour(s)")
         }
         None => "rien de marque cote backend".to_string(),
     }
 }
 
-/// La page rend compte : depuis son dernier passage, elle a dessine `images` images.
-///
-/// `images` a zero avec un compte rendu qui arrive quand meme veut dire quelque chose de
-/// precis : le JavaScript tourne, mais rien n'est peint.
-pub fn signe_de_la_page(images: u32) {
-    DERNIER_SIGNE_PAGE.store(maintenant_ms(), Ordering::SeqCst);
-    IMAGES_PAGE.store(images as i64, Ordering::SeqCst);
+/// La page rend compte : depuis son dernier passage elle a dessine `images` images, et la
+/// fenetre etait visible ou non.
+pub fn signe_de_la_page(images: u32, visible: bool) {
+    IMAGES.store(images as u64, Ordering::SeqCst);
+    VISIBLE.store(visible, Ordering::SeqCst);
+    RAPPORTS.fetch_add(1, Ordering::SeqCst);
 }
 
-/// Faut-il ecrire une ligne ?
-///
-/// Separee du minuteur pour etre verifiable sans boucle graphique : la regle est ici, et les
-/// essais du bas du fichier la tiennent.
-pub fn doit_signaler(retard: Duration, deja_signale: Option<Duration>) -> bool {
-    if retard < SEUIL {
-        return false;
-    }
-    match deja_signale {
-        None => true,
-        Some(precedent) => retard >= precedent + RAPPEL,
-    }
+/// Les pannes que le guetteur sait nommer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Panne {
+    /// La boucle graphique ne repond plus : notre code attend quelque chose.
+    BoucleFigee,
+    /// La page parle, la fenetre est visible, et rien n'est peint : le moteur de rendu.
+    RenduArrete,
+    /// Plus aucun compte rendu de la page : son JavaScript est arrete.
+    PageMuette,
 }
 
-/// La page a-t-elle cesse de peindre, alors qu'elle parle encore ?
+/// Ce que les compteurs disent. Pur, donc verifiable sans boucle graphique ni minuteur.
 ///
-/// Trois etats se distinguent, et c'est tout l'interet : la boucle principale ne repond plus
-/// (notre code attend quelque chose), la page parle mais ne peint plus (le moteur de rendu),
-/// ou la page ne parle plus du tout (son JavaScript est arrete).
-fn etat_de_la_page() -> Option<String> {
-    let dernier = DERNIER_SIGNE_PAGE.load(Ordering::SeqCst);
-    // Aucun compte rendu encore : le demarrage, rien a dire.
-    if dernier == 0 {
-        return None;
+/// L'ordre compte : une boucle figee explique tout le reste, on ne l'accuse pas deux fois.
+pub fn diagnostiquer(
+    tours_sans_reponse: u32,
+    tours_sans_rapport: u32,
+    visible: bool,
+    images: u64,
+) -> Option<Panne> {
+    if tours_sans_reponse >= TOURS_SANS_REPONSE {
+        return Some(Panne::BoucleFigee);
     }
-    let depuis = Duration::from_millis((maintenant_ms() - dernier).max(0) as u64);
-    if depuis >= SEUIL {
-        return Some(format!("la page ne parle plus depuis {} s", depuis.as_secs()));
+    if tours_sans_rapport >= TOURS_SANS_RAPPORT {
+        return Some(Panne::PageMuette);
     }
-    if IMAGES_PAGE.load(Ordering::SeqCst) == 0 {
-        return Some(
-            "la page parle mais ne peint AUCUNE image : c'est le moteur de rendu, pas notre code"
-                .to_string(),
-        );
+    // Une fenetre cachee ne peint pas : ce n'est pas une panne. Et on ne juge le rendu que sur
+    // un compte rendu FRAIS — un rapport en retard dirait n'importe quoi.
+    if visible && images == 0 && tours_sans_rapport == 0 {
+        return Some(Panne::RenduArrete);
     }
     None
 }
 
+fn phrase(panne: Panne) -> String {
+    match panne {
+        Panne::BoucleFigee => format!("la fenetre ne repond plus — {}", ce_qui_tourne()),
+        Panne::RenduArrete => "la page ne peint AUCUNE image alors qu'elle est visible et \
+                               qu'elle parle encore : c'est le moteur de rendu, pas notre code"
+            .to_string(),
+        Panne::PageMuette => "la page ne rend plus compte : son JavaScript est arrete".to_string(),
+    }
+}
+
 /// Met le guetteur en route. A appeler une fois, au demarrage.
 pub fn surveiller(app: AppHandle) {
-    DERNIER_SIGNE.store(maintenant_ms(), Ordering::SeqCst);
-
     std::thread::spawn(move || {
-        // UNE LIGNE AU DEMARRAGE, ET ELLE EST INDISPENSABLE. Sans elle, le silence du
-        // guetteur veut dire deux choses opposees — « tout va bien » ou « le guetteur est
-        // casse » — et on ne peut pas les distinguer. C'est arrive : le 2026-08-28, un gel
-        // n'a laisse aucune ligne, et il a fallu chercher la phrase du guetteur DANS le
-        // binaire pour savoir s'il tournait.
-        journaliser(&app, "guetteur en marche");
+        // UNE LIGNE AU DEMARRAGE, ET ELLE EST INDISPENSABLE. Sans elle, le silence du guetteur
+        // veut dire deux choses opposees — « tout va bien » ou « le guetteur est casse » — et il
+        // a fallu chercher sa phrase DANS le binaire monte pour trancher (2026-08-28). Elle dit
+        // aussi quel mode de rendu a ete retenu : c'est ce journal qui jugera le contournement.
+        journaliser(&app, &format!("guetteur en marche — {}", crate::rendu::mode()));
 
-        let mut signale: Option<Duration> = None;
-        let mut page_signalee: Option<String> = None;
+        let mut vues_reponses = REPONSES.load(Ordering::SeqCst);
+        let mut vus_rapports = RAPPORTS.load(Ordering::SeqCst);
+        let mut sans_reponse = 0u32;
+        let mut sans_rapport = 0u32;
+        let mut signalee: Option<Panne> = None;
+
         loop {
             std::thread::sleep(CADENCE);
 
-            // La demande : si la boucle principale tourne, cette fermeture s'execute tout
-            // de suite. Si elle est figee, elle ne s'execute pas — et c'est le silence qui
-            // nous renseigne.
+            // La demande : si la boucle principale tourne, cette fermeture s'execute et le
+            // compteur bouge. Si elle est figee, il ne bouge pas — c'est tout le signal.
             if app
                 .run_on_main_thread(|| {
-                    DERNIER_SIGNE.store(maintenant_ms(), Ordering::SeqCst);
+                    REPONSES.fetch_add(1, Ordering::SeqCst);
                 })
                 .is_err()
             {
-                // La boucle n'existe plus : l'application se ferme. Rien a signaler.
+                // La boucle n'existe plus : l'application se ferme.
                 return;
             }
 
-            let retard = Duration::from_millis(
-                (maintenant_ms() - DERNIER_SIGNE.load(Ordering::SeqCst)).max(0) as u64,
+            let reponses = REPONSES.load(Ordering::SeqCst);
+            sans_reponse = if reponses == vues_reponses { sans_reponse + 1 } else { 0 };
+            vues_reponses = reponses;
+
+            let rapports = RAPPORTS.load(Ordering::SeqCst);
+            sans_rapport = if rapports == vus_rapports { sans_rapport + 1 } else { 0 };
+            vus_rapports = rapports;
+
+            let panne = diagnostiquer(
+                sans_reponse,
+                sans_rapport,
+                VISIBLE.load(Ordering::SeqCst),
+                IMAGES.load(Ordering::SeqCst),
             );
 
-            if doit_signaler(retard, signale) {
-                journaliser(
-                    &app,
-                    &format!(
-                        "la fenetre ne repond plus depuis {} s — {}",
-                        retard.as_secs(),
-                        ce_qui_tourne()
-                    ),
-                );
-                signale = Some(retard);
-            } else if retard < SEUIL {
-                if let Some(precedent) = signale.take() {
-                    journaliser(
-                        &app,
-                        &format!(
-                            "la fenetre repond de nouveau (figee au moins {} s)",
-                            precedent.as_secs()
-                        ),
-                    );
+            if panne != signalee {
+                match panne {
+                    Some(nouvelle) => journaliser(&app, &phrase(nouvelle)),
+                    None => journaliser(&app, "tout est revenu a la normale"),
                 }
-
-                // La boucle va bien : c'est le moment ou la question « et l'ecran ? » a un
-                // sens. On ne la pose pas quand la boucle est deja en cause, sinon deux
-                // lignes accusent la meme panne.
-                match etat_de_la_page() {
-                    Some(quoi) => {
-                        if page_signalee.as_deref() != Some(quoi.as_str()) {
-                            journaliser(&app, &quoi);
-                            page_signalee = Some(quoi);
-                        }
-                    }
-                    None => {
-                        if page_signalee.take().is_some() {
-                            journaliser(&app, "la page se peint de nouveau");
-                        }
-                    }
-                }
+                signalee = panne;
             }
         }
     });
@@ -220,55 +207,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn une_boucle_occupee_quelques_secondes_n_est_pas_un_gel() {
-        assert!(!doit_signaler(Duration::from_secs(2), None));
-        assert!(!doit_signaler(SEUIL - Duration::from_millis(1), None));
+    fn une_boucle_occupee_quelques_tours_n_est_pas_un_gel() {
+        assert_eq!(diagnostiquer(0, 0, true, 30), None);
+        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE - 1, 0, true, 30), None);
     }
 
     #[test]
-    fn le_premier_depassement_est_signale() {
-        assert!(doit_signaler(SEUIL, None));
-        assert!(doit_signaler(Duration::from_secs(30), None));
+    fn une_boucle_qui_ne_repond_plus_est_nommee() {
+        assert_eq!(diagnostiquer(TOURS_SANS_REPONSE, 0, true, 30), Some(Panne::BoucleFigee));
     }
 
+    /// Une boucle figee explique aussi le silence de la page : un seul verdict, celui d'amont.
     #[test]
-    fn un_gel_qui_dure_ne_remplit_pas_le_journal() {
-        let deja = Some(Duration::from_secs(6));
-        // Une seconde plus tard : rien de neuf a dire.
-        assert!(!doit_signaler(Duration::from_secs(7), deja));
-        // Trente secondes plus tard : la ligne suivante est utile, le gel s'installe.
-        assert!(doit_signaler(Duration::from_secs(36), deja));
-    }
-
-    /// Les trois etats de la page, dans un seul essai : ces compteurs sont globaux, et deux
-    /// essais qui y touchent en parallele se marcheraient dessus.
-    #[test]
-    fn les_trois_etats_de_la_page_se_distinguent() {
-        // Au demarrage, la page n'a rien dit encore : on n'accuse personne.
-        assert_eq!(etat_de_la_page(), None, "aucun compte rendu ne doit rien accuser");
-
-        // Elle peint : rien a signaler.
-        signe_de_la_page(42);
-        assert_eq!(etat_de_la_page(), None);
-
-        // Elle parle et ne peint plus : c'est le moteur de rendu.
-        signe_de_la_page(0);
-        let verdict = etat_de_la_page().expect("zero image doit se voir");
-        assert!(verdict.contains("moteur de rendu"), "verdict inattendu : {verdict}");
-
-        // Elle ne parle plus du tout : autre panne, autre message. On vieillit son dernier
-        // passage au-dela du seuil plutot que d'attendre reellement.
-        signe_de_la_page(42);
-        DERNIER_SIGNE_PAGE.store(
-            maintenant_ms() - (SEUIL.as_millis() as i64) - 1_000,
-            Ordering::SeqCst,
+    fn la_boucle_figee_passe_devant_les_autres_pannes() {
+        assert_eq!(
+            diagnostiquer(TOURS_SANS_REPONSE, TOURS_SANS_RAPPORT, true, 0),
+            Some(Panne::BoucleFigee)
         );
-        let verdict = etat_de_la_page().expect("un silence de la page doit se voir");
-        assert!(verdict.contains("ne parle plus"), "verdict inattendu : {verdict}");
+    }
 
-        // Et on remet les compteurs comme on les a trouves.
-        DERNIER_SIGNE_PAGE.store(0, Ordering::SeqCst);
-        IMAGES_PAGE.store(0, Ordering::SeqCst);
+    #[test]
+    fn une_page_qui_ne_peint_plus_accuse_le_moteur_de_rendu() {
+        assert_eq!(diagnostiquer(0, 0, true, 0), Some(Panne::RenduArrete));
+    }
+
+    /// **Le faux positif a ne pas reintroduire.** Passer sur une autre application arrete les
+    /// images, et ce n'est pas une panne : la premiere version accusait le moteur de rendu
+    /// chaque fois que la fenetre passait derriere une autre.
+    #[test]
+    fn une_fenetre_cachee_ne_peint_pas_et_ce_n_est_pas_une_panne() {
+        assert_eq!(diagnostiquer(0, 0, false, 0), None);
+    }
+
+    #[test]
+    fn une_page_qui_se_tait_est_nommee_autrement() {
+        assert_eq!(diagnostiquer(0, TOURS_SANS_RAPPORT, true, 30), Some(Panne::PageMuette));
+    }
+
+    /// Un retard d'un tour ou deux n'est pas un silence : la page parle toutes les cinq
+    /// secondes, le seuil laisse passer trois periodes.
+    #[test]
+    fn un_retard_de_la_page_n_est_pas_un_silence() {
+        assert_eq!(diagnostiquer(0, 6, true, 30), None);
     }
 
     #[test]
@@ -276,10 +256,10 @@ mod tests {
         assert_eq!(ce_qui_tourne(), "rien de marque cote backend");
         {
             let _marque = marquer("lancement du service de terminaux");
-            assert!(ce_qui_tourne().starts_with("lancement du service de terminaux depuis"));
+            assert!(ce_qui_tourne().starts_with("lancement du service de terminaux, commence"));
         }
-        // Sans le `Drop`, ce nom resterait colle pour le reste de la session et le
-        // prochain gel accuserait une operation terminee depuis longtemps.
+        // Sans le `Drop`, ce nom resterait colle pour le reste de la session et le prochain gel
+        // accuserait une operation terminee depuis longtemps.
         assert_eq!(ce_qui_tourne(), "rien de marque cote backend");
     }
 }
