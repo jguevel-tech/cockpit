@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.2] — 2026-08-31
+
 ### Fixed
 
 - La fenêtre se figeait au hasard, sans autre issue que de fermer Cockpit de force : l'écran
