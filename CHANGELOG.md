@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.3] — 2026-08-31
+
 ### Fixed
 
 - Retour en arrière sur la 0.54.2 : l'interface était devenue plus lente et des lettres
