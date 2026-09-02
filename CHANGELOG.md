@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.7] — 2026-09-02
+
 ### Fixed
 
 - Les gels d'affichage apres une veille ou une reprise sous NVIDIA et Wayland sont evites en
