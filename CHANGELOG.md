@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.10] — 2026-09-02
+
 ### Fixed
 
 - Les sorties importantes d'un terminal sont traitées par petites tranches, pour que le clavier
