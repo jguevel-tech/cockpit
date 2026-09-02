@@ -96,11 +96,9 @@
     pool.get(e.payload)?.term.write("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n");
   });
 
-  // File d'ecriture/resize PAR TERMINAL : chaque invoke part apres le retour du precedent.
-  // Sans ca, des invoke rapproches peuvent s'executer dans le desordre cote Tauri -> octets
-  // melanges dans le PTY. Au niveau MODULE comme le pool : un terminal survit au demontage,
-  // sa file doit vivre aussi longtemps que lui — et le depot de fichiers (plus bas) doit
-  // emprunter la MEME file que la frappe, sinon deux chemins d'ecriture s'entrelacent.
+  // Les redimensionnements et les depots gardent une file par terminal. Les frappes, elles,
+  // partent directement : le client Rust les range deja dans son fil d'ecriture, et les faire
+  // attendre ici ajoutait une latence a chaque touche.
   const ioQueues = new Map<number, Promise<unknown>>();
 
   function enqueue(id: number, op: () => Promise<unknown>) {
@@ -108,7 +106,7 @@
     ioQueues.set(id, next.catch(() => {}));
   }
   function queueWrite(id: number, data: string) {
-    enqueue(id, () => writeTerminal(id, data));
+    void writeTerminal(id, data).catch((e) => signalerErreur("terminal.ecriture", String(e)));
   }
 
   /// GLISSER-DEPOSER DE FICHIERS -> chemin insere dans le terminal.
