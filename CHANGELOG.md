@@ -12,14 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les frappes successives, notamment Retour arrière, ne sont plus retardées par l'attente de la
+  touche précédente.
+
 ## [0.54.8] — 2026-09-02
 
 ### Fixed
 
 - Les frappes dans un terminal restent réactives pendant une grosse sortie : l'écriture vers le
   service ne bloque plus la boucle graphique quand le socket est plein.
-- Les frappes successives, notamment Retour arrière, ne sont plus retardées par l'attente de la
-  touche précédente.
 - Les notes longues ne recalculent plus tout leur contenu Markdown à chaque frappe.
 - Les surveillances système et Docker ne lancent plus plusieurs relevés en retard en même temps.
 
