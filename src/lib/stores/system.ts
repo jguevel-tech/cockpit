@@ -12,8 +12,11 @@ export const memoryHistory = writable<number[]>([]);
 export const metricsLive = writable<boolean>(false);
 
 let liveTimer: ReturnType<typeof setInterval> | null = null;
+let refreshInFlight = false;
 
 export async function refreshMetrics() {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
   try {
     const data = await getSystemMetrics();
     systemMetrics.set(data);
@@ -29,6 +32,8 @@ export async function refreshMetrics() {
   } catch (e) {
       signalerErreur("system.refreshMetrics", String(e));
     console.error("Failed to load system metrics:", e);
+  } finally {
+    refreshInFlight = false;
   }
 }
 

@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les frappes dans un terminal restent réactives pendant une grosse sortie : l'écriture vers le
+  service ne bloque plus la boucle graphique quand le socket est plein.
+- Les notes longues ne recalculent plus tout leur contenu Markdown à chaque frappe.
+- Les surveillances système et Docker ne lancent plus plusieurs relevés en retard en même temps.
+
 ## [0.54.7] — 2026-09-02
 
 ### Fixed

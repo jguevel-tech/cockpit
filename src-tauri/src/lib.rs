@@ -760,8 +760,8 @@ async fn set_project_summary_prompt(project: String, prompt: Option<String>, sta
 // charge d'agents en cours. Regle : toute commande qui LANCE UN PROCESS EXTERNE (tmux, git,
 // docker...) ou qui fait des entrees-sorties bornees par autre chose que la memoire est
 // `async fn`. Restent `fn` celles qui ne touchent que la base ou un champ en memoire, ainsi
-// que `write_terminal` : c'est le chemin de frappe, il ne fait aucun fork et un aller-retour
-// vers le runtime asynchrone lui ajouterait de la latence pour rien.
+// que `write_terminal` : c'est le chemin de frappe. La commande depose maintenant la trame dans
+// la file du fil d'ecriture du client, donc elle ne bloque pas sur le socket.
 //
 // **LE DISQUE COMPTE AUSSI, ET CA A ETE OUBLIE UNE FOIS.** Dix-huit commandes lisaient ou
 // ecrivaient des fichiers sans `async` : un simple `stat` est instantane sur un disque local,

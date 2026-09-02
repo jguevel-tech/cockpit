@@ -13,6 +13,7 @@ pub async fn start_status_monitor(
     on_update();
 
     let mut ticker = time::interval(Duration::from_secs(interval_secs));
+    ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     ticker.tick().await; // skip first immediate tick
 
     loop {

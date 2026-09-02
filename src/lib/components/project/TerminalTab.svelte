@@ -581,7 +581,9 @@
       const b64 = data.slice(semi + 1);
       if (!b64 || b64 === "?") return true; // "?" = demande de lecture, ignoree
       try {
-        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const texte = atob(b64);
+        const bytes = new Uint8Array(texte.length);
+        for (let i = 0; i < texte.length; i++) bytes[i] = texte.charCodeAt(i);
         const text = new TextDecoder().decode(bytes);
         if (text) setClipboard(text).catch(() => {});
       } catch {

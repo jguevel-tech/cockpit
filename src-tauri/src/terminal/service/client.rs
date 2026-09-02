@@ -16,11 +16,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use interprocess::local_socket::traits::Stream as _;
-use interprocess::local_socket::Stream;
 
 use super::protocole::{
-    self, ActionRecherche, ErreurPoignee, InfoSession, Position, Pousse, Reponse, Requete,
-    Taille, Trame,
+    self, ActionRecherche, ErreurPoignee, InfoSession, Position, Pousse, Reponse, Requete, Taille,
+    Trame,
 };
 use super::tuyau;
 
@@ -42,9 +41,9 @@ const DELAI_POIGNEE: Duration = Duration::from_secs(3);
 
 /// Une conversation ouverte avec le service.
 pub struct Client {
-    flux: Arc<Stream>,
-    /// Un seul ecrivain a la fois : deux trames entrelacees seraient illisibles.
-    ecriture: Mutex<()>,
+    /// Le fil d'ecriture possede la sortie du socket. La boucle graphique ne doit jamais
+    /// attendre que le service lise une trame, surtout pendant une grosse sortie de terminal.
+    envois: Sender<Vec<u8>>,
     sequence: AtomicU32,
     attentes: Mutex<HashMap<u32, Sender<Reponse>>>,
     ferme: Arc<AtomicBool>,
@@ -77,13 +76,26 @@ impl Client {
         // Et on refuse de confier des frappes a un service qui n'est pas le notre.
         tuyau::verifier_pair(&flux).map_err(ErreurPoignee::Tuyau)?;
 
+        let (envois, reception) = channel::<Vec<u8>>();
         let client = Arc::new(Self {
-            flux: Arc::clone(&flux),
-            ecriture: Mutex::new(()),
+            envois,
             sequence: AtomicU32::new(1),
             attentes: Mutex::new(HashMap::new()),
             ferme: Arc::new(AtomicBool::new(false)),
         });
+
+        {
+            let flux = Arc::clone(&flux);
+            let ferme = Arc::clone(&client.ferme);
+            std::thread::spawn(move || {
+                while let Ok(trame) = reception.recv() {
+                    if (&*flux).write_all(&trame).is_err() {
+                        ferme.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                }
+            });
+        }
 
         {
             let client = Arc::clone(&client);
@@ -92,8 +104,11 @@ impl Client {
                 loop {
                     match Trame::lire(&mut lecteur) {
                         Ok(Some(Trame::Reponse { sequence, reponse })) => {
-                            if let Some(qui_attend) =
-                                client.attentes.lock().unwrap_or_else(|e| e.into_inner()).remove(&sequence)
+                            if let Some(qui_attend) = client
+                                .attentes
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .remove(&sequence)
                             {
                                 let _ = qui_attend.send(reponse);
                             }
@@ -108,7 +123,11 @@ impl Client {
                 // Le service est parti : personne ne doit rester bloque sur une reponse
                 // qui n'arrivera jamais. Fermer les canaux reveille tous les appelants.
                 client.ferme.store(true, Ordering::SeqCst);
-                client.attentes.lock().unwrap_or_else(|e| e.into_inner()).clear();
+                client
+                    .attentes
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clear();
             });
         }
 
@@ -122,23 +141,27 @@ impl Client {
 
     fn envoyer(&self, sequence: u32, requete: Requete) -> Result<(), String> {
         let trame = Trame::Requete { sequence, requete }.encoder();
-        let _ecriture = self.ecriture.lock().map_err(|_| "tuyau du service perdu")?;
-        (&*self.flux).write_all(&trame).map_err(|e| {
-            // Une ecriture qui echoue a pu partir A MOITIE : le service lit alors une trame
-            // tronquee et tout ce qui suit est decale. Cette connexion ne se rattrape pas,
-            // on la declare morte pour que la suivante soit neuve.
-            self.ferme.store(true, Ordering::SeqCst);
-            e.to_string()
-        })
+        if !self.vivant() {
+            return Err("tuyau du service perdu".to_string());
+        }
+        self.envois
+            .send(trame)
+            .map_err(|_| "tuyau du service perdu".to_string())
     }
 
     /// Envoie une requete et attend sa reponse.
     fn demander(&self, requete: Requete) -> Result<Reponse, String> {
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = channel();
-        self.attentes.lock().unwrap_or_else(|e| e.into_inner()).insert(sequence, tx);
+        self.attentes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(sequence, tx);
         if let Err(e) = self.envoyer(sequence, requete) {
-            self.attentes.lock().unwrap_or_else(|e| e.into_inner()).remove(&sequence);
+            self.attentes
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&sequence);
             return Err(e);
         }
         match rx.recv_timeout(DELAI_REPONSE) {
@@ -146,7 +169,10 @@ impl Client {
             Err(_) => {
                 // On retire l'attente : sans ca, une reponse tardive resterait dans la
                 // table pour toujours et celle-ci grossirait a chaque appel perdu.
-                self.attentes.lock().unwrap_or_else(|e| e.into_inner()).remove(&sequence);
+                self.attentes
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&sequence);
                 Err("le service de terminaux ne repond plus".to_string())
             }
         }
@@ -181,7 +207,13 @@ impl Client {
         // Le numero de sequence est consomme quand meme : il n'y a pas de reponse a
         // apparier, mais un numero reutilise brouillerait une trace de diagnostic.
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
-        self.envoyer(sequence, Requete::Ecrire { id, octets: octets.to_vec() })
+        self.envoyer(
+            sequence,
+            Requete::Ecrire {
+                id,
+                octets: octets.to_vec(),
+            },
+        )
     }
 
     pub fn redimensionner(&self, id: i64, taille: Taille) -> Result<(), String> {
@@ -213,8 +245,16 @@ impl Client {
         action: ActionRecherche,
         motif: &str,
     ) -> Result<(u32, Option<u32>, Option<Position>), String> {
-        match self.demander(Requete::Chercher { id, action, motif: motif.to_string() })? {
-            Reponse::Recherche { total, index, occurrence } => Ok((total, index, occurrence)),
+        match self.demander(Requete::Chercher {
+            id,
+            action,
+            motif: motif.to_string(),
+        })? {
+            Reponse::Recherche {
+                total,
+                index,
+                occurrence,
+            } => Ok((total, index, occurrence)),
             Reponse::Erreur(e) => Err(e),
             autre => Err(format!("reponse inattendue du service : {autre:?}")),
         }
@@ -244,7 +284,10 @@ impl Client {
     /// frontend n'a jamais besoin d'en redemander un. Exercee par `tests.rs`.
     #[allow(dead_code)]
     pub fn redessiner(&self, id: i64, avec_historique: bool) -> Result<(), String> {
-        self.faire(Requete::Redessiner { id, avec_historique })
+        self.faire(Requete::Redessiner {
+            id,
+            avec_historique,
+        })
     }
 
     /// Arrete le service. Les shells meurent avec lui — l'application ne le fait JAMAIS,

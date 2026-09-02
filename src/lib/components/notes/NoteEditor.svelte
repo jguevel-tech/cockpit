@@ -101,7 +101,9 @@
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     if (!dirty || currentId === null) return;
     const id = currentId;
-    const content = markdownContent;
+    // Turndown reparcourt tout le DOM : ne pas le faire a chaque frappe dans une note longue.
+    const content = turndown.turndown(editorEl?.innerHTML || "");
+    markdownContent = content;
     dirty = false;
     try { await saveNoteFile(id, content); } catch (e) { notify(String(e)); }
   }
@@ -406,7 +408,6 @@
   function onEditorInput() {
     if (!editorEl) return;
     garantirParagrapheFinal();
-    markdownContent = turndown.turndown(editorEl.innerHTML);
     dirty = true;
     scheduleSave();
   }
