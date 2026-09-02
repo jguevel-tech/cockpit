@@ -11,10 +11,16 @@
 //! le moteur ne demarre. Machine concernee ici : RTX 500 Ada avec le pilote `nvidia`, session
 //! Wayland, WebKitGTK 2.52.
 //!
-//! **MAIS LE CONTOURNEMENT A UN PRIX.** Sans le chemin DMA-BUF, la page est composee par le
-//! processeur. Le reglage est donc automatique uniquement sous NVIDIA + Wayland, qui est le cas
-//! ou le gel a ete constate. `COCKPIT_SANS_DMABUF=0` permet de tester le chemin normal ; si la
-//! frappe devient moins fluide, ce test suffit a le confirmer.
+//! **MAIS LE CONTOURNEMENT A UN PRIX, ET IL A ETE PAYE DEUX FOIS.** Sans le chemin DMA-BUF, la
+//! page est composee par le processeur : interface plus lente, et surtout une frappe qui arrive
+//! en retard dans les terminaux — on voit l'effet de la touche PRECEDENTE a chaque touche. La
+//! 0.54.2 l'imposait des que le pilote NVIDIA etait present, la 0.54.3 est revenue en arriere
+//! pour cette raison ; la 0.54.7 l'a remis AUTOMATIQUEMENT sous NVIDIA + Wayland, et la meme
+//! plainte est revenue le jour meme. Un gel apres une veille se recupere en relancant ; une
+//! frappe en retard rend le logiciel inutilisable a chaque minute. Le contournement n'est donc
+//! JAMAIS decide a la place de l'utilisateur : `COCKPIT_SANS_DMABUF=1` le demande, rien d'autre
+//! ne l'active. Le journal du guetteur dit comment le poser quand la fenetre cesse de se
+//! redessiner.
 //!
 //! Le choix et l'ecrit dans le journal avant l'initialisation de GTK, pour rendre le diagnostic
 //! verifiable sans deviner le mode actif.
@@ -38,19 +44,14 @@ const NOTRE_REGLAGE: &str = "COCKPIT_SANS_DMABUF";
 /// Ce qui a ete decide, pour que le journal le dise au lieu de le laisser deviner.
 static MODE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
-/// Le pilote proprietaire NVIDIA est-il charge ?
+/// Le pilote proprietaire NVIDIA est-il charge ? Sert au JOURNAL, jamais a decider : c'est la
+/// configuration ou le gel a ete constate, donc celle ou la ligne doit dire comment s'en sortir.
 ///
 /// `/sys/module/nvidia` n'existe qu'avec le pilote proprietaire : ni avec nouveau, ni sur une
-/// machine sans carte NVIDIA. Une carte presente mais inutilisee n'a pas d'importance — c'est le
-/// pilote qui fournit le chemin de rendu fautif.
+/// machine sans carte NVIDIA.
 #[cfg(target_os = "linux")]
 fn pilote_nvidia_proprietaire() -> bool {
     std::path::Path::new("/sys/module/nvidia").exists()
-}
-
-#[cfg(target_os = "linux")]
-fn session_wayland() -> bool {
-    std::env::var("XDG_SESSION_TYPE").is_ok_and(|v| v.eq_ignore_ascii_case("wayland"))
 }
 
 /// **A appeler AVANT toute initialisation de GTK.** WebKitGTK lit sa variable au demarrage du
@@ -61,19 +62,20 @@ fn session_wayland() -> bool {
 /// en arriere de la 0.54.3 s'est retrouve sans effet.
 #[cfg(target_os = "linux")]
 pub fn decider() {
-    let reglage = std::env::var_os(NOTRE_REGLAGE);
-    let demande = reglage.as_ref().is_some_and(|v| v != "0");
-    let automatique = reglage.is_none() && pilote_nvidia_proprietaire() && session_wayland();
-    let mode = if demande || automatique {
+    let demande = std::env::var_os(NOTRE_REGLAGE).is_some_and(|v| v != "0");
+    let mode = if demande {
         std::env::set_var(VARIABLE, "1");
-        if demande {
-            format!("rendu : DMA-BUF desactive ({NOTRE_REGLAGE} demande)")
-        } else {
-            "rendu : DMA-BUF desactive automatiquement (NVIDIA + Wayland)".to_string()
-        }
+        format!("rendu : DMA-BUF desactive ({NOTRE_REGLAGE} demande)")
     } else {
         std::env::remove_var(VARIABLE);
-        "rendu : chemin normal".to_string()
+        if pilote_nvidia_proprietaire() {
+            format!(
+                "rendu : chemin normal, pilote NVIDIA proprietaire present — si la fenetre cesse \
+                 de se redessiner, relancer avec {NOTRE_REGLAGE}=1"
+            )
+        } else {
+            "rendu : chemin normal".to_string()
+        }
     };
     let _ = MODE.set(mode);
 }
@@ -105,10 +107,10 @@ mod tests {
     #[test]
     fn l_etat_est_toujours_remis_a_plat() {
         // Ce qu'une version precedente aurait laisse derriere elle, sans que personne ne l'ait
-        // demande.
-        // La valeur 0 force le chemin normal, meme sur la machine NVIDIA + Wayland qui execute
-        // cet essai.
-        std::env::set_var(NOTRE_REGLAGE, "0");
+        // demande. SANS notre reglage : rien ne doit decider a la place de l'utilisateur, meme
+        // sur la machine NVIDIA + Wayland qui execute cet essai — la 0.54.7 le faisait, et la
+        // frappe en retard est revenue le jour meme.
+        std::env::remove_var(NOTRE_REGLAGE);
         std::env::set_var(VARIABLE, "1");
         decider();
         assert!(
@@ -116,6 +118,12 @@ mod tests {
             "la valeur heritee devait etre retiree, elle vaut {:?}",
             std::env::var_os(VARIABLE)
         );
+
+        // La valeur 0 dit explicitement « chemin normal », et n'active rien non plus.
+        std::env::set_var(NOTRE_REGLAGE, "0");
+        std::env::set_var(VARIABLE, "1");
+        decider();
+        assert!(std::env::var_os(VARIABLE).is_none());
 
         // Et notre reglage, lui, est honore.
         std::env::set_var(NOTRE_REGLAGE, "1");

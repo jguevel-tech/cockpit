@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- La frappe dans les terminaux n'arrive plus en retard, avec Retour arrière et Espace qui
+  semblaient agir sur la touche précédente : la sortie du terminal est de nouveau affichée dès
+  qu'elle arrive, sans attendre une image.
+- Le contournement d'affichage pour NVIDIA n'est plus imposé automatiquement : il ralentissait
+  toute l'interface. Il reste disponible en lançant l'application avec `COCKPIT_SANS_DMABUF=1`
+  si la fenêtre cesse de se redessiner après une veille.
+
 ## [0.54.11] — 2026-09-02
 
 ### Fixed

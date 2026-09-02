@@ -59,7 +59,6 @@
   function disposePoolEntry(id: number) {
     const e = pool.get(id);
     if (!e) return;
-    outputQueues.delete(id);
     e.dataSub?.dispose();
     e.term.dispose();
     e.el.remove();
@@ -90,50 +89,17 @@
   // retrouverait un ecran fige au retour.
   // Sortie brute et redessins arrivent par le MEME evenement : un redessin commence par une
   // remise a plat (RIS), xterm n'a donc rien de particulier a faire pour l'appliquer.
-  const outputQueues = new Map<number, { chunks: Uint8Array[]; bytes: number; scheduled: boolean }>();
-  const OUTPUT_SLICE = 64 * 1024;
-
-  function drainOutput(id: number) {
-    const queue = outputQueues.get(id);
-    const entry = pool.get(id);
-    if (!queue || !entry) return;
-
-    let remaining = OUTPUT_SLICE;
-    while (queue.chunks.length > 0 && remaining > 0) {
-      const chunk = queue.chunks[0];
-      const part = chunk.length > remaining ? chunk.subarray(0, remaining) : chunk;
-      entry.term.write(part);
-      remaining -= part.length;
-      queue.bytes -= part.length;
-      if (part.length === chunk.length) queue.chunks.shift();
-      else queue.chunks[0] = chunk.subarray(part.length);
-    }
-
-    queue.scheduled = false;
-    if (queue.chunks.length > 0) scheduleOutput(id, queue);
-  }
-
-  function scheduleOutput(id: number, queue: { chunks: Uint8Array[]; bytes: number; scheduled: boolean }) {
-    if (queue.scheduled) return;
-    queue.scheduled = true;
-    const run = () => drainOutput(id);
-    if (document.visibilityState === "visible") requestAnimationFrame(run);
-    else setTimeout(run, 16);
-  }
-
-  function enqueueOutput(id: number, data: Uint8Array) {
-    const queue = outputQueues.get(id) ?? { chunks: [], bytes: 0, scheduled: false };
-    queue.chunks.push(data);
-    queue.bytes += data.length;
-    outputQueues.set(id, queue);
-    scheduleOutput(id, queue);
-  }
-
+  // La sortie est ecrite a xterm DES qu'elle arrive. Il ne faut RIEN mettre entre les deux :
+  // xterm decoupe deja son travail en tranches de 12 ms et rend la main entre deux, donc le
+  // clavier ne se bloque pas pendant une grosse sortie. Une file qui attendait une image
+  // (requestAnimationFrame) a ete essayee dans la 0.54.10 : chaque echo de frappe payait une image
+  // de retard, et quand le moteur ne peint plus — cas documente dans le guetteur — la sortie
+  // s'arretait completement au lieu d'etre au moins analysee. Retiree dans la 0.54.12.
   listenGlobal<{ id: number; data: string }>("terminal_output", (e) => {
-    enqueueOutput(e.payload.id, b64ToBytes(e.payload.data));
+    pool.get(e.payload.id)?.term.write(b64ToBytes(e.payload.data));
   });
   listenGlobal<number>("terminal_exit", (e) => {
-    enqueueOutput(e.payload, new TextEncoder().encode("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n"));
+    pool.get(e.payload)?.term.write("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n");
   });
 
   // Un seul appel IPC a la fois : l'ordre des frappes est une regle du terminal. Le client Rust
