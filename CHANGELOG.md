@@ -12,6 +12,10 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- L'ordre des frappes est conservé dans les terminaux, y compris pour Retour arrière et Espace.
+
 ## [0.54.10] — 2026-09-02
 
 ### Fixed

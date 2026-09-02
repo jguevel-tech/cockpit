@@ -136,9 +136,8 @@
     enqueueOutput(e.payload, new TextEncoder().encode("\r\n\x1b[2m[processus terminé]\x1b[0m\r\n"));
   });
 
-  // Les redimensionnements et les depots gardent une file par terminal. Les frappes, elles,
-  // partent directement : le client Rust les range deja dans son fil d'ecriture, et les faire
-  // attendre ici ajoutait une latence a chaque touche.
+  // Un seul appel IPC a la fois : l'ordre des frappes est une regle du terminal. Le client Rust
+  // les depose ensuite dans son fil d'ecriture, sans bloquer sur le socket.
   const ioQueues = new Map<number, Promise<unknown>>();
 
   function enqueue(id: number, op: () => Promise<unknown>) {
@@ -146,7 +145,7 @@
     ioQueues.set(id, next.catch(() => {}));
   }
   function queueWrite(id: number, data: string) {
-    void writeTerminal(id, data).catch((e) => signalerErreur("terminal.ecriture", String(e)));
+    enqueue(id, () => writeTerminal(id, data));
   }
 
   /// GLISSER-DEPOSER DE FICHIERS -> chemin insere dans le terminal.
