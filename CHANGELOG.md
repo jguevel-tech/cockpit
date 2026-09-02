@@ -12,6 +12,11 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les gels d'affichage apres une veille ou une reprise sous NVIDIA et Wayland sont evites en
+  desactivant automatiquement le chemin DMA-BUF concerne.
+
 ## [0.54.6] — 2026-08-31
 
 ### Fixed

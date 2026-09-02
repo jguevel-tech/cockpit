@@ -11,14 +11,13 @@
 //! le moteur ne demarre. Machine concernee ici : RTX 500 Ada avec le pilote `nvidia`, session
 //! Wayland, WebKitGTK 2.52.
 //!
-//! **MAIS LE CONTOURNEMENT A UN PRIX, ET IL A ETE PAYE.** Sans le chemin DMA-BUF, la page est
-//! composee par le processeur. Pose automatiquement en 0.54.2, il a rendu l'interface plus lente
-//! et fait sauter des lettres en cours de frappe — constate le jour meme. Un gel occasionnel se
-//! recupere en relancant, une frappe qui saute rend le logiciel inutilisable a la minute : le
-//! reglage est donc revenu entre les mains de l'utilisateur.
+//! **MAIS LE CONTOURNEMENT A UN PRIX.** Sans le chemin DMA-BUF, la page est composee par le
+//! processeur. Le reglage est donc automatique uniquement sous NVIDIA + Wayland, qui est le cas
+//! ou le gel a ete constate. `COCKPIT_SANS_DMABUF=0` permet de tester le chemin normal ; si la
+//! frappe devient moins fluide, ce test suffit a le confirmer.
 //!
-//! Ce module ne decide plus rien : il CONSTATE et l'ecrit dans le journal, avec la marche a
-//! suivre quand le pilote fautif est present.
+//! Le choix et l'ecrit dans le journal avant l'initialisation de GTK, pour rendre le diagnostic
+//! verifiable sans deviner le mode actif.
 
 /// La variable que WebKitGTK lit au demarrage. Elle n'existe que sous Linux : ce moteur n'est
 /// pas celui des autres systemes.
@@ -49,6 +48,11 @@ fn pilote_nvidia_proprietaire() -> bool {
     std::path::Path::new("/sys/module/nvidia").exists()
 }
 
+#[cfg(target_os = "linux")]
+fn session_wayland() -> bool {
+    std::env::var("XDG_SESSION_TYPE").is_ok_and(|v| v.eq_ignore_ascii_case("wayland"))
+}
+
 /// **A appeler AVANT toute initialisation de GTK.** WebKitGTK lit sa variable au demarrage du
 /// moteur : la poser apres n'a aucun effet, et l'echec serait silencieux.
 ///
@@ -57,20 +61,19 @@ fn pilote_nvidia_proprietaire() -> bool {
 /// en arriere de la 0.54.3 s'est retrouve sans effet.
 #[cfg(target_os = "linux")]
 pub fn decider() {
-    let demande = std::env::var_os(NOTRE_REGLAGE).is_some_and(|v| v != "0");
-    let mode = if demande {
+    let reglage = std::env::var_os(NOTRE_REGLAGE);
+    let demande = reglage.as_ref().is_some_and(|v| v != "0");
+    let automatique = reglage.is_none() && pilote_nvidia_proprietaire() && session_wayland();
+    let mode = if demande || automatique {
         std::env::set_var(VARIABLE, "1");
-        format!("rendu : DMA-BUF desactive ({NOTRE_REGLAGE} demande)")
+        if demande {
+            format!("rendu : DMA-BUF desactive ({NOTRE_REGLAGE} demande)")
+        } else {
+            "rendu : DMA-BUF desactive automatiquement (NVIDIA + Wayland)".to_string()
+        }
     } else {
         std::env::remove_var(VARIABLE);
-        if pilote_nvidia_proprietaire() {
-            format!(
-                "rendu : chemin normal, pilote NVIDIA proprietaire present — si la fenetre cesse \
-                 de se redessiner, relancer avec {NOTRE_REGLAGE}=1"
-            )
-        } else {
-            "rendu : chemin normal".to_string()
-        }
+        "rendu : chemin normal".to_string()
     };
     let _ = MODE.set(mode);
 }
@@ -83,7 +86,9 @@ pub fn decider() {
 
 /// Ce qui a ete decide, pour le journal.
 pub fn mode() -> String {
-    MODE.get().cloned().unwrap_or_else(|| "rendu : pas encore decide".to_string())
+    MODE.get()
+        .cloned()
+        .unwrap_or_else(|| "rendu : pas encore decide".to_string())
 }
 
 #[cfg(test)]
@@ -101,7 +106,9 @@ mod tests {
     fn l_etat_est_toujours_remis_a_plat() {
         // Ce qu'une version precedente aurait laisse derriere elle, sans que personne ne l'ait
         // demande.
-        std::env::remove_var(NOTRE_REGLAGE);
+        // La valeur 0 force le chemin normal, meme sur la machine NVIDIA + Wayland qui execute
+        // cet essai.
+        std::env::set_var(NOTRE_REGLAGE, "0");
         std::env::set_var(VARIABLE, "1");
         decider();
         assert!(
@@ -127,6 +134,9 @@ mod tests {
         decider();
         let mode = mode();
         assert!(mode.starts_with("rendu : "), "mode inattendu : {mode}");
-        assert!(!mode.contains("pas encore decide"), "la decision n'a pas ete prise");
+        assert!(
+            !mode.contains("pas encore decide"),
+            "la decision n'a pas ete prise"
+        );
     }
 }
