@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.12] — 2026-09-02
+
 ### Fixed
 
 - La frappe dans les terminaux n'arrive plus en retard, avec Retour arrière et Espace qui
