@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.8] — 2026-09-02
+
 ### Fixed
 
 - Les frappes dans un terminal restent réactives pendant une grosse sortie : l'écriture vers le
