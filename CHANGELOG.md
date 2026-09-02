@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.54.9] — 2026-09-02
+
 ### Fixed
 
 - Les frappes successives, notamment Retour arrière, ne sont plus retardées par l'attente de la
