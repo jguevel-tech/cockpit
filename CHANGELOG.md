@@ -12,12 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.54.9] — 2026-09-02
-
 ### Fixed
 
 - Les sorties importantes d'un terminal sont traitées par petites tranches, pour que le clavier
   garde la main pendant qu'un agent écrit beaucoup.
+
+## [0.54.9] — 2026-09-02
+
+### Fixed
+
 - Les frappes successives, notamment Retour arrière, ne sont plus retardées par l'attente de la
   touche précédente.
 
