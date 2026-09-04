@@ -12,7 +12,11 @@ le script de release.
 
 ## [Unreleased]
 
-## [0.56.1] — 2026-09-04
+### Added
+
+- Un terminal qui faisait tourner un agent IA le rouvre sur sa conversation. Deux terminaux du
+  même projet reprennent chacun la sienne, la plus récente d'abord. Cela marche avec les
+  fournisseurs qui savent retrouver leurs conversations passées ; les autres ouvrent un shell.
 
 ### Fixed
 
@@ -20,14 +24,6 @@ le script de release.
   un redémarrage de l'ordinateur. Ils étaient bien conservés, avec leur contenu, mais seuls
   ceux dont le shell tournait encore s'affichaient : au premier démarrage, la liste semblait
   vide. Un terminal sans shell est marqué « inactif » et s'ouvre en un clic.
-
-## [0.56.0] — 2026-09-04
-
-### Added
-
-- Un terminal qui faisait tourner un agent IA le rouvre sur sa conversation. Deux terminaux du
-  même projet reprennent chacun la sienne, la plus récente d'abord. Cela marche avec les
-  fournisseurs qui savent retrouver leurs conversations passées ; les autres ouvrent un shell.
 
 ## [0.55.0] — 2026-09-04
 
