@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.55.0] — 2026-09-04
+
 ### Added
 
 - Les terminaux reviennent comme on les a quittés. En rouvrant Cockpit après avoir éteint son
