@@ -136,6 +136,18 @@ pub trait Terminaux: Send + Sync {
     /// Renomme un terminal (libelle d'onglet). BESOIN REEL, purement metadonnee.
     fn renommer(&self, db: &Database, id: i64, nom: &str) -> Result<(), String>;
 
+    /// Photographie les terminaux vivants et range les photos en base.
+    ///
+    /// C'est ce qui rend les terminaux « comme on les a quittes » au prochain demarrage : le
+    /// shell, lui, ne survit pas a l'extinction du poste. Ne rend RIEN : c'est un filet, et
+    /// un service deja parti signifie simplement qu'il n'y a plus rien a photographier.
+    ///
+    /// **A appeler aux moments qui comptent, jamais en continu** : une photo coute un
+    /// aller-retour par terminal et jusqu'a un mega-octet ecrit en base. L'implementation
+    /// refuse d'ailleurs de recommencer trop vite, sauf si `force` — la fermeture de la
+    /// fenetre est le seul moment ou l'on ne peut pas remettre a plus tard.
+    fn enregistrer_les_ecrans(&self, db: &Database, force: bool);
+
     /// Les terminaux d'un projet, ou tous si `projet` est `None`. BESOIN REEL.
     ///
     /// Porte le flag `llm` (un agent tourne dedans) : c'est le logo Claude de la barre

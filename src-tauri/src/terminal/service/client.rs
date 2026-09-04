@@ -39,6 +39,10 @@ const DELAI_REPONSE: Duration = Duration::from_secs(5);
 /// connexion, et plus aucun fil n'ecrit jamais.
 const DELAI_POIGNEE: Duration = Duration::from_secs(3);
 
+/// Combien de temps on laisse a un service d'une autre version pour lacher son socket.
+/// Il n'a rien a ecrire sur disque : au-dela, il est coince et l'utilisateur doit le savoir.
+const DELAI_ARRET: Duration = Duration::from_secs(5);
+
 /// Une conversation ouverte avec le service.
 pub struct Client {
     /// Le fil d'ecriture possede la sortie du socket. La boucle graphique ne doit jamais
@@ -47,6 +51,42 @@ pub struct Client {
     sequence: AtomicU32,
     attentes: Mutex<HashMap<u32, Sender<Reponse>>>,
     ferme: Arc<AtomicBool>,
+}
+
+/// Demande a un service d'une AUTRE version de s'arreter, et attend qu'il ait lache son
+/// socket.
+///
+/// **SANS CETTE FONCTION, UN CHANGEMENT DE VERSION DU PROTOCOLE BLOQUE L'APPLICATION JUSQU'AU
+/// PROCHAIN REDEMARRAGE DE LA MACHINE.** Les versions se comparent a l'egalite stricte, et
+/// `lancement::demarrer` ne lance rien quand un service repond deja : l'application resterait
+/// donc face a un service qu'elle refuse, sans aucun moyen de le remplacer. Constate a la
+/// lecture le 2026-09-04, en passant le protocole a la version 2 ; la version 1 n'avait jamais
+/// eu de successeur, donc le trou n'avait jamais servi.
+///
+/// `Arreter` est la seule requete utilisable ici : sa forme est un octet, inchangee depuis la
+/// version 1, donc un service ancien la comprend. On n'attend PAS sa reponse — il s'arrete —
+/// mais on attend que son socket cesse de repondre, sinon le service neuf naitrait a cote.
+///
+/// Les shells de l'ancien service meurent avec lui. C'est inevitable : deux services ne
+/// peuvent pas se passer des pseudo-terminaux vivants.
+pub fn arreter_le_service_incompatible(chemin: &std::path::Path) -> Result<(), String> {
+    let flux = tuyau::connecter(chemin).map_err(|e| format!("connexion au service : {e}"))?;
+    let _ = flux.set_recv_timeout(Some(DELAI_POIGNEE));
+    // Le preambule est LU et jete : sa forme est figee, et sa version ne nous interesse plus.
+    let mut lecture = &flux;
+    let _ = protocole::lire_preambule(&mut lecture);
+    let trame = Trame::Requete { sequence: 1, requete: Requete::Arreter }.encoder();
+    (&flux).write_all(&trame).map_err(|e| format!("demande d'arret : {e}"))?;
+    drop(flux);
+
+    let debut = std::time::Instant::now();
+    while debut.elapsed() < DELAI_ARRET {
+        if tuyau::connecter(chemin).is_err() {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Err("l'ancien service de terminaux ne s'est pas arrete".to_string())
 }
 
 impl Client {
@@ -193,13 +233,24 @@ impl Client {
         dossier: &str,
         taille: Taille,
         commande_initiale: Option<String>,
+        ecran_initial: Vec<u8>,
     ) -> Result<(), String> {
         self.faire(Requete::Creer {
             id,
             dossier: dossier.to_string(),
             taille,
             commande_initiale,
+            ecran_initial,
         })
+    }
+
+    /// Les octets qui redessineraient ce terminal tel qu'il est.
+    pub fn instantane(&self, id: i64) -> Result<Vec<u8>, String> {
+        match self.demander(Requete::Instantane { id })? {
+            Reponse::Octets(octets) => Ok(octets),
+            Reponse::Erreur(e) => Err(e),
+            autre => Err(format!("reponse inattendue du service : {autre:?}")),
+        }
     }
 
     /// Le chemin de frappe : une trame posee sur le socket, pas d'attente.

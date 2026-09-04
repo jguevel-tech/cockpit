@@ -16,10 +16,13 @@
 //! **Uniquement sur `ScaleFactorChanged`.** Faire ce travail sur `Resized`, qui tombe a chaque
 //! pixel d'un redimensionnement a la souris, couterait cher pour rien — et risquerait de se
 //! rappeler lui-meme.
+//!
+//! Ce module porte aussi la FERMETURE : c'est le dernier moment ou l'on peut photographier les
+//! terminaux, et c'est ce qui les rend « comme on les a quittes » au prochain demarrage.
 
 use std::time::Duration;
 
-use tauri::{PhysicalSize, Runtime, WindowEvent};
+use tauri::{Manager, PhysicalSize, Runtime, WindowEvent};
 
 /// Le temps laisse a GTK entre les deux tailles. Assez pour qu'une reallocation ait lieu, assez
 /// court pour que personne ne voie autre chose qu'un scintillement.
@@ -35,6 +38,18 @@ pub fn taille_secouee(taille: PhysicalSize<u32>) -> PhysicalSize<u32> {
 
 /// A brancher sur le constructeur Tauri.
 pub fn sur_evenement<R: Runtime>(fenetre: &tauri::Window<R>, evenement: &WindowEvent) {
+    // La fenetre se ferme : derniere occasion de photographier les terminaux. C'est fait ICI
+    // et SYNCHRONEMENT, avant que Tauri ne rende la main — un travail lance en tache de fond
+    // serait tue avec le processus, et la photo ne servirait a rien.
+    //
+    // `CloseRequested` et non `Destroyed` : a `Destroyed`, l'etat de l'application est deja
+    // en train de disparaitre. Le cout se paie une fois, quand on ferme.
+    if matches!(evenement, WindowEvent::CloseRequested { .. }) {
+        if let Some(etat) = fenetre.try_state::<crate::AppState>() {
+            etat.terminals.enregistrer_les_ecrans(&etat.db, true);
+        }
+        return;
+    }
     let WindowEvent::ScaleFactorChanged { new_inner_size, .. } = evenement else {
         return;
     };

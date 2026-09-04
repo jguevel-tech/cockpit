@@ -190,7 +190,7 @@ fn le_tour_complet_par_le_socket() {
     let (client, recu) = banc.client();
     let mut miroir = Miroir::neuf();
 
-    client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
     client.attacher(1, TAILLE).unwrap();
     client.ecrire(1, MARQUEUR_BONJOUR).unwrap();
     attendre_a_l_ecran(&mut miroir, &recu, "bonjour-du-service");
@@ -211,6 +211,62 @@ fn le_tour_complet_par_le_socket() {
     }
 }
 
+/// LE PARCOURS DE L'EXTINCTION DU POSTE, par le socket, avec de vrais shells.
+///
+/// Ce que l'utilisateur fait : il travaille, il eteint, il rallume, il retrouve ses
+/// terminaux. Ce que la machine fait : photographier, perdre la session avec le service,
+/// recreer la session avec la photo, et retrouver le texte a l'ecran.
+///
+/// C'est l'essai qui couvre la chaine ENTIERE — `Instantane`, l'ecran initial de `Creer`,
+/// et le fait que le shell neuf ecrive APRES. Les essais unitaires de `session.rs` ne
+/// voient pas passer les octets par le tuyau.
+#[cfg(unix)]
+#[test]
+fn un_terminal_photographie_revient_avec_son_texte() {
+    let banc = Banc::neuf(500);
+    let (client, recu) = banc.client();
+    let mut miroir = Miroir::neuf();
+
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
+    client.attacher(1, TAILLE).unwrap();
+    client.ecrire(1, MARQUEUR_AIGUILLE).unwrap();
+    attendre_a_l_ecran(&mut miroir, &recu, "aiguille-unique");
+
+    // La photo, telle que l'application la rangerait en base.
+    let photo = client.instantane(1).unwrap();
+    assert!(!photo.is_empty(), "une photo vide ne restaurerait rien");
+
+    // L'extinction : la session disparait. Le shell meurt avec elle, comme avec la machine.
+    client.fermer(1).unwrap();
+
+    // Le rallumage : meme identifiant, un shell neuf, et la photo par-dessus.
+    client.creer(1, &dossier_de_travail(), TAILLE, None, photo).unwrap();
+    let mut apres = Miroir::neuf();
+    client.attacher(1, TAILLE).unwrap();
+    attendre_a_l_ecran(&mut apres, &recu, "aiguille-unique");
+    assert!(
+        apres.texte().contains('\u{2500}'),
+        "la ligne de separation manque : rien ne distingue l'ancien du neuf. Ecran :\n{}",
+        apres.texte()
+    );
+
+    // Et le terminal restaure est un VRAI terminal : il repond a la frappe.
+    client.ecrire(1, MARQUEUR_BONJOUR).unwrap();
+    attendre_a_l_ecran(&mut apres, &recu, "bonjour-du-service");
+    client.fermer(1).unwrap();
+}
+
+/// Une photo demandee sur un terminal inconnu est une ERREUR, pas une photo vide.
+///
+/// Un octet vide rendu ici effacerait la derniere photo valable de ce terminal en base.
+#[test]
+fn photographier_un_terminal_inconnu_est_une_erreur() {
+    let banc = Banc::neuf(500);
+    let (client, _recu) = banc.client();
+    let erreur = client.instantane(404).unwrap_err();
+    assert!(erreur.contains("404"), "l'erreur doit nommer le terminal : {erreur}");
+}
+
 /// La commande d'ouverture (bouton « ▶ Cmd », palette, shell de conteneur).
 #[test]
 fn la_commande_d_ouverture_est_lancee() {
@@ -218,7 +274,7 @@ fn la_commande_d_ouverture_est_lancee() {
     let (client, recu) = banc.client();
     let mut miroir = Miroir::neuf();
     client
-        .creer(1, &dossier_de_travail(), TAILLE, Some("echo commande-d-ouverture".into()))
+        .creer(1, &dossier_de_travail(), TAILLE, Some("echo commande-d-ouverture".into()), Vec::new())
         .unwrap();
     client.attacher(1, TAILLE).unwrap();
     attendre_a_l_ecran(&mut miroir, &recu, "commande-d-ouverture");
@@ -254,7 +310,7 @@ fn le_shell_survit_a_la_mort_du_client() {
     let avant = {
         let (client, recu) = connecter(&chemin);
         let mut miroir = Miroir::neuf();
-        client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+        client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
         client.attacher(1, TAILLE).unwrap();
         client.ecrire(1, MARQUEUR_TRACE).unwrap();
         attendre_a_l_ecran(&mut miroir, &recu, "trace-avant-la-coupure");
@@ -352,7 +408,7 @@ fn une_application_plein_ecran_est_retrouvee_vivante() {
     {
         let (client, recu) = banc.client();
         let mut miroir = Miroir::neuf();
-        client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+        client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
         client.attacher(1, TAILLE).unwrap();
         client
             .ecrire(1, format!("{vim} -n -u NONE -c 'set noswapfile' /tmp/essai-cockpit.txt\r").as_bytes())
@@ -392,7 +448,7 @@ fn une_application_plein_ecran_est_retrouvee_vivante() {
 fn une_reconnexion_en_plein_flux_laisse_l_ecran_juste() {
     let banc = Banc::neuf(2000);
     let (client, recu) = banc.client();
-    client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
     client.attacher(1, TAILLE).unwrap();
 
     // Une sortie longue et reguliere : on va couper au milieu.
@@ -437,7 +493,7 @@ fn la_recherche_et_la_copie_passent_par_le_socket() {
     let banc = Banc::neuf(2000);
     let (client, recu) = banc.client();
     let mut miroir = Miroir::neuf();
-    client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
     client.attacher(1, TAILLE).unwrap();
     client.ecrire(1, MARQUEUR_AIGUILLE).unwrap();
     attendre_a_l_ecran(&mut miroir, &recu, "aiguille-unique");
@@ -533,7 +589,7 @@ fn la_latence_de_frappe_reste_sous_celle_de_tmux() {
     let banc = Banc::neuf(500);
     let (client, recu) = banc.client();
     let mut miroir = Miroir::neuf();
-    client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
     client.attacher(1, TAILLE).unwrap();
     // `cat` renvoie ce qu'on lui donne : l'echo ne depend plus de l'invite du shell.
     client.ecrire(1, b"cat\r").unwrap();
@@ -634,7 +690,7 @@ fn le_cout_memoire_d_une_session_est_mesure() {
 
     // Une premiere session paie les tampons communs : on mesure les SUIVANTES, c'est
     // elles qui comptent quand un utilisateur ouvre son onzieme terminal.
-    client.creer(1, &dossier_de_travail(), TAILLE, None).unwrap();
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
     client.attacher(1, TAILLE).unwrap();
     ecouler(&mut miroir, &recu);
 
@@ -642,7 +698,7 @@ fn le_cout_memoire_d_une_session_est_mesure() {
         let taille = Taille { colonnes, lignes: 24 };
         let lignes = serveur::lignes_d_historique(colonnes, serveur::HISTORIQUE);
         let avant = memoire_resident().unwrap();
-        client.creer(numero, &dossier_de_travail(), taille, None).unwrap();
+        client.creer(numero, &dossier_de_travail(), taille, None, Vec::new()).unwrap();
         std::thread::sleep(Duration::from_millis(400));
         let a_vide = memoire_resident().unwrap().saturating_sub(avant);
 

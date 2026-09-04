@@ -25,8 +25,10 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::interface::{Creation, ResultatRecherche, Taille, TerminalInfo, Terminaux};
-use super::service::client::Client;
-use super::service::protocole::{ActionRecherche as ActionService, Pousse, Taille as TailleService};
+use super::service::client::{arreter_le_service_incompatible, Client};
+use super::service::protocole::{
+    ActionRecherche as ActionService, ErreurPoignee, Pousse, Taille as TailleService,
+};
 use super::service::{lancement, reconcilier, tuyau};
 use crate::storage::Database;
 
@@ -45,6 +47,12 @@ struct SortiePayload {
     data: String,
 }
 
+/// Temps minimum entre deux series de photos d'ecran, hors fermeture de la fenetre.
+///
+/// Une minute : assez pour qu'un aller-retour entre onglets ne coute rien, assez court pour
+/// qu'une panne ne fasse pas perdre une heure de terminal.
+const ENTRE_DEUX_PHOTOS: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub struct TerminauxService {
     /// Ou joindre le service. Une erreur ici (dossier d'execution inutilisable) est gardee
     /// telle quelle et remontee a la premiere operation, plutot que d'echouer au demarrage.
@@ -61,6 +69,8 @@ pub struct TerminauxService {
     /// l'onglet revient : re-attacher declencherait un redessin complet, donc un
     /// clignotement et une perte de la position de defilement a chaque changement d'onglet.
     attaches: Mutex<HashSet<i64>>,
+    /// Quand les ecrans ont ete photographies pour la derniere fois. Voir `assez_attendu`.
+    derniere_photo: Mutex<Option<std::time::Instant>>,
 }
 
 impl Default for TerminauxService {
@@ -72,6 +82,7 @@ impl Default for TerminauxService {
             derniere_panne: Mutex::new(None),
             contexte: Mutex::new(None),
             attaches: Mutex::new(HashSet::new()),
+            derniere_photo: Mutex::new(None),
         }
     }
 }
@@ -214,8 +225,32 @@ impl TerminauxService {
         // Nomme l'attente : si la fenetre se fige pendant ce temps, le journal dira quoi.
         let _marque = crate::guetteur::marquer("lancement du service de terminaux");
         lancement::demarrer(&chemin)?;
-        let client = Client::connecter(&chemin, move |pousse| traiter_poussee(&contexte, pousse))
-            .map_err(|e| e.to_string())?;
+        let contexte_pour_relance = contexte.clone();
+        let client = match Client::connecter(&chemin, move |pousse| traiter_poussee(&contexte, pousse))
+        {
+            Ok(client) => client,
+            // Un service d'une AUTRE version : il faut le remplacer, pas abandonner. Sans
+            // cela l'application resterait bloquee jusqu'au prochain redemarrage de la
+            // machine — les versions se comparent a l'egalite stricte, et un service qui
+            // repond deja n'est jamais relance. Ses shells meurent avec lui : deux services
+            // ne peuvent pas se passer des pseudo-terminaux vivants.
+            Err(
+                e @ (ErreurPoignee::ServiceTropAncien { .. }
+                | ErreurPoignee::ApplicationTropAncienne { .. }),
+            ) => {
+                journaliser(
+                    &contexte_pour_relance.app,
+                    "terminal.service",
+                    &format!("{e} — arret de l'ancien service et relance"),
+                );
+                arreter_le_service_incompatible(&chemin)?;
+                lancement::demarrer(&chemin)?;
+                let contexte = contexte_pour_relance.clone();
+                Client::connecter(&chemin, move |pousse| traiter_poussee(&contexte, pousse))
+                    .map_err(|e| e.to_string())?
+            }
+            Err(e) => return Err(e.to_string()),
+        };
         // Un service neuf n'a plus aucun abonnement : tout onglet devra se rebrancher.
         self.attaches.lock().unwrap_or_else(|e| e.into_inner()).clear();
         *self.client.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&client));
@@ -242,6 +277,57 @@ impl TerminauxService {
             Some(client) if client.vivant() => Ok(Arc::clone(client)),
             _ => Err("le service de terminaux ne repond plus".into()),
         }
+    }
+}
+
+impl TerminauxService {
+    /// Assez de temps depuis la derniere photo ? Retient l'instant si oui.
+    ///
+    /// Le geste qui declenche une photo (quitter la vue des terminaux) peut se repeter
+    /// plusieurs fois par minute. Sans cette borne, chaque aller-retour entre deux onglets
+    /// ferait relire l'ecran de tous les terminaux et reecrire la base.
+    fn assez_attendu(&self) -> bool {
+        let mut derniere = self.derniere_photo.lock().unwrap_or_else(|e| e.into_inner());
+        let maintenant = std::time::Instant::now();
+        if derniere.is_some_and(|quand| maintenant.duration_since(quand) < ENTRE_DEUX_PHOTOS) {
+            return false;
+        }
+        *derniere = Some(maintenant);
+        true
+    }
+
+    /// Rouvre un shell pour une ligne que le service ne connait plus, avec l'ecran d'avant.
+    ///
+    /// C'est le chemin normal apres une extinction du poste. Trois choix qui se lisent mal
+    /// dans le code :
+    /// - **le dossier vient de la LIGNE**, pas du projet : un terminal ouvert dans un
+    ///   worktree ou un sous-dossier doit y revenir. La racine du projet n'est qu'un repli ;
+    /// - **aucune commande initiale n'est rejouee.** Une commande relancee a l'aveugle peut
+    ///   etre destructive, et personne ne l'a demandee au demarrage ;
+    /// - **la photo n'est PAS effacee apres usage**, et c'est deliberе. L'effacer paraissait
+    ///   propre ; en realite elle est de toute facon remplacee a la prochaine photo, et la
+    ///   perdre ici ferait perdre l'ecran pour de bon si la machine s'arretait brutalement
+    ///   entre la restauration et la photo suivante.
+    ///
+    /// Limite connue et acceptee : restaurer puis refermer sans rien taper empile un
+    /// separateur et une invite de plus dans la photo suivante. L'historique etant borne en
+    /// cellules, ca ne grossit pas sans fin et le contenu utile reste lisible.
+    fn restaurer(&self, db: &Database, id: i64, taille: Taille) -> Result<(), String> {
+        let client = self.client()?;
+        let ligne = db.get_terminal_row(id)?;
+        let dossier = if ligne.cwd.is_empty() {
+            db.get_project_by_name(&ligne.project).map(|p| p.path).unwrap_or_default()
+        } else {
+            ligne.cwd
+        };
+        client.creer(
+            id,
+            &dossier,
+            taille_service(taille),
+            None,
+            db.get_terminal_snapshot(id),
+        )?;
+        Ok(())
     }
 }
 
@@ -274,9 +360,11 @@ impl Terminaux for TerminauxService {
             .map(|row| row.id)
             .collect();
         let vue = reconcilier(&sessions, &lignes);
-        for id in vue.lignes_a_supprimer {
-            let _ = db.delete_terminal_row(id);
-        }
+        // Les lignes sans session ne sont PAS supprimees : c'est l'etat normal apres une
+        // extinction, et leur onglet doit reparaitre. Chacune retrouvera un shell a
+        // l'ouverture de son onglet (voir `restaurer`) — jamais avant, sinon ouvrir Cockpit
+        // lancerait un shell par terminal de chaque projet.
+        let _ = &vue.lignes_a_restaurer;
         // Une session que plus aucun onglet ne peut afficher tourne pour personne.
         for id in vue.sessions_orphelines {
             if let Err(e) = client.fermer(id) {
@@ -289,9 +377,16 @@ impl Terminaux for TerminauxService {
         let client = self.client()?;
         let Creation { projet, dossier, taille, commande_initiale } = demande;
         // La ligne d'abord : c'est son rowid qui identifie la session, et lui seul traverse
-        // un redemarrage de la machine.
-        let row = db.create_terminal_row(&projet)?;
-        match client.creer(row.id, &dossier, taille_service(taille), commande_initiale) {
+        // l'extinction du poste. Le dossier est retenu avec elle — un terminal ouvert dans un
+        // worktree ou un sous-dossier doit y revenir, pas a la racine du projet.
+        let row = db.create_terminal_row_dans(&projet, &dossier)?;
+        match client.creer(
+            row.id,
+            &dossier,
+            taille_service(taille),
+            commande_initiale,
+            Vec::new(),
+        ) {
             Ok(()) => Ok(row.id),
             Err(e) => {
                 let _ = db.delete_terminal_row(row.id);
@@ -338,11 +433,44 @@ impl Terminaux for TerminauxService {
                 Ok(())
             }
             Err(e) => {
-                // Le service ne connait pas cette session : sa ligne ne designe plus rien.
-                if !client.lister().is_ok_and(|s| s.iter().any(|s| s.id == id)) {
-                    let _ = db.delete_terminal_row(id);
+                // Le service ne connait pas cette session. Le cas ORDINAIRE, apres une
+                // extinction du poste : la ligne est la, le shell est mort avec la machine.
+                // On rouvre un shell dans le meme dossier et on lui redonne l'ecran d'avant,
+                // au lieu de supprimer l'onglet sous les yeux de l'utilisateur.
+                if client.lister().is_ok_and(|s| s.iter().any(|s| s.id == id)) {
+                    return Err(e);
                 }
-                Err(e)
+                self.restaurer(db, id, taille)?;
+                client.attacher(id, taille_service(taille))?;
+                self.attaches.lock().unwrap_or_else(|e| e.into_inner()).insert(id);
+                Ok(())
+            }
+        }
+    }
+
+    /// Photographie tous les terminaux que le service tient, et range les photos en base.
+    ///
+    /// **AUCUN MINUTEUR ICI, ET C'EST DELIBERE.** Une photo coute un aller-retour par
+    /// terminal et jusqu'a un mega-octet ecrit en base, et ce cout se paie MULTIPLIE par le
+    /// nombre de terminaux ouverts — la meme regle que la surveillance des conteneurs, qui a
+    /// deja fait tenir 200 % de processeur a docker. Les photos sont donc prises sur les
+    /// GESTES : quand on quitte la vue des terminaux, et quand la fenetre se ferme. Entre
+    /// deux, `assez_attendu` refuse de recommencer.
+    ///
+    /// Ne rend pas d'erreur : c'est un filet, pas une fonctionnalite. Un service deja parti
+    /// signifie simplement qu'il n'y a plus rien a photographier.
+    fn enregistrer_les_ecrans(&self, db: &Database, force: bool) {
+        if !force && !self.assez_attendu() {
+            return;
+        }
+        let Some(client) = self.deja_connecte() else { return };
+        let Ok(sessions) = client.lister() else { return };
+        for session in sessions.iter().filter(|s| s.vivant) {
+            match client.instantane(session.id) {
+                Ok(octets) if !octets.is_empty() => {
+                    let _ = db.set_terminal_snapshot(session.id, &octets);
+                }
+                _ => {}
             }
         }
     }

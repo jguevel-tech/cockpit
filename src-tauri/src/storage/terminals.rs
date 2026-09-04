@@ -1,30 +1,46 @@
 use super::db::Database;
 use serde::{Deserialize, Serialize};
 
-/// Ce qui, d'un terminal, doit survivre a un redemarrage de la machine : son projet et son
-/// nom d'onglet. Tout le reste (le shell, l'ecran, la taille) appartient au service de
-/// terminaux, qui ne survit pas au redemarrage — voir `terminal/adaptateur.rs`.
+/// Ce qui, d'un terminal, doit survivre a l'extinction du poste : son projet, son nom
+/// d'onglet, le dossier ou son shell a ete ouvert, et la derniere photo de son ecran.
+///
+/// Le shell lui-meme ne survit pas — le noyau le tue — et le service de terminaux non plus.
+/// Ce qui est rendu au retour, c'est ce que le terminal AFFICHAIT, dans le meme dossier, avec
+/// un shell neuf a la suite. Voir `terminal/adaptateur.rs`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalRow {
     pub id: i64,
     pub project: String,
     pub name: String,
+    /// Dossier de depart du shell. Vide = la racine du projet.
+    pub cwd: String,
 }
 
 impl TerminalRow {
-    const SELECT_COLS: &'static str = "id, project, name";
+    const SELECT_COLS: &'static str = "id, project, name, cwd";
 
     pub fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Self> {
         Ok(Self {
             id: row.get(0)?,
             project: row.get(1)?,
             name: row.get(2)?,
+            cwd: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
         })
     }
 }
 
 impl Database {
     pub fn create_terminal_row(&self, project: &str) -> Result<TerminalRow, String> {
+        self.create_terminal_row_dans(project, "")
+    }
+
+    /// La meme chose, en retenant le dossier ou le shell s'ouvre : c'est lui qu'un terminal
+    /// restaure doit retrouver, et pas la racine du projet.
+    pub fn create_terminal_row_dans(
+        &self,
+        project: &str,
+        cwd: &str,
+    ) -> Result<TerminalRow, String> {
         let conn = self.conn();
         // Nom par defaut : « PROJET - N » (projet en majuscules). N = plus grand suffixe
         // deja attribue pour CE projet + 1, et non le nombre de terminaux : apres fermeture
@@ -45,8 +61,8 @@ impl Database {
         };
         let name = format!("{}{}", prefix, next);
         conn.execute(
-            "INSERT INTO terminals (project, name) VALUES (?1, ?2)",
-            [project, &name],
+            "INSERT INTO terminals (project, name, cwd) VALUES (?1, ?2, ?3)",
+            [project, &name, cwd],
         )
         .map_err(|e| e.to_string())?;
         let id = conn.last_insert_rowid();
@@ -107,6 +123,37 @@ impl Database {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    /// Range la derniere photo d'un terminal. Des OCTETS de terminal, jamais du texte : ils
+    /// portent les couleurs, le curseur et les modes, et se redonnent tels quels.
+    pub fn set_terminal_snapshot(&self, id: i64, octets: &[u8]) -> Result<(), String> {
+        let quand = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        self.conn()
+            .execute(
+                "UPDATE terminals SET snapshot=?1, snapshot_at=?2 WHERE id=?3",
+                rusqlite::params![octets, quand, id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// La derniere photo d'un terminal, si elle existe.
+    ///
+    /// Une photo ABSENTE n'est pas une erreur : un terminal qui vient de naitre n'en a pas,
+    /// et un terminal dont la photo a echoue doit pouvoir se rouvrir vide.
+    pub fn get_terminal_snapshot(&self, id: i64) -> Vec<u8> {
+        self.conn()
+            .query_row("SELECT snapshot FROM terminals WHERE id=?1", [id], |r| {
+                r.get::<_, Option<Vec<u8>>>(0)
+            })
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    }
+
 }
 
 #[cfg(test)]
@@ -129,6 +176,36 @@ mod tests {
         db.delete_terminal_row(t.id).unwrap();
         db.delete_terminal_row(t2.id).unwrap();
         assert!(db.get_terminal_rows(None).unwrap().is_empty());
+    }
+
+    /// Ce qui rend un terminal « comme on l'a quitte » : le dossier ET la photo de l'ecran.
+    ///
+    /// La photo est BINAIRE : elle porte des octets de terminal (couleurs, curseur), pas du
+    /// texte. Un aller-retour qui passerait par une chaine les abimerait sans rien dire.
+    #[test]
+    fn le_dossier_et_la_photo_traversent_la_base() {
+        let db = Database::new(":memory:").unwrap();
+        let t = db.create_terminal_row_dans("cockpit", "/tmp/projet/api").unwrap();
+        assert_eq!(t.cwd, "/tmp/projet/api");
+        assert_eq!(db.get_terminal_row(t.id).unwrap().cwd, "/tmp/projet/api");
+
+        // Aucune photo au depart : un terminal neuf s'ouvre vide, ce n'est pas une panne.
+        assert!(db.get_terminal_snapshot(t.id).is_empty());
+
+        let photo = vec![0x1b, b'c', 0x00, 0xff, b'\n', 0xfe];
+        db.set_terminal_snapshot(t.id, &photo).unwrap();
+        assert_eq!(db.get_terminal_snapshot(t.id), photo);
+
+        // Une photo se REMPLACE, elle ne s'efface pas : la perdre entre une restauration et
+        // la photo suivante ferait perdre l'ecran pour de bon si la machine s'arretait la.
+        db.set_terminal_snapshot(t.id, b"\x1b[2Jplus recent").unwrap();
+        assert_eq!(db.get_terminal_snapshot(t.id), b"\x1b[2Jplus recent");
+
+        // Un terminal sans dossier retombe sur la racine du projet, cote adaptateur.
+        let nu = db.create_terminal_row("cockpit").unwrap();
+        assert_eq!(nu.cwd, "");
+        // Et un identifiant inconnu ne fait pas paniquer la lecture.
+        assert!(db.get_terminal_snapshot(999_999).is_empty());
     }
 
     #[test]

@@ -31,7 +31,17 @@
 use std::io::{self, Read, Write};
 
 /// Version du protocole. A INCREMENTER des qu'un message change de forme.
-pub const VERSION: u16 = 1;
+///
+/// **2** : `Creer` porte un ecran initial, et `Instantane` permet de photographier un
+/// terminal. C'est ce qui rend les terminaux retrouvables apres l'extinction du poste.
+///
+/// **UN CHANGEMENT DE VERSION TUE LES SESSIONS EN COURS, UNE FOIS.** L'application refuse
+/// de parler a un service d'une autre version (voir `comparer_versions`), et le service
+/// vivant ne se remplace pas tout seul : c'est `adaptateur` qui lui demande de s'arreter
+/// (`Arreter`, variante inchangee depuis la v1, donc comprise par un service ancien) avant
+/// d'en lancer un neuf. Sans cette demande, l'application resterait bloquee sur
+/// « service trop ancien » jusqu'au prochain redemarrage de la machine.
+pub const VERSION: u16 = 2;
 
 /// Les huit octets qui identifient le service. Jamais de changement de forme.
 const MAGIE: [u8; 8] = *b"CKPTERM\0";
@@ -172,6 +182,15 @@ pub enum Requete {
         dossier: String,
         taille: Taille,
         commande_initiale: Option<String>,
+        /// Ce que le terminal affichait la derniere fois, a remettre dans l'ecran AVANT que
+        /// le shell neuf n'ecrive quoi que ce soit. Vide pour un terminal qui nait.
+        ///
+        /// Passe par le SERVICE et non par le terminal du frontend, pour une raison d'ordre :
+        /// l'attache qui suit une creation pousse un redessin, et un redessin commence par
+        /// une remise a plat qui viderait un contenu ecrit par le frontend. Injecte ici, le
+        /// contenu traverse l'emulateur : il se retrouve dans l'historique, donc dans le
+        /// redessin, la molette et la recherche.
+        ecran_initial: Vec<u8>,
     },
     /// Le chemin de frappe. Aucune reponse n'est attendue : un aller-retour ajouterait la
     /// latence du tuyau a CHAQUE touche. Un echec revient en `Pousse::Panne`.
@@ -189,6 +208,12 @@ pub enum Requete {
     Redessiner { id: i64, avec_historique: bool },
     /// Arret du service. Les shells meurent avec lui.
     Arreter,
+    /// Photographie ce terminal : les octets qui le redessineraient tel quel.
+    ///
+    /// Rendus par le service et non calcules par le frontend : l'emulateur du service est
+    /// l'autorite sur ce qu'affiche un terminal, et une serialisation cote interface
+    /// couterait du temps sur le fil qui dessine, a chaque terminal.
+    Instantane { id: i64 },
 }
 
 /// La reponse a une requete, portant le meme numero de sequence.
@@ -200,6 +225,8 @@ pub enum Reponse {
     Texte(String),
     /// `index` est la position de l'occurrence courante dans `total`, `None` si aucune.
     Recherche { total: u32, index: Option<u32>, occurrence: Option<Position> },
+    /// Les octets qui redessinent un terminal tel qu'il est (reponse a `Instantane`).
+    Octets(Vec<u8>),
 }
 
 /// Ce que le service envoie sans qu'on le lui demande.
@@ -293,12 +320,13 @@ fn abime(detail: String) -> io::Error {
 
 fn encoder_requete(r: &Requete, out: &mut Vec<u8>) {
     match r {
-        Requete::Creer { id, dossier, taille, commande_initiale } => {
+        Requete::Creer { id, dossier, taille, commande_initiale, ecran_initial } => {
             out.push(1);
             mettre_i64(*id, out);
             mettre_chaine(dossier, out);
             mettre_taille(*taille, out);
             mettre_option(commande_initiale.as_deref(), out);
+            mettre_octets(ecran_initial, out);
         }
         Requete::Ecrire { id, octets } => {
             out.push(2);
@@ -343,6 +371,10 @@ fn encoder_requete(r: &Requete, out: &mut Vec<u8>) {
             out.push(*avec_historique as u8);
         }
         Requete::Arreter => out.push(10),
+        Requete::Instantane { id } => {
+            out.push(11);
+            mettre_i64(*id, out);
+        }
     }
 }
 
@@ -353,6 +385,7 @@ fn decoder_requete(l: &mut Lecteur) -> io::Result<Requete> {
             dossier: l.chaine()?,
             taille: l.taille()?,
             commande_initiale: l.option()?,
+            ecran_initial: l.octets()?,
         },
         2 => Requete::Ecrire { id: l.i64()?, octets: l.octets()? },
         3 => Requete::Redimensionner { id: l.i64()?, taille: l.taille()? },
@@ -373,6 +406,7 @@ fn decoder_requete(l: &mut Lecteur) -> io::Result<Requete> {
         8 => Requete::CopierSelection { id: l.i64()?, debut: l.position()?, fin: l.position()? },
         9 => Requete::Redessiner { id: l.i64()?, avec_historique: l.booleen()? },
         10 => Requete::Arreter,
+        11 => Requete::Instantane { id: l.i64()? },
         autre => return Err(abime(format!("requete inconnue: {autre}"))),
     })
 }
@@ -416,6 +450,10 @@ fn encoder_reponse(r: &Reponse, out: &mut Vec<u8>) {
                 None => out.push(0),
             }
         }
+        Reponse::Octets(octets) => {
+            out.push(6);
+            mettre_octets(octets, out);
+        }
     }
 }
 
@@ -442,6 +480,7 @@ fn decoder_reponse(l: &mut Lecteur) -> io::Result<Reponse> {
             index: if l.booleen()? { Some(l.u32()?) } else { None },
             occurrence: if l.booleen()? { Some(l.position()?) } else { None },
         },
+        6 => Reponse::Octets(l.octets()?),
         autre => return Err(abime(format!("reponse inconnue: {autre}"))),
     })
 }
@@ -628,6 +667,7 @@ mod tests {
                     dossier: "/home/moi/projet".into(),
                     taille,
                     commande_initiale: Some("npm run dev".into()),
+                    ecran_initial: vec![27, b'[', b'H', 0, 255],
                 },
             },
             Trame::Requete {
@@ -637,6 +677,7 @@ mod tests {
                     dossier: String::new(),
                     taille,
                     commande_initiale: None,
+                    ecran_initial: Vec::new(),
                 },
             },
             Trame::Requete { sequence: 3, requete: Requete::Ecrire { id: 4, octets: vec![0, 27, 255] } },
@@ -644,6 +685,9 @@ mod tests {
             Trame::Requete { sequence: 5, requete: Requete::Fermer { id: 4 } },
             Trame::Requete { sequence: 6, requete: Requete::Attacher { id: 4, taille } },
             Trame::Requete { sequence: 7, requete: Requete::Lister },
+            Trame::Requete { sequence: 30, requete: Requete::Instantane { id: 4 } },
+            Trame::Reponse { sequence: 31, reponse: Reponse::Octets(vec![27, b'c', 0, 200]) },
+            Trame::Reponse { sequence: 32, reponse: Reponse::Octets(Vec::new()) },
             Trame::Requete {
                 sequence: 8,
                 requete: Requete::Chercher {
@@ -716,6 +760,7 @@ mod tests {
                 dossier: "/tmp".into(),
                 taille: Taille { colonnes: 80, lignes: 24 },
                 commande_initiale: None,
+                ecran_initial: Vec::new(),
             },
         }
         .encoder();

@@ -209,7 +209,7 @@
     createTerminal, resizeTerminal, closeTerminal,
     attachTerminal, renameTerminal, listTerminals, listAllTerminals,
     setClipboard, getClipboard,
-    terminalSearch, openUrl,
+    terminalSearch, openUrl, saveTerminalScreens,
   } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
@@ -319,8 +319,17 @@
         })
       );
 
-      const existing = (await listTerminals(name)).filter((t) => t.alive);
-      sessions = existing.map((t) => ({ id: t.id, alive: t.alive, name: t.name }));
+      // PAS DE FILTRE SUR `alive` ICI, et c'est ce qui rend les terminaux au retour.
+      //
+      // Un terminal dont le service n'a plus la session n'est pas perdu : son shell est mort
+      // avec la machine, sa ligne a survecu, et l'activer rouvre un shell dans le meme
+      // dossier avec l'ecran qu'il affichait (voir `restaurer`, cote Rust). Le filtre qui
+      // vivait ici faisait disparaitre TOUS les onglets de terminal a chaque extinction du
+      // poste. `alive` reste vrai a l'affichage : ce qui barre un onglet, c'est un shell qui
+      // meurt sous les yeux de l'utilisateur (evenement `terminal_exit`), pas un terminal
+      // qui dort.
+      const existing = await listTerminals(name);
+      sessions = existing.map((t) => ({ id: t.id, alive: true, name: t.name }));
 
       // La commande d'abord : elle CREE un terminal, alors qu'une demande d'ouverture ne
       // fait qu'activer un terminal existant.
@@ -363,6 +372,10 @@
       dropOver = false;
       resizeObserver?.disconnect();
       unlisteners.forEach((u) => u());
+      // On quitte la vue des terminaux : le moment de photographier leur ecran, pour qu'ils
+      // reviennent comme on les laisse. Le backend borne la frequence, donc un aller-retour
+      // entre deux onglets ne coute rien.
+      void saveTerminalScreens().catch((e) => signalerErreur("terminal.photo", String(e)));
       // NI detach, NI dispose : les xterm restent vivants dans le pool et le serveur
       // continue de leur envoyer la sortie. On gare simplement les elements DOM hors du
       // document visible (voir le commentaire du pool).

@@ -15,8 +15,12 @@
 //! | `lancement.rs` | detacher le service pour qu'il survive a l'application |
 //!
 //! Trois choses tranchees une fois pour toutes, a ne pas rouvrir sans raison :
-//! 1. **Le service n'ecrit rien sur disque.** Il meurt avec la machine, donc aucun format
-//!    a migrer plus tard.
+//! 1. **Le service n'ecrit rien sur disque, ET CETTE REGLE TIENT TOUJOURS.** Il meurt avec
+//!    la machine, donc aucun format a migrer plus tard. Les terminaux reviennent quand meme
+//!    apres une extinction : c'est l'APPLICATION qui photographie leur ecran
+//!    (`Requete::Instantane`) et le range dans SA base, puis le redonne au service a la
+//!    creation suivante (`Creer { ecran_initial }`). Le service ne connait ni fichier ni
+//!    base, il rend et recoit des octets.
 //! 2. **Un numero de version des la premiere version**, envoye par le SERVICE en premier,
 //!    dans un preambule de forme figee.
 //! 3. **Un service par utilisateur**, jamais un service systeme.
@@ -40,9 +44,15 @@ use protocole::InfoSession;
 /// pendant que Cockpit tourne laisse l'inverse.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Reconciliation {
-    /// Terminaux presents en base dont le service n'a plus la session : leur shell est
-    /// mort, la ligne doit disparaitre.
-    pub lignes_a_supprimer: Vec<i64>,
+    /// Terminaux presents en base dont le service n'a plus la session.
+    ///
+    /// **CES LIGNES NE SE SUPPRIMENT PAS**, et c'est un changement de sens : elles l'etaient
+    /// jusqu'a la 0.54.12, donc chaque extinction du poste effacait tous les onglets de
+    /// terminal. C'est l'etat NORMAL au demarrage — le shell est mort avec la machine, la
+    /// ligne a survecu — et l'onglet doit reparaitre avec l'ecran qu'il affichait. Le shell
+    /// est rouvert a l'ouverture de son onglet, jamais ici : sinon ouvrir Cockpit lancerait
+    /// un shell pour chaque terminal de chaque projet.
+    pub lignes_a_restaurer: Vec<i64>,
     /// Sessions que le service tient et que la base ne connait pas : plus aucun onglet ne
     /// peut les afficher, leur shell tourne pour personne.
     pub sessions_orphelines: Vec<i64>,
@@ -59,10 +69,10 @@ pub fn reconcilier(sessions: &[InfoSession], lignes: &[i64]) -> Reconciliation {
         sessions.iter().filter(|s| s.vivant).map(|s| s.id).collect();
     let connues: std::collections::HashSet<i64> = lignes.iter().copied().collect();
     let mut resultat = Reconciliation {
-        lignes_a_supprimer: lignes.iter().copied().filter(|id| !vivantes.contains(id)).collect(),
+        lignes_a_restaurer: lignes.iter().copied().filter(|id| !vivantes.contains(id)).collect(),
         sessions_orphelines: vivantes.iter().copied().filter(|id| !connues.contains(id)).collect(),
     };
-    resultat.lignes_a_supprimer.sort_unstable();
+    resultat.lignes_a_restaurer.sort_unstable();
     resultat.sessions_orphelines.sort_unstable();
     resultat
 }
@@ -82,11 +92,15 @@ mod tests_reconciliation {
         assert_eq!(vue, Reconciliation::default());
     }
 
-    /// Le cas du redemarrage de la machine : le service est parti avec, les lignes restent.
+    /// Le cas de l'extinction du poste : le service est parti avec, les lignes restent.
+    ///
+    /// Elles sont a RESTAURER et non a supprimer. Falsifier cet essai (rendre une liste vide)
+    /// fait reapparaitre le defaut d'origine : tous les onglets de terminal disparaissaient au
+    /// premier demarrage suivant une extinction.
     #[test]
-    fn les_lignes_sans_session_sont_a_supprimer() {
+    fn les_lignes_sans_session_sont_a_restaurer() {
         let vue = reconcilier(&[], &[3, 1, 2]);
-        assert_eq!(vue.lignes_a_supprimer, vec![1, 2, 3]);
+        assert_eq!(vue.lignes_a_restaurer, vec![1, 2, 3]);
         assert!(vue.sessions_orphelines.is_empty());
     }
 
@@ -95,14 +109,15 @@ mod tests_reconciliation {
     fn les_sessions_sans_ligne_sont_orphelines() {
         let vue = reconcilier(&[session(9, true)], &[]);
         assert_eq!(vue.sessions_orphelines, vec![9]);
-        assert!(vue.lignes_a_supprimer.is_empty());
+        assert!(vue.lignes_a_restaurer.is_empty());
     }
 
-    /// Une session MORTE ne sauve pas sa ligne : le shell ne repondra plus.
+    /// Une session MORTE compte comme absente : son shell ne repondra plus, donc sa ligne
+    /// est a restaurer comme si le service ne la connaissait pas.
     #[test]
     fn une_session_morte_compte_comme_absente() {
         let vue = reconcilier(&[session(4, false)], &[4]);
-        assert_eq!(vue.lignes_a_supprimer, vec![4]);
+        assert_eq!(vue.lignes_a_restaurer, vec![4]);
         assert!(vue.sessions_orphelines.is_empty(), "{vue:?}");
     }
 }

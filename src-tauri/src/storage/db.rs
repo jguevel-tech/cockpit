@@ -232,6 +232,17 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_terminals_project ON terminals(project);",
         )?;
 
+        // Migration: de quoi retrouver un terminal apres l'extinction du poste.
+        //
+        // `cwd` est le dossier ou le shell a ete ouvert (un conteneur, un worktree, un
+        // sous-dossier), sans quoi un terminal restaure repartirait a la racine du projet.
+        // `snapshot` est la derniere photo de son ecran, telle que le service la rend : des
+        // octets de terminal, pas du texte. Les deux restent LOCAUX — `terminals` n'est pas
+        // dans les tables synchronisees, et une photo d'ecran n'a rien a faire sur un serveur.
+        let _ = conn.execute("ALTER TABLE terminals ADD COLUMN cwd TEXT NOT NULL DEFAULT ''", []);
+        let _ = conn.execute("ALTER TABLE terminals ADD COLUMN snapshot BLOB", []);
+        let _ = conn.execute("ALTER TABLE terminals ADD COLUMN snapshot_at INTEGER", []);
+
         // Migration: le nom de session tmux n'existe plus (chantier des terminaux, aout 2026).
         // Tolere : sur un SQLite anterieur a 3.35 le DROP COLUMN echoue, et la colonne reste
         // avec sa valeur par defaut — plus personne ne la lit ni ne l'ecrit.

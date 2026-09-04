@@ -70,6 +70,13 @@ pub const CELLULES_D_HISTORIQUE: usize = 800_000;
 /// Plancher : meme tres large, un terminal garde de quoi remonter.
 const HISTORIQUE_MINIMUM: usize = 2_000;
 
+/// Plafond d'une photographie de terminal, historique compris.
+///
+/// 1 Mo : de quoi porter un ecran et un long defilement de texte, et assez petit pour
+/// qu'un projet a huit terminaux n'ajoute pas dix mega-octets a la base a chaque
+/// enregistrement. Au-dela, seul l'ecran visible est garde (voir `instantane`).
+const INSTANTANE_MAX: usize = 1024 * 1024;
+
 /// Combien de lignes d'historique pour un terminal de cette largeur.
 pub fn lignes_d_historique(colonnes: u16, plafond: usize) -> usize {
     let par_les_cellules = CELLULES_D_HISTORIQUE / (colonnes.max(1) as usize);
@@ -268,8 +275,8 @@ fn servir_une_connexion(service: &Arc<Service>, flux: Stream) {
 /// Traite une requete. `None` = pas de reponse a envoyer (chemin de frappe).
 fn traiter(service: &Arc<Service>, connexion: &Arc<Connexion>, requete: Requete) -> Option<Reponse> {
     match requete {
-        Requete::Creer { id, dossier, taille, commande_initiale } => {
-            Some(match creer(service, id, &dossier, taille, commande_initiale) {
+        Requete::Creer { id, dossier, taille, commande_initiale, ecran_initial } => {
+            Some(match creer(service, id, &dossier, taille, commande_initiale, &ecran_initial) {
                 Ok(()) => Reponse::Fait,
                 Err(e) => Reponse::Erreur(e),
             })
@@ -316,7 +323,25 @@ fn traiter(service: &Arc<Service>, connexion: &Arc<Connexion>, requete: Requete)
             service.arret.store(true, Ordering::SeqCst);
             Some(Reponse::Fait)
         }
+        Requete::Instantane { id } => Some(match service.session(id) {
+            Ok(s) => Reponse::Octets(instantane(&s)),
+            Err(e) => Reponse::Erreur(e),
+        }),
     }
+}
+
+/// La photographie d'un terminal, BORNEE en octets.
+///
+/// L'ecran et son historique d'abord : c'est ce qui rend un terminal « comme on l'a
+/// quitte », molette comprise. Mais l'historique peut faire des mega-octets, et cette
+/// photo finit dans la base de l'application : au-dela du plafond, on rend l'ecran seul.
+/// Perdre le defilement est moins grave que faire grossir la base sans limite.
+fn instantane(session: &Session) -> Vec<u8> {
+    let avec_historique = session.redessin(true);
+    if avec_historique.len() <= INSTANTANE_MAX {
+        return avec_historique;
+    }
+    session.redessin(false)
 }
 
 fn reponse(resultat: Result<(), String>) -> Reponse {
@@ -332,6 +357,7 @@ fn creer(
     dossier: &str,
     taille: Taille,
     commande_initiale: Option<String>,
+    ecran_initial: &[u8],
 ) -> Result<(), String> {
     // Un identifiant deja pris signifie que l'application et le service ne sont pas
     // d'accord sur ce qui existe. Refuser plutot qu'ecraser : ecraser tuerait un shell
@@ -340,7 +366,7 @@ fn creer(
         return Err(format!("le terminal {id} existe deja dans le service"));
     }
     let historique = lignes_d_historique(taille.colonnes, service.historique);
-    let session = Session::ouvrir(id, dossier, taille, commande_initiale, historique)?;
+    let session = Session::ouvrir(id, dossier, taille, commande_initiale, historique, ecran_initial)?;
     service
         .sessions
         .lock()
@@ -407,7 +433,7 @@ mod tests {
     #[test]
     fn une_session_morte_est_signalee_puis_oubliee() {
         let service = Arc::new(Service::neuf(std::path::PathBuf::from("/inutilise"), 100));
-        creer(&service, 7, &std::env::temp_dir().to_string_lossy(), Taille { colonnes: 40, lignes: 10 }, Some("exit".into()))
+        creer(&service, 7, &std::env::temp_dir().to_string_lossy(), Taille { colonnes: 40, lignes: 10 }, Some("exit".into()), &[])
             .unwrap();
 
         let debut = std::time::Instant::now();
@@ -429,8 +455,8 @@ mod tests {
         let service = Arc::new(Service::neuf(std::path::PathBuf::from("/inutilise"), 100));
         let dossier = std::env::temp_dir().to_string_lossy().to_string();
         let taille = Taille { colonnes: 40, lignes: 10 };
-        creer(&service, 1, &dossier, taille, None).unwrap();
-        let erreur = creer(&service, 1, &dossier, taille, None).unwrap_err();
+        creer(&service, 1, &dossier, taille, None, &[]).unwrap();
+        let erreur = creer(&service, 1, &dossier, taille, None, &[]).unwrap_err();
         assert!(erreur.contains("existe deja"), "{erreur}");
         assert_eq!(lister(&service).len(), 1);
         fermer(&service, 1).unwrap();

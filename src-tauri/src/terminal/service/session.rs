@@ -160,14 +160,35 @@ pub struct Session {
     taille: Mutex<Taille>,
 }
 
+/// La ligne qui separe le terminal restaure du shell qui vient de naitre.
+///
+/// En gris (couleur 90 : elle existe dans les seize couleurs de base, donc sur tout theme et
+/// dans tout emulateur), large comme le terminal, plafonnee pour ne pas fabriquer une ligne
+/// de 500 tirets sur un ecran large.
+fn separateur(colonnes: u16) -> Vec<u8> {
+    let combien = (colonnes.max(8) as usize).min(120);
+    let mut octets = Vec::with_capacity(combien * 3 + 16);
+    octets.extend_from_slice(b"\r\n\x1b[90m");
+    for _ in 0..combien {
+        octets.extend_from_slice("\u{2500}".as_bytes());
+    }
+    octets.extend_from_slice(b"\x1b[0m\r\n");
+    octets
+}
+
 impl Session {
     /// Ouvre un shell et met en route les deux threads qui le servent.
+    ///
+    /// `ecran_initial` remet dans l'ecran ce que ce terminal affichait la derniere fois. Il
+    /// est AVALE avant le demarrage des threads : le shell neuf ecrit donc a la suite, et
+    /// l'ordre est garanti sans dependre d'une course. Voir `Requete::Creer`.
     pub fn ouvrir(
         id: i64,
         dossier: &str,
         taille: Taille,
         commande_initiale: Option<String>,
         historique: usize,
+        ecran_initial: &[u8],
     ) -> Result<Arc<Self>, String> {
         let systeme = portable_pty::native_pty_system();
         let paire = systeme
@@ -205,13 +226,28 @@ impl Session {
             .take_writer()
             .map_err(|e| format!("ecriture du PTY : {e}"))?;
 
+        let mut ecran = Ecran::avec_historique(
+            taille.colonnes as usize,
+            taille.lignes as usize,
+            historique,
+        );
+        if !ecran_initial.is_empty() {
+            // Avant tout thread : l'ecran restaure est en place quand le shell parle.
+            ecran.avaler(ecran_initial);
+            // Ce que l'ecran restaure a pu laisser derriere lui : l'ecran alternatif d'une
+            // application plein ecran (claude, vim) qui tournait au moment de la photo, ou
+            // un stylo de couleur. Le shell neuf ne les a pas demandes. A faire AVANT le
+            // separateur : ecrit dans l'ecran alternatif, il serait detruit par ce retour.
+            ecran.avaler(b"\x1b[?1049l\x1b[0m");
+            // Une ligne muette entre l'ancien et le neuf. Sans mot : ce serait du texte a
+            // traduire dans deux catalogues pour une seule ligne. Ce qu'elle dit se lit
+            // sans lire — au-dessus, le terminal d'avant ; en dessous, un shell qui vient
+            // de naitre. Sans elle, on croit son shell vivant et on lui parle.
+            ecran.avaler(&separateur(taille.colonnes));
+        }
         let partage = Arc::new((
             Mutex::new(Tampon {
-                ecran: Ecran::avec_historique(
-                    taille.colonnes as usize,
-                    taille.lignes as usize,
-                    historique,
-                ),
+                ecran,
                 en_attente: Vec::new(),
                 redessin_du: false,
                 historique_du: false,
@@ -761,12 +797,19 @@ mod tests {
     }
 
     fn session(commande: Option<&str>) -> Arc<Session> {
+        session_avec_ecran(commande, &[])
+    }
+
+    /// La meme chose, en repartant d'un ecran deja rempli : c'est le chemin de la
+    /// restauration apres une extinction du poste.
+    fn session_avec_ecran(commande: Option<&str>, ecran_initial: &[u8]) -> Arc<Session> {
         Session::ouvrir(
             1,
             &std::env::temp_dir().to_string_lossy(),
             Taille { colonnes: 80, lignes: 24 },
             commande.map(String::from),
             200,
+            ecran_initial,
         )
         .expect("ouverture du shell")
     }
@@ -798,6 +841,62 @@ mod tests {
     #[cfg(unix)]
     fn pid_vivant(pid: i32) -> bool {
         unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    /// LA QUESTION DE LA RESTAURATION : un terminal rouvert affiche-t-il ce qu'il affichait,
+    /// AVANT ce que le shell neuf ecrit ?
+    ///
+    /// C'est tout l'objet de la fonctionnalite. L'ordre est ce qui compte : le vieil ecran
+    /// d'abord, la ligne de separation, puis l'invite du shell qui vient de naitre. Un ordre
+    /// inverse donnerait un terminal ou l'on croit son shell vivant, et ou l'historique de la
+    /// veille arrive par-dessus ce qu'on tape.
+    ///
+    /// L'essai TOMBE si l'injection disparait, si elle passe apres le demarrage des threads,
+    /// ou si le separateur n'est plus ecrit.
+    #[test]
+    fn un_terminal_rouvert_montre_l_ecran_d_avant() {
+        // Ce qu'un terminal affichait hier, tel que le service le rend : des octets, avec
+        // leurs couleurs. Ici une ligne verte, comme la sortie d'un outil.
+        let hier = b"\x1b[32mtests: 294 passed\x1b[0m\r\n";
+        let session = session_avec_ecran(None, hier);
+        #[cfg(unix)]
+        let _faucheuse = session.pid.map(|pid| Faucheuse(pid as i32));
+
+        // Le shell neuf finit par ecrire son invite : c'est le signal que les deux mondes
+        // cohabitent. Attendre son SILENCE serait plus long sans rien prouver de plus.
+        let vu = attendre(&session, "l'invite du shell neuf", |ecran| {
+            ecran.lines().filter(|l| !l.trim().is_empty()).count() >= 3
+        });
+
+        let lignes: Vec<&str> = vu.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).collect();
+        assert!(
+            lignes[0].contains("tests: 294 passed"),
+            "l'ecran d'avant doit etre la PREMIERE ligne. Ecran :\n{vu}"
+        );
+        assert!(
+            lignes[1].starts_with('\u{2500}'),
+            "la ligne de separation doit suivre l'ecran d'avant. Ecran :\n{vu}"
+        );
+        // Et le shell parle APRES la separation, pas avant.
+        assert!(lignes.len() >= 3, "le shell neuf n'a rien ecrit. Ecran :\n{vu}");
+
+        session.fermer().expect("fermeture");
+    }
+
+    /// Un terminal qui NAIT ne doit pas porter de separateur : rien ne le precede.
+    ///
+    /// Sans cet essai, ecrire le separateur sans condition passerait inapercu — et chaque
+    /// terminal neuf s'ouvrirait avec une ligne grise en haut.
+    #[test]
+    fn un_terminal_neuf_n_a_pas_de_separateur() {
+        let session = session(None);
+        #[cfg(unix)]
+        let _faucheuse = session.pid.map(|pid| Faucheuse(pid as i32));
+        let vu = attendre(&session, "l'invite du shell", |ecran| {
+            ecran.lines().any(|l| !l.trim().is_empty())
+        });
+        assert!(!vu.contains('\u{2500}'), "separateur sur un terminal neuf. Ecran :\n{vu}");
+        session.fermer().expect("fermeture");
     }
 
     /// Le filet de l'essai : un `assert!` rate ne doit pas laisser un dormeur derriere lui.

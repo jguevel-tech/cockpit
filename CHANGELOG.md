@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les terminaux reviennent comme on les a quittés. En rouvrant Cockpit après avoir éteint son
+  ordinateur, on retrouve ses onglets de terminal, dans le même dossier, avec le texte qu'ils
+  affichaient. Une ligne grise sépare ce qui vient d'avant du shell qui vient de démarrer : le
+  shell lui-même ne survit pas à l'extinction, il est relancé.
+
 ## [0.54.12] — 2026-09-02
 
 ### Fixed

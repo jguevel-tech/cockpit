@@ -16,6 +16,11 @@ export const getClipboard = () => invoke<string>("get_clipboard");
 export const attachTerminal = (id: number, cols: number, rows: number) =>
   invoke("attach_terminal", { id, cols, rows });
 export const renameTerminal = (id: number, name: string) => invoke("rename_terminal", { id, name });
+// Photographie les terminaux ouverts, pour qu'ils reviennent comme on les a quittes apres
+// une extinction du poste. A appeler sur un GESTE (quitter la vue des terminaux), jamais sur
+// un minuteur : le cout se paie par terminal, et le backend refuse de recommencer avant une
+// minute. La fermeture de la fenetre declenche la meme chose cote Rust.
+export const saveTerminalScreens = () => invoke("save_terminal_screens");
 export const listTerminals = (project: string) => invoke<TerminalInfo[]>("list_terminals", { project });
 export const listAllTerminals = () => invoke<TerminalInfo[]>("list_all_terminals");
 export const openUrl = (url: string) => invoke("open_url", { url });

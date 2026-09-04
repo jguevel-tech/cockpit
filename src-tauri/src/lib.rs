@@ -804,6 +804,17 @@ async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<()
     state.terminals.fermer(&state.db, id)
 }
 
+/// Photographie les terminaux ouverts pour qu'ils reviennent « comme on les a quittes ».
+///
+/// Appelee par l'interface quand on quitte la vue des terminaux — pas sur un minuteur : le
+/// cout se paie par terminal, et l'implementation refuse de recommencer avant une minute. La
+/// fenetre qui se ferme declenche la meme chose, mais sans borne (voir `fenetre.rs`).
+#[tauri::command]
+async fn save_terminal_screens(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.terminals.enregistrer_les_ecrans(&state.db, false);
+    Ok(())
+}
+
 #[tauri::command]
 async fn attach_terminal(
     id: i64,
@@ -1860,6 +1871,7 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             attach_terminal,
+            save_terminal_screens,
             rename_terminal,
             list_terminals,
             list_all_terminals,
