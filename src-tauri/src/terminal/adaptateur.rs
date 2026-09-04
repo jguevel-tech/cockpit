@@ -337,45 +337,66 @@ impl TerminauxService {
 
     /// La commande qui remet l'agent d'un terminal sur sa conversation, s'il y en avait un.
     ///
-    /// **C'EST LA SEULE COMMANDE QUE LA RESTAURATION REJOUE, ET LA DISTINCTION EST LA
-    /// SUIVANTE** : une commande de projet agit (elle construit, elle deploie, elle efface),
-    /// donc elle ne se rejoue jamais toute seule ; la reprise d'un agent ouvre une
-    /// conversation et ATTEND une consigne. Elle ne fait rien d'elle-meme.
-    ///
-    /// Trois raisons de ne rien rendre, toutes normales : aucun agent ne tournait, le
-    /// fournisseur ne sait pas retrouver ses conversations passees (capacite `None` — on
-    /// n'invente rien a sa place), ou ce dossier n'en a aucune. Dans ces cas le terminal
-    /// s'ouvre en shell nu, et le bouton des conversations reste a un clic.
-    ///
-    /// **Une conversation n'est rendue qu'UNE FOIS par lancement de l'application.** Deux
-    /// terminaux du meme projet reprennent donc les deux conversations les plus recentes,
-    /// chacun la sienne, au lieu d'ouvrir deux fois la meme. Le service ne dit pas quelle
-    /// conversation tournait dans quel terminal, et le deviner par les fichiers ouverts du
-    /// processus serait vrai sous Linux seulement.
+    /// Ne porte que le verrou et le journal : le choix vit dans `conversation_a_reprendre`,
+    /// fonction LIBRE. Ce decoupage n'est pas cosmetique — un essai qui instancie ce service
+    /// fait vivre du code Tauri dans le binaire d'essais, et c'est la piste du binaire qui
+    /// refuse de demarrer sous Windows depuis la 0.56.0. Une fonction libre se teste sans
+    /// rien instancier.
     fn reprise_de_l_agent(&self, agent: &str, dossier: &str) -> Option<String> {
-        if agent.is_empty() || dossier.is_empty() {
-            return None;
-        }
-        let fournisseur = crate::llm::par_id(agent)?;
-        let lecteur = fournisseur.conversations()?;
-        let passees = lecteur.lister(std::path::Path::new(dossier), crate::llm::conversations::MAX);
-        let passees = match passees {
-            Ok(passees) => passees,
+        let mut deja = self.conversations_reprises.lock().unwrap_or_else(|e| e.into_inner());
+        match conversation_a_reprendre(agent, dossier, &mut deja) {
+            Ok(commande) => commande,
             // Un dossier de conversations illisible ne doit pas empecher le terminal de
             // revenir : on le dit au journal et on ouvre un shell.
             Err(e) => {
-                if let Some(contexte) = self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+                if let Some(contexte) =
+                    self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
                 {
                     journaliser(&contexte.app, "terminal.repriseAgent", &e);
                 }
-                return None;
+                None
             }
-        };
-        let mut deja = self.conversations_reprises.lock().unwrap_or_else(|e| e.into_inner());
-        let choisie = passees.into_iter().find(|c| !deja.contains(&c.id))?;
-        deja.insert(choisie.id.clone());
-        Some(lecteur.commande_de_reprise(&choisie.id))
+        }
     }
+}
+
+/// Quelle conversation rendre a un terminal qui faisait tourner un agent, et sous quelle
+/// commande la reprendre.
+///
+/// **C'EST LA SEULE COMMANDE QUE LA RESTAURATION REJOUE, ET LA DISTINCTION EST LA SUIVANTE** :
+/// une commande de projet agit (elle construit, elle deploie, elle efface), donc elle ne se
+/// rejoue jamais toute seule ; la reprise d'un agent ouvre une conversation et ATTEND une
+/// consigne. Elle ne fait rien d'elle-meme.
+///
+/// Trois raisons de ne rien rendre, toutes normales : aucun agent ne tournait, le fournisseur
+/// ne sait pas retrouver ses conversations passees (capacite `None` — on n'invente rien a sa
+/// place), ou ce dossier n'en a aucune. Dans ces cas le terminal s'ouvre en shell nu, et le
+/// bouton des conversations reste a un clic.
+///
+/// **Une conversation n'est rendue qu'UNE FOIS par lancement de l'application** : `deja` la
+/// retient. Deux terminaux du meme projet reprennent donc les deux conversations les plus
+/// recentes, chacun la sienne, au lieu d'ouvrir deux fois la meme. Le service ne dit pas
+/// quelle conversation tournait dans quel terminal, et le deviner par les fichiers ouverts du
+/// processus ne serait vrai que sous Linux.
+///
+/// Fonction LIBRE et non methode : elle se teste sans instancier le service, donc sans faire
+/// entrer Tauri dans le binaire d'essais.
+fn conversation_a_reprendre(
+    agent: &str,
+    dossier: &str,
+    deja: &mut HashSet<String>,
+) -> Result<Option<String>, String> {
+    if agent.is_empty() || dossier.is_empty() {
+        return Ok(None);
+    }
+    let Some(fournisseur) = crate::llm::par_id(agent) else { return Ok(None) };
+    let Some(lecteur) = fournisseur.conversations() else { return Ok(None) };
+    let passees = lecteur.lister(std::path::Path::new(dossier), crate::llm::conversations::MAX)?;
+    let Some(choisie) = passees.into_iter().find(|c| !deja.contains(&c.id)) else {
+        return Ok(None);
+    };
+    deja.insert(choisie.id.clone());
+    Ok(Some(lecteur.commande_de_reprise(&choisie.id)))
 }
 
 fn taille_service(taille: Taille) -> TailleService {
@@ -634,19 +655,25 @@ mod tests {
         std::env::set_var("HOME", &maison);
         std::env::set_var("USERPROFILE", &maison);
 
-        let service = TerminauxService::default();
         let dossier = projet.to_string_lossy().to_string();
+        // AUCUN service instancie ici, et c'est deliberе : instancier `TerminauxService` fait
+        // entrer du code Tauri dans le binaire d'essais. Un `HashSet` local tient le role de
+        // la memoire des conversations deja rendues, donc chaque essai repart propre.
+        let mut deja: HashSet<String> = HashSet::new();
+        let reprise = |agent: &str, dossier: &str, deja: &mut HashSet<String>| {
+            conversation_a_reprendre(agent, dossier, deja).expect("lecture des conversations")
+        };
 
         // Un shell ordinaire ne rejoue RIEN : c'est la regle, et une commande de projet
         // relancee a l'aveugle peut etre destructive.
-        assert_eq!(service.reprise_de_l_agent("", &dossier), None);
+        assert_eq!(reprise("", &dossier, &mut deja), None);
         // Un fournisseur retire du catalogue non plus.
-        assert_eq!(service.reprise_de_l_agent("fournisseur-inconnu", &dossier), None);
+        assert_eq!(reprise("fournisseur-inconnu", &dossier, &mut deja), None);
         // Ni un dossier qu'on ne connait pas.
-        assert_eq!(service.reprise_de_l_agent("claude", "/dossier/qui/n/existe/pas"), None);
+        assert_eq!(reprise("claude", "/dossier/qui/n/existe/pas", &mut deja), None);
 
         // Et l'agent est repris sur la conversation la plus recente.
-        let premiere = service.reprise_de_l_agent("claude", &dossier);
+        let premiere = reprise("claude", &dossier, &mut deja);
         assert_eq!(
             premiere.as_deref(),
             Some("claude --resume 22222222-2222-4222-8222-222222222222"),
@@ -655,7 +682,7 @@ mod tests {
 
         // Un SECOND terminal du meme projet prend la suivante, jamais la meme : sinon deux
         // onglets ouvriraient la meme conversation.
-        let seconde = service.reprise_de_l_agent("claude", &dossier);
+        let seconde = reprise("claude", &dossier, &mut deja);
         assert_eq!(
             seconde.as_deref(),
             Some("claude --resume 11111111-1111-4111-8111-111111111111"),
@@ -663,7 +690,7 @@ mod tests {
         );
 
         // Il n'y en a plus que deux : le troisieme terminal s'ouvre en shell nu.
-        assert_eq!(service.reprise_de_l_agent("claude", &dossier), None);
+        assert_eq!(reprise("claude", &dossier, &mut deja), None);
 
         match ancien_home {
             Some(v) => std::env::set_var("HOME", v),
