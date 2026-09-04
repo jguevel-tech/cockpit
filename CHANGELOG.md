@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Un terminal qui faisait tourner un agent IA le rouvre sur sa conversation. Deux terminaux du
+  même projet reprennent chacun la sienne, la plus récente d'abord. Cela marche avec les
+  fournisseurs qui savent retrouver leurs conversations passées ; les autres ouvrent un shell.
+
 ## [0.55.0] — 2026-09-04
 
 ### Added
@@ -20,9 +26,6 @@ le script de release.
   ordinateur, on retrouve ses onglets de terminal, dans le même dossier, avec le texte qu'ils
   affichaient. Une ligne grise sépare ce qui vient d'avant du shell qui vient de démarrer : le
   shell lui-même ne survit pas à l'extinction, il est relancé.
-- Un terminal qui faisait tourner un agent IA le rouvre sur sa conversation. Deux terminaux du
-  même projet reprennent chacun la sienne, la plus récente d'abord. Cela marche avec les
-  fournisseurs qui savent retrouver leurs conversations passées ; les autres ouvrent un shell.
 
 ## [0.54.12] — 2026-09-02
 
