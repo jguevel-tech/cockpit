@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.56.1] — 2026-09-04
+
 ### Fixed
 
 - Les terminaux d'un projet réapparaissent dans la barre latérale et le tableau de bord après
