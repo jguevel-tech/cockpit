@@ -37,6 +37,25 @@ const FANIONS_STRUCTURELS: Flags = Flags::WRAPLINE
     .union(Flags::LEADING_WIDE_CHAR_SPACER);
 
 pub(super) fn redessiner(ecran: &Ecran, avec_historique: bool) -> Vec<u8> {
+    dessiner(ecran, avec_historique, false)
+}
+
+/// La PHOTO d'un terminal : le meme dessin, mais qui ne bascule jamais en ecran alternatif.
+///
+/// **POURQUOI CE MODE EXISTE.** claude, vim et htop dessinent dans l'ecran alternatif, et un
+/// redessin ordinaire restitue ce mode : il commence donc par y basculer. Une photo sert a
+/// RECOMMENCER un terminal ailleurs, et celui qui la recoit doit revenir a un shell normal —
+/// or basculer DETRUIT la grille inactive, donc en sortir laisse un ecran VIDE. Un terminal
+/// ou un agent tournait revenait ainsi sans rien, ce qui est le cas le plus courant chez qui
+/// en fait tourner un. Mesure par un essai, pas deduit.
+///
+/// Le contenu de l'ecran alternatif est donc dessine dans l'ecran NORMAL : il devient de
+/// l'historique, la molette et la recherche le retrouvent, et le shell neuf ecrit a la suite.
+pub(super) fn photographier(ecran: &Ecran) -> Vec<u8> {
+    dessiner(ecran, true, true)
+}
+
+fn dessiner(ecran: &Ecran, avec_historique: bool, pour_photo: bool) -> Vec<u8> {
     let mut r = Redessin {
         ecran,
         octets: Vec::with_capacity(8 * 1024),
@@ -44,7 +63,7 @@ pub(super) fn redessiner(ecran: &Ecran, avec_historique: bool) -> Vec<u8> {
     };
     r.reinitialiser();
     r.palette();
-    r.contenu(avec_historique);
+    r.contenu(avec_historique, pour_photo);
     r.region();
     r.modes();
     r.style_curseur();
@@ -156,12 +175,17 @@ impl Redessin<'_> {
         }
     }
 
-    fn contenu(&mut self, avec_historique: bool) {
+    fn contenu(&mut self, avec_historique: bool, pour_photo: bool) {
         if self.ecran.ecran_alternatif() {
             // On ne redessine que l'ecran alternatif : la principale cachee dessous n'est
             // pas lisible (cas connus, en tete du module). L'historique n'existe pas sur
             // l'ecran alternatif.
-            self.pousser("\x1b[?1049h");
+            //
+            // Pour une PHOTO, on ne bascule PAS : voir `photographier`. Le contenu part dans
+            // l'ecran normal, donc il survit au retour a un shell.
+            if !pour_photo {
+                self.pousser("\x1b[?1049h");
+            }
             self.dessiner_grille(false);
         } else {
             self.dessiner_grille(avec_historique);

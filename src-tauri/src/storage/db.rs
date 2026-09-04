@@ -242,6 +242,10 @@ impl Database {
         let _ = conn.execute("ALTER TABLE terminals ADD COLUMN cwd TEXT NOT NULL DEFAULT ''", []);
         let _ = conn.execute("ALTER TABLE terminals ADD COLUMN snapshot BLOB", []);
         let _ = conn.execute("ALTER TABLE terminals ADD COLUMN snapshot_at INTEGER", []);
+        // `agent` : l'identifiant du fournisseur d'IA qui tournait dans ce terminal quand sa
+        // photo a ete prise. Vide = un shell ordinaire. C'est ce qui permet de rouvrir la
+        // conversation en cours et pas seulement un shell nu.
+        let _ = conn.execute("ALTER TABLE terminals ADD COLUMN agent TEXT NOT NULL DEFAULT ''", []);
 
         // Migration: le nom de session tmux n'existe plus (chantier des terminaux, aout 2026).
         // Tolere : sur un SQLite anterieur a 3.35 le DROP COLUMN echoue, et la colonne reste

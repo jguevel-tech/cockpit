@@ -189,6 +189,13 @@ impl Ecran {
         redessin::redessiner(self, true)
     }
 
+    /// La PHOTO de cet ecran : comme un redessin, mais elle ne bascule jamais en ecran
+    /// alternatif. Voir `redessin::photographier` — sans ce mode, un terminal ou un agent
+    /// tournait revient vide.
+    pub fn photographier(&self) -> Vec<u8> {
+        redessin::photographier(self)
+    }
+
     /// La photo comparable de l'etat. Voir `etat.rs`.
     #[cfg(test)]
     pub fn etat(&self) -> EtatEcran {

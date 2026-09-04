@@ -337,10 +337,12 @@ fn traiter(service: &Arc<Service>, connexion: &Arc<Connexion>, requete: Requete)
 /// photo finit dans la base de l'application : au-dela du plafond, on rend l'ecran seul.
 /// Perdre le defilement est moins grave que faire grossir la base sans limite.
 fn instantane(session: &Session) -> Vec<u8> {
-    let avec_historique = session.redessin(true);
-    if avec_historique.len() <= INSTANTANE_MAX {
-        return avec_historique;
+    let complet = session.photographier();
+    if complet.len() <= INSTANTANE_MAX {
+        return complet;
     }
+    // Trop gros pour la base : l'ecran visible seul. Il passe par le meme chemin que la
+    // photo complete, donc sans bascule en ecran alternatif non plus.
     session.redessin(false)
 }
 

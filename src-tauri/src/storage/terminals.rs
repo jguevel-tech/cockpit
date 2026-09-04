@@ -14,10 +14,12 @@ pub struct TerminalRow {
     pub name: String,
     /// Dossier de depart du shell. Vide = la racine du projet.
     pub cwd: String,
+    /// Le fournisseur d'IA qui tournait dedans a la derniere photo. Vide = un shell ordinaire.
+    pub agent: String,
 }
 
 impl TerminalRow {
-    const SELECT_COLS: &'static str = "id, project, name, cwd";
+    const SELECT_COLS: &'static str = "id, project, name, cwd, agent";
 
     pub fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Self> {
         Ok(Self {
@@ -25,6 +27,7 @@ impl TerminalRow {
             project: row.get(1)?,
             name: row.get(2)?,
             cwd: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+            agent: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
         })
     }
 }
@@ -124,17 +127,21 @@ impl Database {
         Ok(())
     }
 
-    /// Range la derniere photo d'un terminal. Des OCTETS de terminal, jamais du texte : ils
-    /// portent les couleurs, le curseur et les modes, et se redonnent tels quels.
-    pub fn set_terminal_snapshot(&self, id: i64, octets: &[u8]) -> Result<(), String> {
+    /// Range la derniere photo d'un terminal, et l'agent qui tournait dedans.
+    ///
+    /// Des OCTETS de terminal, jamais du texte : ils portent les couleurs, le curseur et les
+    /// modes, et se redonnent tels quels. `agent` est vide pour un shell ordinaire — et il est
+    /// ECRIT dans les deux cas, sinon un terminal ou l'on a quitte son agent le rouvrirait
+    /// indefiniment.
+    pub fn set_terminal_snapshot(&self, id: i64, octets: &[u8], agent: &str) -> Result<(), String> {
         let quand = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         self.conn()
             .execute(
-                "UPDATE terminals SET snapshot=?1, snapshot_at=?2 WHERE id=?3",
-                rusqlite::params![octets, quand, id],
+                "UPDATE terminals SET snapshot=?1, snapshot_at=?2, agent=?3 WHERE id=?4",
+                rusqlite::params![octets, quand, agent, id],
             )
             .map_err(|e| e.to_string())?;
         Ok(())
@@ -193,12 +200,17 @@ mod tests {
         assert!(db.get_terminal_snapshot(t.id).is_empty());
 
         let photo = vec![0x1b, b'c', 0x00, 0xff, b'\n', 0xfe];
-        db.set_terminal_snapshot(t.id, &photo).unwrap();
+        db.set_terminal_snapshot(t.id, &photo, "claude").unwrap();
         assert_eq!(db.get_terminal_snapshot(t.id), photo);
+        assert_eq!(db.get_terminal_row(t.id).unwrap().agent, "claude");
+
+        // Quitter son agent doit se voir : sinon le terminal le rouvrirait indefiniment.
+        db.set_terminal_snapshot(t.id, &photo, "").unwrap();
+        assert_eq!(db.get_terminal_row(t.id).unwrap().agent, "");
 
         // Une photo se REMPLACE, elle ne s'efface pas : la perdre entre une restauration et
         // la photo suivante ferait perdre l'ecran pour de bon si la machine s'arretait la.
-        db.set_terminal_snapshot(t.id, b"\x1b[2Jplus recent").unwrap();
+        db.set_terminal_snapshot(t.id, b"\x1b[2Jplus recent", "").unwrap();
         assert_eq!(db.get_terminal_snapshot(t.id), b"\x1b[2Jplus recent");
 
         // Un terminal sans dossier retombe sur la racine du projet, cote adaptateur.

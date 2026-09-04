@@ -71,6 +71,9 @@ pub struct TerminauxService {
     attaches: Mutex<HashSet<i64>>,
     /// Quand les ecrans ont ete photographies pour la derniere fois. Voir `assez_attendu`.
     derniere_photo: Mutex<Option<std::time::Instant>>,
+    /// Conversations d'agent deja rendues a un terminal depuis le lancement. Sert a ne pas
+    /// ouvrir deux fois la meme dans deux terminaux du meme projet.
+    conversations_reprises: Mutex<HashSet<String>>,
 }
 
 impl Default for TerminauxService {
@@ -83,6 +86,7 @@ impl Default for TerminauxService {
             contexte: Mutex::new(None),
             attaches: Mutex::new(HashSet::new()),
             derniere_photo: Mutex::new(None),
+            conversations_reprises: Mutex::new(HashSet::new()),
         }
     }
 }
@@ -320,14 +324,57 @@ impl TerminauxService {
         } else {
             ligne.cwd
         };
+        let reprise = self.reprise_de_l_agent(&ligne.agent, &dossier);
         client.creer(
             id,
             &dossier,
             taille_service(taille),
-            None,
+            reprise,
             db.get_terminal_snapshot(id),
         )?;
         Ok(())
+    }
+
+    /// La commande qui remet l'agent d'un terminal sur sa conversation, s'il y en avait un.
+    ///
+    /// **C'EST LA SEULE COMMANDE QUE LA RESTAURATION REJOUE, ET LA DISTINCTION EST LA
+    /// SUIVANTE** : une commande de projet agit (elle construit, elle deploie, elle efface),
+    /// donc elle ne se rejoue jamais toute seule ; la reprise d'un agent ouvre une
+    /// conversation et ATTEND une consigne. Elle ne fait rien d'elle-meme.
+    ///
+    /// Trois raisons de ne rien rendre, toutes normales : aucun agent ne tournait, le
+    /// fournisseur ne sait pas retrouver ses conversations passees (capacite `None` — on
+    /// n'invente rien a sa place), ou ce dossier n'en a aucune. Dans ces cas le terminal
+    /// s'ouvre en shell nu, et le bouton des conversations reste a un clic.
+    ///
+    /// **Une conversation n'est rendue qu'UNE FOIS par lancement de l'application.** Deux
+    /// terminaux du meme projet reprennent donc les deux conversations les plus recentes,
+    /// chacun la sienne, au lieu d'ouvrir deux fois la meme. Le service ne dit pas quelle
+    /// conversation tournait dans quel terminal, et le deviner par les fichiers ouverts du
+    /// processus serait vrai sous Linux seulement.
+    fn reprise_de_l_agent(&self, agent: &str, dossier: &str) -> Option<String> {
+        if agent.is_empty() || dossier.is_empty() {
+            return None;
+        }
+        let fournisseur = crate::llm::par_id(agent)?;
+        let lecteur = fournisseur.conversations()?;
+        let passees = lecteur.lister(std::path::Path::new(dossier), crate::llm::conversations::MAX);
+        let passees = match passees {
+            Ok(passees) => passees,
+            // Un dossier de conversations illisible ne doit pas empecher le terminal de
+            // revenir : on le dit au journal et on ouvre un shell.
+            Err(e) => {
+                if let Some(contexte) = self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+                {
+                    journaliser(&contexte.app, "terminal.repriseAgent", &e);
+                }
+                return None;
+            }
+        };
+        let mut deja = self.conversations_reprises.lock().unwrap_or_else(|e| e.into_inner());
+        let choisie = passees.into_iter().find(|c| !deja.contains(&c.id))?;
+        deja.insert(choisie.id.clone());
+        Some(lecteur.commande_de_reprise(&choisie.id))
     }
 }
 
@@ -465,10 +512,21 @@ impl Terminaux for TerminauxService {
         }
         let Some(client) = self.deja_connecte() else { return };
         let Ok(sessions) = client.lister() else { return };
+        // Le fournisseur est lu UNE fois : c'est un reglage, il ne change pas pendant la
+        // boucle, et le relire par terminal coutait une requete de plus a chaque tour.
+        let fournisseur = crate::llm::prefere(db).id();
         for session in sessions.iter().filter(|s| s.vivant) {
             match client.instantane(session.id) {
                 Ok(octets) if !octets.is_empty() => {
-                    let _ = db.set_terminal_snapshot(session.id, &octets);
+                    // `llm` dit qu'un agent tourne, jamais LEQUEL : le service ne fait pas
+                    // voyager cette information, et la faire voyager couterait une version de
+                    // protocole, donc les terminaux detaches une fois. On retient donc le
+                    // fournisseur PREFERE au moment de la photo. C'est juste dans le cas
+                    // ordinaire — un seul reglage decide et tout le reste le lit — et faux
+                    // seulement si l'on fait tourner a la main un fournisseur qui n'est pas
+                    // celui qu'on a choisi.
+                    let agent = if session.llm { fournisseur } else { "" };
+                    let _ = db.set_terminal_snapshot(session.id, &octets, agent);
                 }
                 _ => {}
             }
@@ -537,6 +595,94 @@ impl Terminaux for TerminauxService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LA QUESTION : un terminal qui faisait tourner un agent le retrouve-t-il SUR SA
+    /// CONVERSATION, et deux terminaux du meme projet en ont-ils chacun une ?
+    ///
+    /// Tout est dans UN essai parce qu'il pose `HOME` : deux essais qui touchent
+    /// l'environnement du processus se marchent dessus en parallele. Meme raison que pour le
+    /// mode de rendu.
+    ///
+    /// Ce qui est verifie ici, et qui tombe si la reprise disparait : la commande rendue
+    /// nomme la conversation la PLUS RECENTE, une conversation n'est rendue qu'une fois, et
+    /// les trois cas ou l'on ne rejoue RIEN (pas d'agent, fournisseur inconnu, aucune
+    /// conversation) ouvrent un shell nu.
+    #[test]
+    fn un_agent_est_repris_sur_sa_conversation_la_plus_recente() {
+        let maison = std::env::temp_dir().join(format!("cockpit-reprise-{}", std::process::id()));
+        let projet = maison.join("projet");
+        let conversations = maison
+            .join(".claude/projects")
+            .join(projet.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>());
+        std::fs::create_dir_all(&conversations).expect("dossier des conversations");
+        std::fs::create_dir_all(&projet).expect("dossier du projet");
+
+        // Deux conversations, la seconde plus recente. Le contenu importe peu : seul le nom
+        // du fichier porte l'identifiant.
+        let ancienne = conversations.join("11111111-1111-4111-8111-111111111111.jsonl");
+        let recente = conversations.join("22222222-2222-4222-8222-222222222222.jsonl");
+        std::fs::write(&ancienne, "{\"type\":\"user\",\"message\":{\"content\":\"vieille\"}}\n").unwrap();
+        std::fs::write(&recente, "{\"type\":\"user\",\"message\":{\"content\":\"fraiche\"}}\n").unwrap();
+        // Des dates franches : une egalite de seconde rendrait l'ordre indecidable.
+        let vieux = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        filetime_grossier(&ancienne, vieux);
+
+        // `HOME` sous Unix, `USERPROFILE` sous Windows : `dossier_personnel()` ne lit jamais
+        // `HOME` la-bas.
+        let ancien_home = std::env::var_os("HOME");
+        let ancien_profil = std::env::var_os("USERPROFILE");
+        std::env::set_var("HOME", &maison);
+        std::env::set_var("USERPROFILE", &maison);
+
+        let service = TerminauxService::default();
+        let dossier = projet.to_string_lossy().to_string();
+
+        // Un shell ordinaire ne rejoue RIEN : c'est la regle, et une commande de projet
+        // relancee a l'aveugle peut etre destructive.
+        assert_eq!(service.reprise_de_l_agent("", &dossier), None);
+        // Un fournisseur retire du catalogue non plus.
+        assert_eq!(service.reprise_de_l_agent("fournisseur-inconnu", &dossier), None);
+        // Ni un dossier qu'on ne connait pas.
+        assert_eq!(service.reprise_de_l_agent("claude", "/dossier/qui/n/existe/pas"), None);
+
+        // Et l'agent est repris sur la conversation la plus recente.
+        let premiere = service.reprise_de_l_agent("claude", &dossier);
+        assert_eq!(
+            premiere.as_deref(),
+            Some("claude --resume 22222222-2222-4222-8222-222222222222"),
+            "la conversation la plus recente doit etre reprise"
+        );
+
+        // Un SECOND terminal du meme projet prend la suivante, jamais la meme : sinon deux
+        // onglets ouvriraient la meme conversation.
+        let seconde = service.reprise_de_l_agent("claude", &dossier);
+        assert_eq!(
+            seconde.as_deref(),
+            Some("claude --resume 11111111-1111-4111-8111-111111111111"),
+            "le second terminal doit prendre l'autre conversation"
+        );
+
+        // Il n'y en a plus que deux : le troisieme terminal s'ouvre en shell nu.
+        assert_eq!(service.reprise_de_l_agent("claude", &dossier), None);
+
+        match ancien_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        match ancien_profil {
+            Some(v) => std::env::set_var("USERPROFILE", v),
+            None => std::env::remove_var("USERPROFILE"),
+        }
+        let _ = std::fs::remove_dir_all(&maison);
+    }
+
+    /// Vieillit un fichier, sans dependance : on reecrit son contenu puis on repose sa date
+    /// par le systeme. `filetime` n'est pas dans les dependances et n'a pas a y entrer pour
+    /// un essai.
+    fn filetime_grossier(chemin: &std::path::Path, quand: std::time::SystemTime) {
+        let fichier = std::fs::File::options().write(true).open(chemin).expect("ouverture");
+        fichier.set_modified(quand).expect("date de modification");
+    }
 
     /// Deux bases differentes = deux services. C'est ce qui protege les terminaux de
     /// l'installation normale quand une installation de developpement demarre a cote.

@@ -425,6 +425,30 @@ impl Session {
         }
     }
 
+    /// Le terminal est-il occupe par une application plein ecran (claude, vim, htop) ?
+    ///
+    /// **L'ECRAN ALTERNATIF SE LIT DANS LA GRILLE DU SERVICE**, jamais dans le terminal du
+    /// frontend : c'est ici qu'il est connu. Reserve aux essais — le service, lui, n'a pas a
+    /// se poser la question : le mode `photographier` traite le cas sans le demander.
+    ///
+    /// `all(test, unix)` et non `test` : l'essai qui s'en sert fait ecrire une sequence par
+    /// `printf`, que `cmd.exe` ne connait pas. Un essai garde sur une seule plateforme laisse
+    /// son outillage inutilise sur l'autre, donc un avertissement — piege deja paye.
+    #[cfg(all(test, unix))]
+    pub fn ecran_alternatif(&self) -> bool {
+        let (tampon, _) = &*self.partage;
+        tampon.lock().unwrap_or_else(|e| e.into_inner()).ecran.ecran_alternatif()
+    }
+
+    /// La photo de ce terminal, a ranger pour le retrouver plus tard.
+    ///
+    /// Ce n'est PAS un redessin : une photo ne bascule jamais en ecran alternatif, sans quoi
+    /// un terminal ou un agent tournait reviendrait vide. Voir `redessin::photographier`.
+    pub fn photographier(&self) -> Vec<u8> {
+        let (tampon, _) = &*self.partage;
+        tampon.lock().unwrap_or_else(|e| e.into_inner()).ecran.photographier()
+    }
+
     pub fn texte_region(&self, debut: (i32, u16), fin: (i32, u16)) -> String {
         let (tampon, _) = &*self.partage;
         tampon.lock().unwrap_or_else(|e| e.into_inner()).ecran.texte_region(debut, fin)
@@ -881,6 +905,53 @@ mod tests {
         assert!(lignes.len() >= 3, "le shell neuf n'a rien ecrit. Ecran :\n{vu}");
 
         session.fermer().expect("fermeture");
+    }
+
+    /// LE CAS D'UN AGENT QUI TOURNAIT : sa photo est un ecran PLEIN ECRAN.
+    ///
+    /// claude, vim et htop dessinent dans l'ecran alternatif. Un redessin ordinaire restitue
+    /// ce mode, donc il commence par y basculer — et comme basculer DETRUIT la grille
+    /// inactive (piege connu), un terminal restaure qui en SORT revient vide. C'est le cas le
+    /// plus courant chez qui fait tourner un agent, et il a fallu un essai pour le voir.
+    ///
+    /// La photo passe donc par `photographier`, qui dessine la grille active dans l'ecran
+    /// NORMAL. L'essai part d'un VRAI ecran alternatif, produit par le shell : ecrire la
+    /// bascule a la main dans la photo ne prouverait rien du chemin reel.
+    #[cfg(unix)]
+    #[test]
+    fn l_ecran_d_un_agent_plein_ecran_reste_lisible() {
+        let session = session(None);
+        #[cfg(unix)]
+        let _faucheuse = session.pid.map(|pid| Faucheuse(pid as i32));
+
+        // Le marqueur est ASSEMBLE par le shell : guette tel quel, on trouverait d'abord
+        // l'echo de la ligne tapee (piege connu).
+        session
+            .ecrire(b"printf '\\033[?1049h\\033[HINTERFACE%s' -DE-L-AGENT\r")
+            .expect("frappe");
+        attendre(&session, "l'ecran plein ecran de l'agent", |ecran| {
+            ecran.contains("INTERFACE-DE-L-AGENT")
+        });
+        assert!(
+            session.ecran_alternatif(),
+            "l'essai doit partir d'un VRAI ecran alternatif, sinon il ne prouve rien"
+        );
+
+        let photo = session.photographier();
+        session.fermer().expect("fermeture");
+
+        // Le rallumage : un shell neuf, la photo par-dessus.
+        let rouverte = session_avec_ecran(None, &photo);
+        #[cfg(unix)]
+        let _faucheuse2 = rouverte.pid.map(|pid| Faucheuse(pid as i32));
+        let vu = attendre(&rouverte, "l'ecran de l'agent restaure", |ecran| {
+            ecran.contains("INTERFACE-DE-L-AGENT")
+        });
+        assert!(
+            !rouverte.ecran_alternatif(),
+            "un terminal restaure doit revenir a un shell normal. Ecran :\n{vu}"
+        );
+        rouverte.fermer().expect("fermeture");
     }
 
     /// Un terminal qui NAIT ne doit pas porter de separateur : rien ne le precede.

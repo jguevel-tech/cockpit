@@ -256,6 +256,50 @@ fn un_terminal_photographie_revient_avec_son_texte() {
     client.fermer(1).unwrap();
 }
 
+/// LE CAS D'UN AGENT, PAR LE SOCKET : la photo d'un terminal PLEIN ECRAN doit revenir
+/// lisible, et rendre un shell normal.
+///
+/// claude, vim et htop dessinent dans l'ecran alternatif. Un redessin ordinaire restitue ce
+/// mode, donc y bascule ; comme basculer DETRUIT la grille inactive, un terminal restaure qui
+/// en sort revient VIDE. C'est le cas le plus courant chez qui fait tourner un agent.
+///
+/// L'essai unitaire de `session.rs` verifie `photographier`. Celui-ci verifie que le SERVICE
+/// s'en sert : il tombe si `instantane` repasse par un redessin ordinaire.
+#[cfg(unix)]
+#[test]
+fn la_photo_d_un_terminal_plein_ecran_revient_lisible() {
+    let banc = Banc::neuf(500);
+    let (client, recu) = banc.client();
+    let mut miroir = Miroir::neuf();
+
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
+    client.attacher(1, TAILLE).unwrap();
+    // Le marqueur est ASSEMBLE par le shell : guette tel quel, on trouverait l'echo de la
+    // ligne tapee avant son execution.
+    client
+        .ecrire(1, b"printf '\\033[?1049h\\033[HINTERFACE%s' -DE-L-AGENT\r")
+        .unwrap();
+    attendre_a_l_ecran(&mut miroir, &recu, "INTERFACE-DE-L-AGENT");
+    assert!(
+        miroir.ecran.ecran_alternatif(),
+        "l'essai doit partir d'un VRAI ecran alternatif, sinon il ne prouve rien"
+    );
+
+    let photo = client.instantane(1).unwrap();
+    client.fermer(1).unwrap();
+
+    client.creer(1, &dossier_de_travail(), TAILLE, None, photo).unwrap();
+    let mut apres = Miroir::neuf();
+    client.attacher(1, TAILLE).unwrap();
+    attendre_a_l_ecran(&mut apres, &recu, "INTERFACE-DE-L-AGENT");
+    assert!(
+        !apres.ecran.ecran_alternatif(),
+        "un terminal restaure doit rendre un shell normal. Ecran :\n{}",
+        apres.texte()
+    );
+    client.fermer(1).unwrap();
+}
+
 /// Une photo demandee sur un terminal inconnu est une ERREUR, pas une photo vide.
 ///
 /// Un octet vide rendu ici effacerait la derniere photo valable de ce terminal en base.

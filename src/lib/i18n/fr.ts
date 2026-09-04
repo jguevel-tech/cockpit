@@ -475,7 +475,7 @@ export const fr = {
   "git.worktreeDetached": "tête détachée sur {tete}",
   "git.noProjectPath": "Ce projet n'a pas de chemin : renseigne-le dans l'onglet Paramètres.",
   "docs.term.heading": ">_ Terminaux",
-  "docs.term.persistent": "<strong>Persistants</strong> : ferme Cockpit, redémarre — tes terminaux et ce qui tourne dedans sont toujours là. Éteins l'ordinateur, et tu retrouves tes onglets dans le même dossier, avec le texte qu'ils affichaient : une ligne grise le sépare du shell qui vient de démarrer.",
+  "docs.term.persistent": "<strong>Persistants</strong> : ferme Cockpit, redémarre — tes terminaux et ce qui tourne dedans sont toujours là. Éteins l'ordinateur, et tu retrouves tes onglets dans le même dossier, avec le texte qu'ils affichaient : une ligne grise le sépare du shell qui vient de démarrer. Un terminal où tournait un agent IA le rouvre sur sa conversation.",
   "docs.term.persistentDemo": "👉 double-clic sur l'onglet = renommer · le nom apparaît aussi dans la barre latérale",
   "docs.term.search": "<strong>Recherche dans l'historique</strong> : 🔍 ou <span class=\"kbd\">Ctrl</span><span class=\"kbd\">Maj</span><span class=\"kbd\">F</span>, Entrée cherche vers le haut. L'occurrence est surlignée dans le terminal, le compteur s'affiche à côté du champ.",
   "docs.term.copy": "<strong>Copier / coller</strong> : sélection à la souris puis <span class=\"kbd\">Ctrl</span><span class=\"kbd\">C</span>, ou clic droit → Copier / Coller. <strong>Clic molette</strong> = coller. <span class=\"kbd\">Maj</span>+glisser pour sélectionner dans vim/claude.",
