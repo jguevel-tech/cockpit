@@ -60,7 +60,7 @@ export const fr = {
   "time.daysAgoShort": "il y a {n} j",
   "terminals.title": "Terminaux en cours",
   "terminals.goTo": "Aller à ce terminal",
-  "terminals.finished": "terminé",
+  "terminals.finished": "inactif",
   "notes.title": "Notes",
   "notes.folderNamePrompt": "Nom du dossier :",
   "notes.fileNamePrompt": "Nom du fichier :",

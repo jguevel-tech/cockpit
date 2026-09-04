@@ -409,8 +409,12 @@
   /// Recharge la liste des sessions du projet et la FUSIONNE avec celle affichee.
   /// Fusion et non remplacement : une session terminee reste visible (barree) jusqu'a ce
   /// que l'utilisateur ferme son onglet, un remplacement la ferait disparaitre sous ses yeux.
+  ///
+  /// Sans filtre sur `alive`, pour la meme raison qu'au montage : un terminal endormi est
+  /// reclamable — la barre laterale et le tableau de bord le proposent — et l'activer rouvre
+  /// son shell avec l'ecran d'avant.
   async function fusionnerSessions() {
-    const frais = (await listTerminals(name)).filter((t) => t.alive);
+    const frais = await listTerminals(name);
     for (const t of frais) {
       const connue = sessions.find((s) => s.id === t.id);
       if (connue) connue.name = t.name;

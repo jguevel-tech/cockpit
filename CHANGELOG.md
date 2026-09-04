@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les terminaux d'un projet réapparaissent dans la barre latérale et le tableau de bord après
+  un redémarrage de l'ordinateur. Ils étaient bien conservés, avec leur contenu, mais seuls
+  ceux dont le shell tournait encore s'affichaient : au premier démarrage, la liste semblait
+  vide. Un terminal sans shell est marqué « inactif » et s'ouvre en un clic.
+
 ## [0.56.0] — 2026-09-04
 
 ### Added

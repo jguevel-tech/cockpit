@@ -57,7 +57,7 @@ export const en: Catalog = {
   "time.daysAgoShort": "{n} d ago",
   "terminals.title": "Open terminals",
   "terminals.goTo": "Go to this terminal",
-  "terminals.finished": "finished",
+  "terminals.finished": "idle",
   "notes.title": "Notes",
   "notes.folderNamePrompt": "Folder name:",
   "notes.fileNamePrompt": "File name:",

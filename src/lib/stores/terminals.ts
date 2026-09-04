@@ -4,7 +4,13 @@ import { listAllTerminals } from "../api/workspace";
 import type { TerminalInfo } from "../types";
 import { signalerErreur } from "./errors";
 
-// Terminaux vivants (toutes sessions du serveur), pour la sidebar et le dashboard.
+// TOUS les terminaux, tous projets confondus, pour la barre laterale et le tableau de bord.
+//
+// **PAS SEULEMENT LES VIVANTS, ET C'EST LE CORRECTIF DE LA 0.56.1.** Un terminal dont le
+// service n'a plus la session n'est pas perdu : son shell est mort avec la machine, sa ligne
+// et l'ecran qu'il affichait ont survecu, et l'ouvrir le rouvre. Le filtre qui vivait ici
+// rendait donc la liste VIDE au premier demarrage suivant une extinction, et on croyait ses
+// terminaux perdus alors qu'ils etaient tous en base.
 export const terminals = writable<TerminalInfo[]>([]);
 
 // Un appel deja en vol interdit le suivant. Sans cette garde, un service qui met plus de
@@ -17,7 +23,7 @@ export async function loadTerminals() {
   if (enVol) return;
   enVol = true;
   try {
-    terminals.set((await listAllTerminals()).filter((t) => t.alive));
+    terminals.set(await listAllTerminals());
   } catch (e) {
     signalerErreur("terminals.loadTerminals", String(e));
   } finally {
