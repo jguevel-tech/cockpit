@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.56.0] — 2026-09-04
+
 ### Added
 
 - Un terminal qui faisait tourner un agent IA le rouvre sur sa conversation. Deux terminaux du
