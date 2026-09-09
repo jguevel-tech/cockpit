@@ -1,0 +1,9 @@
+{
+  "name": "cockpit-coquille",
+  "private": true,
+  "description": "Coquille Electron de Cockpit : fenetre Chromium et pont vers le backend Rust.",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "^38.2.0"
+  }
+}
