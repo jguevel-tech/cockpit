@@ -191,6 +191,15 @@ pub fn mode() -> String {
 mod tests {
     use super::*;
 
+    /// **`decider()` ECRIT DANS L'ENVIRONNEMENT DU PROCESSUS, QUI EST PARTAGE PAR TOUS LES
+    /// ESSAIS.** Tout essai qui l'appelle doit donc prendre ce verrou, y compris celui qui
+    /// ne fait que LIRE le resultat : le 2026-09-09, `la_decision_est_nommee` a repose la
+    /// variable entre le `decider()` de l'autre essai et son assertion, et la suite est
+    /// devenue rouge sans qu'une ligne de code de rendu ait change. Elle ne l'etait pas la
+    /// veille : l'ordonnancement seul avait bouge, ce qui est la signature d'une course.
+    /// Un essai seul passait, la suite en un seul fil aussi, la suite en parallele non.
+    static VERROU_ENVIRONNEMENT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Les deux sens de la decision, dans UN SEUL essai : ils touchent l'environnement du
     /// processus, et deux essais qui le modifient en parallele se marcheraient dessus.
     ///
@@ -200,6 +209,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn l_etat_est_toujours_remis_a_plat() {
+        let _verrou = VERROU_ENVIRONNEMENT.lock().unwrap_or_else(|e| e.into_inner());
         // Ce qu'une version precedente aurait laisse derriere elle, sans que personne ne l'ait
         // demande. SANS notre reglage : rien ne doit decider a la place de l'utilisateur, meme
         // sur la machine NVIDIA + Wayland qui execute cet essai — la 0.54.7 le faisait, et la
@@ -233,6 +243,7 @@ mod tests {
     /// personne, et c'est ce journal qui jugera si le contournement a servi.
     #[test]
     fn la_decision_est_nommee() {
+        let _verrou = VERROU_ENVIRONNEMENT.lock().unwrap_or_else(|e| e.into_inner());
         decider();
         let mode = mode();
         assert!(mode.starts_with("rendu : "), "mode inattendu : {mode}");

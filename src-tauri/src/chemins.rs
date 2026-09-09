@@ -52,22 +52,50 @@ fn resoudre_dossier_personnel(
 /// L'identifiant du paquet, tel qu'il figure aussi dans `tauri.conf.json`. Un essai le
 /// verifie : les deux valeurs doivent rester egales, sinon ce chemin et celui de Tauri
 /// divergent EN SILENCE et le fichier cherche n'est jamais trouve.
-#[cfg(target_os = "linux")]
 pub const IDENTIFIANT: &str = "com.cockpit.dev";
 
 /// Le dossier de donnees de l'application, calcule SANS Tauri.
 ///
-/// Pour les rares chemins qui servent AVANT que la fenetre existe — `rendu::decider()`
-/// tourne avant l'initialisation de GTK, donc avant tout `AppHandle`. Sous Linux c'est
-/// `XDG_DATA_HOME` (ou `~/.local/share`) auquel Tauri ajoute l'identifiant : la regle est
-/// recopiee ici, et un essai la tient alignee sur `tauri.conf.json`.
-#[cfg(target_os = "linux")]
+/// Pour les chemins qui servent AVANT que la fenetre existe — `rendu::decider()` tourne
+/// avant l'initialisation de GTK, donc avant tout `AppHandle` — et pour tout hote qui n'est
+/// pas Tauri, le pont compris.
+///
+/// **ELLE ETAIT SOUS `#[cfg(linux)]` ET CA A CASSE DEUX FOIS LA COMPILATION CROISEE**, le
+/// 2026-09-09, une fois dans le journal des terminaux et une fois dans le pont. Une
+/// fonction dont tout le monde a besoin ne peut pas n'exister que sur un systeme : la regle
+/// de chaque plateforme est donc ecrite ici, celle que Tauri applique de son cote.
+///
+/// L'alignement avec `app_data_dir()` n'est tenu par un essai que sous Linux, faute d'y
+/// pouvoir executer les deux autres. Les regles y sont celles des conventions du systeme,
+/// pas une mesure : `%APPDATA%` sous Windows, `~/Library/Application Support` sous macOS.
 pub fn dossier_donnees_sans_tauri() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| dossier_personnel().ok().map(|d| d.join(".local/share")))?;
-    Some(base.join(IDENTIFIANT))
+    #[cfg(target_os = "linux")]
+    {
+        let base = std::env::var_os("XDG_DATA_HOME")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| dossier_personnel().ok().map(|d| d.join(".local/share")))?;
+        Some(base.join(IDENTIFIANT))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Some(
+            dossier_personnel()
+                .ok()?
+                .join("Library/Application Support")
+                .join(IDENTIFIANT),
+        )
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // `%APPDATA%` d'abord : c'est ce que le systeme donne, et il ne vaut pas toujours
+        // `%USERPROFILE%\AppData\Roaming` (profil itinerant, redirection de dossier).
+        let base = std::env::var_os("APPDATA")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| dossier_personnel().ok().map(|d| d.join("AppData").join("Roaming")))?;
+        Some(base.join(IDENTIFIANT))
+    }
 }
 
 /// Le dossier de donnees de l'application, memorise au demarrage.

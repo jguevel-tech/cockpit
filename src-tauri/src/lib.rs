@@ -1,6 +1,7 @@
 mod agents;
 mod appearance;
 mod evenements;
+pub mod pont;
 mod chemins;
 pub mod compte;
 mod commande;
@@ -43,6 +44,81 @@ pub struct AppState {
     pub connexion_llm: llm::abonnement::SessionConnexion,
     pub lsp: Arc<lsp::LspState>,
 }
+
+/// Sert le pont si `--pont` est demande, et dit si ce processus lui appartient.
+///
+/// **RIEN NE DOIT ALLER SUR LA SORTIE STANDARD EN DEHORS DU PROTOCOLE** : elle EST le
+/// tuyau. Les pannes partent donc sur la sortie d'erreur, que l'hote peut journaliser
+/// sans casser sa lecture.
+pub fn pont_si_demande() -> bool {
+    if !std::env::args().any(|a| a == "--pont") {
+        return false;
+    }
+    match tokio::runtime::Runtime::new() {
+        Ok(runtime) => {
+            if let Err(e) = runtime.block_on(pont::servir()) {
+                eprintln!("pont : {e}");
+            }
+        }
+        Err(e) => eprintln!("pont : runtime impossible a demarrer : {e}"),
+    }
+    true
+}
+
+/// Le chemin de la base, dans l'ordre : `COCKPIT_DB`, puis `--db`, puis le dossier de
+/// donnees. Extrait du `setup` pour que le pont applique la MEME regle : deux resolutions
+/// du meme chemin finiraient par diverger, et l'une des deux ouvrirait une base vide sans
+/// que rien ne le signale.
+pub fn chemin_de_la_base(dossier_donnees: &std::path::Path) -> String {
+    std::env::var("COCKPIT_DB")
+        .ok()
+        .or_else(|| std::env::args().skip_while(|a| a != "--db").nth(1))
+        .unwrap_or_else(|| {
+            std::fs::create_dir_all(dossier_donnees).ok();
+            dossier_donnees.join("data.db").to_string_lossy().to_string()
+        })
+}
+
+/// Construit l'etat applicatif. **Aucun hote en particulier n'est suppose ici** : ni
+/// `AppHandle`, ni fenetre, ni Tauri. Ce qui reste au `setup` de l'appelant, ce sont les
+/// EFFETS qui precedent (ouvrir la base, mettre le guetteur en marche, preparer les
+/// terminaux), parce qu'ils dependent de l'hote et pas de l'etat.
+///
+/// L'orchestrateur reste construit ici et non passe en argument : il derive des projets
+/// que la base contient deja, donc le calculer dehors donnerait deux facons de l'obtenir.
+pub fn construire_etat(
+    db: Database,
+    db_path: String,
+    terminaux: Box<dyn terminal::Terminaux>,
+) -> AppState {
+    let db_projects = db.get_projects().unwrap_or_default();
+    let project_defs: Vec<_> = db_projects
+        .iter()
+        .map(|p| {
+            (
+                p.name.clone(),
+                p.path.clone(),
+                p.compose_file.clone(),
+                p.description.clone(),
+                p.depends_on.clone(),
+            )
+        })
+        .collect();
+
+    AppState {
+        db,
+        db_path,
+        orchestrator: Arc::new(
+            Orchestrator::new(&project_defs).expect("failed to create orchestrator"),
+        ),
+        collector: Arc::new(Mutex::new(Collector::new())),
+        recorder: recorder::RecorderState::default(),
+        terminals: terminaux,
+        connexion_llm: llm::abonnement::SessionConnexion::default(),
+        lsp: Arc::new(lsp::LspState::default()),
+    }
+}
+
 
 /// Bornes du zoom webview. Doivent rester alignees sur ZOOM_LEVELS (src/lib/stores/ui.ts).
 const ZOOM_MIN: f64 = 0.7;
@@ -118,6 +194,12 @@ async fn list_projects(state: tauri::State<'_, AppState>) -> Result<Vec<ProjectW
 /// de frappe ne fasse pas demarrer l'interface dans une langue vide.
 #[tauri::command]
 fn langue_imposee() -> Option<String> {
+    langue_imposee_reelle()
+}
+
+/// La langue imposee par l'environnement, hors de toute commande : le pont la sert aussi,
+/// et deux lectures de la meme variable finiraient par diverger.
+pub fn langue_imposee_reelle() -> Option<String> {
     langue_valide(&std::env::var("COCKPIT_LANGUE").ok()?)
 }
 
@@ -1689,16 +1771,7 @@ pub fn run() {
             }
 
             // Check for --db CLI argument or env var, otherwise use app data dir
-            let db_path = std::env::var("COCKPIT_DB")
-                .ok()
-                .or_else(|| {
-                    std::env::args().skip_while(|a| a != "--db").nth(1)
-                })
-                .unwrap_or_else(|| {
-                    let app_dir = app.path().app_data_dir().unwrap();
-                    std::fs::create_dir_all(&app_dir).ok();
-                    app_dir.join("data.db").to_string_lossy().to_string()
-                });
+            let db_path = chemin_de_la_base(&app.path().app_data_dir().unwrap());
 
             log::info!("Using database: {}", db_path);
             let db = Database::new(&db_path)
@@ -1730,40 +1803,11 @@ pub fn run() {
                 }
             }
 
-            // Load projects from DB
-            let db_projects = db.get_projects().unwrap_or_default();
-            let project_defs: Vec<_> = db_projects
-                .iter()
-                .map(|p| {
-                    (
-                        p.name.clone(),
-                        p.path.clone(),
-                        p.compose_file.clone(),
-                        p.description.clone(),
-                        p.depends_on.clone(),
-                    )
-                })
-                .collect();
-
-            // Init orchestrator
-            let orchestrator = Arc::new(
-                Orchestrator::new(&project_defs).expect("failed to create orchestrator"),
-            );
-
-            // Init system collector
-            let collector = Arc::new(Mutex::new(Collector::new()));
-
-            // Store state
-            app.manage(AppState {
-                db,
-                db_path: db_path.clone(),
-                orchestrator: orchestrator.clone(),
-                collector,
-                recorder: recorder::RecorderState::default(),
-                terminals: terminaux,
-                connexion_llm: llm::abonnement::SessionConnexion::default(),
-                lsp: Arc::new(lsp::LspState::default()),
-            });
+            // L'etat sort d'une fonction que TOUT hote peut appeler, pas du `setup` : c'est
+            // ce qui permet de servir les memes commandes ailleurs que dans Tauri.
+            let etat = construire_etat(db, db_path.clone(), terminaux);
+            let orchestrator = etat.orchestrator.clone();
+            app.manage(etat);
 
             // Start status monitor (every 5s)
             let orch_clone = orchestrator.clone();
