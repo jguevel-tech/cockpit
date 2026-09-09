@@ -685,6 +685,137 @@ fn la_latence_de_frappe_reste_sous_celle_de_tmux() {
     let _ = client.fermer(1);
 }
 
+/// La latence de frappe QUAND UN AUTRE TERMINAL CRACHE.
+///
+/// L'essai precedent mesure un terminal AU REPOS, et il passe. Or ce que l'utilisateur
+/// ressent quand un build tourne a cote n'est pas mesure nulle part : le flux du service
+/// est une file unique, donc la sortie du terminal qui deverse passe devant l'echo de
+/// celui ou l'on tape.
+///
+/// **Cet essai est un INSTRUMENT avant d'etre une garde.** Son seuil n'attrape aujourd'hui
+/// que l'effondrement complet ; le chiffre qui compte est celui qu'il affiche avec
+/// `--nocapture`. Il sera resserre sur la valeur obtenue une fois la contre-pression posee.
+#[cfg(unix)]
+#[test]
+fn la_latence_de_frappe_tient_quand_un_autre_terminal_crache() {
+    const TOURS: usize = 100;
+    let banc = Banc::neuf(500);
+    let (client, recu) = banc.client();
+    let mut miroir = Miroir::neuf();
+
+    // Celui ou l'on tape. `cat` renvoie ce qu'on lui donne : l'echo ne depend pas de l'invite.
+    client.creer(1, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
+    client.attacher(1, TAILLE).unwrap();
+    client.ecrire(1, b"cat\r").unwrap();
+    attendre_a_l_ecran(&mut miroir, &recu, "cat");
+    ecouler(&mut miroir, &recu);
+
+    // Un fil avale TOUT et ne signale que l'echo du terminal 1. Sans lui, le temps que le
+    // banc met a consommer la sortie de l'autre terminal s'ajouterait a la mesure : on
+    // mesurerait le banc, pas le service.
+    // Le terminal de charge est prepare MAINTENANT, tant qu'on peut encore observer
+    // l'ecran : une commande ecrite avant que le shell ne soit pret part dans le vide.
+    // Le marqueur est construit PAR LE SHELL (`pr''et`), sinon on trouverait a l'ecran ce
+    // qu'on vient de taper au lieu de son execution.
+    client.creer(2, &dossier_de_travail(), TAILLE, None, Vec::new()).unwrap();
+    client.attacher(2, TAILLE).unwrap();
+    client.ecrire(2, b"echo pr''et-charge\r").unwrap();
+    attendre_a_l_ecran(&mut miroir, &recu, "pret-charge");
+    ecouler(&mut miroir, &recu);
+
+    // Le fil compte AUSSI ce que crache le terminal 2 : sans ce compteur, une charge qui
+    // n'a pas demarre rendrait un excellent chiffre, et on conclurait sur une mesure qui
+    // n'a jamais eu lieu.
+    let octets_de_charge = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let compteur = std::sync::Arc::clone(&octets_de_charge);
+    let (signal, echos) = std::sync::mpsc::channel::<Instant>();
+    let lecteur = std::thread::spawn(move || {
+        while let Ok(pousse) = recu.recv_timeout(PATIENCE) {
+            match pousse {
+                Pousse::Sortie { id: 1, .. } => {
+                    if signal.send(Instant::now()).is_err() {
+                        return;
+                    }
+                }
+                Pousse::Sortie { id: 2, ref octets } => {
+                    compteur.fetch_add(octets.len(), std::sync::atomic::Ordering::Relaxed);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let mediane = |v: &mut Vec<Duration>| {
+        v.sort();
+        v[v.len() / 2]
+    };
+    let p95 = |v: &mut Vec<Duration>| {
+        v.sort();
+        v[(v.len() * 95) / 100]
+    };
+    // **CE QUI A DEJA FAUSSE CETTE MESURE.** Sans vider le canal avant chaque tour, un echo
+    // en retard etait rendu au tour SUIVANT : anterieur a l'ecriture, il donnait une duree
+    // saturee a zero, et l'essai annoncait une frappe treize fois plus rapide SOUS charge.
+    // Un instant anterieur au depart n'est donc jamais accepte.
+    let mesurer = |tours: usize| {
+        let mut mesures = Vec::with_capacity(tours);
+        for _ in 0..tours {
+            while echos.try_recv().is_ok() {}
+            let debut = Instant::now();
+            client.ecrire(1, b"x").unwrap();
+            let arrivee = loop {
+                let t = echos.recv_timeout(PATIENCE).expect("pas d'echo");
+                if t >= debut {
+                    break t;
+                }
+            };
+            mesures.push(arrivee.duration_since(debut));
+        }
+        mesures
+    };
+
+    // 1) Au repos, pour avoir la reference dans les memes conditions de machine.
+    let mut au_repos = mesurer(TOURS);
+
+    // 2) Sous charge : le second terminal deverse sans discontinuer.
+    client.ecrire(2, b"yes cockpit-charge-de-mesure\r").unwrap();
+    std::thread::sleep(Duration::from_millis(700));
+    while echos.try_recv().is_ok() {} // les echos en retard ne comptent pas dans la mesure
+    let mut sous_charge = mesurer(TOURS);
+
+    // La charge a-t-elle eu lieu ? Un `yes` qui n'aurait pas demarre rendrait la mesure
+    // « sous charge » identique au repos, et le vert ne prouverait rien.
+    let craches = octets_de_charge.load(std::sync::atomic::Ordering::Relaxed);
+    assert!(
+        craches > 1_000_000,
+        "la charge n'a pas eu lieu : seulement {craches} octets craches par le terminal 2"
+    );
+
+    let _ = client.fermer(2);
+    let _ = client.fermer(1);
+    drop(echos);
+    let _ = lecteur.join();
+
+    eprintln!(
+        "frappe au repos   : mediane {:?} | p95 {:?}\n\
+         frappe sous charge: mediane {:?} | p95 {:?}\n\
+         cout de la charge : mediane x{:.1} (charge : {} Mo craches)",
+        mediane(&mut au_repos),
+        p95(&mut au_repos),
+        mediane(&mut sous_charge),
+        p95(&mut sous_charge),
+        mediane(&mut sous_charge).as_secs_f64() / mediane(&mut au_repos).as_secs_f64().max(1e-9),
+        craches / 1_048_576
+    );
+
+    // Seuil large a dessein : il n'attrape aujourd'hui que l'effondrement complet.
+    assert!(
+        mediane(&mut sous_charge) < Duration::from_secs(1),
+        "la frappe s'effondre sous charge : {:?}",
+        mediane(&mut sous_charge)
+    );
+}
+
 /// L'aller-retour de reference : ecrire dans un PTY et relire l'echo, sans rien autour.
 #[cfg(unix)]
 fn aller_retour_sur_un_pty_nu(tours: usize) -> Vec<Duration> {
