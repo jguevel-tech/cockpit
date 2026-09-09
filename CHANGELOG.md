@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.58.1] — 2026-09-09
+
 ### Fixed
 
 - Un affichage gelé est réparé en une dizaine de secondes au lieu de quarante : la
