@@ -19,6 +19,11 @@
 //!
 //! Ce module porte aussi la FERMETURE : c'est le dernier moment ou l'on peut photographier les
 //! terminaux, et c'est ce qui les rend « comme on les a quittes » au prochain demarrage.
+//!
+//! **TOUT CE MODULE EST A TAURI.** Il ne porte que des types de fenetre (`Window`,
+//! `PhysicalSize`, `WindowEvent`) et un bug de son moteur : sans la crate, il n'y a rien a
+//! garder. Une coquille qui n'est pas Tauri traite ce changement d'ecran chez elle.
+#![cfg(feature = "interface-tauri")]
 
 use std::time::Duration;
 
@@ -55,7 +60,7 @@ pub fn sur_evenement<R: Runtime>(fenetre: &tauri::Window<R>, evenement: &WindowE
     };
     let taille = *new_inner_size;
     let fenetre = fenetre.clone();
-    tauri::async_runtime::spawn(async move {
+    crate::taches::lancer(async move {
         // `set_size` est dispatche vers le fil principal par Tauri : rien a faire de plus ici.
         if fenetre.set_size(taille_secouee(taille)).is_err() {
             return;

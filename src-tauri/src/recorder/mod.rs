@@ -221,7 +221,7 @@ pub async fn stop(emetteur: Emetteurs, db: Database, state: &RecorderState) -> R
         },
     );
 
-    tauri::async_runtime::spawn(run_pipeline(emetteur, db, recording_id));
+    crate::taches::lancer(run_pipeline(emetteur, db, recording_id));
     Ok(())
 }
 
@@ -260,7 +260,7 @@ pub fn retry(emetteur: Emetteurs, db: Database, recording_id: i64) -> Result<(),
             mute_track: None,
         },
     );
-    tauri::async_runtime::spawn(run_pipeline(emetteur, db, recording_id));
+    crate::taches::lancer(run_pipeline(emetteur, db, recording_id));
     Ok(())
 }
 

@@ -46,6 +46,11 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
+/// **CE QUI SUIT EST COUPE EN DEUX.** Ce que le guetteur MESURE et DECIDE ne connait ni
+/// fenetre ni hote : ce sont des compteurs et des fonctions pures, et c'est ce qui les rend
+/// verifiables. Ce qu'il FAIT (recharger la vue, relancer, ecrire le journal) passe par
+/// l'hote — ici Tauri. Une autre coquille rebranchera ces gestes-la, pas les decisions.
+#[cfg(feature = "interface-tauri")]
 use tauri::{AppHandle, Manager};
 
 /// Cadence des demandes. Une par seconde : assez fin pour situer un gel, assez rare pour ne rien
@@ -159,6 +164,7 @@ impl Drop for Marque {
     }
 }
 
+#[cfg(feature = "interface-tauri")]
 fn ce_qui_tourne() -> String {
     match *EN_COURS.lock().unwrap_or_else(|e| e.into_inner()) {
         Some((quoi, depuis)) => {
@@ -326,6 +332,7 @@ pub fn tailler_la_fenetre(file: &mut VecDeque<u64>, maintenant: u64) {
     }
 }
 
+#[cfg(feature = "interface-tauri")]
 fn phrase(panne: Panne) -> String {
     match panne {
         Panne::BoucleFigee => format!("la fenetre ne repond plus — {}", ce_qui_tourne()),
@@ -338,6 +345,7 @@ fn phrase(panne: Panne) -> String {
 }
 
 /// Met le guetteur en route. A appeler une fois, au demarrage.
+#[cfg(feature = "interface-tauri")]
 pub fn surveiller(app: AppHandle) {
     std::thread::spawn(move || {
         // UNE LIGNE AU DEMARRAGE, ET ELLE EST INDISPENSABLE. Sans elle, le silence du guetteur
@@ -481,6 +489,7 @@ pub fn surveiller(app: AppHandle) {
 /// Recharge la vue web. Passe par la boucle principale : dans les pannes ou cette action est
 /// decidee (`RenduArrete`, `PageMuette`), elle repond encore — c'est justement ce qui les
 /// distingue de `BoucleFigee`.
+#[cfg(feature = "interface-tauri")]
 fn recharger_la_vue(app: &AppHandle) {
     let app_pour_closure = app.clone();
     let _ = app.run_on_main_thread(move || {
@@ -495,6 +504,7 @@ fn recharger_la_vue(app: &AppHandle) {
 /// Laisse une trace en base : au prochain montage, la page dira POURQUOI elle vient de se
 /// remonter. Sans ca, l'utilisateur voit son interface clignoter et se reconstruire sans
 /// explication — et un geste invisible est un geste qui fait peur.
+#[cfg(feature = "interface-tauri")]
 fn marquer_vue_rechargee(app: &AppHandle) {
     if let Some(etat) = app.try_state::<crate::AppState>() {
         if let Err(e) = etat.db.set_setting("gel_vue_rechargee", "1") {
@@ -505,6 +515,7 @@ fn marquer_vue_rechargee(app: &AppHandle) {
 
 /// Le dialogue de proposition ne se lit QUE quand l'affichage va de nouveau : l'evenement
 /// est donc emis au retour a la normale, jamais pendant la panne.
+#[cfg(feature = "interface-tauri")]
 fn proposer_mode_secours(app: &AppHandle) {
     use tauri::Emitter;
     if let Err(e) = app.emit("guetteur-proposition-secours", ()) {
@@ -526,6 +537,7 @@ fn proposer_mode_secours(app: &AppHandle) {
 ///
 /// **Si le lancement echoue, on NE QUITTE PAS** : transformer un gel en disparition serait
 /// aggraver la panne. La fenetre figee reste, et le journal dit pourquoi rien n'est venu.
+#[cfg(feature = "interface-tauri")]
 pub(crate) fn relancer_l_application(app: &AppHandle) -> Result<(), String> {
     tauri_plugin_single_instance::destroy(app);
     let binaire = crate::terminal::service::lancement::binaire_a_relancer().map_err(|e| {
@@ -554,6 +566,7 @@ pub(crate) fn relancer_l_application(app: &AppHandle) -> Result<(), String> {
     }
 }
 
+#[cfg(feature = "interface-tauri")]
 fn journaliser(app: &AppHandle, message: &str) {
     if let Ok(dir) = app.path().app_data_dir() {
         let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();

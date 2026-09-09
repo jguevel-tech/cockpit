@@ -24,6 +24,9 @@ pub trait Emetteur: Send + Sync {
 /// la boucle qui lit le service de terminaux, et celle qui les rebranche apres coupure.
 pub type Emetteurs = Arc<dyn Emetteur>;
 
+/// L'implementation de Tauri. Elle ne survit pas au retrait de la crate : sans elle, le
+/// trait reste, et c'est bien ce qu'on cherchait.
+#[cfg(feature = "interface-tauri")]
 impl Emetteur for tauri::AppHandle {
     fn emettre(&self, evenement: &str, charge: serde_json::Value) {
         use tauri::Emitter;

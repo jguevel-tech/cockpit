@@ -12,6 +12,11 @@
 //!
 //! **Toutes les commandes de ce module sont `async`** : une commande synchrone s'execute dans
 //! la boucle GTK et gele l'interface entiere — ici, le temps d'un aller-retour reseau.
+//!
+//! **LES COMMANDES SONT DES ADAPTATEURS, ET ELLES SEULES DEPENDENT DE TAURI.** Ce qui parle
+//! au serveur prend une base et rien d'autre ; la commande y ajoute le `State` et le nom que
+//! l'interface appelle. Sans la crate, les adaptateurs disparaissent et le reste tient : une
+//! autre coquille rebranche ses propres appels sur les memes fonctions.
 
 pub mod google;
 pub mod synchro;
@@ -326,6 +331,7 @@ struct Capacites {
 ///
 /// Rend `false` quand on ne peut pas lui demander : mieux vaut ne pas proposer un bouton que
 /// d'en proposer un qui mene a une page ou le choix n'existe pas.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_google_disponible(
     state: tauri::State<'_, crate::AppState>,
@@ -361,6 +367,7 @@ pub async fn compte_google_disponible(
 /// Separe de la question « y a-t-il un chemin Google » : le bouton s'affiche des qu'il y en a un,
 /// mais le geste au clic n'est pas le meme. Sans cette distinction, un binaire construit sans
 /// client de bureau tenterait le chemin direct et echouerait apres avoir ouvert un navigateur.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_google_direct(
     state: tauri::State<'_, crate::AppState>,
@@ -385,11 +392,13 @@ pub async fn compte_google_direct(
         .unwrap_or(false))
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_etat(state: tauri::State<'_, crate::AppState>) -> Result<EtatCompte, String> {
     Ok(etat(&state.db))
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_inscription(
     email: String,
@@ -400,6 +409,7 @@ pub async fn compte_inscription(
     ouvrir_une_session(&state.db, "/api/inscription", &email, &mot_de_passe, nom.as_deref()).await
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_connexion(
     email: String,
@@ -414,6 +424,7 @@ pub async fn compte_connexion(
 /// Le navigateur s'ouvre, la personne choisit son compte, la fenetre se ferme — et c'est fini.
 /// Le detail de l'echange est dans `google.rs` ; ici on ne fait que porter le jeton d'identite au
 /// serveur, qui rend le notre.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_connexion_google(
     state: tauri::State<'_, crate::AppState>,
@@ -456,6 +467,7 @@ pub async fn compte_connexion_google(
 ///
 /// Ce detour existe parce que Cockpit n'a pas de serveur HTTP — Google ne peut donc pas lui
 /// renvoyer l'utilisateur sur une adresse locale.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_appairage_demarrer(
     state: tauri::State<'_, crate::AppState>,
@@ -482,6 +494,7 @@ pub async fn compte_appairage_demarrer(
 }
 
 /// Le logiciel interroge cette commande jusqu'a obtenir son jeton.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_appairage_etat(
     id: String,
@@ -513,6 +526,7 @@ pub async fn compte_appairage_etat(
 /// precisement ce qu'une deconnexion promet d'empecher. Si le serveur est injoignable, on
 /// oublie quand meme localement : refuser de se deconnecter hors ligne serait absurde. La
 /// panne part alors dans les journaux.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_deconnexion(
     state: tauri::State<'_, crate::AppState>,
@@ -610,6 +624,7 @@ struct ReponseMoi {
 }
 
 /// La liste des machines du compte, et laquelle est celle-ci.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_machines(
     state: tauri::State<'_, crate::AppState>,
@@ -649,6 +664,7 @@ pub async fn definir_le_nom(db: &Database, nom: &str) -> Result<EtatCompte, Stri
     .await
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_definir_nom(
     nom: String,
@@ -736,6 +752,7 @@ pub async fn retirer_l_avatar(db: &Database) -> Result<EtatCompte, String> {
     appeler_le_profil(db, reqwest::Method::DELETE, "/api/moi/avatar", None, None).await
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_deposer_avatar(
     chemin: String,
@@ -744,6 +761,7 @@ pub async fn compte_deposer_avatar(
     deposer_un_avatar(&state.db, &chemin).await
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub fn compte_lire_image(chemin: String) -> Result<String, String> {
     lire_une_image(&chemin)
@@ -751,6 +769,7 @@ pub fn compte_lire_image(chemin: String) -> Result<String, String> {
 
 /// Depose l'image RECADREE par l'interface. Elle arrive en `data:` URL parce que c'est ce que
 /// produit un canvas, et que le convertir en binaire cote interface ne gagnerait rien.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_deposer_image(
     donnees: String,
@@ -760,6 +779,7 @@ pub async fn compte_deposer_image(
     deposer_une_image(&state.db, octets).await
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_retirer_avatar(
     state: tauri::State<'_, crate::AppState>,
@@ -767,6 +787,7 @@ pub async fn compte_retirer_avatar(
     retirer_l_avatar(&state.db).await
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_definir_serveur(
     url: String,

@@ -12,6 +12,7 @@ use super::{jeton, motif, serveur};
 use crate::storage::db::Database;
 use crate::storage::synchro::ChangementLocal;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "interface-tauri")]
 use tauri::Emitter;
 
 /// Reglage ou vit le curseur : le numero du dernier changement recu du serveur.
@@ -273,6 +274,7 @@ pub async fn passer(db: &Database) -> Result<Resultat, String> {
     Ok(total)
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn synchro_maintenant(
     fenetre: tauri::Window,
@@ -291,6 +293,7 @@ pub async fn synchro_maintenant(
     Ok(resultat)
 }
 
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn synchro_etat(state: tauri::State<'_, crate::AppState>) -> Result<EtatSynchro, String> {
     let db = &state.db;
