@@ -1,5 +1,6 @@
 mod agents;
 mod appearance;
+mod evenements;
 mod chemins;
 pub mod compte;
 mod commande;
@@ -1713,7 +1714,7 @@ pub fn run() {
             // Serveur de terminaux : mise en route (lancement du service s'il ne tourne
             // pas deja, puis reconciliation avec la base) avant toute autre operation.
             let terminaux = terminal::terminaux();
-            terminaux.preparer(app.handle(), &db);
+            terminaux.preparer(std::sync::Arc::new(app.handle().clone()), &db);
 
             // Import initial de la cle API depuis secrets.json (depose manuellement)
             if db.get_setting("openai_api_key").filter(|k| !k.is_empty()).is_none() {

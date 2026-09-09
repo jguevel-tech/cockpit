@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use crate::evenements::Emetteurs;
 
 use super::interface::{Creation, ResultatRecherche, Taille, TerminalInfo, Terminaux};
 use super::service::client::{arreter_le_service_incompatible, Client};
@@ -35,7 +35,7 @@ use crate::storage::Database;
 /// Ce que l'implementation doit garder pour rebrancher la sortie apres une reconnexion.
 #[derive(Clone)]
 struct Contexte {
-    app: AppHandle,
+    emetteur: Emetteurs,
     db: Database,
 }
 
@@ -125,8 +125,13 @@ fn b64(donnees: &[u8]) -> String {
 
 /// Ecrit dans le journal local. Une panne de fond n'a pas d'ecran ou s'afficher : elle
 /// serait perdue sans ca, et c'est justement ce qu'on reproche a un `catch` muet.
-fn journaliser(app: &AppHandle, scope: &str, message: &str) {
-    if let Ok(dir) = app.path().app_data_dir() {
+fn journaliser(scope: &str, message: &str) {
+    // **L'HOTE POSE LE DOSSIER, ON NE LE RECALCULE PAS ICI.** Le repli evident
+    // (`dossier_donnees_sans_tauri`) est sous `#[cfg(linux)]` a juste titre : il suppose
+    // les chemins XDG, que Windows et macOS n'ont pas. L'appeler compilait sous Linux et
+    // cassait la compilation croisee — la moitie morte du code « portable » que ce projet
+    // guette. Tout hote appelle donc `chemins::memoriser_dossier_donnees` au demarrage.
+    if let Some(dir) = crate::chemins::dossier_donnees() {
         let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         crate::report::append_log(&dir, &crate::report::format_log_line(&horodatage, scope, message));
     }
@@ -138,21 +143,23 @@ fn traiter_poussee(contexte: &Contexte, pousse: Pousse) {
         // Sortie brute et redessin partent par le MEME evenement : le frontend les donne
         // tels quels a xterm, qui n'a pas a savoir lequel des deux il recoit.
         Pousse::Sortie { id, octets } | Pousse::Redessin { id, octets } => {
-            let _ = contexte
-                .app
-                .emit("terminal_output", SortiePayload { id, data: b64(&octets) });
+            contexte.emetteur.emettre(
+                "terminal_output",
+                serde_json::to_value(SortiePayload { id, data: b64(&octets) })
+                    .unwrap_or_default(),
+            );
         }
         Pousse::PressePapier { id, texte } => {
             if let Err(e) = crate::poser_presse_papier(texte) {
-                journaliser(&contexte.app, "terminal.pressePapier", &format!("terminal {id} : {e}"));
+                journaliser("terminal.pressePapier", &format!("terminal {id} : {e}"));
             }
         }
         Pousse::Fini { id } => {
             let _ = contexte.db.delete_terminal_row(id);
-            let _ = contexte.app.emit("terminal_exit", id);
+            contexte.emetteur.emettre("terminal_exit", serde_json::json!(id));
         }
         Pousse::Panne { id, message } => {
-            journaliser(&contexte.app, "terminal.panne", &format!("terminal {id} : {message}"));
+            journaliser("terminal.panne", &format!("terminal {id} : {message}"));
         }
     }
 }
@@ -173,21 +180,16 @@ impl TerminauxService {
             return;
         }
         *derniere = Some(panne.to_string());
-        if let Some(contexte) = self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-            journaliser(&contexte.app, "terminal.service", panne);
-        }
+        journaliser("terminal.service", panne);
     }
 
     fn panne_terminee(&self) {
         let mut derniere = self.derniere_panne.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(panne) = derniere.take() {
-            if let Some(contexte) = self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                journaliser(
-                    &contexte.app,
-                    "terminal.service",
-                    &format!("le service repond de nouveau (panne precedente : {panne})"),
-                );
-            }
+            journaliser(
+                "terminal.service",
+                &format!("le service repond de nouveau (panne precedente : {panne})"),
+            );
         }
     }
 
@@ -242,9 +244,7 @@ impl TerminauxService {
                 e @ (ErreurPoignee::ServiceTropAncien { .. }
                 | ErreurPoignee::ApplicationTropAncienne { .. }),
             ) => {
-                journaliser(
-                    &contexte_pour_relance.app,
-                    "terminal.service",
+                journaliser("terminal.service",
                     &format!("{e} — arret de l'ancien service et relance"),
                 );
                 arreter_le_service_incompatible(&chemin)?;
@@ -349,11 +349,7 @@ impl TerminauxService {
             // Un dossier de conversations illisible ne doit pas empecher le terminal de
             // revenir : on le dit au journal et on ouvre un shell.
             Err(e) => {
-                if let Some(contexte) =
-                    self.contexte.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
-                {
-                    journaliser(&contexte.app, "terminal.repriseAgent", &e);
-                }
+                journaliser("terminal.repriseAgent", &e);
                 None
             }
         }
@@ -404,22 +400,22 @@ fn taille_service(taille: Taille) -> TailleService {
 }
 
 impl Terminaux for TerminauxService {
-    fn preparer(&self, app: &AppHandle, db: &Database) {
+    fn preparer(&self, emetteur: Emetteurs, db: &Database) {
         *self.contexte.lock().unwrap_or_else(|e| e.into_inner()) =
-            Some(Contexte { app: app.clone(), db: db.clone() });
+            Some(Contexte { emetteur, db: db.clone() });
 
         let client = match self.client() {
             Ok(client) => client,
             // Sans service, aucun terminal ne s'ouvrira : l'erreur ressortira au premier
             // clic, avec un message. Ici, elle va au journal — il n'y a pas encore
             // d'interface pour l'afficher.
-            Err(e) => return journaliser(app, "terminal.service", &e),
+            Err(e) => return journaliser("terminal.service", &e),
         };
 
         // Reconciliation : des qu'un etat survit a l'application, les deux divergent.
         let sessions = match client.lister() {
             Ok(sessions) => sessions,
-            Err(e) => return journaliser(app, "terminal.reconciliation", &e),
+            Err(e) => return journaliser("terminal.reconciliation", &e),
         };
         let lignes: Vec<i64> = db
             .get_terminal_rows(None)
@@ -436,7 +432,7 @@ impl Terminaux for TerminauxService {
         // Une session que plus aucun onglet ne peut afficher tourne pour personne.
         for id in vue.sessions_orphelines {
             if let Err(e) = client.fermer(id) {
-                journaliser(app, "terminal.orpheline", &format!("terminal {id} : {e}"));
+                journaliser("terminal.orpheline", &format!("terminal {id} : {e}"));
             }
         }
     }

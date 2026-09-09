@@ -6,16 +6,17 @@
 //! (`docs/portabilite/plan-terminaux.md`) : elles n'avaient aucun appelant.
 //!
 //! Ce qui traverse encore l'interface, et pourquoi :
-//! - `AppHandle` seulement dans `preparer` : la sortie remonte au webview par un evenement
-//!   Tauri, et l'implementation garde le handle une fois pour toutes. Ni `creer` ni
-//!   `attacher` n'en ont besoin.
+//! - un `Emetteur` seulement dans `preparer` : la sortie remonte a l'interface par un
+//!   evenement, et l'implementation le garde une fois pour toutes. Ni `creer` ni
+//!   `attacher` n'en ont besoin. C'etait un `AppHandle` jusqu'au 2026-09-09 ; le trait
+//!   `crate::evenements::Emetteur` l'a remplace pour que ce coeur ne connaisse plus
+//!   l'hote qui l'affiche.
 //! - `&Database` : le NOM d'onglet et le PROJET vivent en SQLite, parce qu'eux doivent
 //!   survivre au redemarrage de la machine — le service, non. Le rowid est donc la seule
 //!   identite qui traverse un reboot, et c'est lui que le service recoit.
 
 use crate::storage::Database;
 use serde::Serialize;
-use tauri::AppHandle;
 
 /// Ce que le frontend affiche d'un terminal. Forme figee : elle traverse l'IPC en
 /// snake_case vers `src/lib/types/index.ts`.
@@ -105,9 +106,10 @@ pub trait Terminaux: Send + Sync {
     /// qu'il tient avec ce que la base dit (lignes sans session, sessions sans ligne). Des
     /// qu'un etat survit a l'application, les deux divergent.
     ///
-    /// C'est aussi le seul endroit ou l'implementation recoit un `AppHandle` : elle le
-    /// garde pour emettre la sortie des terminaux.
-    fn preparer(&self, app: &AppHandle, db: &Database);
+    /// C'est aussi le seul endroit ou l'implementation recoit de quoi PARLER a
+    /// l'interface : elle garde l'emetteur pour pousser la sortie des terminaux. Le trait
+    /// ne connait donc aucun hote en particulier.
+    fn preparer(&self, emetteur: crate::evenements::Emetteurs, db: &Database);
 
     /// Ouvre un terminal et rend son identifiant.
     fn creer(&self, db: &Database, demande: Creation) -> Result<i64, String>;
