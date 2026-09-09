@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.58.0] — 2026-09-09
+
 ### Added
 
 - L'application se répare toute seule quand l'affichage gèle : la vue est rechargée quand
