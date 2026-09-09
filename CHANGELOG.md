@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.58.2] — 2026-09-09
+
 ### Fixed
 
 - Le mode secours de l'affichage annonce maintenant ce qu'il coûte vraiment. Il promettait
