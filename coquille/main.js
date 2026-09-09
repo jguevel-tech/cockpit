@@ -18,7 +18,12 @@ const readline = require('node:readline')
 // L'interface buildee par Vite. Servie par un protocole a nous plutot qu'en `file://` :
 // **une origine stable est ce qui garde le localStorage**, ou vivent la langue et les
 // preferences. Un `file://` donne une origine opaque et les perdrait a chaque lancement.
-const RACINE_INTERFACE = path.join(__dirname, '..', 'dist')
+// **LES CHEMINS NE SONT PAS LES MEMES UNE FOIS EMPAQUETE.** En developpement l'interface
+// et le backend sont a leur place dans le depot ; dans le paquet ils sont des ressources.
+// Se tromper ici donne une fenetre blanche sans une ligne d'erreur.
+const RACINE_INTERFACE = app.isPackaged
+  ? path.join(process.resourcesPath, 'interface')
+  : path.join(__dirname, '..', 'dist')
 const SCHEMA = 'cockpit'
 
 protocol.registerSchemesAsPrivileged([
@@ -88,15 +93,35 @@ class Backend {
     this.surEvenement = () => {}
     // La sortie d'erreur du backend n'est PAS le protocole : elle va au journal de la
     // coquille, sinon une panne de demarrage serait invisible.
+    this.vivant = true
+    this.dernieresPlaintes = []
     this.processus = spawn(chemin, ['--pont'], { stdio: ['pipe', 'pipe', 'pipe'] })
-    this.processus.stderr.on('data', (bloc) => console.error(`[backend] ${bloc}`.trimEnd()))
+    this.processus.stderr.on('data', (bloc) => {
+      const texte = `${bloc}`.trimEnd()
+      console.error(`[backend] ${texte}`)
+      // Gardees pour les JOINDRE au rejet : sans elles, une panne de demarrage du backend
+      // arrive dans l'interface comme une erreur de flux, qui ne nomme rien.
+      this.dernieresPlaintes.push(texte)
+      if (this.dernieresPlaintes.length > 5) this.dernieresPlaintes.shift()
+    })
+    // **UN `spawn` QUI ECHOUE N'EMET PAS `exit`, IL EMET `error`.** Sans cet ecouteur, un
+    // backend introuvable ou non executable laissait un flux ferme, et le premier appel
+    // ressortait en `ERR_STREAM_WRITE_AFTER_END` au milieu du processus principal : une
+    // exception qui ne dit ni quel binaire, ni pourquoi.
+    this.processus.on('error', (e) => {
+      this.vivant = false
+      this.echouer(new Error(`backend introuvable ou illisible (${chemin}) : ${e.message}`))
+    })
     this.processus.on('exit', (code) => {
+      this.vivant = false
       // Toute promesse en vol doit etre rejetee : sans ca, l'interface attendrait pour
       // toujours une reponse qui ne viendra jamais, sans rien afficher.
-      for (const { rejeter } of this.enAttente.values()) {
-        rejeter(new Error(`le backend s'est arrete (code ${code})`))
-      }
-      this.enAttente.clear()
+      const plaintes = this.dernieresPlaintes.join(' | ')
+      this.echouer(
+        new Error(
+          `le backend s'est arrete (code ${code})${plaintes ? ` : ${plaintes}` : ''}`
+        )
+      )
     })
     readline
       .createInterface({ input: this.processus.stdout })
@@ -124,11 +149,32 @@ class Backend {
     else attente.resoudre(message.ok)
   }
 
+  /** Rejette tout ce qui attend, et retient la cause pour les appels suivants. */
+  echouer(panne) {
+    this.panne = panne
+    for (const { rejeter } of this.enAttente.values()) rejeter(panne)
+    this.enAttente.clear()
+  }
+
   appeler(commande, arguments_) {
+    // **ON N'ECRIT JAMAIS SUR UN FLUX FERME.** Ecrire quand meme levait une exception non
+    // rattrapee dans le processus principal, qu'Electron affiche dans une fenetre
+    // technique illisible. Ici l'appel est rejete avec la vraie cause, que l'interface
+    // remonte comme n'importe quelle erreur de commande.
+    if (!this.vivant || this.processus.stdin.destroyed) {
+      return Promise.reject(this.panne ?? new Error('le backend ne tourne plus'))
+    }
     const id = this.prochainAppel++
     return new Promise((resoudre, rejeter) => {
       this.enAttente.set(id, { resoudre, rejeter })
-      this.processus.stdin.write(`${JSON.stringify({ id, commande, arguments: arguments_ })}\n`)
+      this.processus.stdin.write(
+        `${JSON.stringify({ id, commande, arguments: arguments_ })}\n`,
+        (e) => {
+          if (!e) return
+          this.enAttente.delete(id)
+          rejeter(new Error(`envoi au backend impossible : ${e.message}`))
+        }
+      )
     })
   }
 
@@ -141,10 +187,10 @@ class Backend {
 
 /** Le binaire du backend. En developpement, celui que `cargo build` vient de produire. */
 function cheminDuBackend() {
-  return (
-    process.env.COCKPIT_BACKEND ||
-    path.join(__dirname, '..', 'src-tauri', 'target', 'debug', 'cockpit')
-  )
+  if (process.env.COCKPIT_BACKEND) return process.env.COCKPIT_BACKEND
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'cockpit')
+    : path.join(__dirname, '..', 'src-tauri', 'target', 'debug', 'cockpit')
 }
 
 // --- Le pont : ce que la page peut demander --------------------------------------------
@@ -198,20 +244,30 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
       pousserEvenement(arguments_.event, arguments_.payload, fenetre)
       return { traite: true, valeur: null }
     }
-    case 'relancer_application':
-      // Relancer appartient a l'HOTE : sous Tauri la commande passait par le plugin
-      // process, ici c'est Electron qui sait le faire. Le backend, lui, n'a jamais eu a
-      // savoir comment on redemarre la fenetre qui l'affiche.
-      app.relaunch()
-      app.quit()
-      return { traite: true, valeur: null }
+    // **`relancer_application` N'EST PAS TRAITEE ICI, ET C'EST DELIBERE.**
+    //
+    // Elle l'a ete, avec `app.relaunch()` + `app.quit()`, et le 2026-09-09 ca a rendu une
+    // machine inutilisable : le backend ne demarrait pas dans le paquet, l'interface
+    // demandait une relance, l'application repartait, echouait encore, redemandait. Des
+    // fenetres se sont ouvertes sans fin et il a fallu ETEINDRE le poste.
+    //
+    // Si on la remet un jour, trois conditions, toutes obligatoires : un COMPTEUR de
+    // relances par lancement (une seule, jamais deux), un REFUS de relancer tant que le
+    // backend n'a pas repondu au moins une fois, et un delai avant de repartir. Une
+    // relance automatique sans borne transforme n'importe quelle panne de demarrage en
+    // boucle qui prend le poste en otage.
+    //
+    // En attendant, la commande est REFUSEE et nommee, comme toute commande inconnue.
     case 'set_webview_zoom':
       // Le zoom appartient a l'HOTE, pas au backend : sous Tauri la commande recevait la
       // fenetre, ici c'est Chromium qui l'applique. Le backend n'a jamais eu a le savoir.
       fenetre.webContents.setZoomFactor(arguments_.factor)
       return { traite: true, valeur: null }
     case 'plugin:app|version':
-      return { traite: true, valeur: require('../package.json').version }
+      // `app.getVersion()` et non un `require` du package.json parent : celui-ci n'est
+      // PAS dans le paquet, et l'appel echouait des le demarrage de l'AppImage alors
+      // qu'il marchait en developpement.
+      return { traite: true, valeur: app.getVersion() }
     case 'plugin:app|name':
       return { traite: true, valeur: 'Cockpit' }
     default:
@@ -343,6 +399,13 @@ function armerLeBanc(fenetre) {
     }, 4000)
   })
 }
+
+// **LE DOSSIER DE DONNEES EST CELUI DE L'IDENTIFIANT, PAS CELUI D'ELECTRON.** Sans cette
+// ligne, Chromium ecrirait dans un dossier a lui et la page repartirait sans son
+// `localStorage` : la langue et les preferences d'interface seraient perdues. Le backend,
+// lui, calcule le sien depuis le meme identifiant, donc la base et le fond d'ecran sont
+// retrouves quoi qu'il arrive.
+app.setPath('userData', path.join(app.getPath('appData'), 'com.cockpit.dev'))
 
 app.whenReady().then(() => {
   servirInterface()
