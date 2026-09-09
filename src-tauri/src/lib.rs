@@ -1,6 +1,7 @@
 mod agents;
 mod appearance;
 mod evenements;
+mod taches;
 pub mod pont;
 mod chemins;
 pub mod compte;
@@ -26,6 +27,7 @@ use docker::orchestrator::Orchestrator;
 use std::sync::Arc;
 use storage::Database;
 use system::metrics::Collector;
+#[cfg(feature = "interface-tauri")]
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
@@ -139,6 +141,8 @@ pub struct ProjectWithFolder {
     folder_id: Option<i64>,
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn list_projects(
     state: tauri::State<'_, AppState>,
@@ -208,7 +212,7 @@ pub async fn list_projects_pour_hote(
 /// Rendue `fn` et non `async fn` : elle lit une variable d'environnement, elle ne touche ni la
 /// base ni un process externe. Une valeur inconnue est traitee comme absente, pour qu'une faute
 /// de frappe ne fasse pas demarrer l'interface dans une langue vide.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn langue_imposee() -> Option<String> {
     langue_imposee_reelle()
 }
@@ -232,6 +236,8 @@ fn langue_valide(valeur: &str) -> Option<String> {
     }
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn start_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     start_project_pour_hote(&state, name).await
@@ -243,6 +249,8 @@ async fn start_project_pour_hote(state: &AppState, name: String) -> Result<(), S
     state.orchestrator.start_project(&name).await
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn stop_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     stop_project_pour_hote(&state, name).await
@@ -253,6 +261,8 @@ async fn stop_project(name: String, state: tauri::State<'_, AppState>) -> Result
 async fn stop_project_pour_hote(state: &AppState, name: String) -> Result<(), String> {
     state.orchestrator.stop_project(&name).await
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn restart_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -267,57 +277,59 @@ async fn restart_project_pour_hote(state: &AppState, name: String) -> Result<(),
 
 // --- Tauri Commands: Conteneurs Docker (vue globale) ---
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn list_all_containers() -> Result<Vec<docker::containers::DockerContainer>, String> {
     docker::containers::list_all().await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn container_action(id: String, action: String) -> Result<(), String> {
     docker::containers::container_action(&id, &action).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn container_logs(id: String, tail: u32) -> Result<String, String> {
     docker::containers::container_logs(&id, tail).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn container_action_bulk(ids: Vec<String>, action: String) -> Result<(), String> {
     docker::containers::container_action_bulk(&ids, &action).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn docker_disk_usage() -> Result<Vec<docker::containers::DiskUsage>, String> {
     docker::containers::disk_usage().await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn list_docker_volumes() -> Result<Vec<docker::containers::DockerVolume>, String> {
     docker::containers::list_volumes().await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn list_docker_images() -> Result<Vec<docker::containers::DockerImage>, String> {
     docker::containers::list_images().await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn remove_docker_volume(name: String) -> Result<(), String> {
     docker::containers::remove_volume(&name).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn remove_docker_image(id: String) -> Result<(), String> {
     docker::containers::remove_image(&id).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn docker_prune(target: String) -> Result<String, String> {
     docker::containers::prune(&target).await
 }
 
 // --- Tauri Commands: Todos ---
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_todos(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Todo>, String> {
@@ -330,6 +342,8 @@ fn get_todos_pour_hote(state: &AppState, project: String) -> Result<Vec<storage:
     state.db.get_todos(&project)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn create_todo(project: String, text: String, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
     create_todo_pour_hote(&state, project, text)
@@ -341,6 +355,8 @@ fn create_todo_pour_hote(state: &AppState, project: String, text: String) -> Res
     state.db.create_todo(&project, &text)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn update_todo(id: i64, text: String, done: bool, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
     update_todo_pour_hote(&state, id, text, done)
@@ -351,6 +367,8 @@ fn update_todo(id: i64, text: String, done: bool, state: tauri::State<'_, AppSta
 fn update_todo_pour_hote(state: &AppState, id: i64, text: String, done: bool) -> Result<storage::Todo, String> {
     state.db.update_todo(id, &text, done)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn set_todo_due(id: i64, due_date: Option<String>, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
@@ -364,6 +382,7 @@ fn set_todo_due_pour_hote(state: &AppState, id: i64, due_date: Option<String>) -
 }
 
 /// Avancement d'une tache, en pourcentage. 100 la marque finie.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 fn set_todo_progress(id: i64, progress: i32, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
     set_todo_progress_pour_hote(&state, id, progress)
@@ -374,6 +393,8 @@ fn set_todo_progress(id: i64, progress: i32, state: tauri::State<'_, AppState>) 
 fn set_todo_progress_pour_hote(state: &AppState, id: i64, progress: i32) -> Result<storage::Todo, String> {
     state.db.set_todo_progress(id, progress)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn delete_todo(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -386,6 +407,8 @@ fn delete_todo_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_todo(id)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn reorder_todos(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     reorder_todos_pour_hote(&state, ids)
@@ -397,6 +420,8 @@ fn reorder_todos_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String
     state.db.reorder_todos(&ids)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn move_todo(id: i64, new_project: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     move_todo_pour_hote(&state, id, new_project)
@@ -407,6 +432,8 @@ fn move_todo(id: i64, new_project: String, state: tauri::State<'_, AppState>) ->
 fn move_todo_pour_hote(state: &AppState, id: i64, new_project: String) -> Result<(), String> {
     state.db.move_todo(id, &new_project)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_pending_todos(state: tauri::State<'_, AppState>) -> Result<Vec<storage::Todo>, String> {
@@ -421,6 +448,8 @@ pub fn get_pending_todos_pour_hote(state: &AppState) -> Result<Vec<storage::Todo
 
 // --- Tauri Commands: Notes ---
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn get_note(project: String, state: tauri::State<'_, AppState>) -> Result<Option<storage::Note>, String> {
     get_note_pour_hote(&state, project)
@@ -431,6 +460,8 @@ fn get_note(project: String, state: tauri::State<'_, AppState>) -> Result<Option
 fn get_note_pour_hote(state: &AppState, project: String) -> Result<Option<storage::Note>, String> {
     state.db.get_note(&project)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn save_note(project: String, content: String, state: tauri::State<'_, AppState>) -> Result<storage::Note, String> {
@@ -443,6 +474,8 @@ fn save_note_pour_hote(state: &AppState, project: String, content: String) -> Re
     state.db.save_note(&project, &content)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn get_note_tree(project: String, state: tauri::State<'_, AppState>) -> Result<storage::NoteTree, String> {
     get_note_tree_pour_hote(&state, project)
@@ -453,6 +486,8 @@ fn get_note_tree(project: String, state: tauri::State<'_, AppState>) -> Result<s
 fn get_note_tree_pour_hote(state: &AppState, project: String) -> Result<storage::NoteTree, String> {
     state.db.get_note_tree(&project)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn create_note_folder(project: String, parent_id: Option<i64>, name: String, state: tauri::State<'_, AppState>) -> Result<storage::NoteFolder, String> {
@@ -465,6 +500,8 @@ fn create_note_folder_pour_hote(state: &AppState, project: String, parent_id: Op
     state.db.create_note_folder(&project, parent_id, &name)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn rename_note_folder(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     rename_note_folder_pour_hote(&state, id, name)
@@ -475,6 +512,8 @@ fn rename_note_folder(id: i64, name: String, state: tauri::State<'_, AppState>) 
 fn rename_note_folder_pour_hote(state: &AppState, id: i64, name: String) -> Result<(), String> {
     state.db.rename_note_folder(id, &name)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn delete_note_folder(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -487,6 +526,8 @@ fn delete_note_folder_pour_hote(state: &AppState, id: i64) -> Result<(), String>
     state.db.delete_note_folder(id)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn create_note_file(project: String, folder_id: Option<i64>, name: String, state: tauri::State<'_, AppState>) -> Result<storage::NoteFile, String> {
     create_note_file_pour_hote(&state, project, folder_id, name)
@@ -497,6 +538,8 @@ fn create_note_file(project: String, folder_id: Option<i64>, name: String, state
 fn create_note_file_pour_hote(state: &AppState, project: String, folder_id: Option<i64>, name: String) -> Result<storage::NoteFile, String> {
     state.db.create_note_file(&project, folder_id, &name)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_note_file(id: i64, state: tauri::State<'_, AppState>) -> Result<storage::NoteFile, String> {
@@ -509,6 +552,8 @@ fn get_note_file_pour_hote(state: &AppState, id: i64) -> Result<storage::NoteFil
     state.db.get_note_file(id)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn save_note_file(id: i64, content: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     save_note_file_pour_hote(&state, id, content)
@@ -519,6 +564,8 @@ fn save_note_file(id: i64, content: String, state: tauri::State<'_, AppState>) -
 fn save_note_file_pour_hote(state: &AppState, id: i64, content: String) -> Result<(), String> {
     state.db.save_note_file(id, &content)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn rename_note_file(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -531,6 +578,8 @@ fn rename_note_file_pour_hote(state: &AppState, id: i64, name: String) -> Result
     state.db.rename_note_file(id, &name)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn delete_note_file(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     delete_note_file_pour_hote(&state, id)
@@ -541,6 +590,8 @@ fn delete_note_file(id: i64, state: tauri::State<'_, AppState>) -> Result<(), St
 fn delete_note_file_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_note_file(id)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn reorder_note_folders(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -553,6 +604,8 @@ fn reorder_note_folders_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(),
     state.db.reorder_note_folders(&ids)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn reorder_note_files(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     reorder_note_files_pour_hote(&state, ids)
@@ -563,6 +616,8 @@ fn reorder_note_files(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Resul
 fn reorder_note_files_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
     state.db.reorder_note_files(&ids)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn move_note_file(id: i64, folder_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -577,6 +632,8 @@ fn move_note_file_pour_hote(state: &AppState, id: i64, folder_id: Option<i64>) -
 
 // --- Tauri Commands: URLs ---
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn get_urls(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Url>, String> {
     get_urls_pour_hote(&state, project)
@@ -588,10 +645,12 @@ fn get_urls_pour_hote(state: &AppState, project: String) -> Result<Vec<storage::
     state.db.get_urls(&project)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn check_urls(urls: Vec<String>) -> Vec<urlhealth::UrlHealth> {
     urlhealth::check_urls(&urls).await
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn create_url(project: String, label: String, url: String, state: tauri::State<'_, AppState>) -> Result<storage::Url, String> {
@@ -604,6 +663,8 @@ fn create_url_pour_hote(state: &AppState, project: String, label: String, url: S
     state.db.create_url(&project, &label, &url)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn update_url(id: i64, label: String, url: String, state: tauri::State<'_, AppState>) -> Result<storage::Url, String> {
     update_url_pour_hote(&state, id, label, url)
@@ -614,6 +675,8 @@ fn update_url(id: i64, label: String, url: String, state: tauri::State<'_, AppSt
 fn update_url_pour_hote(state: &AppState, id: i64, label: String, url: String) -> Result<storage::Url, String> {
     state.db.update_url(id, &label, &url)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn delete_url(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -628,6 +691,8 @@ fn delete_url_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
 
 // --- Tauri Commands: Commandes rapides par projet ---
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn get_project_commands(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::ProjectCommand>, String> {
     get_project_commands_pour_hote(&state, project)
@@ -638,6 +703,8 @@ fn get_project_commands(project: String, state: tauri::State<'_, AppState>) -> R
 fn get_project_commands_pour_hote(state: &AppState, project: String) -> Result<Vec<storage::ProjectCommand>, String> {
     state.db.get_project_commands(&project)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn create_project_command(project: String, label: String, command: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectCommand, String> {
@@ -650,6 +717,8 @@ fn create_project_command_pour_hote(state: &AppState, project: String, label: St
     state.db.create_project_command(&project, &label, &command)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn update_project_command(id: i64, label: String, command: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectCommand, String> {
     update_project_command_pour_hote(&state, id, label, command)
@@ -661,6 +730,8 @@ fn update_project_command_pour_hote(state: &AppState, id: i64, label: String, co
     state.db.update_project_command(id, &label, &command)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn delete_project_command(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     delete_project_command_pour_hote(&state, id)
@@ -671,6 +742,8 @@ fn delete_project_command(id: i64, state: tauri::State<'_, AppState>) -> Result<
 fn delete_project_command_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_project_command(id)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn reorder_project_commands(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -685,6 +758,8 @@ fn reorder_project_commands_pour_hote(state: &AppState, ids: Vec<i64>) -> Result
 
 // --- Tauri Commands: Project Folders ---
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn get_project_folders(state: tauri::State<'_, AppState>) -> Result<Vec<storage::ProjectFolder>, String> {
     get_project_folders_pour_hote(&state)
@@ -695,6 +770,8 @@ fn get_project_folders(state: tauri::State<'_, AppState>) -> Result<Vec<storage:
 fn get_project_folders_pour_hote(state: &AppState) -> Result<Vec<storage::ProjectFolder>, String> {
     state.db.get_project_folders()
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn create_project_folder(name: String, parent_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<storage::ProjectFolder, String> {
@@ -707,6 +784,8 @@ fn create_project_folder_pour_hote(state: &AppState, name: String, parent_id: Op
     state.db.create_project_folder(&name, parent_id)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn rename_project_folder(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     rename_project_folder_pour_hote(&state, id, name)
@@ -718,6 +797,8 @@ fn rename_project_folder_pour_hote(state: &AppState, id: i64, name: String) -> R
     state.db.rename_project_folder(id, &name)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn delete_project_folder(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     delete_project_folder_pour_hote(&state, id)
@@ -728,6 +809,8 @@ fn delete_project_folder(id: i64, state: tauri::State<'_, AppState>) -> Result<(
 fn delete_project_folder_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_project_folder(id)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn reorder_project_folders(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -741,6 +824,7 @@ fn reorder_project_folders_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<
 }
 
 /// Deplace un dossier sous un autre (`parent_id` a None = racine). Refuse les boucles.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 fn move_project_folder(id: i64, parent_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     move_project_folder_pour_hote(&state, id, parent_id)
@@ -751,6 +835,8 @@ fn move_project_folder(id: i64, parent_id: Option<i64>, state: tauri::State<'_, 
 fn move_project_folder_pour_hote(state: &AppState, id: i64, parent_id: Option<i64>) -> Result<(), String> {
     state.db.move_project_folder(id, parent_id)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn move_project_to_folder(project_name: String, folder_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -765,17 +851,19 @@ fn move_project_to_folder_pour_hote(state: &AppState, project_name: String, fold
 
 // --- Tauri Commands: Scanner ---
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn scan_dir(path: String) -> Result<scanner::ScanResult, String> {
     scanner::scan(&path)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn scan_subdirs(path: String) -> Result<Vec<scanner::ScanResult>, String> {
     scanner::scan_subdirs(&path)
 }
 
 // --- Tauri Commands: Settings (DB projects) ---
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_db_projects(state: tauri::State<'_, AppState>) -> Result<Vec<storage::Project>, String> {
@@ -787,6 +875,8 @@ fn get_db_projects(state: tauri::State<'_, AppState>) -> Result<Vec<storage::Pro
 fn get_db_projects_pour_hote(state: &AppState) -> Result<Vec<storage::Project>, String> {
     state.db.get_projects()
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn add_project(
@@ -818,6 +908,8 @@ async fn add_project_pour_hote(state: &AppState, name: String, path: String, com
     Ok(proj)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn update_db_project(
     id: i64,
@@ -836,6 +928,8 @@ fn update_db_project(
 fn update_db_project_pour_hote(state: &AppState, id: i64, name: String, path: String, compose_file: String, description: String, depends_on: Vec<String>) -> Result<storage::Project, String> {
     state.db.update_project(id, &name, &path, &compose_file, &description, &depends_on)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn delete_db_project(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -863,6 +957,8 @@ async fn delete_db_project_pour_hote(state: &AppState, id: i64) -> Result<(), St
     }
     Ok(())
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn reorder_projects(names: Vec<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -916,6 +1012,8 @@ struct ComposeDetecte {
     choisi_a_la_main: bool,
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn docker_compose_detecte(
     name: String,
@@ -949,6 +1047,8 @@ async fn docker_compose_detecte_pour_hote(state: &AppState, name: String, rafrai
     Ok(ComposeDetecte { retenu, candidats, choisi_a_la_main: choisi })
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn get_project_settings(name: String, state: tauri::State<'_, AppState>) -> Result<storage::Project, String> {
     get_project_settings_pour_hote(&state, name).await
@@ -960,6 +1060,8 @@ async fn get_project_settings_pour_hote(state: &AppState, name: String) -> Resul
     let db_name = resolve_db_project_name(&state, &name).await;
     state.db.get_project_by_name(&db_name)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn update_project_settings(
@@ -982,6 +1084,8 @@ async fn update_project_settings_pour_hote(state: &AppState, name: String, path:
     state.orchestrator.update_project(&name, &path, &compose_file, &description, depends_on).await;
     Ok(proj)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn rename_project(
@@ -1011,6 +1115,8 @@ async fn rename_project_pour_hote(state: &AppState, old_name: String, new_name: 
 
 // --- Tauri Commands: System ---
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn get_system_metrics(
     state: tauri::State<'_, AppState>,
@@ -1026,6 +1132,8 @@ pub async fn get_system_metrics_pour_hote(
     Ok(collector.collect())
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn kill_process(pid: u32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     kill_process_pour_hote(&state, pid).await
@@ -1040,7 +1148,7 @@ async fn kill_process_pour_hote(state: &AppState, pid: u32) -> Result<(), String
 
 // --- Tauri Commands: Apparence (image de fond) ---
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn set_wallpaper(data_url: String) -> Result<(), String> {
     set_wallpaper_pour_hote(data_url)
 }
@@ -1052,7 +1160,7 @@ fn set_wallpaper_pour_hote(data_url: String) -> Result<(), String> {
     appearance::set_wallpaper(dossier, &data_url)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn get_wallpaper() -> Result<Option<String>, String> {
     get_wallpaper_pour_hote()
 }
@@ -1064,7 +1172,7 @@ fn get_wallpaper_pour_hote() -> Result<Option<String>, String> {
     appearance::get_wallpaper(dossier)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn clear_wallpaper() -> Result<(), String> {
     clear_wallpaper_pour_hote()
 }
@@ -1076,7 +1184,7 @@ fn clear_wallpaper_pour_hote() -> Result<(), String> {
     appearance::clear_wallpaper(dossier)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn read_image_as_data_url(path: String) -> Result<String, String> {
     appearance::read_image_as_data_url(&path)
 }
@@ -1090,6 +1198,7 @@ async fn read_image_as_data_url(path: String) -> Result<String, String> {
 /// finirait par deborder de ses boites.
 /// Cote terminaux : rien a faire, changer le zoom change les dimensions en px CSS du
 /// conteneur -> le ResizeObserver de TerminalTab refit et renvoie la taille a tmux.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 fn set_webview_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
     if !(ZOOM_MIN..=ZOOM_MAX).contains(&factor) {
@@ -1099,6 +1208,8 @@ fn set_webview_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), Str
 }
 
 // --- Tauri Command: Import DB ---
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn import_database(path: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
@@ -1110,6 +1221,8 @@ async fn import_database(path: String, state: tauri::State<'_, AppState>) -> Res
 async fn import_database_pour_hote(state: &AppState, path: String) -> Result<String, String> {
     storage::import::import_from(&state.db, &path)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_db_path(state: tauri::State<'_, AppState>) -> String {
@@ -1123,6 +1236,8 @@ fn get_db_path_pour_hote(state: &AppState) -> String {
 }
 
 // --- Tauri Commands: Enregistrement de reunions ---
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn start_recording(
@@ -1141,6 +1256,8 @@ async fn start_recording_pour_hote(
     recorder::start(state.emetteur.clone(), state.db.clone(), &state.recorder, project).await
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn stop_recording(state: tauri::State<'_, AppState>) -> Result<(), String> {
     stop_recording_pour_hote(&state).await
@@ -1150,6 +1267,8 @@ async fn stop_recording(state: tauri::State<'_, AppState>) -> Result<(), String>
 async fn stop_recording_pour_hote(state: &AppState) -> Result<(), String> {
     recorder::stop(state.emetteur.clone(), state.db.clone(), &state.recorder).await
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_active_recording(state: tauri::State<'_, AppState>) -> Option<recorder::RecordingStatus> {
@@ -1162,6 +1281,8 @@ fn get_active_recording_pour_hote(state: &AppState) -> Option<recorder::Recordin
     recorder::active_status(&state.recorder)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn get_failed_recordings(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Recording>, String> {
     get_failed_recordings_pour_hote(&state, project)
@@ -1173,6 +1294,8 @@ fn get_failed_recordings_pour_hote(state: &AppState, project: String) -> Result<
     state.db.get_failed_recordings(&project)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn retry_recording(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
     retry_recording_pour_hote(&state, id)
@@ -1182,6 +1305,8 @@ fn retry_recording(id: i64, state: tauri::State<'_, AppState>) -> Result<(), Str
 fn retry_recording_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     recorder::retry(state.emetteur.clone(), state.db.clone(), id)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn delete_recording(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -1195,6 +1320,8 @@ fn delete_recording_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
 }
 
 // --- Tauri Commands: App settings (cle API, prompt de resume) ---
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn get_app_settings(
@@ -1222,6 +1349,8 @@ pub fn get_app_settings_pour_hote(
     Ok(settings)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn set_app_setting(key: String, value: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     set_app_setting_pour_hote(&state, key, value)
@@ -1232,6 +1361,8 @@ fn set_app_setting(key: String, value: String, state: tauri::State<'_, AppState>
 fn set_app_setting_pour_hote(state: &AppState, key: String, value: String) -> Result<(), String> {
     state.db.set_setting(&key, &value)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn get_project_summary_prompt(project: String, state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
@@ -1244,6 +1375,8 @@ async fn get_project_summary_prompt_pour_hote(state: &AppState, project: String)
     let db_name = resolve_db_project_name(&state, &project).await;
     state.db.get_project_summary_prompt(&db_name)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn set_project_summary_prompt(project: String, prompt: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -1276,6 +1409,8 @@ async fn set_project_summary_prompt_pour_hote(state: &AppState, project: String,
 // autre issue que de tuer l'application. Une commande qui touche un chemin fourni par
 // l'utilisateur est `async fn`, sans exception.
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 async fn create_terminal(
     project: String,
@@ -1300,6 +1435,8 @@ async fn create_terminal_pour_hote(state: &AppState, project: String, cwd: Strin
     state.terminals.creer(&state.db, demande)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn write_terminal(id: i64, data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     write_terminal_pour_hote(&state, id, data)
@@ -1310,6 +1447,8 @@ fn write_terminal(id: i64, data: String, state: tauri::State<'_, AppState>) -> R
 fn write_terminal_pour_hote(state: &AppState, id: i64, data: String) -> Result<(), String> {
     state.terminals.ecrire(id, &data)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -1323,6 +1462,8 @@ async fn resize_terminal_pour_hote(state: &AppState, id: i64, cols: u16, rows: u
         .terminals
         .redimensionner(&state.db, id, terminal::Taille { colonnes: cols, lignes: rows })
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -1340,6 +1481,7 @@ async fn close_terminal_pour_hote(state: &AppState, id: i64) -> Result<(), Strin
 /// Appelee par l'interface quand on quitte la vue des terminaux — pas sur un minuteur : le
 /// cout se paie par terminal, et l'implementation refuse de recommencer avant une minute. La
 /// fenetre qui se ferme declenche la meme chose, mais sans borne (voir `fenetre.rs`).
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 async fn save_terminal_screens(state: tauri::State<'_, AppState>) -> Result<(), String> {
     save_terminal_screens_pour_hote(&state).await
@@ -1351,6 +1493,8 @@ async fn save_terminal_screens_pour_hote(state: &AppState) -> Result<(), String>
     state.terminals.enregistrer_les_ecrans(&state.db, false);
     Ok(())
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn attach_terminal(
@@ -1370,6 +1514,8 @@ async fn attach_terminal_pour_hote(state: &AppState, id: i64, cols: u16, rows: u
         .attacher(&state.db, id, terminal::Taille { colonnes: cols, lignes: rows })
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn rename_terminal(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     rename_terminal_pour_hote(&state, id, name)
@@ -1380,6 +1526,8 @@ fn rename_terminal(id: i64, name: String, state: tauri::State<'_, AppState>) -> 
 fn rename_terminal_pour_hote(state: &AppState, id: i64, name: String) -> Result<(), String> {
     state.terminals.renommer(&state.db, id, &name)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn list_terminals(
@@ -1394,6 +1542,8 @@ async fn list_terminals(
 async fn list_terminals_pour_hote(state: &AppState, project: String) -> Result<Vec<terminal::TerminalInfo>, String> {
     Ok(state.terminals.lister(&state.db, Some(&project)))
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn list_all_terminals(
@@ -1412,7 +1562,7 @@ async fn list_all_terminals_pour_hote(state: &AppState) -> Result<Vec<terminal::
 /// du presse-papier disparait quand son proprietaire (la connexion) est droppe.
 static CLIPBOARD: std::sync::Mutex<Option<arboard::Clipboard>> = std::sync::Mutex::new(None);
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn set_clipboard(text: String) -> Result<(), String> {
     poser_presse_papier(text)
 }
@@ -1431,7 +1581,7 @@ pub fn poser_presse_papier(text: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn get_clipboard() -> Result<String, String> {
     let mut guard = CLIPBOARD.lock().unwrap_or_else(|e| e.into_inner());
     if guard.is_none() {
@@ -1448,6 +1598,7 @@ fn get_clipboard() -> Result<String, String> {
 
 /// Le catalogue et ce que chacun sait faire. Le frontend s'en sert pour n'afficher que ce qui
 /// existe : un bouton qui promet ce que le fournisseur ne sait pas faire est un mensonge.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 fn llm_catalogue(state: tauri::State<'_, AppState>) -> Vec<llm::Capacites> {
     llm_catalogue_pour_hote(&state)
@@ -1459,6 +1610,8 @@ fn llm_catalogue_pour_hote(state: &AppState) -> Vec<llm::Capacites> {
     llm::catalogue_pour_le_frontend(&state.db)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn llm_choisir(id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     llm_choisir_pour_hote(&state, id)
@@ -1469,6 +1622,8 @@ fn llm_choisir(id: String, state: tauri::State<'_, AppState>) -> Result<(), Stri
 fn llm_choisir_pour_hote(state: &AppState, id: String) -> Result<(), String> {
     llm::choisir(&state.db, &id)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn llm_poser_cle(id: String, cle: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -1482,6 +1637,7 @@ fn llm_poser_cle_pour_hote(state: &AppState, id: String, cle: String) -> Result<
 }
 
 /// Les conversations passees du projet, chez le fournisseur choisi.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 fn llm_conversations(
     project_path: String,
@@ -1495,6 +1651,8 @@ fn llm_conversations(
 fn llm_conversations_pour_hote(state: &AppState, project_path: String) -> Result<Vec<llm::Conversation>, String> {
     llm::conversations::lister(&state.db, llm::prefere(&state.db), &project_path)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn llm_renommer_conversation(
@@ -1524,6 +1682,8 @@ struct CommandesAgent {
     reprise: Option<String>,
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn llm_commandes(
     conversation_id: Option<String>,
@@ -1545,6 +1705,8 @@ fn llm_commandes_pour_hote(state: &AppState, conversation_id: Option<String>) ->
     })
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn record_command(project: String, command: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     record_command_pour_hote(&state, project, command)
@@ -1555,6 +1717,8 @@ fn record_command(project: String, command: String, state: tauri::State<'_, AppS
 fn record_command_pour_hote(state: &AppState, project: String, command: String) -> Result<(), String> {
     terminal::history::record(&state.db, &project, &command)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn terminal_search(
@@ -1584,6 +1748,8 @@ struct AffectationsReunion {
     redaction: Option<String>,
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn llm_reunions(state: tauri::State<'_, AppState>) -> AffectationsReunion {
     llm_reunions_pour_hote(&state)
@@ -1601,6 +1767,7 @@ fn llm_reunions_pour_hote(state: &AppState) -> AffectationsReunion {
 // --- Tauri Commands: abonnement d'un fournisseur ---
 
 /// L'etat de connexion du fournisseur donne, ou du fournisseur choisi.
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 fn llm_abonnement(
     id: Option<String>,
@@ -1618,6 +1785,8 @@ fn llm_abonnement_pour_hote(state: &AppState, id: Option<String>) -> Result<llm:
     };
     Ok(llm::abonnement::etat(fournisseur))
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn llm_connexion_demarrer(
@@ -1640,6 +1809,8 @@ fn llm_connexion_demarrer_pour_hote(
     state.connexion_llm.demarrer(state.emetteur.clone(), fournisseur)
 }
 
+#[cfg(feature = "interface-tauri")]
+
 #[tauri::command]
 fn llm_connexion_entrer(data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     llm_connexion_entrer_pour_hote(&state, data)
@@ -1650,6 +1821,8 @@ fn llm_connexion_entrer(data: String, state: tauri::State<'_, AppState>) -> Resu
 fn llm_connexion_entrer_pour_hote(state: &AppState, data: String) -> Result<(), String> {
     state.connexion_llm.entrer(&data)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn llm_connexion_annuler(state: tauri::State<'_, AppState>) {
@@ -1677,13 +1850,15 @@ fn schema_ouvrable(url: &str) -> bool {
         .any(|schema| url.len() > schema.len() && url.starts_with(schema))
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn open_url(url: String) -> Result<(), String> {
     if !schema_ouvrable(&url) {
         return Err(format!("adresse non ouvrable : {url}"));
     }
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 /// Journalise une erreur et la remonte au serveur de suivi si l'utilisateur l'a accepte.
@@ -1744,7 +1919,7 @@ fn whoami_fallback() -> String {
         .unwrap_or_else(|_| "inconnu".to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 /// Fiche technique de la machine, telle qu'elle accompagne les erreurs.
 /// Sert aussi a l'afficher a l'utilisateur : il doit pouvoir voir ce qui serait envoye.
 ///
@@ -1753,7 +1928,7 @@ fn whoami_fallback() -> String {
 /// principale GTK — l'interface ne repeint plus pendant ce temps. C'etait deja vrai
 /// avant, avec deux `Command::new` (`pactl`, `pw-record`) au meme endroit.
 async fn machine_report() -> report::MachineInfo {
-    tauri::async_runtime::spawn_blocking(|| report::machine_info().clone())
+    taches::lancer_bloquant(|| report::machine_info().clone())
         .await
         .unwrap_or_else(|_| report::machine_info().clone())
 }
@@ -1764,13 +1939,13 @@ async fn machine_report() -> report::MachineInfo {
 /// tourne et que rien n'est dessine. Le focus disculpe la fenetre recouverte, qui reste
 /// « visible » sans qu'on la regarde. L'entree recente dit si quelqu'un est devant : le
 /// guetteur ne recharge la vue que dans ce cas — voir `guetteur`.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn sante_page(a_peint: bool, visible: bool, concentre: bool, entree_recente: bool) {
     guetteur::signe_de_la_page(a_peint, visible, concentre, entree_recente);
 }
 
 /// Le mode secours du rendu : disponible sous Linux seulement, et deja active ou non.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn mode_secours_rendu() -> rendu::EtatModeSecours {
     rendu::etat_mode_secours()
 }
@@ -1778,7 +1953,7 @@ fn mode_secours_rendu() -> rendu::EtatModeSecours {
 /// Pose ou retire le mode secours du rendu. Le changement prend effet au prochain lancement :
 /// la variable de WebKitGTK se lit AVANT l'initialisation de GTK, donc avant que cette
 /// commande puisse exister dans le processus en cours.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn activer_mode_secours_rendu(activer: bool) -> Result<(), String> {
     rendu::basculer_mode_secours(activer)
 }
@@ -1790,12 +1965,13 @@ async fn activer_mode_secours_rendu(activer: bool) -> Result<(), String> {
 /// trouvant pris), choisit `$APPIMAGE` sous AppImage, et journalise. La mise a jour, elle,
 /// reste sur le `relaunch()` du plugin process : son flux est verifie de bout en bout et
 /// l'AppImage le met a l'abri de la course (sa nouvelle instance demarre lentement).
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 async fn relancer_application(app: tauri::AppHandle) -> Result<(), String> {
     guetteur::relancer_l_application(&app)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn debug_log(line: String) {
     use std::io::Write;
     // `temp_dir()` et pas `/tmp` : sous Windows le dossier temporaire est dans le profil de
@@ -1805,6 +1981,8 @@ async fn debug_log(line: String) {
         let _ = writeln!(f, "{}", line);
     }
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 fn search_command_history(
@@ -1823,19 +2001,19 @@ fn search_command_history_pour_hote(state: &AppState, query: String, limit: Opti
 
 // --- Tauri Commands: Explorateur de fichiers ---
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn list_project_dir(project_path: String, rel_path: String) -> Result<Vec<workspace::DirEntry>, String> {
     workspace::list_dir(&project_path, &rel_path)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn read_project_file(project_path: String, rel_path: String) -> Result<workspace::FileContent, String> {
     workspace::read_project_file(&project_path, &rel_path)
 }
 
 /// Etat disque du fichier affiche : sert au suivi des modifications exterieures
 /// (relire 2 Mo toutes les deux secondes serait absurde, un stat ne coute rien).
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn stat_project_file(
     project_path: String,
     rel_path: String,
@@ -1843,15 +2021,17 @@ async fn stat_project_file(
     workspace::stat_project_file(&project_path, &rel_path)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn write_project_file(project_path: String, rel_path: String, content: String) -> Result<(), String> {
     workspace::write_project_file(&project_path, &rel_path, &content)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn read_project_image(project_path: String, rel_path: String) -> Result<String, String> {
     workspace::read_project_image(&project_path, &rel_path)
 }
+
+#[cfg(feature = "interface-tauri")]
 
 #[tauri::command]
 async fn backup_database(dest: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -1864,28 +2044,28 @@ async fn backup_database_pour_hote(state: &AppState, dest: String) -> Result<(),
     state.db.backup_to(&dest)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn create_project_file(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
     workspace::create_project_file(&project_path, &rel_dir, &name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn create_project_dir(project_path: String, rel_dir: String, name: String) -> Result<String, String> {
     workspace::create_project_dir(&project_path, &rel_dir, &name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn rename_project_entry(project_path: String, rel_path: String, new_name: String) -> Result<String, String> {
     workspace::rename_project_entry(&project_path, &rel_path, &new_name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn trash_project_entry(project_path: String, rel_path: String) -> Result<(), String> {
     workspace::trash_project_entry(&project_path, &rel_path)
 }
 
 // async : la recherche parcourt tout le projet, elle ne doit pas bloquer le thread principal
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn search_project(project_path: String, query: String) -> Result<workspace::SearchResults, String> {
     tokio::task::spawn_blocking(move || workspace::search_project(&project_path, &query))
         .await
@@ -1902,6 +2082,7 @@ struct GotoDefinitionResult {
 /// Aller a la definition : LSP si un serveur existe pour le langage, sinon
 /// recherche heuristique de declarations. `content` = texte courant du viewer
 /// (positions coherentes meme avec des modifications non sauvees).
+#[cfg(feature = "interface-tauri")]
 #[tauri::command]
 async fn goto_definition(
     project_path: String,
@@ -1943,12 +2124,12 @@ async fn goto_definition_pour_hote(state: &AppState, project_path: String, lang:
 
 // --- Tauri Commands: Git ---
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_status(project_path: String) -> Result<gitdiff::GitStatus, String> {
     gitdiff::git_status(&project_path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_diff_file(
     project_path: String,
     path: String,
@@ -1957,64 +2138,64 @@ async fn git_diff_file(
     gitdiff::git_diff_file(&project_path, &path, untracked).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_stage(project_path: String, path: String) -> Result<(), String> {
     gitdiff::git_stage(&project_path, &path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_unstage(project_path: String, path: String) -> Result<(), String> {
     gitdiff::git_unstage(&project_path, &path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_stage_all(project_path: String) -> Result<(), String> {
     gitdiff::git_stage_all(&project_path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_unstage_all(project_path: String) -> Result<(), String> {
     gitdiff::git_unstage_all(&project_path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_commit(project_path: String, message: String) -> Result<(), String> {
     gitdiff::git_commit(&project_path, &message).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_push(project_path: String, set_upstream: bool) -> Result<String, String> {
     gitdiff::git_push(&project_path, set_upstream).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_pull(project_path: String) -> Result<String, String> {
     gitdiff::git_pull(&project_path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_log(project_path: String, limit: u32) -> Result<Vec<gitdiff::CommitInfo>, String> {
     gitdiff::git_log(&project_path, limit).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_commit_diff(project_path: String, hash: String) -> Result<Vec<gitdiff::FileDiff>, String> {
     gitdiff::git_commit_diff(&project_path, &hash).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_branches(project_path: String) -> Result<Vec<gitdiff::BranchInfo>, String> {
     gitdiff::git_branches(&project_path).await
 }
 
 /// Les dossiers de travail du depot, le principal en premier.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_worktrees(project_path: String) -> Result<Vec<gitdiff::worktree::Worktree>, String> {
     gitdiff::worktree::lister(&project_path).await
 }
 
 /// Ajoute un dossier de travail sur `branche`, en la creant si `creer`. Rend son chemin.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_worktree_add(
     project_path: String,
     branche: String,
@@ -2024,7 +2205,7 @@ async fn git_worktree_add(
 }
 
 /// Retire un dossier de travail. `force` abandonne les modifications non validees.
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_worktree_remove(
     project_path: String,
     chemin: String,
@@ -2033,49 +2214,49 @@ async fn git_worktree_remove(
     gitdiff::worktree::retirer(&project_path, &chemin, force).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_checkout_branch(project_path: String, name: String) -> Result<(), String> {
     gitdiff::git_checkout_branch(&project_path, &name).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_create_branch(project_path: String, name: String) -> Result<(), String> {
     gitdiff::git_create_branch(&project_path, &name).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 async fn git_delete_branch(project_path: String, name: String, force: bool) -> Result<(), String> {
     gitdiff::git_delete_branch(&project_path, &name, force).await
 }
 
 // --- Tauri Commands: Agents marketplace (multi-marketplace) ---
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn get_marketplace_path() -> Result<String, String> {
     Ok(agents::ccm_marketplace_path()?.to_string_lossy().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn list_marketplaces() -> Result<Vec<agents::MarketplaceLocation>, String> {
     agents::list_marketplaces()
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn list_plugins(marketplace_id: String) -> Result<Vec<agents::PluginInfo>, String> {
     agents::list_plugins_in(&marketplace_id)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn list_agents(marketplace_id: String, plugin: String) -> Result<Vec<agents::AgentInfo>, String> {
     agents::list_agents_in(&marketplace_id, &plugin)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn read_agent(marketplace_id: String, plugin: String, name: String) -> Result<String, String> {
     agents::read_agent(&marketplace_id, &plugin, &name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn save_agent(
     marketplace_id: String,
     plugin: String,
@@ -2085,12 +2266,12 @@ fn save_agent(
     agents::save_agent(&marketplace_id, &plugin, &name, &content)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn delete_agent(marketplace_id: String, plugin: String, name: String) -> Result<(), String> {
     agents::delete_agent(&marketplace_id, &plugin, &name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn rename_agent(
     marketplace_id: String,
     plugin: String,
@@ -2100,17 +2281,17 @@ fn rename_agent(
     agents::rename_agent(&marketplace_id, &plugin, &old_name, &new_name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn create_plugin(name: String, description: String) -> Result<(), String> {
     agents::create_plugin(&name, &description)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn delete_plugin(marketplace_id: String, name: String) -> Result<(), String> {
     agents::delete_plugin(&marketplace_id, &name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn rename_plugin(
     marketplace_id: String,
     old_name: String,
@@ -2119,32 +2300,32 @@ fn rename_plugin(
     agents::rename_plugin(&marketplace_id, &old_name, &new_name)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn get_project_plugins(project_path: String) -> Result<Vec<String>, String> {
     agents::get_project_plugins(&project_path)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn set_project_plugins(project_path: String, plugins: Vec<String>) -> Result<(), String> {
     agents::set_project_plugins(&project_path, plugins)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn get_orchestrator_config() -> Result<agents::OrchestratorConfig, String> {
     agents::get_orchestrator_config()
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn set_teams_enabled(enabled: bool) -> Result<(), String> {
     agents::set_teams_enabled(enabled)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn set_teammate_mode(mode: String) -> Result<(), String> {
     agents::set_teammate_mode(&mode)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 fn toggle_plugin_enabled(plugin_key: String, enabled: bool) -> Result<(), String> {
     agents::toggle_plugin_enabled(&plugin_key, enabled)
 }
@@ -2259,6 +2440,9 @@ pub fn service_terminaux_si_demande() -> bool {
     terminal::service::lancement::tourner_si_demande()
 }
 
+/// **CE LANCEUR N'EXISTE QU'AVEC TAURI.** Sans la feature, le binaire ne sert que le
+/// pont : il n'ouvre aucune fenetre, et ne doit donc pas etre lie a WebKitGTK.
+#[cfg(feature = "interface-tauri")]
 pub fn run() {
     // FIX RACINE bug accents terminaux (NE PAS RETIRER) : sous Linux, ibus route
     // les touches accentuees DIRECTES de l'AZERTY (é è ç à) par le pipeline de
