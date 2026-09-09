@@ -43,6 +43,10 @@ pub struct AppState {
     /// La connexion guidee en cours, quel que soit le fournisseur.
     pub connexion_llm: llm::abonnement::SessionConnexion,
     pub lsp: Arc<lsp::LspState>,
+    /// De quoi parler a l'interface, quelle qu'elle soit. **C'est ce qui remplace
+    /// l'`AppHandle` que se passaient les commandes** : l'enregistrement et la connexion
+    /// guidee doivent emettre, et rien d'autre ne les liait a Tauri.
+    pub emetteur: crate::evenements::Emetteurs,
 }
 
 /// Sert le pont si `--pont` est demande, et dit si ce processus lui appartient.
@@ -90,6 +94,7 @@ pub fn construire_etat(
     db: Database,
     db_path: String,
     terminaux: Box<dyn terminal::Terminaux>,
+    emetteur: crate::evenements::Emetteurs,
 ) -> AppState {
     let db_projects = db.get_projects().unwrap_or_default();
     let project_defs: Vec<_> = db_projects
@@ -116,6 +121,7 @@ pub fn construire_etat(
         terminals: terminaux,
         connexion_llm: llm::abonnement::SessionConnexion::default(),
         lsp: Arc::new(lsp::LspState::default()),
+        emetteur,
     }
 }
 
@@ -1034,27 +1040,40 @@ async fn kill_process_pour_hote(state: &AppState, pid: u32) -> Result<(), String
 
 // --- Tauri Commands: Apparence (image de fond) ---
 
-/// Resout `<app_data>`, ou toutes les donnees de l'app vivent deja (DB, enregistrements, tmux.conf).
-fn app_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    use tauri::Manager;
-    app.path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir indisponible : {}", e))
+#[tauri::command]
+async fn set_wallpaper(data_url: String) -> Result<(), String> {
+    set_wallpaper_pour_hote(data_url)
+}
+
+/// La logique de `set_wallpaper`. L'`AppHandle` n'y servait qu'a trouver le dossier de donnees,
+/// que `chemins::dossier_donnees()` connait deja, pose par l'hote au demarrage.
+fn set_wallpaper_pour_hote(data_url: String) -> Result<(), String> {
+    let dossier = crate::chemins::dossier_donnees().ok_or("dossier de donnees inconnu")?;
+    appearance::set_wallpaper(dossier, &data_url)
 }
 
 #[tauri::command]
-async fn set_wallpaper(app: tauri::AppHandle, data_url: String) -> Result<(), String> {
-    appearance::set_wallpaper(&app_data_dir(&app)?, &data_url)
+async fn get_wallpaper() -> Result<Option<String>, String> {
+    get_wallpaper_pour_hote()
+}
+
+/// La logique de `get_wallpaper`. L'`AppHandle` n'y servait qu'a trouver le dossier de donnees,
+/// que `chemins::dossier_donnees()` connait deja, pose par l'hote au demarrage.
+fn get_wallpaper_pour_hote() -> Result<Option<String>, String> {
+    let dossier = crate::chemins::dossier_donnees().ok_or("dossier de donnees inconnu")?;
+    appearance::get_wallpaper(dossier)
 }
 
 #[tauri::command]
-async fn get_wallpaper(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    appearance::get_wallpaper(&app_data_dir(&app)?)
+async fn clear_wallpaper() -> Result<(), String> {
+    clear_wallpaper_pour_hote()
 }
 
-#[tauri::command]
-async fn clear_wallpaper(app: tauri::AppHandle) -> Result<(), String> {
-    appearance::clear_wallpaper(&app_data_dir(&app)?)
+/// La logique de `clear_wallpaper`. L'`AppHandle` n'y servait qu'a trouver le dossier de donnees,
+/// que `chemins::dossier_donnees()` connait deja, pose par l'hote au demarrage.
+fn clear_wallpaper_pour_hote() -> Result<(), String> {
+    let dossier = crate::chemins::dossier_donnees().ok_or("dossier de donnees inconnu")?;
+    appearance::clear_wallpaper(dossier)
 }
 
 #[tauri::command]
@@ -1107,19 +1126,29 @@ fn get_db_path_pour_hote(state: &AppState) -> String {
 
 #[tauri::command]
 async fn start_recording(
-    app: tauri::AppHandle,
     project: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<recorder::RecordingStatus, String> {
-    recorder::start(app, state.db.clone(), &state.recorder, project).await
+    start_recording_pour_hote(&state, project).await
+}
+
+/// La logique de `start_recording`. L'`AppHandle` n'y servait qu'a emettre l'etat de
+/// l'enregistrement : l'emetteur de l'etat le fait, sans connaitre l'hote.
+async fn start_recording_pour_hote(
+    state: &AppState,
+    project: String,
+) -> Result<recorder::RecordingStatus, String> {
+    recorder::start(state.emetteur.clone(), state.db.clone(), &state.recorder, project).await
 }
 
 #[tauri::command]
-async fn stop_recording(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
-    recorder::stop(app, state.db.clone(), &state.recorder).await
+async fn stop_recording(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    stop_recording_pour_hote(&state).await
+}
+
+/// La logique de `stop_recording`.
+async fn stop_recording_pour_hote(state: &AppState) -> Result<(), String> {
+    recorder::stop(state.emetteur.clone(), state.db.clone(), &state.recorder).await
 }
 
 #[tauri::command]
@@ -1145,8 +1174,13 @@ fn get_failed_recordings_pour_hote(state: &AppState, project: String) -> Result<
 }
 
 #[tauri::command]
-fn retry_recording(app: tauri::AppHandle, id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    recorder::retry(app, state.db.clone(), id)
+fn retry_recording(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    retry_recording_pour_hote(&state, id)
+}
+
+/// La logique de `retry_recording`.
+fn retry_recording_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
+    recorder::retry(state.emetteur.clone(), state.db.clone(), id)
 }
 
 #[tauri::command]
@@ -1588,14 +1622,22 @@ fn llm_abonnement_pour_hote(state: &AppState, id: Option<String>) -> Result<llm:
 #[tauri::command]
 fn llm_connexion_demarrer(
     id: Option<String>,
-    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    llm_connexion_demarrer_pour_hote(&state, id)
+}
+
+/// La logique de `llm_connexion_demarrer`. L'`AppHandle` n'y servait qu'a emettre la
+/// sortie de la connexion guidee : l'emetteur de l'etat le fait, sans connaitre l'hote.
+fn llm_connexion_demarrer_pour_hote(
+    state: &AppState,
+    id: Option<String>,
 ) -> Result<(), String> {
     let fournisseur = match id {
         Some(id) => llm::par_id(&id).ok_or_else(|| format!("fournisseur inconnu : {id}"))?,
         None => llm::prefere(&state.db),
     };
-    state.connexion_llm.demarrer(app, fournisseur)
+    state.connexion_llm.demarrer(state.emetteur.clone(), fournisseur)
 }
 
 #[tauri::command]
@@ -2334,7 +2376,9 @@ pub fn run() {
             // Serveur de terminaux : mise en route (lancement du service s'il ne tourne
             // pas deja, puis reconciliation avec la base) avant toute autre operation.
             let terminaux = terminal::terminaux();
-            terminaux.preparer(std::sync::Arc::new(app.handle().clone()), &db);
+            let emetteur: crate::evenements::Emetteurs =
+                std::sync::Arc::new(app.handle().clone());
+            terminaux.preparer(emetteur.clone(), &db);
 
             // Import initial de la cle API depuis secrets.json (depose manuellement)
             if db.get_setting("openai_api_key").filter(|k| !k.is_empty()).is_none() {
@@ -2352,7 +2396,7 @@ pub fn run() {
 
             // L'etat sort d'une fonction que TOUT hote peut appeler, pas du `setup` : c'est
             // ce qui permet de servir les memes commandes ailleurs que dans Tauri.
-            let etat = construire_etat(db, db_path.clone(), terminaux);
+            let etat = construire_etat(db, db_path.clone(), terminaux, emetteur);
             let orchestrator = etat.orchestrator.clone();
             app.manage(etat);
 

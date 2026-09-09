@@ -174,6 +174,13 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
       pousserEvenement(arguments_.event, arguments_.payload, fenetre)
       return { traite: true, valeur: null }
     }
+    case 'relancer_application':
+      // Relancer appartient a l'HOTE : sous Tauri la commande passait par le plugin
+      // process, ici c'est Electron qui sait le faire. Le backend, lui, n'a jamais eu a
+      // savoir comment on redemarre la fenetre qui l'affiche.
+      app.relaunch()
+      app.quit()
+      return { traite: true, valeur: null }
     case 'set_webview_zoom':
       // Le zoom appartient a l'HOTE, pas au backend : sous Tauri la commande recevait la
       // fenetre, ici c'est Chromium qui l'applique. Le backend n'a jamais eu a le savoir.

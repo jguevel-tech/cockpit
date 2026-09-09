@@ -16,7 +16,7 @@ use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, Pt
 use serde::Serialize;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use crate::evenements::Emetteurs;
 
 /// L'evenement qui porte la sortie du CLI pendant une connexion guidee.
 pub const EVENEMENT_SORTIE: &str = "llm_connexion_sortie";
@@ -152,7 +152,7 @@ impl SessionConnexion {
     /// par `EVENEMENT_FIN`.
     pub fn demarrer(
         &self,
-        app: AppHandle,
+        emetteur: Emetteurs,
         fournisseur: &'static dyn super::Fournisseur,
     ) -> Result<(), String> {
         let guidee = fournisseur
@@ -196,7 +196,7 @@ impl SessionConnexion {
         let vivant = Arc::new(std::sync::atomic::AtomicBool::new(true));
         {
             let vivant = vivant.clone();
-            let app = app.clone();
+            let emetteur = emetteur.clone();
             std::thread::spawn(move || {
                 let mut morceau = [0u8; 4096];
                 loop {
@@ -204,12 +204,12 @@ impl SessionConnexion {
                         Ok(0) | Err(_) => break,
                         Ok(n) => {
                             let texte = String::from_utf8_lossy(&morceau[..n]).to_string();
-                            let _ = app.emit(EVENEMENT_SORTIE, texte);
+                            emetteur.emettre(EVENEMENT_SORTIE, serde_json::json!(texte));
                         }
                     }
                 }
                 vivant.store(false, std::sync::atomic::Ordering::SeqCst);
-                let _ = app.emit(EVENEMENT_FIN, ());
+                emetteur.emettre(EVENEMENT_FIN, serde_json::Value::Null);
             });
         }
 

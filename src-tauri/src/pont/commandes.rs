@@ -579,6 +579,23 @@ pub async fn appeler(
             ).await?))
         })
         .await,
+        "set_wallpaper" => typer(async {
+            valeur(serde_json::to_value(crate::set_wallpaper(
+                serde_json::from_value(prendre(a, "dataUrl", "data_url"))
+                    .map_err(|e| format!("argument dataUrl : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "get_wallpaper" => typer(async {
+            valeur(serde_json::to_value(crate::get_wallpaper(
+            ).await?))
+        })
+        .await,
+        "clear_wallpaper" => typer(async {
+            valeur(serde_json::to_value(crate::clear_wallpaper(
+            ).await?))
+        })
+        .await,
         "read_image_as_data_url" => typer(async {
             valeur(serde_json::to_value(crate::read_image_as_data_url(
                 serde_json::from_value(prendre(a, "path", "path"))
@@ -598,6 +615,18 @@ pub async fn appeler(
             )))
         })
         .await,
+        "start_recording" => typer(async {
+            valeur(serde_json::to_value(crate::start_recording_pour_hote(etat,
+                serde_json::from_value(prendre(a, "project", "project"))
+                    .map_err(|e| format!("argument project : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "stop_recording" => typer(async {
+            valeur(serde_json::to_value(crate::stop_recording_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
         "get_active_recording" => typer(async {
             valeur(serde_json::to_value(crate::get_active_recording_pour_hote(etat, 
             )))
@@ -607,6 +636,13 @@ pub async fn appeler(
             valeur(serde_json::to_value(crate::get_failed_recordings_pour_hote(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
+            )?))
+        })
+        .await,
+        "retry_recording" => typer(async {
+            valeur(serde_json::to_value(crate::retry_recording_pour_hote(etat,
+                serde_json::from_value(prendre(a, "id", "id"))
+                    .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
@@ -809,6 +845,13 @@ pub async fn appeler(
         .await,
         "llm_abonnement" => typer(async {
             valeur(serde_json::to_value(crate::llm_abonnement_pour_hote(etat,
+                serde_json::from_value(prendre(a, "id", "id"))
+                    .map_err(|e| format!("argument id : {e}"))?,
+            )?))
+        })
+        .await,
+        "llm_connexion_demarrer" => typer(async {
+            valeur(serde_json::to_value(crate::llm_connexion_demarrer_pour_hote(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))

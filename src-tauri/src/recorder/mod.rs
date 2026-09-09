@@ -14,7 +14,7 @@ use crate::storage::Database;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager};
+use crate::evenements::Emetteurs;
 
 pub struct RecorderState {
     active: Mutex<Option<ActiveRecording>>,
@@ -88,25 +88,25 @@ fn compose_note(
 }
 
 /// Ligne de journal technique : jamais affichee, jamais notifiee.
-fn journaliser(app: &AppHandle, message: &str) {
-    if let Ok(dir) = app.path().app_data_dir() {
+fn journaliser(message: &str) {
+    if let Some(dir) = crate::chemins::dossier_donnees() {
         let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         crate::report::append_log(
-            &dir,
+            dir,
             &crate::report::format_log_line(&horodatage, "reunion.capture", message),
         );
     }
 }
 
-fn emit_status(app: &AppHandle, status: &RecordingStatus) {
-    let _ = app.emit("recording_status", status.clone());
+fn emit_status(emetteur: &Emetteurs, status: &RecordingStatus) {
+    emetteur.emettre(
+        "recording_status",
+        serde_json::to_value(status).unwrap_or_default(),
+    );
 }
 
-fn recordings_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app data dir: {}", e))?;
+fn recordings_root() -> Result<PathBuf, String> {
+    let dir = crate::chemins::dossier_donnees().ok_or("dossier de donnees inconnu")?;
     Ok(dir.join("recordings"))
 }
 
@@ -120,7 +120,7 @@ fn track_duration_secs(path: &PathBuf) -> i64 {
 // --- Demarrage / arret ---
 
 pub async fn start(
-    app: AppHandle,
+    emetteur: Emetteurs,
     db: Database,
     state: &RecorderState,
     project: String,
@@ -134,7 +134,7 @@ pub async fn start(
 
     let started_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let rec = db.create_recording(&project, &started_at)?;
-    let dir = recordings_root(&app)?.join(format!("rec_{}", rec.id));
+    let dir = recordings_root()?.join(format!("rec_{}", rec.id));
     db.set_recording_dir(rec.id, &dir.to_string_lossy())?;
 
     let handles = match capture::start_capture(&dir).await {
@@ -183,11 +183,11 @@ pub async fn start(
         });
     }
 
-    emit_status(&app, &status);
+    emit_status(&emetteur, &status);
     Ok(status)
 }
 
-pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result<(), String> {
+pub async fn stop(emetteur: Emetteurs, db: Database, state: &RecorderState) -> Result<(), String> {
     let active = {
         let mut guard = state.active.lock().unwrap();
         guard.take().ok_or("Aucun enregistrement en cours")?
@@ -197,9 +197,7 @@ pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result
     let bilan = handles.stop().await;
     // Ce que la capture a constate, appareil par appareil : c'est cette fiche qui a
     // manque pendant plusieurs corrections. Journal technique seulement, rien d'affiche.
-    journaliser(
-        &app,
-        &format!("{} | {}", bilan.micro.resume(), bilan.systeme.resume()),
+    journaliser(&format!("{} | {}", bilan.micro.resume(), bilan.systeme.resume()),
     );
 
     let duration = track_duration_secs(&dir.join("mic.raw"))
@@ -208,7 +206,7 @@ pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result
     db.set_recording_state(recording_id, "transcribing", None)?;
 
     emit_status(
-        &app,
+        &emetteur,
         &RecordingStatus {
             recording_id,
             project,
@@ -223,7 +221,7 @@ pub async fn stop(app: AppHandle, db: Database, state: &RecorderState) -> Result
         },
     );
 
-    tauri::async_runtime::spawn(run_pipeline(app, db, recording_id));
+    tauri::async_runtime::spawn(run_pipeline(emetteur, db, recording_id));
     Ok(())
 }
 
@@ -240,7 +238,7 @@ pub fn active_status(state: &RecorderState) -> Option<RecordingStatus> {
     })
 }
 
-pub fn retry(app: AppHandle, db: Database, recording_id: i64) -> Result<(), String> {
+pub fn retry(emetteur: Emetteurs, db: Database, recording_id: i64) -> Result<(), String> {
     let rec = db.get_recording(recording_id)?;
     if rec.state != "error" {
         return Err("Cet enregistrement n'est pas en echec".into());
@@ -251,7 +249,7 @@ pub fn retry(app: AppHandle, db: Database, recording_id: i64) -> Result<(), Stri
     }
     db.set_recording_state(recording_id, "transcribing", None)?;
     emit_status(
-        &app,
+        &emetteur,
         &RecordingStatus {
             recording_id,
             project: rec.project,
@@ -262,7 +260,7 @@ pub fn retry(app: AppHandle, db: Database, recording_id: i64) -> Result<(), Stri
             mute_track: None,
         },
     );
-    tauri::async_runtime::spawn(run_pipeline(app, db, recording_id));
+    tauri::async_runtime::spawn(run_pipeline(emetteur, db, recording_id));
     Ok(())
 }
 
@@ -276,7 +274,7 @@ pub fn delete(db: &Database, recording_id: i64) -> Result<(), String> {
 
 // --- Pipeline transcription + resume ---
 
-async fn run_pipeline(app: AppHandle, db: Database, recording_id: i64) {
+async fn run_pipeline(emetteur: Emetteurs, db: Database, recording_id: i64) {
     let rec = match db.get_recording(recording_id) {
         Ok(r) => r,
         Err(e) => {
@@ -285,7 +283,7 @@ async fn run_pipeline(app: AppHandle, db: Database, recording_id: i64) {
         }
     };
 
-    let result = pipeline_inner(&app, &db, &rec).await;
+    let result = pipeline_inner(&emetteur, &db, &rec).await;
 
     let (state, error) = match &result {
         Ok(()) => ("done", None),
@@ -301,7 +299,7 @@ async fn run_pipeline(app: AppHandle, db: Database, recording_id: i64) {
     }
 
     emit_status(
-        &app,
+        &emetteur,
         &RecordingStatus {
             recording_id,
             project: rec.project.clone(),
@@ -315,7 +313,7 @@ async fn run_pipeline(app: AppHandle, db: Database, recording_id: i64) {
 }
 
 async fn pipeline_inner(
-    app: &AppHandle,
+    emetteur: &Emetteurs,
     db: &Database,
     rec: &crate::storage::Recording,
 ) -> Result<(), String> {
@@ -394,7 +392,7 @@ async fn pipeline_inner(
     let transcript = transcribe::merge_dialogue(mic, sys);
 
     emit_status(
-        app,
+        emetteur,
         &RecordingStatus {
             recording_id: rec.id,
             project: rec.project.clone(),

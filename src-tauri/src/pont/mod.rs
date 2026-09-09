@@ -118,7 +118,7 @@ pub async fn servir() -> Result<(), String> {
     let terminaux = crate::terminal::terminaux();
     terminaux.preparer(emetteur.clone(), &db);
 
-    let etat = crate::construire_etat(db, chemin_base, terminaux);
+    let etat = crate::construire_etat(db, chemin_base, terminaux, emetteur.clone());
 
     let entree = std::io::stdin();
     for ligne in entree.lock().lines() {
