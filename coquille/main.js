@@ -9,7 +9,7 @@
 // **CE QUI NE CHANGE PAS.** Le service de terminaux reste le binaire Rust, detache, avec son
 // protocole binaire a lui. Il ne sait pas qui l'affiche et n'a pas a le savoir.
 
-const { app, BrowserWindow, protocol, net, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, protocol, net, shell, ipcMain, dialog } = require('electron')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { spawn } = require('node:child_process')
@@ -29,7 +29,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 function servirInterface() {
-  protocol.handle(SCHEMA, (requete) => {
+  protocol.handle(SCHEMA, async (requete) => {
     const url = new URL(requete.url)
     const relatif = decodeURIComponent(url.pathname)
     // Tout ce qui n'est pas un fichier connu retombe sur index.html : la navigation de
@@ -41,7 +41,31 @@ function servirInterface() {
     if (resolu !== RACINE_INTERFACE && !resolu.startsWith(RACINE_INTERFACE + path.sep)) {
       return new Response('chemin refuse', { status: 403 })
     }
-    return net.fetch(pathToFileURL(resolu).toString())
+    const reponse = await net.fetch(pathToFileURL(resolu).toString())
+    // **LA CSP EST POSEE SUR LA REPONSE, PAS DANS LE HTML.** Une balise `meta` dans
+    // `index.html` serait perdue au prochain build de Vite, qui reecrit ce fichier.
+    //
+    // Ce que chaque directive paie : `style-src 'unsafe-inline'` parce que Svelte et xterm
+    // posent des styles a la volee ; `img-src data: blob:` parce que le fond d'ecran et les
+    // avatars sont des data URL ; `connect-src` pour les APIs des fournisseurs d'IA et la
+    // synchronisation. Il n'y a PAS de `script-src 'unsafe-eval'` : le code de la page est
+    // compile, et le pont ne fait rien evaluer.
+    const entetes = new Headers(reponse.headers)
+    entetes.set(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' https:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "frame-ancestors 'none'"
+      ].join('; ')
+    )
+    return new Response(reponse.body, { status: reponse.status, headers: entetes })
   })
 }
 
@@ -195,6 +219,40 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
   }
 }
 
+
+/**
+ * Les selecteurs de fichiers, traduits vers ceux du systeme.
+ *
+ * **CE SONT DES DIALOGUES NATIFS, ET C'EST L'HOTE QUI LES OUVRE.** Sous Tauri, le plugin
+ * `dialog` faisait la meme chose depuis le Rust. Le contrat rendu a la page ne change pas :
+ * un chemin, un tableau de chemins si plusieurs sont permis, `null` si l'on annule. Le
+ * frontend ne voit aucune difference et n'a pas ete touche.
+ */
+async function ouvrirUnDialogue(commande, options, fenetre) {
+  const proprietes = []
+  if (options.directory) proprietes.push('openDirectory')
+  else proprietes.push('openFile')
+  if (options.multiple) proprietes.push('multiSelections')
+
+  const commun = {
+    ...(options.title ? { title: options.title } : {}),
+    ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
+    ...(options.filters ? { filters: options.filters } : {})
+  }
+
+  if (commande === 'plugin:dialog|save') {
+    const { canceled, filePath } = await dialog.showSaveDialog(fenetre, commun)
+    return canceled ? null : filePath
+  }
+  const { canceled, filePaths } = await dialog.showOpenDialog(fenetre, {
+    ...commun,
+    properties: proprietes
+  })
+  // Annuler rend `null`, jamais un tableau vide : c'est ce que le frontend teste.
+  if (canceled || filePaths.length === 0) return null
+  return options.multiple ? filePaths : filePaths[0]
+}
+
 function brancherLePont(fenetre) {
   const backend = new Backend(cheminDuBackend())
   // Ce que le backend pousse de lui-meme (sortie de terminal, fin de processus) emprunte
@@ -206,6 +264,9 @@ function brancherLePont(fenetre) {
   ipcMain.handle('cockpit:commande', async (_evenement, commande, arguments_) => {
     const dansLaCoquille = traiterDansLaCoquille(commande, arguments_ ?? {}, fenetre)
     if (dansLaCoquille.traite) return dansLaCoquille.valeur
+    if (commande === 'plugin:dialog|open' || commande === 'plugin:dialog|save') {
+      return ouvrirUnDialogue(commande, arguments_?.options ?? {}, fenetre)
+    }
     return backend.appeler(commande, arguments_ ?? {})
   })
 }
