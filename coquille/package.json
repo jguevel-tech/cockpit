@@ -4,6 +4,42 @@
   "description": "Coquille Electron de Cockpit : fenetre Chromium et pont vers le backend Rust.",
   "main": "main.js",
   "devDependencies": {
-    "electron": "^38.2.0"
-  }
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "version": "0.58.2",
+  "scripts": {
+    "paquet": "electron-builder"
+  },
+  "build": {
+    "appId": "com.cockpit.dev",
+    "productName": "Cockpit",
+    "directories": {
+      "output": "paquet"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "interface"
+      },
+      {
+        "from": "../src-tauri/target/release/cockpit",
+        "to": "cockpit"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development",
+      "icon": "../src-tauri/icons/128x128@2x.png",
+      "syncDesktopName": true
+    }
+  },
+  "desktopName": "cockpit.desktop"
 }
