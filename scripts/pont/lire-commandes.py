@@ -29,7 +29,16 @@ def decouper(args):
 def analyser(chemin):
     s = io.open(chemin, encoding='utf-8').read()
     trouvees = []
-    for m in re.finditer(r'#\[tauri::command\]\s*\n\s*((?:pub\s+)?(async\s+)?fn\s+(\w+)\s*)\(', s):
+    # **DEUX PIEGES DANS CE SEUL MOTIF, PAYES CHACUN UNE FOIS.** L'attribut peut etre
+    # conditionne (`cfg_attr`) : ne reconnaitre que la forme nue faisait disparaitre 72
+    # commandes du dispatch SANS AUCUN SIGNAL, le generateur annoncant juste un total plus
+    # petit. Et un commentaire de doc ou un `#[cfg]` se glisse entre l'attribut et le `fn` :
+    # deux commandes sur 165 avaient ete manquees comme ca. Le controle qui attrape les deux,
+    # c'est de compter les attributs presents dans les fichiers et de comparer.
+    for m in re.finditer(
+        r'#\[(?:tauri::command|cfg_attr\(feature = "interface-tauri", tauri::command\))\]\s*\n'
+        r'(?:\s*(?://[^\n]*|#\[[^\]]*\])\n)*'
+        r'\s*((?:pub\s+)?(async\s+)?fn\s+(\w+)\s*)\(', s):
         nom = m.group(3)
         ouvre = s.index('(', m.end(1) - 1)
         ferme = fermeture(s, ouvre)
@@ -47,7 +56,36 @@ def analyser(chemin):
         })
     return trouvees
 
-cmds = analyser('src-tauri/src/lib.rs')
+# **LE PONT DOIT AUSSI SERVIR CE QUI N'EST PAS DANS lib.rs.** Les commandes du compte et
+# de la synchro vivent ailleurs : ne lire que lib.rs les rendait injoignables hors Tauri,
+# donc l'onglet compte mort sous la coquille, sans qu'aucune erreur ne le signale.
+SOURCES = [
+    ('src-tauri/src/lib.rs', 'crate::'),
+    ('src-tauri/src/compte/mod.rs', 'crate::compte::'),
+    ('src-tauri/src/compte/synchro.rs', 'crate::compte::synchro::'),
+]
+def compter_les_attributs(chemin):
+    """Combien d'attributs de commande ce fichier porte VRAIMENT.
+
+    **C'est le seul controle qui attrape un motif troue.** Un analyseur qui s'audite sur son
+    propre motif est toujours vert : le 2026-09-09 il a rendu 111 commandes sur 183 sans
+    lever le moindre signal, parce qu'il ne reconnaissait qu'une des deux formes d'attribut.
+    Compter puis COMPARER est ce qui l'a revele."""
+    t = io.open(chemin, encoding='utf-8').read()
+    return len(re.findall(r'#\[tauri::command\]', t)) + len(re.findall(r'tauri::command\)\]', t))
+
+cmds = []
+for chemin, prefixe in SOURCES:
+    lues = analyser(chemin)
+    for x in lues:
+        x['module'] = prefixe
+    attendu = compter_les_attributs(chemin)
+    if len(lues) != attendu:
+        raise SystemExit(
+            f'{chemin} : {len(lues)} commandes lues pour {attendu} attributs presents. '
+            f'Le motif a un trou — corrige-le, ne contourne pas ce controle.'
+        )
+    cmds += lues
 c = collections.Counter()
 for x in cmds:
     if x['handle']: c['avec AppHandle (a traiter a part)'] += 1

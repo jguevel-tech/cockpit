@@ -336,6 +336,13 @@ struct Capacites {
 pub async fn compte_google_disponible(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    compte_google_disponible_pour_hote(&state).await
+}
+
+/// La logique de `compte_google_disponible`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_google_disponible_pour_hote(state: &crate::AppState) -> Result<bool, String> {
     let reponse = match client()
         .get(format!("{}/api/capacites", serveur(&state.db)))
         .send()
@@ -372,6 +379,13 @@ pub async fn compte_google_disponible(
 pub async fn compte_google_direct(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    compte_google_direct_pour_hote(&state).await
+}
+
+/// La logique de `compte_google_direct`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_google_direct_pour_hote(state: &crate::AppState) -> Result<bool, String> {
     if !google::configure() {
         return Ok(false);
     }
@@ -395,6 +409,13 @@ pub async fn compte_google_direct(
 #[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn compte_etat(state: tauri::State<'_, crate::AppState>) -> Result<EtatCompte, String> {
+    compte_etat_pour_hote(&state).await
+}
+
+/// La logique de `compte_etat`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_etat_pour_hote(state: &crate::AppState) -> Result<EtatCompte, String> {
     Ok(etat(&state.db))
 }
 
@@ -406,6 +427,13 @@ pub async fn compte_inscription(
     nom: Option<String>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_inscription_pour_hote(&state, email, mot_de_passe, nom).await
+}
+
+/// La logique de `compte_inscription`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_inscription_pour_hote(state: &crate::AppState, email: String, mot_de_passe: String, nom: Option<String>) -> Result<EtatCompte, String> {
     ouvrir_une_session(&state.db, "/api/inscription", &email, &mot_de_passe, nom.as_deref()).await
 }
 
@@ -416,6 +444,13 @@ pub async fn compte_connexion(
     mot_de_passe: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_connexion_pour_hote(&state, email, mot_de_passe).await
+}
+
+/// La logique de `compte_connexion`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_connexion_pour_hote(state: &crate::AppState, email: String, mot_de_passe: String) -> Result<EtatCompte, String> {
     ouvrir_une_session(&state.db, "/api/connexion", &email, &mot_de_passe, None).await
 }
 
@@ -429,6 +464,13 @@ pub async fn compte_connexion(
 pub async fn compte_connexion_google(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_connexion_google_pour_hote(&state).await
+}
+
+/// La logique de `compte_connexion_google`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_connexion_google_pour_hote(state: &crate::AppState) -> Result<EtatCompte, String> {
     let identite = google::obtenir_une_identite(|adresse| {
         // L'ouverture passe par le systeme : c'est le navigateur de la personne qui doit
         // s'ouvrir, celui ou elle est deja connectee a Google.
@@ -472,6 +514,13 @@ pub async fn compte_connexion_google(
 pub async fn compte_appairage_demarrer(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<DemandeAppairage, String> {
+    compte_appairage_demarrer_pour_hote(&state).await
+}
+
+/// La logique de `compte_appairage_demarrer`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_appairage_demarrer_pour_hote(state: &crate::AppState) -> Result<DemandeAppairage, String> {
     let corps = serde_json::json!({ "appareil": bloc_appareil(&state.db)? });
 
     let reponse = client()
@@ -500,6 +549,13 @@ pub async fn compte_appairage_etat(
     id: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatAppairage, String> {
+    compte_appairage_etat_pour_hote(&state, id).await
+}
+
+/// La logique de `compte_appairage_etat`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_appairage_etat_pour_hote(state: &crate::AppState, id: String) -> Result<EtatAppairage, String> {
     let reponse = client()
         .get(format!("{}/api/appairage/{id}", serveur(&state.db)))
         .send()
@@ -531,6 +587,13 @@ pub async fn compte_appairage_etat(
 pub async fn compte_deconnexion(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_deconnexion_pour_hote(&state).await
+}
+
+/// La logique de `compte_deconnexion`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_deconnexion_pour_hote(state: &crate::AppState) -> Result<EtatCompte, String> {
     let db = &state.db;
 
     if let Some(jeton) = jeton(db) {
@@ -629,6 +692,13 @@ struct ReponseMoi {
 pub async fn compte_machines(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(Vec<Machine>, Option<String>), String> {
+    compte_machines_pour_hote(&state).await
+}
+
+/// La logique de `compte_machines`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_machines_pour_hote(state: &crate::AppState) -> Result<(Vec<Machine>, Option<String>), String> {
     let db = &state.db;
     let Some(jeton) = jeton(db) else {
         return Err(motif::PAS_CONNECTE.to_string());
@@ -670,6 +740,13 @@ pub async fn compte_definir_nom(
     nom: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_definir_nom_pour_hote(&state, nom).await
+}
+
+/// La logique de `compte_definir_nom`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_definir_nom_pour_hote(state: &crate::AppState, nom: String) -> Result<EtatCompte, String> {
     definir_le_nom(&state.db, &nom).await
 }
 
@@ -758,11 +835,20 @@ pub async fn compte_deposer_avatar(
     chemin: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_deposer_avatar_pour_hote(&state, chemin).await
+}
+
+/// La logique de `compte_deposer_avatar`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_deposer_avatar_pour_hote(state: &crate::AppState, chemin: String) -> Result<EtatCompte, String> {
     deposer_un_avatar(&state.db, &chemin).await
 }
 
-#[cfg(feature = "interface-tauri")]
-#[tauri::command]
+// Elle ne prend AUCUN etat, donc le pont l'appelle directement : seul l'attribut
+// disparait sans la feature, jamais la fonction. La conditionner en entier la rendait
+// introuvable pour le dispatch.
+#[cfg_attr(feature = "interface-tauri", tauri::command)]
 pub fn compte_lire_image(chemin: String) -> Result<String, String> {
     lire_une_image(&chemin)
 }
@@ -775,6 +861,13 @@ pub async fn compte_deposer_image(
     donnees: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_deposer_image_pour_hote(&state, donnees).await
+}
+
+/// La logique de `compte_deposer_image`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_deposer_image_pour_hote(state: &crate::AppState, donnees: String) -> Result<EtatCompte, String> {
     let octets = octets_d_une_data_url(&donnees)?;
     deposer_une_image(&state.db, octets).await
 }
@@ -784,6 +877,13 @@ pub async fn compte_deposer_image(
 pub async fn compte_retirer_avatar(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_retirer_avatar_pour_hote(&state).await
+}
+
+/// La logique de `compte_retirer_avatar`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_retirer_avatar_pour_hote(state: &crate::AppState) -> Result<EtatCompte, String> {
     retirer_l_avatar(&state.db).await
 }
 
@@ -793,6 +893,13 @@ pub async fn compte_definir_serveur(
     url: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<EtatCompte, String> {
+    compte_definir_serveur_pour_hote(&state, url).await
+}
+
+/// La logique de `compte_definir_serveur`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn compte_definir_serveur_pour_hote(state: &crate::AppState, url: String) -> Result<EtatCompte, String> {
     let propre = url.trim().trim_end_matches('/');
 
     // Un serveur en clair transporterait le mot de passe en clair. On refuse, sauf en local

@@ -12,8 +12,6 @@ use super::{jeton, motif, serveur};
 use crate::storage::db::Database;
 use crate::storage::synchro::ChangementLocal;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "interface-tauri")]
-use tauri::Emitter;
 
 /// Reglage ou vit le curseur : le numero du dernier changement recu du serveur.
 const CLE_CURSEUR: &str = "compte_synchro_curseur";
@@ -277,17 +275,26 @@ pub async fn passer(db: &Database) -> Result<Resultat, String> {
 #[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn synchro_maintenant(
-    fenetre: tauri::Window,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<Resultat, String> {
+    synchro_maintenant_pour_hote(&state).await
+}
+
+/// La logique de `synchro_maintenant`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn synchro_maintenant_pour_hote(state: &crate::AppState) -> Result<Resultat, String> {
     let resultat = passer(&state.db).await?;
 
     // L'interface se recharge SEULEMENT si quelque chose est arrive : rafraichir a vide ferait
     // sauter la selection et le defilement pour rien.
     if resultat.recus > 0 {
-        if let Err(e) = fenetre.emit("synchro-recue", resultat.recus) {
-            log::warn!("synchro : l'interface n'a pas ete prevenue — {e}");
-        }
+        // L'evenement passe par l'emetteur de l'etat, plus par la fenetre : c'est le meme
+        // nom et la meme charge, donc l'interface ne voit aucune difference. Elle recevait
+        // `resultat.recus` et continue de le recevoir.
+        state
+            .emetteur
+            .emettre("synchro-recue", serde_json::json!(resultat.recus));
     }
 
     Ok(resultat)
@@ -296,6 +303,13 @@ pub async fn synchro_maintenant(
 #[cfg(feature = "interface-tauri")]
 #[tauri::command]
 pub async fn synchro_etat(state: tauri::State<'_, crate::AppState>) -> Result<EtatSynchro, String> {
+    synchro_etat_pour_hote(&state).await
+}
+
+/// La logique de `synchro_etat`, appelable par tout hote. **Elle n'est PAS
+/// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
+/// n'est pas la. Le corps n'a pas bouge.
+pub async fn synchro_etat_pour_hote(state: &crate::AppState) -> Result<EtatSynchro, String> {
     let db = &state.db;
     Ok(EtatSynchro {
         actif: jeton(db).is_some(),

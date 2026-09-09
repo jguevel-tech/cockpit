@@ -34,11 +34,11 @@ for c in cmds:
         for x in args)
 
     if c['etat']:
-        cible = f'crate::{nom}_pour_hote'
+        cible = f'{c.get("module", "crate::")}{nom}_pour_hote'
         tete = 'etat, ' if not args else 'etat,'
         portees.append(nom)
     else:
-        cible = f'crate::{nom}'
+        cible = f'{c.get("module", "crate::")}{nom}'
         tete = ''
         directes.append(nom)
 

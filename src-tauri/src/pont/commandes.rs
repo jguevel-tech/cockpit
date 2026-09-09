@@ -1360,6 +1360,118 @@ pub async fn appeler(
             )?))
         })
         .await,
+        "compte_google_disponible" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_google_disponible_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_google_direct" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_google_direct_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_etat" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_etat_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_inscription" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_inscription_pour_hote(etat,
+                serde_json::from_value(prendre(a, "email", "email"))
+                    .map_err(|e| format!("argument email : {e}"))?,
+                serde_json::from_value(prendre(a, "motDePasse", "mot_de_passe"))
+                    .map_err(|e| format!("argument motDePasse : {e}"))?,
+                serde_json::from_value(prendre(a, "nom", "nom"))
+                    .map_err(|e| format!("argument nom : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "compte_connexion" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_connexion_pour_hote(etat,
+                serde_json::from_value(prendre(a, "email", "email"))
+                    .map_err(|e| format!("argument email : {e}"))?,
+                serde_json::from_value(prendre(a, "motDePasse", "mot_de_passe"))
+                    .map_err(|e| format!("argument motDePasse : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "compte_connexion_google" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_connexion_google_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_appairage_demarrer" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_appairage_demarrer_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_appairage_etat" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_appairage_etat_pour_hote(etat,
+                serde_json::from_value(prendre(a, "id", "id"))
+                    .map_err(|e| format!("argument id : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "compte_deconnexion" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_deconnexion_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_machines" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_machines_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_definir_nom" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_definir_nom_pour_hote(etat,
+                serde_json::from_value(prendre(a, "nom", "nom"))
+                    .map_err(|e| format!("argument nom : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "compte_deposer_avatar" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_deposer_avatar_pour_hote(etat,
+                serde_json::from_value(prendre(a, "chemin", "chemin"))
+                    .map_err(|e| format!("argument chemin : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "compte_lire_image" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_lire_image(
+                serde_json::from_value(prendre(a, "chemin", "chemin"))
+                    .map_err(|e| format!("argument chemin : {e}"))?,
+            )?))
+        })
+        .await,
+        "compte_deposer_image" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_deposer_image_pour_hote(etat,
+                serde_json::from_value(prendre(a, "donnees", "donnees"))
+                    .map_err(|e| format!("argument donnees : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "compte_retirer_avatar" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_retirer_avatar_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "compte_definir_serveur" => typer(async {
+            valeur(serde_json::to_value(crate::compte::compte_definir_serveur_pour_hote(etat,
+                serde_json::from_value(prendre(a, "url", "url"))
+                    .map_err(|e| format!("argument url : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "synchro_maintenant" => typer(async {
+            valeur(serde_json::to_value(crate::compte::synchro::synchro_maintenant_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
+        "synchro_etat" => typer(async {
+            valeur(serde_json::to_value(crate::compte::synchro::synchro_etat_pour_hote(etat, 
+            ).await?))
+        })
+        .await,
         _ => return None,
     })
 }
