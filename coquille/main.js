@@ -174,6 +174,11 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
       pousserEvenement(arguments_.event, arguments_.payload, fenetre)
       return { traite: true, valeur: null }
     }
+    case 'set_webview_zoom':
+      // Le zoom appartient a l'HOTE, pas au backend : sous Tauri la commande recevait la
+      // fenetre, ici c'est Chromium qui l'applique. Le backend n'a jamais eu a le savoir.
+      fenetre.webContents.setZoomFactor(arguments_.factor)
+      return { traite: true, valeur: null }
     case 'plugin:app|version':
       return { traite: true, valeur: require('../package.json').version }
     case 'plugin:app|name':

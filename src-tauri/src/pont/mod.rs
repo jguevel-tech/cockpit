@@ -18,6 +18,8 @@ use std::sync::Mutex;
 
 use crate::evenements::Emetteur;
 
+mod commandes;
+
 /// Un appel venu de l'hote. `id` revient tel quel dans la reponse : c'est ce qui permet a
 /// l'hote d'avoir plusieurs appels en vol sans les confondre.
 #[derive(serde::Deserialize)]
@@ -61,6 +63,11 @@ async fn repondre(
     commande: &str,
     _arguments: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    // Les commandes de l'application d'abord, servies par la table generee : elle appelle
+    // les MEMES fonctions que les commandes Tauri, sans jamais reecrire leur logique.
+    if let Some(reponse) = commandes::appeler(etat, commande, _arguments).await {
+        return reponse;
+    }
     let valeur = |v: Result<serde_json::Value, serde_json::Error>| v.map_err(|e| e.to_string());
     match commande {
         "langue_imposee" => valeur(serde_json::to_value(crate::langue_imposee_reelle())),

@@ -228,16 +228,34 @@ fn langue_valide(valeur: &str) -> Option<String> {
 
 #[tauri::command]
 async fn start_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    start_project_pour_hote(&state, name).await
+}
+
+/// La logique de `start_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn start_project_pour_hote(state: &AppState, name: String) -> Result<(), String> {
     state.orchestrator.start_project(&name).await
 }
 
 #[tauri::command]
 async fn stop_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    stop_project_pour_hote(&state, name).await
+}
+
+/// La logique de `stop_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn stop_project_pour_hote(state: &AppState, name: String) -> Result<(), String> {
     state.orchestrator.stop_project(&name).await
 }
 
 #[tauri::command]
 async fn restart_project(name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    restart_project_pour_hote(&state, name).await
+}
+
+/// La logique de `restart_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn restart_project_pour_hote(state: &AppState, name: String) -> Result<(), String> {
     state.orchestrator.restart_project(&name).await
 }
 
@@ -297,42 +315,90 @@ async fn docker_prune(target: String) -> Result<String, String> {
 
 #[tauri::command]
 fn get_todos(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Todo>, String> {
+    get_todos_pour_hote(&state, project)
+}
+
+/// La logique de `get_todos`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_todos_pour_hote(state: &AppState, project: String) -> Result<Vec<storage::Todo>, String> {
     state.db.get_todos(&project)
 }
 
 #[tauri::command]
 fn create_todo(project: String, text: String, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
+    create_todo_pour_hote(&state, project, text)
+}
+
+/// La logique de `create_todo`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn create_todo_pour_hote(state: &AppState, project: String, text: String) -> Result<storage::Todo, String> {
     state.db.create_todo(&project, &text)
 }
 
 #[tauri::command]
 fn update_todo(id: i64, text: String, done: bool, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
+    update_todo_pour_hote(&state, id, text, done)
+}
+
+/// La logique de `update_todo`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn update_todo_pour_hote(state: &AppState, id: i64, text: String, done: bool) -> Result<storage::Todo, String> {
     state.db.update_todo(id, &text, done)
 }
 
 #[tauri::command]
 fn set_todo_due(id: i64, due_date: Option<String>, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
+    set_todo_due_pour_hote(&state, id, due_date)
+}
+
+/// La logique de `set_todo_due`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn set_todo_due_pour_hote(state: &AppState, id: i64, due_date: Option<String>) -> Result<storage::Todo, String> {
     state.db.set_todo_due(id, due_date.as_deref())
 }
 
 /// Avancement d'une tache, en pourcentage. 100 la marque finie.
 #[tauri::command]
 fn set_todo_progress(id: i64, progress: i32, state: tauri::State<'_, AppState>) -> Result<storage::Todo, String> {
+    set_todo_progress_pour_hote(&state, id, progress)
+}
+
+/// La logique de `set_todo_progress`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn set_todo_progress_pour_hote(state: &AppState, id: i64, progress: i32) -> Result<storage::Todo, String> {
     state.db.set_todo_progress(id, progress)
 }
 
 #[tauri::command]
 fn delete_todo(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_todo_pour_hote(&state, id)
+}
+
+/// La logique de `delete_todo`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_todo_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_todo(id)
 }
 
 #[tauri::command]
 fn reorder_todos(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    reorder_todos_pour_hote(&state, ids)
+}
+
+/// La logique de `reorder_todos`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn reorder_todos_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
     state.db.reorder_todos(&ids)
 }
 
 #[tauri::command]
 fn move_todo(id: i64, new_project: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    move_todo_pour_hote(&state, id, new_project)
+}
+
+/// La logique de `move_todo`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn move_todo_pour_hote(state: &AppState, id: i64, new_project: String) -> Result<(), String> {
     state.db.move_todo(id, &new_project)
 }
 
@@ -351,71 +417,155 @@ pub fn get_pending_todos_pour_hote(state: &AppState) -> Result<Vec<storage::Todo
 
 #[tauri::command]
 fn get_note(project: String, state: tauri::State<'_, AppState>) -> Result<Option<storage::Note>, String> {
+    get_note_pour_hote(&state, project)
+}
+
+/// La logique de `get_note`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_note_pour_hote(state: &AppState, project: String) -> Result<Option<storage::Note>, String> {
     state.db.get_note(&project)
 }
 
 #[tauri::command]
 fn save_note(project: String, content: String, state: tauri::State<'_, AppState>) -> Result<storage::Note, String> {
+    save_note_pour_hote(&state, project, content)
+}
+
+/// La logique de `save_note`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn save_note_pour_hote(state: &AppState, project: String, content: String) -> Result<storage::Note, String> {
     state.db.save_note(&project, &content)
 }
 
 #[tauri::command]
 fn get_note_tree(project: String, state: tauri::State<'_, AppState>) -> Result<storage::NoteTree, String> {
+    get_note_tree_pour_hote(&state, project)
+}
+
+/// La logique de `get_note_tree`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_note_tree_pour_hote(state: &AppState, project: String) -> Result<storage::NoteTree, String> {
     state.db.get_note_tree(&project)
 }
 
 #[tauri::command]
 fn create_note_folder(project: String, parent_id: Option<i64>, name: String, state: tauri::State<'_, AppState>) -> Result<storage::NoteFolder, String> {
+    create_note_folder_pour_hote(&state, project, parent_id, name)
+}
+
+/// La logique de `create_note_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn create_note_folder_pour_hote(state: &AppState, project: String, parent_id: Option<i64>, name: String) -> Result<storage::NoteFolder, String> {
     state.db.create_note_folder(&project, parent_id, &name)
 }
 
 #[tauri::command]
 fn rename_note_folder(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    rename_note_folder_pour_hote(&state, id, name)
+}
+
+/// La logique de `rename_note_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn rename_note_folder_pour_hote(state: &AppState, id: i64, name: String) -> Result<(), String> {
     state.db.rename_note_folder(id, &name)
 }
 
 #[tauri::command]
 fn delete_note_folder(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_note_folder_pour_hote(&state, id)
+}
+
+/// La logique de `delete_note_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_note_folder_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_note_folder(id)
 }
 
 #[tauri::command]
 fn create_note_file(project: String, folder_id: Option<i64>, name: String, state: tauri::State<'_, AppState>) -> Result<storage::NoteFile, String> {
+    create_note_file_pour_hote(&state, project, folder_id, name)
+}
+
+/// La logique de `create_note_file`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn create_note_file_pour_hote(state: &AppState, project: String, folder_id: Option<i64>, name: String) -> Result<storage::NoteFile, String> {
     state.db.create_note_file(&project, folder_id, &name)
 }
 
 #[tauri::command]
 fn get_note_file(id: i64, state: tauri::State<'_, AppState>) -> Result<storage::NoteFile, String> {
+    get_note_file_pour_hote(&state, id)
+}
+
+/// La logique de `get_note_file`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_note_file_pour_hote(state: &AppState, id: i64) -> Result<storage::NoteFile, String> {
     state.db.get_note_file(id)
 }
 
 #[tauri::command]
 fn save_note_file(id: i64, content: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    save_note_file_pour_hote(&state, id, content)
+}
+
+/// La logique de `save_note_file`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn save_note_file_pour_hote(state: &AppState, id: i64, content: String) -> Result<(), String> {
     state.db.save_note_file(id, &content)
 }
 
 #[tauri::command]
 fn rename_note_file(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    rename_note_file_pour_hote(&state, id, name)
+}
+
+/// La logique de `rename_note_file`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn rename_note_file_pour_hote(state: &AppState, id: i64, name: String) -> Result<(), String> {
     state.db.rename_note_file(id, &name)
 }
 
 #[tauri::command]
 fn delete_note_file(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_note_file_pour_hote(&state, id)
+}
+
+/// La logique de `delete_note_file`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_note_file_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_note_file(id)
 }
 
 #[tauri::command]
 fn reorder_note_folders(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    reorder_note_folders_pour_hote(&state, ids)
+}
+
+/// La logique de `reorder_note_folders`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn reorder_note_folders_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
     state.db.reorder_note_folders(&ids)
 }
 
 #[tauri::command]
 fn reorder_note_files(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    reorder_note_files_pour_hote(&state, ids)
+}
+
+/// La logique de `reorder_note_files`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn reorder_note_files_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
     state.db.reorder_note_files(&ids)
 }
 
 #[tauri::command]
 fn move_note_file(id: i64, folder_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    move_note_file_pour_hote(&state, id, folder_id)
+}
+
+/// La logique de `move_note_file`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn move_note_file_pour_hote(state: &AppState, id: i64, folder_id: Option<i64>) -> Result<(), String> {
     state.db.move_note_file(id, folder_id)
 }
 
@@ -423,6 +573,12 @@ fn move_note_file(id: i64, folder_id: Option<i64>, state: tauri::State<'_, AppSt
 
 #[tauri::command]
 fn get_urls(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Url>, String> {
+    get_urls_pour_hote(&state, project)
+}
+
+/// La logique de `get_urls`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_urls_pour_hote(state: &AppState, project: String) -> Result<Vec<storage::Url>, String> {
     state.db.get_urls(&project)
 }
 
@@ -433,16 +589,34 @@ async fn check_urls(urls: Vec<String>) -> Vec<urlhealth::UrlHealth> {
 
 #[tauri::command]
 fn create_url(project: String, label: String, url: String, state: tauri::State<'_, AppState>) -> Result<storage::Url, String> {
+    create_url_pour_hote(&state, project, label, url)
+}
+
+/// La logique de `create_url`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn create_url_pour_hote(state: &AppState, project: String, label: String, url: String) -> Result<storage::Url, String> {
     state.db.create_url(&project, &label, &url)
 }
 
 #[tauri::command]
 fn update_url(id: i64, label: String, url: String, state: tauri::State<'_, AppState>) -> Result<storage::Url, String> {
+    update_url_pour_hote(&state, id, label, url)
+}
+
+/// La logique de `update_url`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn update_url_pour_hote(state: &AppState, id: i64, label: String, url: String) -> Result<storage::Url, String> {
     state.db.update_url(id, &label, &url)
 }
 
 #[tauri::command]
 fn delete_url(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_url_pour_hote(&state, id)
+}
+
+/// La logique de `delete_url`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_url_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_url(id)
 }
 
@@ -450,26 +624,56 @@ fn delete_url(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> 
 
 #[tauri::command]
 fn get_project_commands(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::ProjectCommand>, String> {
+    get_project_commands_pour_hote(&state, project)
+}
+
+/// La logique de `get_project_commands`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_project_commands_pour_hote(state: &AppState, project: String) -> Result<Vec<storage::ProjectCommand>, String> {
     state.db.get_project_commands(&project)
 }
 
 #[tauri::command]
 fn create_project_command(project: String, label: String, command: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectCommand, String> {
+    create_project_command_pour_hote(&state, project, label, command)
+}
+
+/// La logique de `create_project_command`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn create_project_command_pour_hote(state: &AppState, project: String, label: String, command: String) -> Result<storage::ProjectCommand, String> {
     state.db.create_project_command(&project, &label, &command)
 }
 
 #[tauri::command]
 fn update_project_command(id: i64, label: String, command: String, state: tauri::State<'_, AppState>) -> Result<storage::ProjectCommand, String> {
+    update_project_command_pour_hote(&state, id, label, command)
+}
+
+/// La logique de `update_project_command`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn update_project_command_pour_hote(state: &AppState, id: i64, label: String, command: String) -> Result<storage::ProjectCommand, String> {
     state.db.update_project_command(id, &label, &command)
 }
 
 #[tauri::command]
 fn delete_project_command(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_project_command_pour_hote(&state, id)
+}
+
+/// La logique de `delete_project_command`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_project_command_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_project_command(id)
 }
 
 #[tauri::command]
 fn reorder_project_commands(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    reorder_project_commands_pour_hote(&state, ids)
+}
+
+/// La logique de `reorder_project_commands`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn reorder_project_commands_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
     state.db.reorder_project_commands(&ids)
 }
 
@@ -477,37 +681,79 @@ fn reorder_project_commands(ids: Vec<i64>, state: tauri::State<'_, AppState>) ->
 
 #[tauri::command]
 fn get_project_folders(state: tauri::State<'_, AppState>) -> Result<Vec<storage::ProjectFolder>, String> {
+    get_project_folders_pour_hote(&state)
+}
+
+/// La logique de `get_project_folders`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_project_folders_pour_hote(state: &AppState) -> Result<Vec<storage::ProjectFolder>, String> {
     state.db.get_project_folders()
 }
 
 #[tauri::command]
 fn create_project_folder(name: String, parent_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<storage::ProjectFolder, String> {
+    create_project_folder_pour_hote(&state, name, parent_id)
+}
+
+/// La logique de `create_project_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn create_project_folder_pour_hote(state: &AppState, name: String, parent_id: Option<i64>) -> Result<storage::ProjectFolder, String> {
     state.db.create_project_folder(&name, parent_id)
 }
 
 #[tauri::command]
 fn rename_project_folder(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    rename_project_folder_pour_hote(&state, id, name)
+}
+
+/// La logique de `rename_project_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn rename_project_folder_pour_hote(state: &AppState, id: i64, name: String) -> Result<(), String> {
     state.db.rename_project_folder(id, &name)
 }
 
 #[tauri::command]
 fn delete_project_folder(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_project_folder_pour_hote(&state, id)
+}
+
+/// La logique de `delete_project_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_project_folder_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.db.delete_project_folder(id)
 }
 
 #[tauri::command]
 fn reorder_project_folders(ids: Vec<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    reorder_project_folders_pour_hote(&state, ids)
+}
+
+/// La logique de `reorder_project_folders`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn reorder_project_folders_pour_hote(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
     state.db.reorder_project_folders(&ids)
 }
 
 /// Deplace un dossier sous un autre (`parent_id` a None = racine). Refuse les boucles.
 #[tauri::command]
 fn move_project_folder(id: i64, parent_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    move_project_folder_pour_hote(&state, id, parent_id)
+}
+
+/// La logique de `move_project_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn move_project_folder_pour_hote(state: &AppState, id: i64, parent_id: Option<i64>) -> Result<(), String> {
     state.db.move_project_folder(id, parent_id)
 }
 
 #[tauri::command]
 fn move_project_to_folder(project_name: String, folder_id: Option<i64>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    move_project_to_folder_pour_hote(&state, project_name, folder_id)
+}
+
+/// La logique de `move_project_to_folder`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn move_project_to_folder_pour_hote(state: &AppState, project_name: String, folder_id: Option<i64>) -> Result<(), String> {
     state.db.move_project_to_folder(&project_name, folder_id)
 }
 
@@ -527,6 +773,12 @@ async fn scan_subdirs(path: String) -> Result<Vec<scanner::ScanResult>, String> 
 
 #[tauri::command]
 fn get_db_projects(state: tauri::State<'_, AppState>) -> Result<Vec<storage::Project>, String> {
+    get_db_projects_pour_hote(&state)
+}
+
+/// La logique de `get_db_projects`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_db_projects_pour_hote(state: &AppState) -> Result<Vec<storage::Project>, String> {
     state.db.get_projects()
 }
 
@@ -539,6 +791,12 @@ async fn add_project(
     depends_on: Vec<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<storage::Project, String> {
+    add_project_pour_hote(&state, name, path, compose_file, description, depends_on).await
+}
+
+/// La logique de `add_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn add_project_pour_hote(state: &AppState, name: String, path: String, compose_file: String, description: String, depends_on: Vec<String>) -> Result<storage::Project, String> {
     let proj = state.db.create_project(&name, &path, &compose_file, &description, &depends_on)?;
     // Seul echec possible : le nom existe deja dans l'orchestrateur (creation precedente
     // avortee, suppression partielle). Mettre a jour au lieu d'avaler l'erreur — c'est ce
@@ -564,11 +822,23 @@ fn update_db_project(
     depends_on: Vec<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<storage::Project, String> {
+    update_db_project_pour_hote(&state, id, name, path, compose_file, description, depends_on)
+}
+
+/// La logique de `update_db_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn update_db_project_pour_hote(state: &AppState, id: i64, name: String, path: String, compose_file: String, description: String, depends_on: Vec<String>) -> Result<storage::Project, String> {
     state.db.update_project(id, &name, &path, &compose_file, &description, &depends_on)
 }
 
 #[tauri::command]
 async fn delete_db_project(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_db_project_pour_hote(&state, id).await
+}
+
+/// La logique de `delete_db_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn delete_db_project_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     let name = state.db.get_project_by_id(id).ok().map(|p| p.name);
 
     // Tue les sessions tmux vivantes du projet (leurs lignes DB partent avec le projet)
@@ -590,6 +860,12 @@ async fn delete_db_project(id: i64, state: tauri::State<'_, AppState>) -> Result
 
 #[tauri::command]
 fn reorder_projects(names: Vec<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    reorder_projects_pour_hote(&state, names)
+}
+
+/// La logique de `reorder_projects`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn reorder_projects_pour_hote(state: &AppState, names: Vec<String>) -> Result<(), String> {
     state.db.reorder_projects(&names)
 }
 
@@ -597,7 +873,9 @@ fn reorder_projects(names: Vec<String>, state: tauri::State<'_, AppState>) -> Re
 /// memoire). Le nom affiche peut avoir derive du nom stocke (renommages) :
 /// on retombe alors sur le chemin, identite stable — meme logique que
 /// rename_project. Sans correspondance, retourne le nom affiche tel quel.
-async fn resolve_db_project_name(state: &tauri::State<'_, AppState>, display_name: &str) -> String {
+/// Prend `&AppState` et non `&State<..>` : elle est appelee depuis les commandes Tauri
+/// comme depuis les fonctions `_pour_hote`, et seul le premier des deux connait Tauri.
+async fn resolve_db_project_name(state: &AppState, display_name: &str) -> String {
     if state.db.get_project_by_name(display_name).is_ok() {
         return display_name.to_string();
     }
@@ -638,6 +916,12 @@ async fn docker_compose_detecte(
     rafraichir: bool,
     state: tauri::State<'_, AppState>,
 ) -> Result<ComposeDetecte, String> {
+    docker_compose_detecte_pour_hote(&state, name, rafraichir).await
+}
+
+/// La logique de `docker_compose_detecte`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn docker_compose_detecte_pour_hote(state: &AppState, name: String, rafraichir: bool) -> Result<ComposeDetecte, String> {
     let db_name = resolve_db_project_name(&state, &name).await;
     let projet = state.db.get_project_by_name(&db_name)?;
     let racine = std::path::PathBuf::from(&projet.path);
@@ -661,6 +945,12 @@ async fn docker_compose_detecte(
 
 #[tauri::command]
 async fn get_project_settings(name: String, state: tauri::State<'_, AppState>) -> Result<storage::Project, String> {
+    get_project_settings_pour_hote(&state, name).await
+}
+
+/// La logique de `get_project_settings`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn get_project_settings_pour_hote(state: &AppState, name: String) -> Result<storage::Project, String> {
     let db_name = resolve_db_project_name(&state, &name).await;
     state.db.get_project_by_name(&db_name)
 }
@@ -674,6 +964,12 @@ async fn update_project_settings(
     depends_on: Vec<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<storage::Project, String> {
+    update_project_settings_pour_hote(&state, name, path, compose_file, description, depends_on).await
+}
+
+/// La logique de `update_project_settings`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn update_project_settings_pour_hote(state: &AppState, name: String, path: String, compose_file: String, description: String, depends_on: Vec<String>) -> Result<storage::Project, String> {
     let db_name = resolve_db_project_name(&state, &name).await;
     let proj = state.db.update_project_by_name(&db_name, &path, &compose_file, &description, &depends_on)?;
     // L'orchestrateur est indexe par le nom AFFICHE, lui
@@ -687,6 +983,12 @@ async fn rename_project(
     new_name: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    rename_project_pour_hote(&state, old_name, new_name).await
+}
+
+/// La logique de `rename_project`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn rename_project_pour_hote(state: &AppState, old_name: String, new_name: String) -> Result<(), String> {
     // Chemin du projet (identite stable) pour retrouver la ligne DB meme si le
     // nom affiche a derive du nom stocke.
     let path = state
@@ -720,6 +1022,12 @@ pub async fn get_system_metrics_pour_hote(
 
 #[tauri::command]
 async fn kill_process(pid: u32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    kill_process_pour_hote(&state, pid).await
+}
+
+/// La logique de `kill_process`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn kill_process_pour_hote(state: &AppState, pid: u32) -> Result<(), String> {
     let collector = state.collector.lock().await;
     system::process::kill_process_with_sys(collector.system(), pid)
 }
@@ -775,11 +1083,23 @@ fn set_webview_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), Str
 
 #[tauri::command]
 async fn import_database(path: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
+    import_database_pour_hote(&state, path).await
+}
+
+/// La logique de `import_database`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn import_database_pour_hote(state: &AppState, path: String) -> Result<String, String> {
     storage::import::import_from(&state.db, &path)
 }
 
 #[tauri::command]
 fn get_db_path(state: tauri::State<'_, AppState>) -> String {
+    get_db_path_pour_hote(&state)
+}
+
+/// La logique de `get_db_path`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_db_path_pour_hote(state: &AppState) -> String {
     state.db_path.clone()
 }
 
@@ -804,11 +1124,23 @@ async fn stop_recording(
 
 #[tauri::command]
 fn get_active_recording(state: tauri::State<'_, AppState>) -> Option<recorder::RecordingStatus> {
+    get_active_recording_pour_hote(&state)
+}
+
+/// La logique de `get_active_recording`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_active_recording_pour_hote(state: &AppState) -> Option<recorder::RecordingStatus> {
     recorder::active_status(&state.recorder)
 }
 
 #[tauri::command]
 fn get_failed_recordings(project: String, state: tauri::State<'_, AppState>) -> Result<Vec<storage::Recording>, String> {
+    get_failed_recordings_pour_hote(&state, project)
+}
+
+/// La logique de `get_failed_recordings`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn get_failed_recordings_pour_hote(state: &AppState, project: String) -> Result<Vec<storage::Recording>, String> {
     state.db.get_failed_recordings(&project)
 }
 
@@ -819,6 +1151,12 @@ fn retry_recording(app: tauri::AppHandle, id: i64, state: tauri::State<'_, AppSt
 
 #[tauri::command]
 fn delete_recording(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_recording_pour_hote(&state, id)
+}
+
+/// La logique de `delete_recording`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn delete_recording_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     recorder::delete(&state.db, id)
 }
 
@@ -852,17 +1190,35 @@ pub fn get_app_settings_pour_hote(
 
 #[tauri::command]
 fn set_app_setting(key: String, value: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    set_app_setting_pour_hote(&state, key, value)
+}
+
+/// La logique de `set_app_setting`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn set_app_setting_pour_hote(state: &AppState, key: String, value: String) -> Result<(), String> {
     state.db.set_setting(&key, &value)
 }
 
 #[tauri::command]
 async fn get_project_summary_prompt(project: String, state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    get_project_summary_prompt_pour_hote(&state, project).await
+}
+
+/// La logique de `get_project_summary_prompt`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn get_project_summary_prompt_pour_hote(state: &AppState, project: String) -> Result<Option<String>, String> {
     let db_name = resolve_db_project_name(&state, &project).await;
     state.db.get_project_summary_prompt(&db_name)
 }
 
 #[tauri::command]
 async fn set_project_summary_prompt(project: String, prompt: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    set_project_summary_prompt_pour_hote(&state, project, prompt).await
+}
+
+/// La logique de `set_project_summary_prompt`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn set_project_summary_prompt_pour_hote(state: &AppState, project: String, prompt: Option<String>) -> Result<(), String> {
     let db_name = resolve_db_project_name(&state, &project).await;
     state.db.set_project_summary_prompt(&db_name, prompt.as_deref())
 }
@@ -895,6 +1251,12 @@ async fn create_terminal(
     init_command: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<i64, String> {
+    create_terminal_pour_hote(&state, project, cwd, cols, rows, init_command).await
+}
+
+/// La logique de `create_terminal`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn create_terminal_pour_hote(state: &AppState, project: String, cwd: String, cols: u16, rows: u16, init_command: Option<String>) -> Result<i64, String> {
     let demande = terminal::Creation {
         projet: project,
         dossier: cwd,
@@ -906,11 +1268,23 @@ async fn create_terminal(
 
 #[tauri::command]
 fn write_terminal(id: i64, data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    write_terminal_pour_hote(&state, id, data)
+}
+
+/// La logique de `write_terminal`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn write_terminal_pour_hote(state: &AppState, id: i64, data: String) -> Result<(), String> {
     state.terminals.ecrire(id, &data)
 }
 
 #[tauri::command]
 async fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    resize_terminal_pour_hote(&state, id, cols, rows).await
+}
+
+/// La logique de `resize_terminal`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn resize_terminal_pour_hote(state: &AppState, id: i64, cols: u16, rows: u16) -> Result<(), String> {
     state
         .terminals
         .redimensionner(&state.db, id, terminal::Taille { colonnes: cols, lignes: rows })
@@ -918,6 +1292,12 @@ async fn resize_terminal(id: i64, cols: u16, rows: u16, state: tauri::State<'_, 
 
 #[tauri::command]
 async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    close_terminal_pour_hote(&state, id).await
+}
+
+/// La logique de `close_terminal`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn close_terminal_pour_hote(state: &AppState, id: i64) -> Result<(), String> {
     state.terminals.fermer(&state.db, id)
 }
 
@@ -928,6 +1308,12 @@ async fn close_terminal(id: i64, state: tauri::State<'_, AppState>) -> Result<()
 /// fenetre qui se ferme declenche la meme chose, mais sans borne (voir `fenetre.rs`).
 #[tauri::command]
 async fn save_terminal_screens(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    save_terminal_screens_pour_hote(&state).await
+}
+
+/// La logique de `save_terminal_screens`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn save_terminal_screens_pour_hote(state: &AppState) -> Result<(), String> {
     state.terminals.enregistrer_les_ecrans(&state.db, false);
     Ok(())
 }
@@ -939,6 +1325,12 @@ async fn attach_terminal(
     rows: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    attach_terminal_pour_hote(&state, id, cols, rows).await
+}
+
+/// La logique de `attach_terminal`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn attach_terminal_pour_hote(state: &AppState, id: i64, cols: u16, rows: u16) -> Result<(), String> {
     state
         .terminals
         .attacher(&state.db, id, terminal::Taille { colonnes: cols, lignes: rows })
@@ -946,6 +1338,12 @@ async fn attach_terminal(
 
 #[tauri::command]
 fn rename_terminal(id: i64, name: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    rename_terminal_pour_hote(&state, id, name)
+}
+
+/// La logique de `rename_terminal`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn rename_terminal_pour_hote(state: &AppState, id: i64, name: String) -> Result<(), String> {
     state.terminals.renommer(&state.db, id, &name)
 }
 
@@ -954,6 +1352,12 @@ async fn list_terminals(
     project: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<terminal::TerminalInfo>, String> {
+    list_terminals_pour_hote(&state, project).await
+}
+
+/// La logique de `list_terminals`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn list_terminals_pour_hote(state: &AppState, project: String) -> Result<Vec<terminal::TerminalInfo>, String> {
     Ok(state.terminals.lister(&state.db, Some(&project)))
 }
 
@@ -961,6 +1365,12 @@ async fn list_terminals(
 async fn list_all_terminals(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<terminal::TerminalInfo>, String> {
+    list_all_terminals_pour_hote(&state).await
+}
+
+/// La logique de `list_all_terminals`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn list_all_terminals_pour_hote(state: &AppState) -> Result<Vec<terminal::TerminalInfo>, String> {
     Ok(state.terminals.lister(&state.db, None))
 }
 
@@ -1006,16 +1416,34 @@ fn get_clipboard() -> Result<String, String> {
 /// existe : un bouton qui promet ce que le fournisseur ne sait pas faire est un mensonge.
 #[tauri::command]
 fn llm_catalogue(state: tauri::State<'_, AppState>) -> Vec<llm::Capacites> {
+    llm_catalogue_pour_hote(&state)
+}
+
+/// La logique de `llm_catalogue`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_catalogue_pour_hote(state: &AppState) -> Vec<llm::Capacites> {
     llm::catalogue_pour_le_frontend(&state.db)
 }
 
 #[tauri::command]
 fn llm_choisir(id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    llm_choisir_pour_hote(&state, id)
+}
+
+/// La logique de `llm_choisir`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_choisir_pour_hote(state: &AppState, id: String) -> Result<(), String> {
     llm::choisir(&state.db, &id)
 }
 
 #[tauri::command]
 fn llm_poser_cle(id: String, cle: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    llm_poser_cle_pour_hote(&state, id, cle)
+}
+
+/// La logique de `llm_poser_cle`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_poser_cle_pour_hote(state: &AppState, id: String, cle: String) -> Result<(), String> {
     llm::poser_cle_api(&state.db, &id, &cle)
 }
 
@@ -1025,6 +1453,12 @@ fn llm_conversations(
     project_path: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<llm::Conversation>, String> {
+    llm_conversations_pour_hote(&state, project_path)
+}
+
+/// La logique de `llm_conversations`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_conversations_pour_hote(state: &AppState, project_path: String) -> Result<Vec<llm::Conversation>, String> {
     llm::conversations::lister(&state.db, llm::prefere(&state.db), &project_path)
 }
 
@@ -1034,6 +1468,12 @@ fn llm_renommer_conversation(
     nom: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    llm_renommer_conversation_pour_hote(&state, conversation_id, nom)
+}
+
+/// La logique de `llm_renommer_conversation`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_renommer_conversation_pour_hote(state: &AppState, conversation_id: String, nom: String) -> Result<(), String> {
     llm::conversations::renommer(
         &state.db,
         llm::prefere(&state.db).id(),
@@ -1055,6 +1495,12 @@ fn llm_commandes(
     conversation_id: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<CommandesAgent, String> {
+    llm_commandes_pour_hote(&state, conversation_id)
+}
+
+/// La logique de `llm_commandes`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_commandes_pour_hote(state: &AppState, conversation_id: Option<String>) -> Result<CommandesAgent, String> {
     let fournisseur = llm::prefere(&state.db);
     let lecteur = fournisseur
         .conversations()
@@ -1067,6 +1513,12 @@ fn llm_commandes(
 
 #[tauri::command]
 fn record_command(project: String, command: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    record_command_pour_hote(&state, project, command)
+}
+
+/// La logique de `record_command`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn record_command_pour_hote(state: &AppState, project: String, command: String) -> Result<(), String> {
     terminal::history::record(&state.db, &project, &command)
 }
 
@@ -1077,6 +1529,12 @@ async fn terminal_search(
     query: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<terminal::ResultatRecherche, String> {
+    terminal_search_pour_hote(&state, id, action, query).await
+}
+
+/// La logique de `terminal_search`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn terminal_search_pour_hote(state: &AppState, id: i64, action: String, query: String) -> Result<terminal::ResultatRecherche, String> {
     let action = terminal::ActionRecherche::depuis_texte(&action)?;
     state.terminals.chercher(&state.db, id, action, &query)
 }
@@ -1094,6 +1552,12 @@ struct AffectationsReunion {
 
 #[tauri::command]
 fn llm_reunions(state: tauri::State<'_, AppState>) -> AffectationsReunion {
+    llm_reunions_pour_hote(&state)
+}
+
+/// La logique de `llm_reunions`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_reunions_pour_hote(state: &AppState) -> AffectationsReunion {
     AffectationsReunion {
         transcription: llm::pour(&state.db, |f| f.transcription()).map(|(f, _)| f.nom().to_string()),
         redaction: llm::pour(&state.db, |f| f.texte()).map(|(f, _)| f.nom().to_string()),
@@ -1108,6 +1572,12 @@ fn llm_abonnement(
     id: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<llm::EtatAbonnement, String> {
+    llm_abonnement_pour_hote(&state, id)
+}
+
+/// La logique de `llm_abonnement`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_abonnement_pour_hote(state: &AppState, id: Option<String>) -> Result<llm::EtatAbonnement, String> {
     let fournisseur = match id {
         Some(id) => llm::par_id(&id).ok_or_else(|| format!("fournisseur inconnu : {id}"))?,
         None => llm::prefere(&state.db),
@@ -1130,11 +1600,23 @@ fn llm_connexion_demarrer(
 
 #[tauri::command]
 fn llm_connexion_entrer(data: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    llm_connexion_entrer_pour_hote(&state, data)
+}
+
+/// La logique de `llm_connexion_entrer`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_connexion_entrer_pour_hote(state: &AppState, data: String) -> Result<(), String> {
     state.connexion_llm.entrer(&data)
 }
 
 #[tauri::command]
 fn llm_connexion_annuler(state: tauri::State<'_, AppState>) {
+    llm_connexion_annuler_pour_hote(&state)
+}
+
+/// La logique de `llm_connexion_annuler`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn llm_connexion_annuler_pour_hote(state: &AppState)  {
     state.connexion_llm.annuler()
 }
 
@@ -1170,10 +1652,23 @@ fn open_url(url: String) -> Result<(), String> {
 ///
 /// N'echoue jamais : une remontee cassee ne doit pas ajouter une erreur a l'erreur.
 async fn report_error(
-    app: tauri::AppHandle,
     scope: String,
     message: String,
     state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    report_error_pour_hote(&state, scope, message).await
+}
+
+/// La logique de `report_error`, appelable par tout hote.
+///
+/// **L'`AppHandle` A DISPARU DE LA SIGNATURE.** Il n'y servait qu'a trouver le dossier de
+/// donnees, que `chemins::dossier_donnees()` connait deja, pose par l'hote au demarrage.
+/// C'est le meme decouplage que celui du journal des terminaux : garder le handle pour ca
+/// rendait la commande inutilisable ailleurs sans aucune raison.
+async fn report_error_pour_hote(
+    state: &AppState,
+    scope: String,
+    message: String,
 ) -> Result<(), String> {
     // Tout ce qui touche la base est lu AVANT le point d'attente : la connexion n'est pas
     // faite pour traverser un await.
@@ -1187,9 +1682,9 @@ async fn report_error(
         (autorise, utilisateur)
     };
 
-    if let Ok(dir) = app_data_dir(&app) {
+    if let Some(dir) = crate::chemins::dossier_donnees() {
         let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        report::append_log(&dir, &report::format_log_line(&horodatage, &scope, &message));
+        report::append_log(dir, &report::format_log_line(&horodatage, &scope, &message));
     }
 
     if autorise {
@@ -1275,6 +1770,12 @@ fn search_command_history(
     limit: Option<usize>,
     state: tauri::State<'_, AppState>,
 ) -> Vec<terminal::history::HistoryEntry> {
+    search_command_history_pour_hote(&state, query, limit)
+}
+
+/// La logique de `search_command_history`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+fn search_command_history_pour_hote(state: &AppState, query: String, limit: Option<usize>) -> Vec<terminal::history::HistoryEntry> {
     terminal::history::search(&state.db, &query, limit.unwrap_or(50))
 }
 
@@ -1312,6 +1813,12 @@ async fn read_project_image(project_path: String, rel_path: String) -> Result<St
 
 #[tauri::command]
 async fn backup_database(dest: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    backup_database_pour_hote(&state, dest).await
+}
+
+/// La logique de `backup_database`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn backup_database_pour_hote(state: &AppState, dest: String) -> Result<(), String> {
     state.db.backup_to(&dest)
 }
 
@@ -1364,6 +1871,12 @@ async fn goto_definition(
     symbol: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<GotoDefinitionResult, String> {
+    goto_definition_pour_hote(&state, project_path, lang, rel_path, content, line, character, symbol).await
+}
+
+/// La logique de `goto_definition`, appelable par tout hote. La commande ci-dessus
+/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
+async fn goto_definition_pour_hote(state: &AppState, project_path: String, lang: String, rel_path: String, content: String, line: u32, character: u32, symbol: String) -> Result<GotoDefinitionResult, String> {
     let lsp_state = state.lsp.clone();
     tokio::task::spawn_blocking(move || {
         if lsp::available(&lang) {
