@@ -12,6 +12,8 @@
 const { app, BrowserWindow, protocol, net, shell, ipcMain } = require('electron')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
+const { spawn } = require('node:child_process')
+const readline = require('node:readline')
 
 // L'interface buildee par Vite. Servie par un protocole a nous plutot qu'en `file://` :
 // **une origine stable est ce qui garde le localStorage**, ou vivent la langue et les
@@ -43,6 +45,83 @@ function servirInterface() {
   })
 }
 
+
+
+// --- Le backend : un processus a part, qui parle en lignes JSON ---------------------------
+
+/**
+ * Lance le backend Rust en mode pont et tient la conversation avec lui.
+ *
+ * **C'EST UN PROCESSUS SEPARE, ET C'EST VOULU.** Le backend ouvre la base, parle au service
+ * de terminaux et lit le disque ; le faire vivre dans le processus de la fenetre le
+ * rendrait solidaire du moteur de rendu, qui est justement ce qu'on remplace. Separe, il
+ * survit a un rechargement de la vue.
+ */
+class Backend {
+  constructor(chemin) {
+    this.enAttente = new Map()
+    this.prochainAppel = 1
+    this.surEvenement = () => {}
+    // La sortie d'erreur du backend n'est PAS le protocole : elle va au journal de la
+    // coquille, sinon une panne de demarrage serait invisible.
+    this.processus = spawn(chemin, ['--pont'], { stdio: ['pipe', 'pipe', 'pipe'] })
+    this.processus.stderr.on('data', (bloc) => console.error(`[backend] ${bloc}`.trimEnd()))
+    this.processus.on('exit', (code) => {
+      // Toute promesse en vol doit etre rejetee : sans ca, l'interface attendrait pour
+      // toujours une reponse qui ne viendra jamais, sans rien afficher.
+      for (const { rejeter } of this.enAttente.values()) {
+        rejeter(new Error(`le backend s'est arrete (code ${code})`))
+      }
+      this.enAttente.clear()
+    })
+    readline
+      .createInterface({ input: this.processus.stdout })
+      .on('line', (ligne) => this.recevoir(ligne))
+  }
+
+  recevoir(ligne) {
+    let message
+    try {
+      message = JSON.parse(ligne)
+    } catch {
+      // Une ligne illisible ne tue pas le pont cote backend ; elle ne doit pas le tuer ici
+      // non plus. On la signale et on continue de lire.
+      console.error(`[backend] ligne illisible : ${ligne.slice(0, 200)}`)
+      return
+    }
+    if (message.evenement !== undefined) {
+      this.surEvenement(message.evenement, message.charge)
+      return
+    }
+    const attente = this.enAttente.get(message.id)
+    if (!attente) return
+    this.enAttente.delete(message.id)
+    if ('err' in message) attente.rejeter(new Error(message.err))
+    else attente.resoudre(message.ok)
+  }
+
+  appeler(commande, arguments_) {
+    const id = this.prochainAppel++
+    return new Promise((resoudre, rejeter) => {
+      this.enAttente.set(id, { resoudre, rejeter })
+      this.processus.stdin.write(`${JSON.stringify({ id, commande, arguments: arguments_ })}\n`)
+    })
+  }
+
+  arreter() {
+    // Fermer l'entree suffit : le pont s'arrete quand son entree se ferme, ce qui le laisse
+    // finir proprement au lieu de le tuer au milieu d'une ecriture en base.
+    this.processus.stdin.end()
+  }
+}
+
+/** Le binaire du backend. En developpement, celui que `cargo build` vient de produire. */
+function cheminDuBackend() {
+  return (
+    process.env.COCKPIT_BACKEND ||
+    path.join(__dirname, '..', 'src-tauri', 'target', 'debug', 'cockpit')
+  )
+}
 
 // --- Le pont : ce que la page peut demander --------------------------------------------
 
@@ -105,11 +184,17 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
 }
 
 function brancherLePont(fenetre) {
+  const backend = new Backend(cheminDuBackend())
+  // Ce que le backend pousse de lui-meme (sortie de terminal, fin de processus) emprunte
+  // le meme chemin qu'un evenement emis dans la coquille : l'interface ne voit pas la
+  // difference, et n'a pas a la voir.
+  backend.surEvenement = (nom, charge) => pousserEvenement(nom, charge, fenetre)
+  fenetre.on('closed', () => backend.arreter())
+
   ipcMain.handle('cockpit:commande', async (_evenement, commande, arguments_) => {
     const dansLaCoquille = traiterDansLaCoquille(commande, arguments_ ?? {}, fenetre)
     if (dansLaCoquille.traite) return dansLaCoquille.valeur
-    // Le backend Rust n'est pas encore branche : on le DIT, avec le nom de la commande.
-    throw new Error(`commande pas encore portee : ${commande}`)
+    return backend.appeler(commande, arguments_ ?? {})
   })
 }
 

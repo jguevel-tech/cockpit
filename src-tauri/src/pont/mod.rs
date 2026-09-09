@@ -64,10 +64,20 @@ async fn repondre(
     let valeur = |v: Result<serde_json::Value, serde_json::Error>| v.map_err(|e| e.to_string());
     match commande {
         "langue_imposee" => valeur(serde_json::to_value(crate::langue_imposee_reelle())),
-        "get_pending_todos" => valeur(serde_json::to_value(etat.db.get_pending_todos()?)),
+        // **CHAQUE BRANCHE APPELLE LA FONCTION DE LA COMMANDE, JAMAIS SA LOGIQUE.**
+        // Reecrire `etat.db.get_pending_todos()` ici donnerait deux verites pour une meme
+        // reponse, et elles divergeraient au premier correctif applique d'un seul cote.
+        "get_pending_todos" => {
+            valeur(serde_json::to_value(crate::get_pending_todos_pour_hote(etat)?))
+        }
         "get_system_metrics" => {
-            let mut collecteur = etat.collector.lock().await;
-            valeur(serde_json::to_value(collecteur.collect()))
+            valeur(serde_json::to_value(crate::get_system_metrics_pour_hote(etat).await?))
+        }
+        "list_projects" => {
+            valeur(serde_json::to_value(crate::list_projects_pour_hote(etat).await?))
+        }
+        "get_app_settings" => {
+            valeur(serde_json::to_value(crate::get_app_settings_pour_hote(etat)?))
         }
         "get_wallpaper" => {
             let dossier = crate::chemins::dossier_donnees()

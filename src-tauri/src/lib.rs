@@ -127,14 +127,24 @@ const ZOOM_MAX: f64 = 2.0;
 // --- Tauri Commands: Docker ---
 
 #[derive(serde::Serialize)]
-struct ProjectWithFolder {
+pub struct ProjectWithFolder {
     #[serde(flatten)]
     project: docker::orchestrator::Project,
     folder_id: Option<i64>,
 }
 
 #[tauri::command]
-async fn list_projects(state: tauri::State<'_, AppState>) -> Result<Vec<ProjectWithFolder>, String> {
+async fn list_projects(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ProjectWithFolder>, String> {
+    list_projects_pour_hote(&state).await
+}
+
+/// La logique de `list_projects`, appelable par TOUT hote. Le corps n'a pas bouge : seule
+/// la signature change, `&AppState` se lisant comme `State<AppState>` par deref.
+pub async fn list_projects_pour_hote(
+    state: &AppState,
+) -> Result<Vec<ProjectWithFolder>, String> {
     // L'ordre vient de la DB (position), les statuts de l'orchestrateur
     let db_projects = state.db.get_projects().map_err(|e| e.to_string())?;
     let orch_projects = state.orchestrator.get_projects().await;
@@ -328,6 +338,12 @@ fn move_todo(id: i64, new_project: String, state: tauri::State<'_, AppState>) ->
 
 #[tauri::command]
 fn get_pending_todos(state: tauri::State<'_, AppState>) -> Result<Vec<storage::Todo>, String> {
+    get_pending_todos_pour_hote(&state)
+}
+
+/// La logique de `get_pending_todos`, appelable par TOUT hote. La commande Tauri
+/// ci-dessus n'en est que la facade, et le pont appelle celle-ci : une seule verite.
+pub fn get_pending_todos_pour_hote(state: &AppState) -> Result<Vec<storage::Todo>, String> {
     state.db.get_pending_todos()
 }
 
@@ -688,7 +704,16 @@ async fn rename_project(
 // --- Tauri Commands: System ---
 
 #[tauri::command]
-async fn get_system_metrics(state: tauri::State<'_, AppState>) -> Result<system::metrics::SystemMetrics, String> {
+async fn get_system_metrics(
+    state: tauri::State<'_, AppState>,
+) -> Result<system::metrics::SystemMetrics, String> {
+    get_system_metrics_pour_hote(&state).await
+}
+
+/// La logique de `get_system_metrics`, appelable par TOUT hote.
+pub async fn get_system_metrics_pour_hote(
+    state: &AppState,
+) -> Result<system::metrics::SystemMetrics, String> {
     let mut collector = state.collector.lock().await;
     Ok(collector.collect())
 }
@@ -800,7 +825,16 @@ fn delete_recording(id: i64, state: tauri::State<'_, AppState>) -> Result<(), St
 // --- Tauri Commands: App settings (cle API, prompt de resume) ---
 
 #[tauri::command]
-fn get_app_settings(state: tauri::State<'_, AppState>) -> Result<std::collections::HashMap<String, String>, String> {
+fn get_app_settings(
+    state: tauri::State<'_, AppState>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    get_app_settings_pour_hote(&state)
+}
+
+/// La logique de `get_app_settings`, appelable par TOUT hote.
+pub fn get_app_settings_pour_hote(
+    state: &AppState,
+) -> Result<std::collections::HashMap<String, String>, String> {
     let mut settings = state.db.get_all_settings()?;
     settings
         .entry("summary_prompt".into())
