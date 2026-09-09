@@ -1,14 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/// La page a-t-elle peint depuis son dernier passage, la fenetre etait-elle visible, et
-/// l'utilisateur a-t-il touche le clavier ou la souris recemment ? La derniere reponse dit
-/// si quelqu'un regarde : le guetteur ne recharge la vue que dans ce cas, sinon il agirait
-/// sur une fenetre figee que personne ne voit (ecran eteint, session verrouillee).
+/// La page a-t-elle peint depuis son dernier passage, la fenetre etait-elle visible et
+/// concentree, et l'utilisateur a-t-il touche le clavier ou la souris recemment ?
+/// `concentre` disculpe la fenetre recouverte : elle reste « visible » pour la page mais
+/// perd le focus, et un gel qu'on ne regarde pas n'est pas une panne. `entreeRecente` dit
+/// si quelqu'un est devant : le guetteur ne recharge la vue que dans ce cas.
 export const santePage = (
   aPeint: boolean,
   visible: boolean,
+  concentre: boolean,
   entreeRecente: boolean,
-) => invoke<void>("sante_page", { aPeint, visible, entreeRecente });
+) => invoke<void>("sante_page", { aPeint, visible, concentre, entreeRecente });
 
 /// Le mode secours du rendu : disponible sous Linux seulement (le chemin DMA-BUF est
 /// celui de WebKitGTK), et deja active ou non.

@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Un affichage gelé est réparé en une dizaine de secondes au lieu de quarante : la
+  détection s'accélère dès le premier doute et le rechargement de la vue suit tout de
+  suite. Jusque-là, le gel du 2026-09-09 avait été tué à la main avant que la réparation
+  n'arrive. Une fenêtre recouverte par une autre n'est plus prise pour un gel.
+
 ## [0.58.0] — 2026-09-09
 
 ### Added

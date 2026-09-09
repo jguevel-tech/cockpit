@@ -69,10 +69,15 @@ const TOURS_SANS_RAPPORT: u32 = 15;
 /// les cinq secondes.
 const RAPPORTS_SANS_IMAGE: u32 = 3;
 
-/// Tours de panne confirmee avant de recharger la vue. La confirmation prend deja 15 tours
-/// (trois rapports de cinq secondes) ; la marge laisse les gels BREFS se recuperer seuls —
-/// ceux du 2026-09-08 duraient 20 a 45 secondes et revenaient d'eux-memes.
-const TOURS_AVANT_RECHARGEMENT: u32 = 25;
+/// Tours de panne confirmee avant de recharger la vue.
+///
+/// **POURQUOI 5 ET PAS 25.** A 25 tours la reparation tombait 40 secondes apres le debut du
+/// gel — le 2026-09-09 a 14 h, l'utilisateur a tue l'application a la 12e seconde de panne
+/// signalee, sans savoir qu'un rechargement arrivait. Or un gel de 20 a 45 secondes qui
+/// « revient tout seul » (le motif du 2026-09-08) est vecu exactement comme un gel qu'on tue.
+/// La marge ne protegeait donc rien : cinq tours suffisent a ecarter un hoquet de rendu, et
+/// la page en doute rapporte chaque seconde, donc la confirmation elle-meme prend ~3 s.
+const TOURS_AVANT_RECHARGEMENT: u32 = 5;
 
 /// Tours entre deux rechargements. Un affichage qui gèle toutes les minutes (le motif du
 /// 2026-09-08, 15 h 51 a 16 h 11) ne doit pas transformer l'application en boucle de
@@ -122,6 +127,11 @@ static A_PEINT: AtomicBool = AtomicBool::new(true);
 /// cette information, passer sur une autre application accusait le moteur de rendu.
 static VISIBLE: AtomicBool = AtomicBool::new(true);
 
+/// La fenetre avait-elle le focus ? **Une fenetre RECOUVERTE reste « visible » pour la page
+/// et cesse de produire des images** : c'etait le faux positif du 2026-08-31, et `visible`
+/// seul ne l'ecartait pas. Le focus, si : on regarde ailleurs, elle ne l'a plus.
+static CONCENTRE: AtomicBool = AtomicBool::new(true);
+
 /// Le tour ou la page a signale une entree utilisateur pour la derniere fois. Sert de
 /// presence : on ne repare que ce que quelqu'un regarde (voir l'en-tete).
 static DERNIERE_ENTREE: AtomicU64 = AtomicU64::new(0);
@@ -160,10 +170,11 @@ fn ce_qui_tourne() -> String {
 }
 
 /// La page rend compte : depuis son dernier passage elle a peint ou non, la fenetre etait
-/// visible ou non, et le clavier ou la souris a servi recemment ou non.
-pub fn signe_de_la_page(a_peint: bool, visible: bool, entree_recente: bool) {
+/// visible et concentree ou non, et le clavier ou la souris a servi recemment ou non.
+pub fn signe_de_la_page(a_peint: bool, visible: bool, concentre: bool, entree_recente: bool) {
     A_PEINT.store(a_peint, Ordering::SeqCst);
     VISIBLE.store(visible, Ordering::SeqCst);
+    CONCENTRE.store(concentre, Ordering::SeqCst);
     if entree_recente {
         DERNIERE_ENTREE.store(REPONSES.load(Ordering::SeqCst), Ordering::SeqCst);
     }
@@ -203,18 +214,21 @@ pub fn diagnostiquer(
 
 /// Met a jour le compte des rapports sans image. Pur.
 ///
-/// Une fenetre cachee ne peint pas et ce n'est PAS une panne : elle remet le compte a zero.
+/// Une fenetre cachee OU RECOUVERTE ne peint pas et ce n'est PAS une panne : elle remet le
+/// compte a zero. Le focus est ce qui distingue « recouverte » de « gelee » : une fenetre
+/// sous une autre garde `visible` et perd le focus.
 pub fn compter_sans_image(
     precedent: u32,
     rapport_frais: bool,
     visible: bool,
+    concentre: bool,
     a_peint: bool,
 ) -> u32 {
     if !rapport_frais {
         // Rien de neuf : on garde ce qu'on savait, sinon le verdict oscille a chaque tour.
         return precedent;
     }
-    if !visible || a_peint {
+    if !visible || !concentre || a_peint {
         return 0;
     }
     precedent + 1
@@ -315,8 +329,9 @@ pub fn tailler_la_fenetre(file: &mut VecDeque<u64>, maintenant: u64) {
 fn phrase(panne: Panne) -> String {
     match panne {
         Panne::BoucleFigee => format!("la fenetre ne repond plus — {}", ce_qui_tourne()),
-        Panne::RenduArrete => "la page ne peint AUCUNE image alors qu'elle est visible et \
-                               qu'elle parle encore : c'est le moteur de rendu, pas notre code"
+        Panne::RenduArrete => "la page ne peint AUCUNE image alors qu'elle est visible, \
+                               concentree et qu'elle parle encore : c'est le moteur de rendu, \
+                               pas notre code"
             .to_string(),
         Panne::PageMuette => "la page ne rend plus compte : son JavaScript est arrete".to_string(),
     }
@@ -370,6 +385,7 @@ pub fn surveiller(app: AppHandle) {
                 sans_image,
                 sans_rapport == 0,
                 VISIBLE.load(Ordering::SeqCst),
+                CONCENTRE.load(Ordering::SeqCst),
                 A_PEINT.load(Ordering::SeqCst),
             );
 
@@ -377,6 +393,7 @@ pub fn surveiller(app: AppHandle) {
 
             tailler_la_fenetre(&mut episodes, reponses);
             tailler_la_fenetre(&mut rechargements, reponses);
+            let duree_episode = tours_en_panne;
             tours_en_panne = if panne.is_some() { tours_en_panne + 1 } else { 0 };
 
             if panne != signalee {
@@ -386,7 +403,17 @@ pub fn surveiller(app: AppHandle) {
                         episodes.push_back(reponses);
                     }
                     None => {
-                        journaliser(&app, "tout est revenu a la normale");
+                        // La DUREE est la mesure qui manquait : sans elle, « revenu a la
+                        // normale » ne dit pas si le gel a dure 3 secondes ou 30 minutes,
+                        // et on ne peut pas juger si les correctifs raccourcissent quoi
+                        // que ce soit. Un tour = une seconde (la boucle ne dort pas
+                        // pendant une veille, donc une veille ne gonfle rien).
+                        journaliser(
+                            &app,
+                            &format!(
+                                "tout est revenu a la normale — le gel avait dure {duree_episode} s"
+                            ),
+                        );
                         if faut_il_proposer_le_secours(signalee, episodes.len(), secours_propose) {
                             secours_propose = true;
                             journaliser(
@@ -422,7 +449,10 @@ pub fn surveiller(app: AppHandle) {
                     rechargements.push_back(reponses);
                     journaliser(
                         &app,
-                        "l'affichage est gele et l'utilisateur est devant : je recharge la vue",
+                        &format!(
+                            "l'affichage est gele depuis {tours_en_panne} s et l'utilisateur \
+                             est devant : je recharge la vue"
+                        ),
                     );
                     marquer_vue_rechargee(&app);
                     recharger_la_vue(&app);
@@ -434,8 +464,10 @@ pub fn surveiller(app: AppHandle) {
                     };
                     journaliser(
                         &app,
-                        &format!("je relance l'application : {cause}. Les terminaux survivent \
-                                  dans le service"),
+                        &format!(
+                            "je relance l'application : {cause} (gel de {tours_en_panne} s). \
+                             Les terminaux survivent dans le service"
+                        ),
                     );
                     // En cas d'echec la fonction a deja journalise : le gel continue,
                     // l'utilisateur garde la main (kill), rien de pire qu'avant.
@@ -574,23 +606,27 @@ mod tests {
         assert_eq!(diagnostiquer(0, 0, RAPPORTS_SANS_IMAGE), Some(Panne::RenduArrete));
     }
 
-    /// **LES DEUX FAUX POSITIFS A NE PAS REINTRODUIRE.** Une fenetre recouverte cesse de
-    /// produire des images tout en restant « visible » : elle remet le compte a zero. Et un tour
-    /// sans compte rendu frais ne change RIEN — sinon le verdict oscille a chaque seconde, ce
-    /// qui a rempli le journal du 2026-08-31 d'alternances « ne peint plus / revenu a la
-    /// normale » toutes les cinq secondes.
+    /// **LES TROIS FAUX POSITIFS A NE PAS REINTRODUIRE.** Une fenetre RECOUVERTE cesse de
+    /// produire des images tout en restant « visible » : c'est le focus qui la disculpe, pas
+    /// `visible`, et sans lui le journal du 2026-08-31 s'est rempli d'alternances « ne peint
+    /// plus / revenu a la normale ». Une fenetre cachee non plus n'est pas une panne. Et un
+    /// tour sans compte rendu frais ne change RIEN — sinon le verdict oscille a chaque
+    /// seconde.
     #[test]
     fn le_compte_des_rapports_sans_image_ne_se_laisse_pas_tromper() {
-        // Un rapport frais sans image, fenetre visible : ca compte.
-        assert_eq!(compter_sans_image(0, true, true, false), 1);
-        assert_eq!(compter_sans_image(1, true, true, false), 2);
+        // Un rapport frais sans image, fenetre visible et concentree : ca compte.
+        assert_eq!(compter_sans_image(0, true, true, true, false), 1);
+        assert_eq!(compter_sans_image(1, true, true, true, false), 2);
         // La page peint de nouveau : on repart de zero.
-        assert_eq!(compter_sans_image(2, true, true, true), 0);
+        assert_eq!(compter_sans_image(2, true, true, true, true), 0);
         // Fenetre cachee : ce n'est pas une panne.
-        assert_eq!(compter_sans_image(2, true, false, false), 0);
+        assert_eq!(compter_sans_image(2, true, false, true, false), 0);
+        // Fenetre visible mais RECOUVERTE (une autre a le focus) : pas une panne non plus.
+        // Retirer `!concentre` de `compter_sans_image` DOIT faire tomber cette ligne.
+        assert_eq!(compter_sans_image(2, true, true, false, false), 0);
         // Aucun rapport neuf : on garde ce qu'on savait, sans osciller.
-        assert_eq!(compter_sans_image(2, false, true, false), 2);
-        assert_eq!(compter_sans_image(0, false, true, false), 0);
+        assert_eq!(compter_sans_image(2, false, true, true, false), 2);
+        assert_eq!(compter_sans_image(0, false, true, true, false), 0);
     }
 
     #[test]
@@ -659,8 +695,7 @@ mod tests {
 
     #[test]
     fn le_rendu_gele_recharge_la_vue_si_l_utilisateur_est_la() {
-        // La confirmation prend deja ses tours ; avant la marge, les gels brefs qui se
-        // recuperent seuls ne doivent rien couter.
+        // La confirmation prend deja ses tours ; la marge ecarte un hoquet de rendu.
         let trop_tot = etat(Some(Panne::RenduArrete), TOURS_AVANT_RECHARGEMENT - 1);
         assert_eq!(prochaine_action(&trop_tot), Action::Rien);
         let mure = etat(Some(Panne::RenduArrete), TOURS_AVANT_RECHARGEMENT);

@@ -1105,13 +1105,14 @@ async fn machine_report() -> report::MachineInfo {
 }
 
 /// La page rend compte de sa sante : a-t-elle peint depuis son dernier passage, la fenetre
-/// etait-elle visible, et l'utilisateur a-t-il touche le clavier ou la souris recemment.
-/// « Pas peint » avec un appel qui arrive quand meme veut dire que le JavaScript tourne et que
-/// rien n'est dessine. L'entree recente dit si quelqu'un regarde : le guetteur ne recharge la
-/// vue que dans ce cas — voir `guetteur`.
+/// etait-elle visible et concentree, et l'utilisateur a-t-il touche le clavier ou la souris
+/// recemment. « Pas peint » avec un appel qui arrive quand meme veut dire que le JavaScript
+/// tourne et que rien n'est dessine. Le focus disculpe la fenetre recouverte, qui reste
+/// « visible » sans qu'on la regarde. L'entree recente dit si quelqu'un est devant : le
+/// guetteur ne recharge la vue que dans ce cas — voir `guetteur`.
 #[tauri::command]
-async fn sante_page(a_peint: bool, visible: bool, entree_recente: bool) {
-    guetteur::signe_de_la_page(a_peint, visible, entree_recente);
+async fn sante_page(a_peint: bool, visible: bool, concentre: bool, entree_recente: bool) {
+    guetteur::signe_de_la_page(a_peint, visible, concentre, entree_recente);
 }
 
 /// Le mode secours du rendu : disponible sous Linux seulement, et deja active ou non.
