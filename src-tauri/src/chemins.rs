@@ -49,6 +49,27 @@ fn resoudre_dossier_personnel(
         .to_string())
 }
 
+/// L'identifiant du paquet, tel qu'il figure aussi dans `tauri.conf.json`. Un essai le
+/// verifie : les deux valeurs doivent rester egales, sinon ce chemin et celui de Tauri
+/// divergent EN SILENCE et le fichier cherche n'est jamais trouve.
+#[cfg(target_os = "linux")]
+pub const IDENTIFIANT: &str = "com.cockpit.dev";
+
+/// Le dossier de donnees de l'application, calcule SANS Tauri.
+///
+/// Pour les rares chemins qui servent AVANT que la fenetre existe — `rendu::decider()`
+/// tourne avant l'initialisation de GTK, donc avant tout `AppHandle`. Sous Linux c'est
+/// `XDG_DATA_HOME` (ou `~/.local/share`) auquel Tauri ajoute l'identifiant : la regle est
+/// recopiee ici, et un essai la tient alignee sur `tauri.conf.json`.
+#[cfg(target_os = "linux")]
+pub fn dossier_donnees_sans_tauri() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dossier_personnel().ok().map(|d| d.join(".local/share")))?;
+    Some(base.join(IDENTIFIANT))
+}
+
 /// Le dossier de donnees de l'application, memorise au demarrage.
 ///
 /// Le hook de panic en a besoin : a l'instant d'un panic on ne peut pas compter sur le
@@ -142,5 +163,35 @@ mod tests {
     fn le_dossier_personnel_est_trouve_sur_cette_machine() {
         let dossier = dossier_personnel().expect("dossier personnel");
         assert!(!dossier.as_os_str().is_empty());
+    }
+
+    /// `dossier_donnees_sans_tauri` recopie la regle de Tauri : `XDG_DATA_HOME` (sinon
+    /// `~/.local/share`) puis l'identifiant. Si l'identifiant diverge de `tauri.conf.json`,
+    /// le chemin calcule avant GTK ne designe plus le meme dossier que celui de
+    /// `app_data_dir()` et le fichier pose d'un cote est invisible de l'autre — sans aucune
+    /// erreur nulle part. D'ou cet essai.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn le_chemin_sans_tauri_monte_vers_le_dossier_de_tauri() {
+        let conf = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tauri.conf.json"))
+            .expect("tauri.conf.json lisible");
+        let conf: serde_json::Value = serde_json::from_str(&conf).expect("tauri.conf.json valide");
+        assert_eq!(
+            conf["identifier"].as_str(),
+            Some(IDENTIFIANT),
+            "l'identifiant recopie dans chemins.rs a diverge de tauri.conf.json"
+        );
+
+        std::env::set_var("XDG_DATA_HOME", "/tmp/essai-donnees");
+        assert_eq!(
+            dossier_donnees_sans_tauri(),
+            Some(PathBuf::from("/tmp/essai-donnees").join(IDENTIFIANT))
+        );
+        std::env::remove_var("XDG_DATA_HOME");
+        let sans_xdg = dossier_donnees_sans_tauri().expect("chemin sans XDG_DATA_HOME");
+        assert!(
+            sans_xdg.ends_with(IDENTIFIANT) && sans_xdg.to_string_lossy().contains(".local/share"),
+            "chemin inattendu sans XDG_DATA_HOME : {sans_xdg:?}"
+        );
     }
 }

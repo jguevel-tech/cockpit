@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- L'application se répare toute seule quand l'affichage gèle : la vue est rechargée quand
+  vous êtes devant la fenêtre, et l'application se relance quand cela ne suffit pas ou quand
+  la fenêtre ne répond plus. Les terminaux survivent dans les deux cas.
+- Mode secours de l'affichage (Linux) : proposé après des gels répétés, ou activable dans
+  Paramètres → Général. Le rendu est plus lent, mais les gels d'affichage disparaissent.
+
 ## [0.57.0] — 2026-09-04
 
 ### Added

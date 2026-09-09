@@ -1,4 +1,4 @@
-//! Le guetteur : la fenetre repond-elle, et l'ecran se met-il a jour ?
+//! Le guetteur : la fenetre repond-elle, l'ecran se met-il a jour, et QUE FAIT-ON quand non ?
 //!
 //! **Pourquoi il existe.** Un gel ne laissait AUCUNE trace : l'utilisateur tuait l'application,
 //! la relancait, et il ne restait rien a lire. Impossible de dire si la fenetre s'etait figee
@@ -10,18 +10,38 @@
 //! au meme endroit : la boucle ne repond plus (notre code attend), la page ne peint plus (le
 //! moteur de rendu), la page ne parle plus (son JavaScript est arrete).
 //!
+//! **CE QU'IL REPARE, depuis le 2026-09-09.** Observer sans agir laissait l'utilisateur seul
+//! devant une fenetre morte : le journal du 2026-09-08 montre 45 episodes en une journee, dont
+//! un gel de plus d'une demi-heure termine par un kill. Les paliers, dans l'ordre :
+//!   1. la page ne peint plus (ou ne parle plus) ET l'utilisateur est devant → la vue est
+//!      RECHARGEE. Les terminaux ne perdent rien : le service les tient, la vue s'y rebranche ;
+//!   2. les rechargements ne suffisent pas → l'application se RELANCE elle-meme, comme
+//!      l'utilisateur le ferait a la main, en mieux : les shells survivent dans le service ;
+//!   3. la boucle principale ne repond plus du tout pendant une minute → relance aussi, car
+//!      rien d'autre dans le processus ne peut plus la debloquer ;
+//!   4. les episodes se repetent → l'application PROPPOSE le mode secours du rendu
+//!      (`rendu`), au moment ou l'affichage va de nouveau, donc quand un dialogue est lisible.
+//!
+//! **LA PRESENCE DE L'UTILISATEUR EST LA CONDITION DE TOUT, SAUF DU PALIER 3.** La page dit
+//! toutes les cinq secondes si le clavier ou la souris a servi recemment. Sans cette porte, le
+//! guetteur agirait sur une fenetre que personne ne regarde : la nuit du 2026-09-03 au 09-08,
+//! les trois quarts des episodes ont eu lieu entre 21 h et 7 h — ecran eteint ou verrouille,
+//! fenetre « visible » pour la page, aucune image peinte, et personne devant. Recharger une vue
+//! dans le vide ne gene personne mais ne prouve rien non plus ; se relancer toute la nuit, si.
+//! Le palier 3 s'en passe : une boucle morte une minute est morte, et justement la page ne
+//! peut plus rien nous dire — son IPC passe par la boucle graphique.
+//!
 //! **AUCUNE HORLOGE ICI, ET C'EST DELIBERE.** La premiere version comptait en heure murale :
 //! une mise en veille de 53 minutes lui a fait annoncer un gel de 3 180 secondes qui n'avait
 //! jamais eu lieu (constate le 2026-08-31). On compte donc des TOURS et des REPONSES — pendant
-//! une veille le fil ne tourne pas, donc rien ne s'accumule.
+//! une veille le fil ne tourne pas, donc rien ne s'accumule. Les delais des paliers sont dans
+//! la meme unite : une nuit de veille ne rapproche pas un relancement.
 //!
 //! **ET ON N'ECRIT QU'AU CHANGEMENT D'ETAT.** Se reperer sur le MESSAGE, qui portait un nombre
 //! de secondes, a fait ecrire 733 lignes pour une poignee d'episodes : chaque seconde produisait
 //! un message different, donc « nouveau ». Le repere est l'ETAT.
-//!
-//! Il ne corrige rien et ne tue rien : une application figee qui se fermerait d'elle-meme
-//! emporterait le travail en cours sans rien expliquer.
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -49,6 +69,41 @@ const TOURS_SANS_RAPPORT: u32 = 15;
 /// les cinq secondes.
 const RAPPORTS_SANS_IMAGE: u32 = 3;
 
+/// Tours de panne confirmee avant de recharger la vue. La confirmation prend deja 15 tours
+/// (trois rapports de cinq secondes) ; la marge laisse les gels BREFS se recuperer seuls —
+/// ceux du 2026-09-08 duraient 20 a 45 secondes et revenaient d'eux-memes.
+const TOURS_AVANT_RECHARGEMENT: u32 = 25;
+
+/// Tours entre deux rechargements. Un affichage qui gèle toutes les minutes (le motif du
+/// 2026-09-08, 15 h 51 a 16 h 11) ne doit pas transformer l'application en boucle de
+/// rechargement permanent : passe ce delai, le prochain episode attend son tour.
+const TOURS_ENTRE_RECHARGEMENTS: u64 = 60;
+
+/// Rechargements dans la fenetre d'observation avant de conclure que recharger ne suffit pas.
+const RECHARGEMENTS_MAX: u32 = 3;
+
+/// Tours de panne de rendu, rechargements epuises, avant de relancer toute l'application.
+const TOURS_AVANT_RELANCER_RENDU: u32 = 120;
+
+/// Tours sans reponse de la boucle principale avant de relancer l'application. Une minute
+/// reelle : en dessous, un gros travail (ouverture de projet, construction) peut legitiment
+/// tenir la boucle. Au-dela, plus rien dans le processus ne peut la debloquer, et
+/// l'utilisateur devrait sinon tuer l'application a la main.
+const TOURS_AVANT_RELANCER_BOUCLE: u32 = 60;
+
+/// Tours depuis la derniere entree utilisateur au-dela desquels personne n'est devant la
+/// fenetre. La page rapporte les entrees des deux dernieres minutes, toutes les cinq
+/// secondes : cinq tours de marge couvrent un rapport manque.
+const TOURS_SANS_PRESENCE: u64 = 300;
+
+/// Fenetre d'observation des episodes et des rechargements, en tours (donc en secondes).
+const FENETRE_OBSERVATION: u64 = 1800;
+
+/// Episodes de rendu confirmes dans la fenetre d'observation a partir desquels le mode
+/// secours est propose. En dessous, c'est un incident ; au-dela, c'est une configuration
+/// qui ne sait pas peindre de facon fiable.
+const EPISODES_AVANT_PROPOSITION: usize = 3;
+
 /// Combien de fois la boucle principale a leve la main.
 static REPONSES: AtomicU64 = AtomicU64::new(0);
 
@@ -66,6 +121,10 @@ static A_PEINT: AtomicBool = AtomicBool::new(true);
 /// La fenetre etait-elle visible ? **Une page cachee ne peint pas, et c'est NORMAL** : sans
 /// cette information, passer sur une autre application accusait le moteur de rendu.
 static VISIBLE: AtomicBool = AtomicBool::new(true);
+
+/// Le tour ou la page a signale une entree utilisateur pour la derniere fois. Sert de
+/// presence : on ne repare que ce que quelqu'un regarde (voir l'en-tete).
+static DERNIERE_ENTREE: AtomicU64 = AtomicU64::new(0);
 
 /// Ce que le backend est en train de faire, pose par les chemins qui peuvent attendre longtemps.
 /// Un gel nomme vaut dix hypotheses.
@@ -100,11 +159,14 @@ fn ce_qui_tourne() -> String {
     }
 }
 
-/// La page rend compte : depuis son dernier passage elle a peint ou non, et la fenetre etait
-/// visible ou non.
-pub fn signe_de_la_page(a_peint: bool, visible: bool) {
+/// La page rend compte : depuis son dernier passage elle a peint ou non, la fenetre etait
+/// visible ou non, et le clavier ou la souris a servi recemment ou non.
+pub fn signe_de_la_page(a_peint: bool, visible: bool, entree_recente: bool) {
     A_PEINT.store(a_peint, Ordering::SeqCst);
     VISIBLE.store(visible, Ordering::SeqCst);
+    if entree_recente {
+        DERNIERE_ENTREE.store(REPONSES.load(Ordering::SeqCst), Ordering::SeqCst);
+    }
     RAPPORTS.fetch_add(1, Ordering::SeqCst);
 }
 
@@ -158,6 +220,98 @@ pub fn compter_sans_image(
     precedent + 1
 }
 
+/// Ce que le guetteur decide de faire face a une panne.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Rien : observer, et ecrire au changement d'etat seulement.
+    Rien,
+    /// Recharger la vue. La boucle graphique repond dans ce cas, donc la commande passe.
+    Recharger,
+    /// Relancer toute l'application. Les shells survivent : le service de terminaux est un
+    /// processus separe.
+    Relancer,
+}
+
+/// Tout ce que la decision de reparer prend en compte. Pur, donc testable sans fenetre,
+/// sans minuteur et sans tuer personne — meme decoupe que `diagnostiquer`.
+#[derive(Debug, Clone, Copy)]
+pub struct Etat {
+    pub panne: Option<Panne>,
+    /// Tours consecutifs avec cette panne.
+    pub tours_en_panne: u32,
+    /// Tours depuis la derniere entree utilisateur rapportee par la page.
+    pub tours_depuis_entree: u64,
+    /// Rechargements deja faits dans la fenetre d'observation.
+    pub rechargements_fenetre: u32,
+    /// Tours depuis le dernier rechargement. `u64::MAX` s'il n'y en a pas eu.
+    pub tours_depuis_rechargement: u64,
+}
+
+/// La decision de reparation. **PURE : c'est elle que les essais jugent.**
+///
+/// Le palier de la boucle figee se passe de la presence : la page ne peut justement plus la
+/// rapporter (son IPC passe par la boucle graphique), et une boucle morte une minute ne
+/// revient pas.
+pub fn prochaine_action(etat: &Etat) -> Action {
+    let Some(panne) = etat.panne else {
+        return Action::Rien;
+    };
+    match panne {
+        Panne::BoucleFigee => {
+            if etat.tours_en_panne >= TOURS_AVANT_RELANCER_BOUCLE {
+                Action::Relancer
+            } else {
+                Action::Rien
+            }
+        }
+        Panne::RenduArrete | Panne::PageMuette => {
+            // Personne devant la fenetre : on laisse, le journal suffit. C'est la porte qui
+            // empeche d'agir sur les episodes de la nuit (ecran eteint, fenetre « visible »).
+            if etat.tours_depuis_entree > TOURS_SANS_PRESENCE {
+                return Action::Rien;
+            }
+            if etat.rechargements_fenetre >= RECHARGEMENTS_MAX {
+                // Recharger ne suffit pas : passer au processus entier, mais seulement si la
+                // panne dure — elle peut encore se recuperer seule.
+                return if etat.tours_en_panne >= TOURS_AVANT_RELANCER_RENDU {
+                    Action::Relancer
+                } else {
+                    Action::Rien
+                };
+            }
+            if etat.tours_en_panne >= TOURS_AVANT_RECHARGEMENT
+                && etat.tours_depuis_rechargement >= TOURS_ENTRE_RECHARGEMENTS
+            {
+                Action::Recharger
+            } else {
+                Action::Rien
+            }
+        }
+    }
+}
+
+/// Faut-il proposer le mode secours ? Pur. Au retour a la normale, pas pendant : un dialogue
+/// ne se lit pas sur un ecran qui ne peint plus.
+pub fn faut_il_proposer_le_secours(
+    precedente: Option<Panne>,
+    episodes_dans_la_fenetre: usize,
+    deja_propose: bool,
+) -> bool {
+    !deja_propose
+        && episodes_dans_la_fenetre >= EPISODES_AVANT_PROPOSITION
+        && matches!(
+            precedente,
+            Some(Panne::RenduArrete) | Some(Panne::PageMuette)
+        )
+}
+
+/// Retire d'une file les evenements plus vieux que la fenetre d'observation. Pur.
+pub fn tailler_la_fenetre(file: &mut VecDeque<u64>, maintenant: u64) {
+    while file.front().is_some_and(|t| maintenant.saturating_sub(*t) > FENETRE_OBSERVATION) {
+        file.pop_front();
+    }
+}
+
 fn phrase(panne: Panne) -> String {
     match panne {
         Panne::BoucleFigee => format!("la fenetre ne repond plus — {}", ce_qui_tourne()),
@@ -183,6 +337,11 @@ pub fn surveiller(app: AppHandle) {
         let mut sans_rapport = 0u32;
         let mut sans_image = 0u32;
         let mut signalee: Option<Panne> = None;
+        let mut tours_en_panne = 0u32;
+        // Tours (donc secondes) ou chaque episode et chaque rechargement a commence.
+        let mut episodes: VecDeque<u64> = VecDeque::new();
+        let mut rechargements: VecDeque<u64> = VecDeque::new();
+        let mut secours_propose = false;
 
         loop {
             std::thread::sleep(CADENCE);
@@ -216,15 +375,151 @@ pub fn surveiller(app: AppHandle) {
 
             let panne = diagnostiquer(sans_reponse, sans_rapport, sans_image);
 
+            tailler_la_fenetre(&mut episodes, reponses);
+            tailler_la_fenetre(&mut rechargements, reponses);
+            tours_en_panne = if panne.is_some() { tours_en_panne + 1 } else { 0 };
+
             if panne != signalee {
                 match panne {
-                    Some(nouvelle) => journaliser(&app, &phrase(nouvelle)),
-                    None => journaliser(&app, "tout est revenu a la normale"),
+                    Some(nouvelle) => {
+                        journaliser(&app, &phrase(nouvelle));
+                        episodes.push_back(reponses);
+                    }
+                    None => {
+                        journaliser(&app, "tout est revenu a la normale");
+                        if faut_il_proposer_le_secours(signalee, episodes.len(), secours_propose) {
+                            secours_propose = true;
+                            journaliser(
+                                &app,
+                                &format!(
+                                    "affichage gele {} fois en {} minutes : proposition du mode \
+                                     secours de rendu",
+                                    episodes.len(),
+                                    FENETRE_OBSERVATION / 60
+                                ),
+                            );
+                            proposer_mode_secours(&app);
+                        }
+                    }
                 }
                 signalee = panne;
             }
+
+            let etat = Etat {
+                panne,
+                tours_en_panne,
+                tours_depuis_entree: reponses
+                    .saturating_sub(DERNIERE_ENTREE.load(Ordering::SeqCst)),
+                rechargements_fenetre: rechargements.len() as u32,
+                tours_depuis_rechargement: rechargements
+                    .back()
+                    .map(|t| reponses.saturating_sub(*t))
+                    .unwrap_or(u64::MAX),
+            };
+            match prochaine_action(&etat) {
+                Action::Rien => {}
+                Action::Recharger => {
+                    rechargements.push_back(reponses);
+                    journaliser(
+                        &app,
+                        "l'affichage est gele et l'utilisateur est devant : je recharge la vue",
+                    );
+                    marquer_vue_rechargee(&app);
+                    recharger_la_vue(&app);
+                }
+                Action::Relancer => {
+                    let cause = match panne {
+                        Some(Panne::BoucleFigee) => "la fenetre ne repond plus depuis une minute",
+                        _ => "recharger la vue n'a pas suffi",
+                    };
+                    journaliser(
+                        &app,
+                        &format!("je relance l'application : {cause}. Les terminaux survivent \
+                                  dans le service"),
+                    );
+                    // En cas d'echec la fonction a deja journalise : le gel continue,
+                    // l'utilisateur garde la main (kill), rien de pire qu'avant.
+                    let _ = relancer_l_application(&app);
+                }
+            }
         }
     });
+}
+
+/// Recharge la vue web. Passe par la boucle principale : dans les pannes ou cette action est
+/// decidee (`RenduArrete`, `PageMuette`), elle repond encore — c'est justement ce qui les
+/// distingue de `BoucleFigee`.
+fn recharger_la_vue(app: &AppHandle) {
+    let app_pour_closure = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(fenetre) = app_pour_closure.get_webview_window("main") {
+            if let Err(e) = fenetre.reload() {
+                journaliser(&app_pour_closure, &format!("rechargement de la vue refuse : {e}"));
+            }
+        }
+    });
+}
+
+/// Laisse une trace en base : au prochain montage, la page dira POURQUOI elle vient de se
+/// remonter. Sans ca, l'utilisateur voit son interface clignoter et se reconstruire sans
+/// explication — et un geste invisible est un geste qui fait peur.
+fn marquer_vue_rechargee(app: &AppHandle) {
+    if let Some(etat) = app.try_state::<crate::AppState>() {
+        if let Err(e) = etat.db.set_setting("gel_vue_rechargee", "1") {
+            journaliser(app, &format!("trace du rechargement impossible a ecrire : {e}"));
+        }
+    }
+}
+
+/// Le dialogue de proposition ne se lit QUE quand l'affichage va de nouveau : l'evenement
+/// est donc emis au retour a la normale, jamais pendant la panne.
+fn proposer_mode_secours(app: &AppHandle) {
+    use tauri::Emitter;
+    if let Err(e) = app.emit("guetteur-proposition-secours", ()) {
+        journaliser(app, &format!("proposition du mode secours non transmise : {e}"));
+    }
+}
+
+/// Relance l'application, puis quitte ce processus.
+///
+/// **Le binaire est choisi comme pour le service de terminaux** : `$APPIMAGE` d'abord, car le
+/// montage `/tmp/.mount_*` disparait quand ce processus se termine. Sans console sous
+/// Windows, comme tout lancement.
+///
+/// **LE NOM « SINGLE INSTANCE » EST LIBERE AVANT DE LANCER.** L'application empeche un
+/// second exemplaire de demarrer : tant que ce processus vit, il tient le nom qui le
+/// prouve, et une instance lancee pendant ce temps se tait et se tue. Sans cette
+/// liberation, la nouvelle instance arrivait trop tot et disparaissait sans laisser une
+/// ligne — constate au banc le 2026-09-09.
+///
+/// **Si le lancement echoue, on NE QUITTE PAS** : transformer un gel en disparition serait
+/// aggraver la panne. La fenetre figee reste, et le journal dit pourquoi rien n'est venu.
+pub(crate) fn relancer_l_application(app: &AppHandle) -> Result<(), String> {
+    tauri_plugin_single_instance::destroy(app);
+    let binaire = crate::terminal::service::lancement::binaire_a_relancer().map_err(|e| {
+        journaliser(app, &format!("relance impossible, executable introuvable : {e}"));
+        e
+    })?;
+    use crate::commande::SansConsole;
+    let mut commande = std::process::Command::new(binaire);
+    commande.sans_console();
+    commande.stdin(std::process::Stdio::null());
+    commande.stdout(std::process::Stdio::null());
+    commande.stderr(std::process::Stdio::null());
+    match commande.spawn() {
+        Ok(_) => {
+            journaliser(app, "la nouvelle instance est lancee, celle-ci s'arrete");
+            // Les photos de terminaux ne seront pas reprises (la boucle est morte ou
+            // l'affichage gele) : la restauration jouera la derniere photo, comme apres
+            // une extinction. C'est le comportement documente, pas une perte nouvelle.
+            std::process::exit(0);
+        }
+        Err(e) => {
+            let message = format!("relance impossible, la nouvelle instance n'a pas demarre : {e}");
+            journaliser(app, &message);
+            Err(message)
+        }
+    }
 }
 
 fn journaliser(app: &AppHandle, message: &str) {
@@ -308,5 +603,151 @@ mod tests {
         // Sans le `Drop`, ce nom resterait colle pour le reste de la session et le prochain gel
         // accuserait une operation terminee depuis longtemps.
         assert_eq!(ce_qui_tourne(), "rien de marque cote backend");
+    }
+
+    // --- La reparation ---
+
+    fn etat(panne: Option<Panne>, tours_en_panne: u32) -> Etat {
+        Etat {
+            panne,
+            tours_en_panne,
+            tours_depuis_entree: 0,
+            rechargements_fenetre: 0,
+            tours_depuis_rechargement: u64::MAX,
+        }
+    }
+
+    #[test]
+    fn sans_panne_rien_ne_se_passe() {
+        assert_eq!(prochaine_action(&etat(None, 0)), Action::Rien);
+    }
+
+    /// **LE FAUX POSITIF DE LA NUIT.** Ecran eteint ou session verrouillee : la fenetre reste
+    /// « visible », rien n'est peint, personne devant. Sans la porte de presence, le guetteur
+    /// rechargerait puis relancerait l'application toute la nuit. Retirer la condition de
+    /// presence dans `prochaine_action` DOIT faire tomber cet essai.
+    #[test]
+    fn sans_utilisateur_devant_la_fenetre_rien_ne_se_passe() {
+        let absente = Etat {
+            tours_depuis_entree: TOURS_SANS_PRESENCE + 1,
+            ..etat(Some(Panne::RenduArrete), TOURS_AVANT_RELANCER_RENDU * 2)
+        };
+        assert_eq!(prochaine_action(&absente), Action::Rien);
+        let muette_absente = Etat {
+            panne: Some(Panne::PageMuette),
+            ..absente
+        };
+        assert_eq!(prochaine_action(&muette_absente), Action::Rien);
+    }
+
+    /// La boucle figee se passe de la presence : la page ne peut justement plus la rapporter.
+    /// Une minute reelle de boucle morte, et l'application se relance — meme sans entree
+    /// recente. Retirer la dispense de presence pour `BoucleFigee` DOIT faire tomber cet essai.
+    #[test]
+    fn la_boucle_figee_relance_meme_sans_nouvelle_de_la_page() {
+        let figee = Etat {
+            tours_depuis_entree: TOURS_SANS_PRESENCE * 10,
+            ..etat(Some(Panne::BoucleFigee), TOURS_AVANT_RELANCER_BOUCLE)
+        };
+        assert_eq!(prochaine_action(&figee), Action::Relancer);
+        let pas_encore = Etat {
+            tours_en_panne: TOURS_AVANT_RELANCER_BOUCLE - 1,
+            ..figee
+        };
+        assert_eq!(prochaine_action(&pas_encore), Action::Rien);
+    }
+
+    #[test]
+    fn le_rendu_gele_recharge_la_vue_si_l_utilisateur_est_la() {
+        // La confirmation prend deja ses tours ; avant la marge, les gels brefs qui se
+        // recuperent seuls ne doivent rien couter.
+        let trop_tot = etat(Some(Panne::RenduArrete), TOURS_AVANT_RECHARGEMENT - 1);
+        assert_eq!(prochaine_action(&trop_tot), Action::Rien);
+        let mure = etat(Some(Panne::RenduArrete), TOURS_AVANT_RECHARGEMENT);
+        assert_eq!(prochaine_action(&mure), Action::Recharger);
+        // La page muette se soigne pareil : recharger ne demande pas son JavaScript.
+        let muette = etat(Some(Panne::PageMuette), TOURS_AVANT_RECHARGEMENT);
+        assert_eq!(prochaine_action(&muette), Action::Recharger);
+    }
+
+    /// Un affichage qui gele toutes les minutes ne doit pas transformer l'application en
+    /// boucle de rechargement : un delai minimal separe deux rechargements.
+    #[test]
+    fn deux_rechargements_sont_separes_par_le_delai() {
+        let recent = Etat {
+            tours_depuis_rechargement: TOURS_ENTRE_RECHARGEMENTS - 1,
+            ..etat(Some(Panne::RenduArrete), TOURS_AVANT_RECHARGEMENT * 4)
+        };
+        assert_eq!(prochaine_action(&recent), Action::Rien);
+        let ancien = Etat {
+            tours_depuis_rechargement: TOURS_ENTRE_RECHARGEMENTS,
+            ..recent
+        };
+        assert_eq!(prochaine_action(&ancien), Action::Recharger);
+    }
+
+    #[test]
+    fn recharger_trois_fois_sans_succes_mene_a_la_relance() {
+        let epuise = Etat {
+            rechargements_fenetre: RECHARGEMENTS_MAX,
+            tours_en_panne: TOURS_AVANT_RELANCER_RENDU,
+            ..etat(Some(Panne::RenduArrete), 0)
+        };
+        assert_eq!(prochaine_action(&epuise), Action::Relancer);
+        // Epuise mais la panne est jeune : elle peut encore se recuperer seule.
+        let jeune = Etat {
+            tours_en_panne: TOURS_AVANT_RELANCER_RENDU - 1,
+            ..epuise
+        };
+        assert_eq!(prochaine_action(&jeune), Action::Rien);
+        // Moins de trois rechargements : on continue de recharger, pas de relancer.
+        let pas_epuise = Etat {
+            rechargements_fenetre: RECHARGEMENTS_MAX - 1,
+            ..epuise
+        };
+        assert_eq!(prochaine_action(&pas_epuise), Action::Recharger);
+    }
+
+    /// La proposition de mode secours se fait AU RETOUR A LA NORMALE : un dialogue ne se lit
+    /// pas sur un ecran qui ne peint plus. Et une seule fois par lancement.
+    #[test]
+    fn le_secours_est_propose_apres_trois_episodes_et_une_seule_fois() {
+        assert!(!faut_il_proposer_le_secours(
+            Some(Panne::RenduArrete),
+            EPISODES_AVANT_PROPOSITION - 1,
+            false
+        ));
+        assert!(faut_il_proposer_le_secours(
+            Some(Panne::RenduArrete),
+            EPISODES_AVANT_PROPOSITION,
+            false
+        ));
+        assert!(!faut_il_proposer_le_secours(
+            Some(Panne::RenduArrete),
+            EPISODES_AVANT_PROPOSITION,
+            true
+        ));
+        // Une boucle figee n'est PAS le moteur de rendu : le mode secours n'y changerait
+        // rien, le proposer serait mentir.
+        assert!(!faut_il_proposer_le_secours(
+            Some(Panne::BoucleFigee),
+            EPISODES_AVANT_PROPOSITION * 2,
+            false
+        ));
+    }
+
+    #[test]
+    fn la_fenetre_d_observation_oublie_ce_qui_est_vieux() {
+        let maintenant = 10_000u64;
+        let mut file: VecDeque<u64> =
+            [maintenant - FENETRE_OBSERVATION - 1, maintenant - 10, maintenant]
+                .into_iter()
+                .collect();
+        tailler_la_fenetre(&mut file, maintenant);
+        assert_eq!(file.len(), 2, "l'evenement trop vieux devait partir");
+        // La borne est inclusive : exactement la fenetre, on garde.
+        let mut borne: VecDeque<u64> = [maintenant - FENETRE_OBSERVATION].into_iter().collect();
+        tailler_la_fenetre(&mut borne, maintenant);
+        assert_eq!(borne.len(), 1);
     }
 }

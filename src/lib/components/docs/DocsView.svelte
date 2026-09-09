@@ -430,6 +430,17 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.appearance.secours")}</p>
+        <div class="demo">
+          <div class="d-row">
+            <strong>{$trad("settings.secours.title")}</strong>
+            <span class="d-btn small">☐ {$trad("settings.secours.toggle")}</span>
+            <span class="d-note">{$trad("docs.appearance.secoursDemo")}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.appearance.zoom")}</p>
         <div class="demo">
           <div class="d-tabs"><span class="d-btn small">🔔</span><span class="d-btn small">−</span><span class="d-muted">115 %</span><span class="d-btn small">+</span><span class="d-btn small"><i>i</i></span><span class="d-btn small">⚙</span><span class="d-btn small">◑</span></div>

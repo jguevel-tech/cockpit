@@ -15,10 +15,23 @@ import { signalerErreur } from "./errors";
 //
 // **ON PARLE MEME QUAND LA FENETRE EST CACHEE**, en le disant : une page cachee ne peint pas et
 // ce n'est pas une panne. La version qui se taisait rendait son silence indistinguable d'un gel.
+//
+// **L'ENTREE UTILISATEUR NE MEMORISE QUE SON MOMENT.** Ni le texte frappe, ni la position : un
+// horodatage. Le guetteur s'en sert pour decider si quelqu'un est devant la fenetre avant de la
+// recharger — les episodes d'ecran eteint, la nuit, ne doivent declencher aucune reparation.
 const PERIODE = 5000;
+
+/// Fenetre de presence cote page : une entree compte pendant deux minutes. Le guetteur
+/// elargit de son cote (cinq tours) pour couvrir un rapport manque.
+const FENETRE_ENTREE = 120_000;
 
 let aPeint = false;
 let demandeEnCours = false;
+let derniereEntree = 0;
+
+function marquerEntree() {
+  derniereEntree = Date.now();
+}
 
 function demanderUneImage() {
   if (demandeEnCours) return;
@@ -30,13 +43,19 @@ function demanderUneImage() {
 }
 
 export function surveillerLeRendu() {
+  // Capture + passifs : on ne filtre rien et on ne ralentit aucun geste, xterm compris.
+  window.addEventListener("keydown", marquerEntree, { capture: true, passive: true });
+  window.addEventListener("pointerdown", marquerEntree, { capture: true, passive: true });
+
   demanderUneImage();
 
   setInterval(() => {
     const peint = aPeint;
     aPeint = false;
-    santePage(peint, document.visibilityState === "visible").catch((e) =>
-      signalerErreur("sante.rendu", String(e)),
+    const entreeRecente =
+      derniereEntree > 0 && Date.now() - derniereEntree < FENETRE_ENTREE;
+    santePage(peint, document.visibilityState === "visible", entreeRecente).catch(
+      (e) => signalerErreur("sante.rendu", String(e)),
     );
     demanderUneImage();
   }, PERIODE);

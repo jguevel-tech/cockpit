@@ -44,6 +44,93 @@ const NOTRE_REGLAGE: &str = "COCKPIT_SANS_DMABUF";
 /// Ce qui a ete decide, pour que le journal le dise au lieu de le laisser deviner.
 static MODE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
+/// Le fichier du mode secours : present = demande.
+///
+/// **POURQUOI UN FICHIER ET PAS LA BASE.** `decider()` tourne AVANT l'initialisation de
+/// GTK, donc avant que l'application n'existe : ni `AppHandle`, ni base ouverte. Un fichier
+/// dans le dossier de donnees se lit sans rien d'autre. Il est ecrit par l'ecran des
+/// Parametres et par le dialogue que le guetteur propose apres des gels repete — donc dans
+/// les deux cas sur un geste de l'utilisateur, jamais par une detection automatique : la
+/// regle « le contournement n'est JAMAIS decide a la place de l'utilisateur » tient.
+#[cfg(target_os = "linux")]
+pub const NOM_MODE_SECOURS: &str = "mode_secours_rendu";
+
+/// Le chemin du fichier du mode secours. `None` si le dossier personnel est introuvable.
+#[cfg(target_os = "linux")]
+pub fn chemin_mode_secours() -> Option<std::path::PathBuf> {
+    crate::chemins::dossier_donnees_sans_tauri()
+        .map(|dossier| dossier.join(NOM_MODE_SECOURS))
+}
+
+/// La demande, separee des lectures pour etre testable : la variable d'environnement OU le
+/// fichier du mode secours.
+#[cfg(target_os = "linux")]
+fn secours_demande(valeur_reglage: Option<&std::ffi::OsStr>, drapeau_pose: bool) -> bool {
+    valeur_reglage.is_some_and(|v| v != "0") || drapeau_pose
+}
+
+/// Pose ou retire le fichier du mode secours. Separe du chemin pour etre testable sur un
+/// dossier temporaire : un essai qui ecrirait le VRAI fichier activerait le contournement
+/// sur la machine qui execute les essais.
+#[cfg(target_os = "linux")]
+fn ecrire_drapeau(chemin: &std::path::Path, activer: bool) -> Result<(), String> {
+    if activer {
+        if let Some(parent) = chemin.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("dossier du mode secours : {e}"))?;
+        }
+        std::fs::write(chemin, "mode secours du rendu, active dans Cockpit\n")
+            .map_err(|e| format!("ecriture du mode secours : {e}"))
+    } else {
+        match std::fs::remove_file(chemin) {
+            Ok(()) => Ok(()),
+            // Absent = deja desactive : retirer deux fois n'est pas une erreur.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("retrait du mode secours : {e}")),
+        }
+    }
+}
+
+/// Etat du mode secours, pour l'ecran des Parametres. `disponible` vaut `false` hors Linux :
+/// le chemin DMA-BUF est celui de WebKitGTK, les autres systemes n'ont rien a en dire.
+#[derive(serde::Serialize)]
+pub struct EtatModeSecours {
+    pub disponible: bool,
+    pub actif: bool,
+}
+
+pub fn etat_mode_secours() -> EtatModeSecours {
+    #[cfg(target_os = "linux")]
+    {
+        EtatModeSecours {
+            disponible: true,
+            actif: chemin_mode_secours().is_some_and(|c| c.exists()),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        EtatModeSecours {
+            disponible: false,
+            actif: false,
+        }
+    }
+}
+
+/// Pose ou retire le mode secours. Hors Linux : une erreur claire, pas un silence — un
+/// bouton qui ne fait rien est un mensonge.
+pub fn basculer_mode_secours(activer: bool) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        let chemin = chemin_mode_secours().ok_or("dossier de donnees introuvable")?;
+        ecrire_drapeau(&chemin, activer)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = activer;
+        Err("le mode secours du rendu ne concerne que Linux".to_string())
+    }
+}
+
 /// Le pilote proprietaire NVIDIA est-il charge ? Sert au JOURNAL, jamais a decider : c'est la
 /// configuration ou le gel a ete constate, donc celle ou la ligne doit dire comment s'en sortir.
 ///
@@ -62,10 +149,17 @@ fn pilote_nvidia_proprietaire() -> bool {
 /// en arriere de la 0.54.3 s'est retrouve sans effet.
 #[cfg(target_os = "linux")]
 pub fn decider() {
-    let demande = std::env::var_os(NOTRE_REGLAGE).is_some_and(|v| v != "0");
+    let par_variable = std::env::var_os(NOTRE_REGLAGE);
+    let drapeau_pose = chemin_mode_secours().is_some_and(|c| c.exists());
+    let demande = secours_demande(par_variable.as_deref(), drapeau_pose);
     let mode = if demande {
         std::env::set_var(VARIABLE, "1");
-        format!("rendu : DMA-BUF desactive ({NOTRE_REGLAGE} demande)")
+        let origine = if drapeau_pose {
+            "mode secours active dans l'application".to_string()
+        } else {
+            format!("{NOTRE_REGLAGE} demande")
+        };
+        format!("rendu : DMA-BUF desactive ({origine})")
     } else {
         std::env::remove_var(VARIABLE);
         if pilote_nvidia_proprietaire() {
@@ -146,5 +240,32 @@ mod tests {
             !mode.contains("pas encore decide"),
             "la decision n'a pas ete prise"
         );
+    }
+
+    /// Le fichier du mode secours est une demande au meme titre que la variable. L'essai
+    /// travaille sur un dossier TEMPORAIRE : ecrire le vrai fichier activerait le
+    /// contournement sur la machine qui execute les essais.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn le_drapeau_se_pose_et_se_retire() {
+        let dossier = std::env::temp_dir().join(format!("cockpit-secours-{}", std::process::id()));
+        let chemin = dossier.join("sous-dossier").join(NOM_MODE_SECOURS);
+
+        ecrire_drapeau(&chemin, true).unwrap();
+        assert!(chemin.exists(), "le fichier devait etre cree, dossier compris");
+        assert!(secours_demande(None, chemin.exists()));
+
+        ecrire_drapeau(&chemin, false).unwrap();
+        assert!(!chemin.exists());
+        // Retirer deux fois n'est pas une erreur : l'etat vise est atteint.
+        ecrire_drapeau(&chemin, false).unwrap();
+        assert!(!secours_demande(None, chemin.exists()));
+
+        // La variable seule demande aussi ; « 0 » est un refus explicite.
+        assert!(secours_demande(Some(std::ffi::OsStr::new("1")), false));
+        assert!(!secours_demande(Some(std::ffi::OsStr::new("0")), false));
+        assert!(!secours_demande(None, false));
+
+        let _ = std::fs::remove_dir_all(&dossier);
     }
 }

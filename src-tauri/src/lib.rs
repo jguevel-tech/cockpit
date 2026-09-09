@@ -1104,12 +1104,40 @@ async fn machine_report() -> report::MachineInfo {
         .unwrap_or_else(|_| report::machine_info().clone())
 }
 
-/// La page rend compte de sa sante : a-t-elle peint depuis son dernier passage, et la fenetre
-/// etait-elle visible. « Pas peint » avec un appel qui arrive quand meme veut dire que le
-/// JavaScript tourne et que rien n'est dessine — voir `guetteur`.
+/// La page rend compte de sa sante : a-t-elle peint depuis son dernier passage, la fenetre
+/// etait-elle visible, et l'utilisateur a-t-il touche le clavier ou la souris recemment.
+/// « Pas peint » avec un appel qui arrive quand meme veut dire que le JavaScript tourne et que
+/// rien n'est dessine. L'entree recente dit si quelqu'un regarde : le guetteur ne recharge la
+/// vue que dans ce cas — voir `guetteur`.
 #[tauri::command]
-async fn sante_page(a_peint: bool, visible: bool) {
-    guetteur::signe_de_la_page(a_peint, visible);
+async fn sante_page(a_peint: bool, visible: bool, entree_recente: bool) {
+    guetteur::signe_de_la_page(a_peint, visible, entree_recente);
+}
+
+/// Le mode secours du rendu : disponible sous Linux seulement, et deja active ou non.
+#[tauri::command]
+fn mode_secours_rendu() -> rendu::EtatModeSecours {
+    rendu::etat_mode_secours()
+}
+
+/// Pose ou retire le mode secours du rendu. Le changement prend effet au prochain lancement :
+/// la variable de WebKitGTK se lit AVANT l'initialisation de GTK, donc avant que cette
+/// commande puisse exister dans le processus en cours.
+#[tauri::command]
+async fn activer_mode_secours_rendu(activer: bool) -> Result<(), String> {
+    rendu::basculer_mode_secours(activer)
+}
+
+/// Relance l'application : la nouvelle instance est lancee, puis celle-ci s'arrete.
+///
+/// `async fn` car elle lance un processus externe. Le chemin est celui du guetteur : il
+/// libere le nom single-instance AVANT de lancer (sinon la nouvelle instance se tue en le
+/// trouvant pris), choisit `$APPIMAGE` sous AppImage, et journalise. La mise a jour, elle,
+/// reste sur le `relaunch()` du plugin process : son flux est verifie de bout en bout et
+/// l'AppImage le met a l'abri de la course (sa nouvelle instance demarre lentement).
+#[tauri::command]
+async fn relancer_application(app: tauri::AppHandle) -> Result<(), String> {
+    guetteur::relancer_l_application(&app)
 }
 
 #[tauri::command]
@@ -1876,6 +1904,9 @@ pub fn run() {
             list_terminals,
             list_all_terminals,
             sante_page,
+            mode_secours_rendu,
+            activer_mode_secours_rendu,
+            relancer_application,
             docker_compose_detecte,
             set_clipboard,
             get_clipboard,

@@ -40,7 +40,7 @@ pub fn commande_du_service(chemin: &std::path::Path) -> Result<Command, String> 
 /// `.AppImage` pose sur le disque : le service en obtient son propre montage, vivant tant
 /// qu'il tourne. C'est la meme lecon que le tmux embarque, qu'il fallait copier hors du
 /// montage avant de le lancer.
-fn binaire_a_relancer() -> Result<std::path::PathBuf, String> {
+pub(crate) fn binaire_a_relancer() -> Result<std::path::PathBuf, String> {
     if let Some(appimage) = std::env::var_os("APPIMAGE") {
         let chemin = std::path::PathBuf::from(appimage);
         if chemin.is_file() {
