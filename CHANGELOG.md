@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Le mode secours de l'affichage annonce maintenant ce qu'il coûte vraiment. Il promettait
+  seulement « un rendu plus lent » ; en réalité, dans les terminaux, ce qu'on tape s'affiche
+  avec une touche de retard. La proposition qui apparaît après des gels répétés, le réglage
+  des paramètres et la doc intégrée le disent tous les trois.
+
 ## [0.58.1] — 2026-09-09
 
 ### Fixed
