@@ -217,8 +217,13 @@ jobs:
           # rend « release not found » : l'API ne resout un tag que pour une release
           # PUBLIEE. Il faut la retrouver dans la liste et deposer par son identifiant. La
           # note existait deja dans le job `publier` ci-dessous ; l'ignorer ici a coute un run.
-          ID=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
-                 --jq "[.[] | select(.tag_name == \"$TAG\")] | first | .id")
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases.json
+          ID=$(python3 -c "
+          import json, os
+          tag = os.environ['TAG']
+          cibles = [r['id'] for r in json.load(open('/tmp/releases.json')) if r['tag_name'] == tag]
+          print(cibles[0] if cibles else '')
+          ")
           if [ -z "$ID" ] || [ "$ID" = "null" ]; then
             echo "::error::aucune release pour $TAG — la passerelle ne peut pas etre posee"
             exit 1
@@ -274,7 +279,9 @@ jobs:
               sys.exit("::error::latest-linux.yml absent : la release reste en brouillon")
           print(f"RELEASE_ID={r['id']}")
           print(f"DEJA_PUBLIEE={'0' if r['draft'] else '1'}")
-          print(f"NOMS={' '.join(noms)}")
+          # **CE FICHIER EST EVALUE COMME DU SHELL.** Une valeur a espaces sans guillemets
+          # fait prendre le deuxieme mot pour une commande — constate le 2026-09-10.
+          print("NOMS=\"" + " ".join(noms) + "\"")
           EOF
           cat /tmp/brouillon.env >> "$GITHUB_ENV"
           . /tmp/brouillon.env
