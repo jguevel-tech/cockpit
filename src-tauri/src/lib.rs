@@ -1,6 +1,7 @@
 mod agents;
 mod appearance;
 mod evenements;
+mod ouvrir;
 mod preferences_heritees;
 mod taches;
 pub mod pont;
@@ -1856,7 +1857,7 @@ fn open_url(url: String) -> Result<(), String> {
     if !schema_ouvrable(&url) {
         return Err(format!("adresse non ouvrable : {url}"));
     }
-    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
+    ouvrir::adresse(&url)
 }
 
 #[cfg(feature = "interface-tauri")]
@@ -2333,6 +2334,7 @@ fn toggle_plugin_enabled(plugin_key: String, enabled: bool) -> Result<(), String
 
 // --- App Setup ---
 
+#[cfg(feature = "interface-tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Ecarte les polices emoji en couleur du format COLRv1, pour l'interface de Cockpit
 /// UNIQUEMENT.

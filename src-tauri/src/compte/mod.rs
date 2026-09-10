@@ -474,7 +474,7 @@ pub async fn compte_connexion_google_pour_hote(state: &crate::AppState) -> Resul
     let identite = google::obtenir_une_identite(|adresse| {
         // L'ouverture passe par le systeme : c'est le navigateur de la personne qui doit
         // s'ouvrir, celui ou elle est deja connectee a Google.
-        tauri_plugin_opener::open_url(adresse, None::<&str>).map_err(|e| {
+        crate::ouvrir::adresse(adresse).map_err(|e| {
             log::error!("google : impossible d'ouvrir le navigateur — {e}");
             "navigateur_indisponible".to_string()
         })

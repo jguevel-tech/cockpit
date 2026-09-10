@@ -14,10 +14,10 @@ path = "src/main.rs"
 
 [dependencies]
 tauri = { version = "2", features = [], optional = true }
-tauri-plugin-shell = "2"
-tauri-plugin-store = "2"
-tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2"
+tauri-plugin-shell = { version = "2", optional = true }
+tauri-plugin-store = { version = "2", optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.31", features = ["bundled", "backup"] }
@@ -52,9 +52,9 @@ regex = "1.13.1"
 # Suppression de fichiers de l'onglet Fichiers : corbeille SYSTEME, jamais un rm definitif.
 # Cross-platform (freedesktop/macOS/Windows) — coherent avec l'objectif de portabilite.
 trash = "5"
-tauri-plugin-updater = "2.10.1"
-tauri-plugin-process = "2.3.1"
-tauri-plugin-single-instance = "2"
+tauri-plugin-updater = { version = "2.10.1", optional = true }
+tauri-plugin-process = { version = "2.3.1", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
 # Emulateur de terminal (grille de caracteres, curseur, ecran alternatif, historique).
 # Version EPINGLEE a l'exact : la crate ne promet aucune stabilite d'API (0.x, extraite
 # d'Alacritty). Ce sur quoi terminal/ecran/ s'appuie est liste en tete de
@@ -106,4 +106,4 @@ uuid = { version = "1", features = ["v4"] }
 # gtk-3 et javascriptcore : il ne demarrerait pas chez qui ne les a pas, et l'AppImage
 # Electron embarquerait le moteur qu'on cherche justement a quitter.
 default = ["interface-tauri"]
-interface-tauri = ["dep:tauri", "dep:tauri-build"]
+interface-tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-store", "dep:tauri-plugin-opener", "dep:tauri-plugin-dialog", "dep:tauri-plugin-updater", "dep:tauri-plugin-process", "dep:tauri-plugin-single-instance"]
