@@ -80,8 +80,13 @@ jobs:
       # `--release` est volontaire : sans lui, cargo compile TOUT une premiere fois en debug
       # pour les tests, puis une seconde en release pour le binaire livre — deux profils,
       # aucun artefact partage. Aucun `debug_assert!` dans le code, donc rien n'est perdu.
+      # **ON EPROUVE CE QU'ON LIVRE, PAS AUTRE CHOSE.** Avec les features par defaut, les
+      # essais compilent Tauri et reclament gtk-3 sur le runner — que ce workflow n'installe
+      # plus, justement parce que le binaire livre ne le demande pas. La 0.59.0 est tombee
+      # la-dessus : `gdk-sys` introuvable a l'etape des tests, alors que le paquet, lui,
+      # n'en a aucun besoin.
       - name: Tests Rust
-        run: cargo test --release --manifest-path src-tauri/Cargo.toml
+        run: cargo test --release --no-default-features --manifest-path src-tauri/Cargo.toml
 
       # **LE BACKEND LIVRE EST CELUI SANS TAURI.** Construit avec la feature, il reclamerait
       # webkit2gtk chez l'utilisateur et embarquerait le moteur qu'on cherche a quitter.

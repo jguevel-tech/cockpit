@@ -642,6 +642,11 @@ mod tests {
         assert_eq!(compter_sans_image(0, false, true, true, false), 0);
     }
 
+    /// **CET ESSAI SUIT LA FONCTION QU'IL EPROUVE.** `ce_qui_tourne` sert a nommer ce que le
+    /// backend faisait au moment d'un gel, ce qui n'a de sens que dans la boucle du
+    /// guetteur : elle vit donc derriere la feature, et l'essai aussi. Sans cette ligne, la
+    /// suite ne COMPILE PAS dans la configuration livree, celle sans Tauri.
+    #[cfg(feature = "interface-tauri")]
     #[test]
     fn une_marque_se_retire_toute_seule() {
         assert_eq!(ce_qui_tourne(), "rien de marque cote backend");
