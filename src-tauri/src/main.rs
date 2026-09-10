@@ -11,5 +11,19 @@ fn main() {
     if cockpit_lib::pont_si_demande() {
         return;
     }
-    cockpit_lib::run()
+    #[cfg(feature = "interface-tauri")]
+    cockpit_lib::run();
+
+    // **SANS TAURI, CE BINAIRE N'OUVRE AUCUNE FENETRE**, et c'est le but : il ne sert que le
+    // pont et le service de terminaux. Lance sans mode, il ne doit pas rendre la main en
+    // silence — on croirait a un demarrage reussi.
+    #[cfg(not(feature = "interface-tauri"))]
+    {
+        eprintln!(
+            "cockpit : construit sans interface graphique. Modes disponibles :\n\
+             \x20 --pont                        servir les commandes sur l'entree standard\n\
+             \x20 --service-terminaux <socket>  tenir les terminaux"
+        );
+        std::process::exit(2);
+    }
 }
