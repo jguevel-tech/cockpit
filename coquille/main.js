@@ -16,6 +16,16 @@ const { spawn } = require('node:child_process')
 const { traiterUneCommandeDeMiseAJour } = require('./updater')
 const readline = require('node:readline')
 
+// **LE NOM DE L'APPLICATION EST CE QUE LA FENETRE ANNONCE AU BUREAU, ET LES RACCOURCIS
+// INSTALLES ATTENDENT « cockpit ».** Sans cette ligne, Electron prend le nom du paquet npm
+// (`cockpit-coquille`) : le bureau n'associe plus la fenetre au lanceur, l'icone devient
+// generique et une SECONDE entree apparait dans la barre des taches a cote de la vraie.
+// Renommer l'executable ne suffit pas — mesure le 2026-09-10 sur le paquet 0.59.2, dont le
+// binaire s'appelle bien `cockpit` et dont la fenetre annoncait toujours `cockpit-coquille`.
+// Pose AVANT que la fenetre existe, sinon elle garde l'ancien nom. Le dossier de donnees ne
+// bouge pas : il est fixe explicitement plus bas.
+app.setName('cockpit')
+
 // L'interface buildee par Vite. Servie par un protocole a nous plutot qu'en `file://` :
 // **une origine stable est ce qui garde le localStorage**, ou vivent la langue et les
 // preferences. Un `file://` donne une origine opaque et les perdrait a chaque lancement.

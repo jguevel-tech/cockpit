@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- L'icône de Cockpit revient dans la barre des tâches, et sa fenêtre se range sous le raccourci
+  du menu au lieu d'ouvrir une seconde entrée à côté. La correction de la 0.59.2 était
+  incomplète : la fenêtre continuait de s'annoncer sous un nom que le raccourci ne reconnaît
+  pas.
+
 ## [0.59.2] — 2026-09-10
 
 ### Fixed
