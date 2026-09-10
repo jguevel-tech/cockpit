@@ -9,7 +9,8 @@
   },
   "version": "0.58.2",
   "scripts": {
-    "paquet": "electron-builder"
+    "backend": ". ../../.claude/env-construction.sh && cd ../src-tauri && cargo build --release --no-default-features",
+    "paquet": "npm run backend && electron-builder"
   },
   "build": {
     "appId": "com.cockpit.dev",
@@ -37,9 +38,7 @@
         "AppImage"
       ],
       "category": "Development",
-      "icon": "../src-tauri/icons/128x128@2x.png",
-      "syncDesktopName": true
+      "icon": "../src-tauri/icons/128x128@2x.png"
     }
-  },
-  "desktopName": "cockpit.desktop"
+  }
 }
