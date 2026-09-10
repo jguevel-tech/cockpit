@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- L'application se lance de nouveau. La 0.59.0 refusait de démarrer sur les systèmes où
+  `libfuse2` n'est pas installé, ce qui est le cas par défaut d'Ubuntu 22.04 et des versions
+  suivantes : le message affiché était « dlopen(): error loading libfuse.so.2 ». Rien à
+  installer désormais.
+- Si vous êtes bloqué sur la 0.59.0, téléchargez cette version depuis la page des versions,
+  ou lancez l'ancienne une fois avec l'option `--appimage-extract-and-run` pour récupérer la
+  main.
+
 ## [0.59.0] — 2026-09-10
 
 ### Changed

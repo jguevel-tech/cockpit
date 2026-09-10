@@ -76,6 +76,9 @@
           "to": "cockpit.exe"
         }
       ]
+    },
+    "toolsets": {
+      "appimage": "1.0.3"
     }
   },
   "dependencies": {
