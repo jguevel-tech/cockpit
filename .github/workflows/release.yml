@@ -35,6 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
+          export VERSION
           # Les notes viennent du CHANGELOG : c'est ce texte que les gens lisent dans le modal
           # de mise a jour ET sur la page de la release. electron-builder, lui, cree une
           # release SANS notes : les 0.59.0 et 0.59.1 sont sorties avec une page blanche.
@@ -60,27 +61,35 @@ jobs:
             echo "::error::$COMPTE releases portent deja le tag $TAG — menage manuel requis"
             exit 1
           fi
-          if [ "$COMPTE" = "0" ]; then
-            gh release create "$TAG" --draft --title "$TAG" --notes-file /tmp/notes.md > /dev/null
-            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases.json
-          fi
-          ID=$(python3 -c "
-          import json, os
-          tag = os.environ['TAG']
-          cibles = [r['id'] for r in json.load(open('/tmp/releases.json')) if r['tag_name'] == tag]
-          print(cibles[0] if cibles else '')
-          ")
-          if [ -z "$ID" ]; then
-            echo "::error::brouillon introuvable apres creation pour $TAG"
-            exit 1
-          fi
+          # **ON NE RECHERCHE PAS UNE RELEASE QU'ON VIENT DE CREER : ON GARDE CE QUE LA
+          # CREATION A RENDU.** Mesure du 2026-09-10 : six secondes apres un
+          # `gh release create --draft`, la liste ne contenait toujours pas le brouillon.
+          # La creation par l'API, elle, rend l'objet cree avec son identifiant.
           # Le corps passe par un fichier JSON : les notes sont multilignes et accentuees,
           # ce qu'un `-f body=...` en ligne de commande abime.
-          python3 -c "
+          if [ "$COMPTE" = "0" ]; then
+            python3 -c "
+          import json, os
+          print(json.dumps({'tag_name': os.environ['TAG'], 'name': os.environ['VERSION'],
+                            'draft': True, 'body': open('/tmp/notes.md').read()}))
+            " > /tmp/creation.json
+            ID=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" --input /tmp/creation.json --jq .id)
+          else
+            ID=$(python3 -c "
+          import json, os
+          tag = os.environ['TAG']
+          print([r['id'] for r in json.load(open('/tmp/releases.json')) if r['tag_name'] == tag][0])
+            ")
+            python3 -c "
           import json
           print(json.dumps({'body': open('/tmp/notes.md').read()}))
-          " > /tmp/corps.json
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" --input /tmp/corps.json > /dev/null
+            " > /tmp/corps.json
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" --input /tmp/corps.json > /dev/null
+          fi
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::la creation de la release n'a rendu aucun identifiant pour $TAG"
+            exit 1
+          fi
           echo "id=$ID" >> "$GITHUB_OUTPUT"
           echo "brouillon $ID pret pour $TAG"
 
