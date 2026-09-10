@@ -1,5 +1,5 @@
 {
-  "name": "cockpit-coquille",
+  "name": "cockpit",
   "desktopName": "cockpit.desktop",
   "private": true,
   "description": "Coquille Electron de Cockpit : fenetre Chromium et pont vers le backend Rust.",
