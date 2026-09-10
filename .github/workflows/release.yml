@@ -232,7 +232,7 @@ jobs:
           gh api --method POST \
             "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=latest.json" \
             --header "Content-Type: application/json" --input /tmp/latest.json > /dev/null
-          echo "latest.json publie : les installations Tauri basculeront a leur prochaine verification.
+          echo "latest.json publie : les installations Tauri basculeront a leur prochaine verification."
 
   # Leve le brouillon UNE FOIS la version Linux verifiee. Separe du build pour s'executer
   # meme si le job macOS a echoue : un echec la-bas ne doit pas priver les utilisateurs
@@ -300,6 +300,7 @@ jobs:
           # meme — les systemes qui ont reussi ne doivent pas attendre l'autre — puis on fait
           # ECHOUER le run en nommant ce qui manque. Ajouter une plateforme a la matrice =
           # l'ajouter ici, sinon son absence redevient silencieuse.
+          export NOMS
           MANIFESTES="latest-linux.yml latest-mac.yml latest.yml" python3 - <<'EOF'
           import os, sys
           noms = set(os.environ["NOMS"].split())
