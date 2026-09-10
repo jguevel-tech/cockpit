@@ -12,6 +12,16 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- L'affichage ne se fige plus. Les blocages où la fenêtre restait immobile jusqu'à ce qu'on
+  tue l'application venaient de la partie qui dessine la page. Elle a été remplacée. Les
+  projets, les terminaux avec leur contenu, les notes, le fond d'écran et les réglages sont
+  conservés, ainsi que la langue et le thème choisis.
+- Sur macOS et Windows, cette version s'installe une fois à la main. Les mises à jour
+  automatiques reprennent normalement ensuite. Sous Linux, rien à faire : la mise à jour
+  habituelle suffit.
+
 ## [0.58.2] — 2026-09-09
 
 ### Fixed
