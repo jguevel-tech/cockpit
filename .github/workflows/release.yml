@@ -14,54 +14,33 @@ permissions:
 
 jobs:
   release:
-    # Matrice Linux + macOS + Windows : les trois jobs publient sur la MEME release (meme
-    # tagName), et tauri-action FUSIONNE latest.json plateforme par plateforme — l'updater de
-    # chaque OS y trouve son artefact. fail-fast: false pour qu'un echec macOS ou Windows
-    # (plateformes non testables en local) ne prive jamais les utilisateurs Linux de leur
-    # version.
+    # Matrice Linux + macOS + Windows. `fail-fast: false` pour qu'un echec macOS ou Windows
+    # ne prive jamais les utilisateurs Linux de leur version.
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
-            bundles: appimage
-          # `app` en plus du dmg : l'artefact de MISE A JOUR macOS (.app.tar.gz + .sig)
-          # est genere depuis le bundle app — sans lui, latest.json n'a pas d'entree
-          # darwin et l'updater integre ne fonctionne pas (constate sur la v0.25.0).
           - os: macos-latest # Apple Silicon (aarch64)
-            bundles: app,dmg
-          # NSIS et pas MSI. MSI passe par WiX, s'installe PAR MACHINE donc reclame
-          # l'elevation a chaque mise a jour, et double les fichiers a signer. NSIS
-          # s'installe par utilisateur et c'est le format que l'updater Tauri v2 sait
-          # remplacer tout seul. Rien a installer sur le runner : WebView2 est deja present
-          # sur les images `windows-*`, et les etapes `apt-get` sont conditionnees a Linux.
-          #
-          # Windows a ete SORTI de cette matrice le temps d'une version : sur le runner de la
-          # v0.38.0, treize essais tombaient, dont l'ecriture dans le PTY (« os error 0 »).
-          # Il y est revenu quand les essais sont passes au vert — la cause etait dans les
-          # essais eux-memes (cinq tapaient du `printf` dans `cmd.exe`, et le socket etait un
-          # chemin de fichier au lieu d'un tuyau nomme), pas dans le produit. Avant de
-          # remettre une plateforme ici, la passer par `essais.yml` : c'est gratuit, et ca
-          # evite de l'apprendre en publiant.
           - os: windows-latest
-            bundles: nsis
     runs-on: ${{ matrix.os }}
-    # Le build Rust a cache froid prend ~80 min ; au-dela c'est un blocage, pas une
-    # lenteur. Sans ce plafond GitHub attend SIX HEURES avant de tuer le job.
+    # Le build Rust a cache froid est long ; au-dela c'est un blocage, pas une lenteur.
+    # Sans ce plafond GitHub attend SIX HEURES avant de tuer le job.
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
-      - name: Dependances systeme Tauri (Linux)
+      # **BEAUCOUP MOINS DE DEPENDANCES QU'AVANT, ET C'EST LE POINT DE TOUTE LA MIGRATION.**
+      # Le backend ne reclame plus webkit2gtk, gtk-3, rsvg2 ni patchelf : compile sans la
+      # feature `interface-tauri`, il ne demande plus que quatre bibliotheques, alsa comprise.
+      - name: Dependances systeme (Linux)
         if: runner.os == 'Linux'
-        # 15 min suffisent largement (~40 s en temps normal). Le plafond est la parce que
-        # cette etape s'est figee SIX HEURES sur la v0.31.0 : `unattended-upgrades` tient le
-        # verrou dpkg au demarrage du runner et apt attend indefiniment. D'ou aussi
-        # `Lock::Timeout` (apt rend la main au lieu d'attendre) et les trois essais.
+        # 15 min suffisent largement. Le plafond est la parce que cette etape s'est figee SIX
+        # HEURES sur la v0.31.0 : `unattended-upgrades` tient le verrou dpkg au demarrage du
+        # runner et apt attend indefiniment. D'ou aussi `Lock::Timeout` et les trois essais.
         timeout-minutes: 15
         run: |
           set -eux
-          # Coupe le service qui tient le verrou, sinon on ne fait que l'attendre.
           sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
           export DEBIAN_FRONTEND=noninteractive
           apt_reessai() {
@@ -74,48 +53,58 @@ jobs:
           }
           apt_reessai update
           # `libasound2-dev` : cpal (capture audio des reunions) depend d'`alsa-sys` sans
-          # condition sous Linux — le host ALSA n'est pas derriere une feature, meme quand
-          # on ne se sert que du host PulseAudio. Sans ce paquet, `alsa-sys` echoue sur
-          # « Package alsa was not found in the pkg-config search path ».
-          apt_reessai install -y --no-install-recommends \
-            libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf libasound2-dev
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+          # condition sous Linux, meme quand on ne se sert que du host PulseAudio.
+          apt_reessai install -y --no-install-recommends libasound2-dev
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          # Sauve le cache meme quand le job echoue : sans ca, chaque correctif de CI
-          # repartait d'une compilation Rust complete (~11 min perdues par iteration).
           cache-on-failure: true
-          # Cle fixe et non derivee du nom du job (rust-cache y ajoute l'OS de lui-meme) :
-          # le cache est reutilise d'une release a la suivante tant que Cargo.lock ne bouge
-          # pas. C'est ce qui fait passer le run de ~12 min a ~7 min.
-          shared-key: tauri
+          # Cle fixe : le cache est reutilise d'une release a la suivante tant que
+          # Cargo.lock ne bouge pas.
+          shared-key: backend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - run: npm ci
 
-      # Les garde-fous du projet tournent aussi en CI : une release ne doit jamais
-      # partir depuis un etat qui ne passe pas les verifications.
+      # Les garde-fous du projet tournent aussi en CI : une release ne doit jamais partir
+      # depuis un etat qui ne passe pas les verifications.
       - name: Verification des types frontend
         run: npm run check
 
       # `--release` est volontaire : sans lui, cargo compile TOUT une premiere fois en debug
-      # pour les tests, puis tauri-action recompile TOUT en release pour le bundle — deux
-      # profils, aucun artefact partage. Mesure sur le run 31691474888 : 2 min 45 de tests
-      # + 8 min 44 de build = ~12 min. En release, les deux etapes partagent le meme
-      # target/release. Aucun `debug_assert!` dans le code, donc rien n'est perdu.
+      # pour les tests, puis une seconde en release pour le binaire livre — deux profils,
+      # aucun artefact partage. Aucun `debug_assert!` dans le code, donc rien n'est perdu.
       - name: Tests Rust
         run: cargo test --release --manifest-path src-tauri/Cargo.toml
 
-      # Les notes de version viennent du CHANGELOG.md, pas du message de commit : c'est ce
-      # texte que les utilisateurs lisent dans le modal de mise a jour. On extrait la section
-      # de la version taguee, delimitee par le titre suivant.
+      # **LE BACKEND LIVRE EST CELUI SANS TAURI.** Construit avec la feature, il reclamerait
+      # webkit2gtk chez l'utilisateur et embarquerait le moteur qu'on cherche a quitter.
+      # Le meme chemin de sortie sert aux deux : c'est le DERNIER build qui est empaquete,
+      # d'ou cette etape juste avant l'empaquetage.
+      - name: Backend sans interface graphique
+        env:
+          # L'adresse du serveur de suivi est figee DANS le binaire a la compilation
+          # (`option_env!`), pas ecrite dans le depot — il est public. Secrets absents = la
+          # remontee est simplement inactive, ce qui est le cas des builds locaux.
+          COCKPIT_GOOGLE_ID: ${{ secrets.COCKPIT_GOOGLE_ID }}
+          COCKPIT_GOOGLE_SECRET: ${{ secrets.COCKPIT_GOOGLE_SECRET }}
+          COCKPIT_REPORT_URL: ${{ secrets.COCKPIT_REPORT_URL }}
+          COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
+          # Serveur maison sans certificat : le HTTP est assume ici, explicitement.
+          COCKPIT_REPORT_ALLOW_HTTP: ${{ secrets.COCKPIT_REPORT_ALLOW_HTTP }}
+        run: cargo build --release --no-default-features --manifest-path src-tauri/Cargo.toml
+
+      - name: Interface
+        run: npm run build
+
+      # Les notes de version viennent du CHANGELOG.md : c'est ce texte que les utilisateurs
+      # lisent dans le modal de mise a jour.
       - name: Extraire les notes du CHANGELOG
         id: notes
         # `shell: bash` explicite : le shell par defaut du runner Windows est PowerShell, qui
@@ -139,52 +128,92 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Construit le bundle de la plateforme, le signe (signature updater minisign — la
-      # signature Apple/notarisation demanderait un compte developpeur), publie sur la
-      # Release et fusionne latest.json.
-      - name: Build, signature et publication
-        uses: tauri-apps/tauri-action@v0
+      - name: Dependances de la coquille
+        working-directory: coquille
+        run: npm ci
+
+      # Empaquete et publie sur la MEME release que les autres plateformes. En BROUILLON :
+      # les trois jobs y deposent leurs artefacts, et le premier a finir exposerait sinon une
+      # release incomplete. Le job `publier` leve le brouillon quand Linux est bien la.
+      - name: Empaqueter et publier
+        working-directory: coquille
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pas de compte developpeur Apple : on ne signe ni ne notarise, comme la version
+          # precedente. Sans cette ligne, electron-builder cherche une identite et echoue.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        shell: bash
+        run: npx electron-builder --publish always
+
+      # **LA BASCULE DEPUIS TAURI, ET ELLE N'A LIEU QU'UNE FOIS.** Les installations deja
+      # livrees interrogent `latest.json` et attendent une signature minisign : sans ce
+      # fichier, elles ne verront JAMAIS cette version et resteront sur la derniere que
+      # Tauri leur a servie. On signe donc l'AppImage Electron avec la meme cle qu'avant et
+      # on publie un manifeste a leur format, a cote de celui d'electron-updater.
+      #
+      # Linux seulement : l'updater Tauri y remplace le fichier AppImage, ce qui marche quel
+      # que soit ce qu'il contient. Sous macOS et Windows la mise a jour passe par des
+      # formats qu'electron-builder ne produit pas pareil — ces installations devront etre
+      # reinstallees une fois, et c'est assume.
+      - name: Passerelle pour les installations Tauri (Linux)
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # La cle a ete generee SANS mot de passe : un seul secret a gerer, et rien de
-          # sensible n'a besoin de transiter ailleurs que du fichier vers GitHub.
-          # La variable doit exister quand meme (chaine vide), sinon la CLI la reclame.
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-          # Remontee des erreurs : l'adresse du serveur de suivi est figee DANS le binaire a
-          # la compilation (`option_env!`), pas ecrite dans le depot — il est public, et
-          # l'adresse d'un serveur prive n'a pas a y etre indexee. Secrets absents = la
-          # remontee est simplement inactive, ce qui est le cas des builds locaux.
-          COCKPIT_GOOGLE_ID: ${{ secrets.COCKPIT_GOOGLE_ID }}
-          COCKPIT_GOOGLE_SECRET: ${{ secrets.COCKPIT_GOOGLE_SECRET }}
-          COCKPIT_REPORT_URL: ${{ secrets.COCKPIT_REPORT_URL }}
-          COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
-          # Serveur maison sans certificat : le HTTP est assume ici, explicitement.
-          COCKPIT_REPORT_ALLOW_HTTP: ${{ secrets.COCKPIT_REPORT_ALLOW_HTTP }}
-        with:
-          # `bundle.active` est volontairement absent de tauri.conf.json : l'y mettre a true
-          # ECRASE le --no-bundle de la CLI et casserait le build de dev local (il tenterait
-          # de signer sans cle privee). Le bundle est donc force ici, explicitement.
-          args: -b ${{ matrix.bundles }}
-          tagName: ${{ github.ref_name }}
-          releaseName: Cockpit ${{ github.ref_name }}
-          # Section du CHANGELOG.md extraite a l'etape precedente : c'est exactement ce
-          # texte que les utilisateurs voient dans le modal de mise a jour.
-          releaseBody: ${{ steps.notes.outputs.body }}
-          # BROUILLON, volontairement. Les deux jobs publient sur la meme release et
-          # tauri-action fusionne `latest.json` plateforme par plateforme : le premier job
-          # a finir exposait donc un `latest.json` SANS l'autre plateforme. Un utilisateur
-          # Linux qui verifiait pendant cette fenetre recevait « None of the fallback
-          # platforms [...] were found » — constate en usage. Le brouillon n'est pas servi
-          # par `releases/latest`, donc personne ne voit un fichier incomplet ; le job
-          # `publier` ci-dessous leve le brouillon quand la version Linux est bien la.
-          releaseDraft: true
-          prerelease: false
-          includeUpdaterJson: true
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ steps.notes.outputs.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          APPIMAGE=$(ls coquille/paquet/*.AppImage)
+          echo "signature de $(basename "$APPIMAGE")"
+
+          # La CLI Tauri sert UNIQUEMENT a signer : elle ne construit plus rien ici.
+          npx --yes @tauri-apps/cli@2 signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" "$APPIMAGE"
+          SIGNATURE=$(cat "$APPIMAGE.sig")
+
+          # **LES VARIABLES SONT EXPORTEES, SINON LE SCRIPT NE LES VOIT PAS.** Une variable
+          # de shell n'est pas dans l'environnement du processus python : sans `export`,
+          # chaque lecture leve une KeyError et l'etape echoue apres avoir deja signe.
+          export APPIMAGE VERSION SIGNATURE
+          # Le format d'horodatage que l'updater Tauri attend (RFC 3339).
+          export PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          python3 - <<'EOF' > /tmp/latest.json
+          import json, os
+          nom = os.path.basename(os.environ["APPIMAGE"])
+          print(json.dumps({
+              "version": os.environ["VERSION"],
+              "notes": os.environ["NOTES"],
+              "pub_date": os.environ["PUB_DATE"],
+              "platforms": {
+                  "linux-x86_64": {
+                      "signature": os.environ["SIGNATURE"],
+                      "url": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
+                             f"/releases/download/{os.environ['TAG']}/{nom}",
+                  }
+              },
+          }, ensure_ascii=False, indent=1))
+          EOF
+
+          # Un manifeste vide ou tronque couperait les mises a jour sans rien dire : on
+          # verifie ce qu'on vient d'ecrire avant de le publier.
+          python3 -c "
+          import json, sys
+          d = json.load(open('/tmp/latest.json'))
+          if not d['platforms']['linux-x86_64']['signature']:
+              sys.exit('::error::signature vide dans latest.json')
+          print('latest.json :', d['version'], '|', list(d['platforms']))
+          "
+
+          gh release upload "$TAG" /tmp/latest.json --clobber
+          echo "latest.json publie : les installations Tauri basculeront a leur prochaine verification.
 
   # Leve le brouillon UNE FOIS la version Linux verifiee. Separe du build pour s'executer
-  # meme si le job macOS a echoue (plateforme secondaire) : un echec la-bas ne doit pas
-  # priver les utilisateurs Linux de leur mise a jour.
+  # meme si le job macOS a echoue : un echec la-bas ne doit pas priver les utilisateurs
+  # Linux de leur mise a jour.
   publier:
     needs: release
     if: always()
@@ -221,28 +250,16 @@ jobs:
           if not any(n.endswith(".AppImage") for n in noms):
               sys.exit("::error::aucune AppImage : la release reste en brouillon")
 
-          maj = [a for a in r["assets"] if a["name"] == "latest.json"]
-          if not maj:
-              sys.exit("::error::latest.json absent : la release reste en brouillon")
+          # Le manifeste que lit l'updater d'Electron. Sans lui, l'application cherche une
+          # mise a jour et ne trouve rien — le 404 que la migration a deja fait voir.
+          if "latest-linux.yml" not in noms:
+              sys.exit("::error::latest-linux.yml absent : la release reste en brouillon")
           print(f"RELEASE_ID={r['id']}")
-          print(f"ASSET_ID={maj[0]['id']}")
           print(f"DEJA_PUBLIEE={'0' if r['draft'] else '1'}")
+          print(f"NOMS={' '.join(noms)}")
           EOF
           cat /tmp/brouillon.env >> "$GITHUB_ENV"
           . /tmp/brouillon.env
-
-          # `latest.json` est ce que lit l'updater : sans entree Linux, l'application affiche
-          # une erreur au lieu d'une mise a jour. C'est le bug qu'on ferme ici.
-          gh api -H "Accept: application/octet-stream" \
-            "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" > /tmp/latest.json
-          python3 - <<'EOF'
-          import json, sys
-          d = json.load(open("/tmp/latest.json"))
-          plateformes = sorted(d.get("platforms", {}))
-          print("version:", d.get("version"), "| plateformes:", plateformes)
-          if not any(p.startswith("linux-") for p in plateformes):
-              sys.exit("::error::latest.json sans entree Linux : la release reste en brouillon")
-          EOF
 
           if [ "$DEJA_PUBLIEE" = "1" ]; then
             echo "Release $TAG deja publiee, rien a faire."
@@ -252,24 +269,21 @@ jobs:
             echo "Release $TAG publiee : les utilisateurs peuvent mettre a jour."
           fi
 
-          # Une plateforme absente ne doit PAS passer inapercue. Sur la v0.32.0, le job macOS
-          # avait echoue : `latest.json` est sorti avec les seules entrees Linux, tous les
-          # utilisateurs mac ont ete coupes des mises a jour, et ce job est reste VERT. Personne
-          # n'a ete averti.
-          # On publie quand meme — les systemes qui ont reussi ne doivent pas attendre l'autre —
-          # puis on fait ECHOUER le run en nommant ce qui manque. Ajouter une plateforme a la
-          # matrice = l'ajouter ici, sinon son absence redevient silencieuse.
-          PLATEFORMES_ATTENDUES="linux- darwin- windows-" python3 - <<'EOF'
-          import json, os, sys
-          plateformes = sorted(json.load(open("/tmp/latest.json")).get("platforms", {}))
-          attendues = os.environ["PLATEFORMES_ATTENDUES"].split()
-          manquantes = [a for a in attendues if not any(p.startswith(a) for p in plateformes)]
-          if manquantes:
-              noms = ", ".join(m.rstrip("-") for m in manquantes)
-              print(f"::error::release publiee mais INCOMPLETE — aucune entree {noms} dans "
-                    f"latest.json. Ces utilisateurs ne recevront pas la mise a jour. "
-                    f"Reparer par `gh run rerun <id> --failed` : tauri-action retrouve la "
-                    f"release et y fusionne la plateforme manquante.")
+          # **UNE PLATEFORME ABSENTE NE DOIT PAS PASSER INAPERCUE.** Sur la v0.32.0, le job
+          # macOS avait echoue, le manifeste est sorti sans son entree, tous les utilisateurs
+          # mac ont ete coupes des mises a jour, et le job est reste VERT. On publie quand
+          # meme — les systemes qui ont reussi ne doivent pas attendre l'autre — puis on fait
+          # ECHOUER le run en nommant ce qui manque. Ajouter une plateforme a la matrice =
+          # l'ajouter ici, sinon son absence redevient silencieuse.
+          MANIFESTES="latest-linux.yml latest-mac.yml latest.yml" python3 - <<'EOF'
+          import os, sys
+          noms = set(os.environ["NOMS"].split())
+          manquants = [m for m in os.environ["MANIFESTES"].split() if m not in noms]
+          if manquants:
+              print(f"::error::release publiee mais INCOMPLETE — manifestes absents : "
+                    f"{', '.join(manquants)}. Ces utilisateurs ne recevront pas la mise a "
+                    f"jour. Reparer en relancant le job de la plateforme concernee : "
+                    f"electron-builder retrouve la release et y ajoute ce qui manque.")
               sys.exit(1)
-          print(f"latest.json complet : {plateformes}")
+          print(f"manifestes complets : {sorted(noms & set(os.environ['MANIFESTES'].split()))}")
           EOF

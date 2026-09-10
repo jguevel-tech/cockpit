@@ -28,10 +28,6 @@
       {
         "from": "../dist",
         "to": "interface"
-      },
-      {
-        "from": "../src-tauri/target/release/cockpit",
-        "to": "cockpit"
       }
     ],
     "linux": {
@@ -39,7 +35,13 @@
         "AppImage"
       ],
       "category": "Development",
-      "icon": "../src-tauri/icons/128x128@2x.png"
+      "icon": "../src-tauri/icons/128x128@2x.png",
+      "extraResources": [
+        {
+          "from": "../src-tauri/target/release/cockpit",
+          "to": "cockpit"
+        }
+      ]
     },
     "publish": [
       {
@@ -47,7 +49,34 @@
         "owner": "jguevel-tech",
         "repo": "cockpit"
       }
-    ]
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "../src-tauri/icons/icon.icns",
+      "identity": null,
+      "extraResources": [
+        {
+          "from": "../src-tauri/target/release/cockpit",
+          "to": "cockpit"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "../src-tauri/icons/icon.ico",
+      "extraResources": [
+        {
+          "from": "../src-tauri/target/release/cockpit.exe",
+          "to": "cockpit.exe"
+        }
+      ]
+    }
   },
   "dependencies": {
     "electron-updater": "^6.8.9"

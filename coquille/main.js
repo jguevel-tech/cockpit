@@ -189,9 +189,12 @@ class Backend {
 /** Le binaire du backend. En developpement, celui que `cargo build` vient de produire. */
 function cheminDuBackend() {
   if (process.env.COCKPIT_BACKEND) return process.env.COCKPIT_BACKEND
+  // Le nom du binaire differe sous Windows. Sans le `.exe`, le paquet s'ouvre et ne sert
+  // rien : la fenetre s'affiche, chaque commande echoue.
+  const nom = process.platform === 'win32' ? 'cockpit.exe' : 'cockpit'
   return app.isPackaged
-    ? path.join(process.resourcesPath, 'cockpit')
-    : path.join(__dirname, '..', 'src-tauri', 'target', 'debug', 'cockpit')
+    ? path.join(process.resourcesPath, nom)
+    : path.join(__dirname, '..', 'src-tauri', 'target', 'debug', nom)
 }
 
 // --- Le pont : ce que la page peut demander --------------------------------------------
