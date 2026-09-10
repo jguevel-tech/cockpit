@@ -20,9 +20,9 @@ le script de release.
   `libfuse2` n'est pas installé, ce qui est le cas par défaut d'Ubuntu 22.04 et des versions
   suivantes : le message affiché était « dlopen(): error loading libfuse.so.2 ». Rien à
   installer désormais.
-- Si vous êtes bloqué sur la 0.59.0, téléchargez cette version depuis la page des versions,
-  ou lancez l'ancienne une fois avec l'option `--appimage-extract-and-run` pour récupérer la
-  main.
+- Si vous êtes bloqué sur la 0.59.0, téléchargez cette version depuis la page des versions et
+  mettez-la à la place de l'ancienne. C'est le seul geste à faire : vos projets, vos terminaux
+  et vos réglages restent en place, et les mises à jour repartent toutes seules ensuite.
 
 ## [0.59.0] — 2026-09-10
 

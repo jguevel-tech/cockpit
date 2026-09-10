@@ -150,6 +150,35 @@ jobs:
         shell: bash
         run: npx electron-builder --publish always
 
+      # **UNE RELEASE SANS NOTES NE DIT RIEN A PERSONNE.** L'action Tauri remplissait le
+      # corps de la release ; electron-builder, lui, la cree VIDE. Les 0.59.0 et 0.59.1 sont
+      # sorties avec une page blanche, alors que le texte existait et partait deja dans
+      # `latest.json`. Etape SEPAREE de la passerelle Tauri juste en dessous : celle-la est
+      # temporaire et sera retiree, celle-ci doit lui survivre.
+      - name: Poser les notes de version sur la page de la release
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ steps.notes.outputs.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Un brouillon ne se resout pas par son tag : le retrouver dans la liste.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases-notes.json
+          ID=$(python3 -c "
+          import json, os
+          tag = os.environ['TAG']
+          cibles = [r['id'] for r in json.load(open('/tmp/releases-notes.json')) if r['tag_name'] == tag]
+          print(cibles[0] if cibles else '')
+          ")
+          if [ -z "$ID" ]; then
+            echo "::error::aucune release pour $TAG — notes non posees"
+            exit 1
+          fi
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" -f body="$NOTES" > /dev/null
+          echo "notes posees sur la release $TAG"
+
       # **LA BASCULE DEPUIS TAURI, ET ELLE N'A LIEU QU'UNE FOIS.** Les installations deja
       # livrees interrogent `latest.json` et attendent une signature minisign : sans ce
       # fichier, elles ne verront JAMAIS cette version et resteront sur la derniere que
