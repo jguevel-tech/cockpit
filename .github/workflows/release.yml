@@ -213,7 +213,20 @@ jobs:
           print('latest.json :', d['version'], '|', list(d['platforms']))
           "
 
-          gh release upload "$TAG" /tmp/latest.json --clobber
+          # **UN BROUILLON N'EST PAS ACCESSIBLE PAR SON TAG.** `gh release upload "$TAG"`
+          # rend « release not found » : l'API ne resout un tag que pour une release
+          # PUBLIEE. Il faut la retrouver dans la liste et deposer par son identifiant. La
+          # note existait deja dans le job `publier` ci-dessous ; l'ignorer ici a coute un run.
+          ID=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+                 --jq "[.[] | select(.tag_name == \"$TAG\")] | first | .id")
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::aucune release pour $TAG — la passerelle ne peut pas etre posee"
+            exit 1
+          fi
+          # Un depot d'asset passe par uploads.github.com, jamais par l'API principale.
+          gh api --method POST \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=latest.json" \
+            --header "Content-Type: application/json" --input /tmp/latest.json > /dev/null
           echo "latest.json publie : les installations Tauri basculeront a leur prochaine verification.
 
   # Leve le brouillon UNE FOIS la version Linux verifiee. Separe du build pour s'executer

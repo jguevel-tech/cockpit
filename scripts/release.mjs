@@ -17,6 +17,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG = resolve(ROOT, "package.json");
 const CARGO = resolve(ROOT, "src-tauri/Cargo.toml");
+// La coquille Electron porte SA version, et c'est elle qu'electron-builder publie. Oubliee,
+// la release part sous l'ancien numero : le 2026-09-10 le tag disait v0.59.0 et le paquet
+// 0.58.2, donc la release attendue n'existait nulle part et le job de publication cherchait
+// un tag sans objet. Son VERROU compte aussi — `npm ci` refuse une version qui diverge.
+const COQUILLE = resolve(ROOT, "coquille/package.json");
+const COQUILLE_LOCK = resolve(ROOT, "coquille/package-lock.json");
 const LOCK = resolve(ROOT, "src-tauri/Cargo.lock");
 const CHANGELOG = resolve(ROOT, "CHANGELOG.md");
 
@@ -104,6 +110,15 @@ const today = new Date().toISOString().slice(0, 10);
 pkg.version = next;
 writeFileSync(PKG, JSON.stringify(pkg, null, 2) + "\n");
 
+const coquille = JSON.parse(readFileSync(COQUILLE, "utf8"));
+coquille.version = next;
+writeFileSync(COQUILLE, JSON.stringify(coquille, null, 2) + "\n");
+
+const coquilleLock = JSON.parse(readFileSync(COQUILLE_LOCK, "utf8"));
+coquilleLock.version = next;
+if (coquilleLock.packages?.[""]) coquilleLock.packages[""].version = next;
+writeFileSync(COQUILLE_LOCK, JSON.stringify(coquilleLock, null, 2) + "\n");
+
 const cargo = readFileSync(CARGO, "utf8");
 const cargoOut = cargo.replace(/^version = "[^"]+"$/m, `version = "${next}"`);
 if (cargoOut === cargo) die("Impossible de mettre a jour la version dans Cargo.toml.");
@@ -135,7 +150,8 @@ writeFileSync(
 
 // --- 5. Commit + tag (jamais de push) ---
 
-git("add", "package.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "CHANGELOG.md");
+git("add", "package.json", "coquille/package.json", "coquille/package-lock.json",
+      "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "CHANGELOG.md");
 git("commit", "-m", `Release ${next}`);
 git("tag", "-a", `v${next}`, "-m", `Release ${next}\n\n${notes}`);
 
@@ -143,6 +159,7 @@ console.log(`
 ✓ Release ${pkg.version === next ? next : next} preparee (${bump})
 
   package.json      ${next}
+  coquille          ${next}
   Cargo.toml        ${next}
   Cargo.lock        ${next}
   CHANGELOG.md      section [${next}] — ${today}
