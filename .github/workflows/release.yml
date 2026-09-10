@@ -13,7 +13,79 @@ permissions:
   contents: write # necessaire pour creer la Release et y attacher les artefacts
 
 jobs:
+  # **LA RELEASE SE CREE UNE SEULE FOIS, ICI, AVANT TOUTE CONSTRUCTION.** Chaque job de la
+  # matrice demandait a electron-builder de publier ; quand deux d'entre eux finissaient dans
+  # la meme seconde, chacun constatait « la release n'existe pas » et en creait une. Sur la
+  # v0.59.2 : DEUX brouillons pour le meme tag, l'AppImage Linux perdue entre les deux, et le
+  # job de publication qui refuse (a juste titre) de trancher. Les trois jobs se contentent
+  # desormais de deposer leurs fichiers dans un brouillon qui existe deja.
+  preparer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_id: ${{ steps.creer.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Creer le brouillon de release et y poser les notes
+        id: creer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          # Les notes viennent du CHANGELOG : c'est ce texte que les gens lisent dans le modal
+          # de mise a jour ET sur la page de la release. electron-builder, lui, cree une
+          # release SANS notes : les 0.59.0 et 0.59.1 sont sorties avec une page blanche.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { inside = 1; next }
+            inside && /^## \[/ { exit }
+            inside { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if [ -z "$(tr -d '[:space:]' < /tmp/notes.md)" ]; then
+            echo "::error::Aucune section [$VERSION] trouvee dans CHANGELOG.md — release interrompue."
+            exit 1
+          fi
+
+          # Un brouillon n'est pas accessible par son tag : on le cherche dans la liste. Cette
+          # etape doit pouvoir se rejouer (relance d'un run), donc elle REUTILISE ce qui existe.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases.json
+          COMPTE=$(python3 -c "
+          import json, os
+          tag = os.environ['TAG']
+          print(len([r for r in json.load(open('/tmp/releases.json')) if r['tag_name'] == tag]))
+          ")
+          if [ "$COMPTE" -gt 1 ]; then
+            echo "::error::$COMPTE releases portent deja le tag $TAG — menage manuel requis"
+            exit 1
+          fi
+          if [ "$COMPTE" = "0" ]; then
+            gh release create "$TAG" --draft --title "$TAG" --notes-file /tmp/notes.md > /dev/null
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases.json
+          fi
+          ID=$(python3 -c "
+          import json, os
+          tag = os.environ['TAG']
+          cibles = [r['id'] for r in json.load(open('/tmp/releases.json')) if r['tag_name'] == tag]
+          print(cibles[0] if cibles else '')
+          ")
+          if [ -z "$ID" ]; then
+            echo "::error::brouillon introuvable apres creation pour $TAG"
+            exit 1
+          fi
+          # Le corps passe par un fichier JSON : les notes sont multilignes et accentuees,
+          # ce qu'un `-f body=...` en ligne de commande abime.
+          python3 -c "
+          import json
+          print(json.dumps({'body': open('/tmp/notes.md').read()}))
+          " > /tmp/corps.json
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" --input /tmp/corps.json > /dev/null
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "brouillon $ID pret pour $TAG"
+
   release:
+    needs: preparer
     # Matrice Linux + macOS + Windows. `fail-fast: false` pour qu'un echec macOS ou Windows
     # ne prive jamais les utilisateurs Linux de leur version.
     strategy:
@@ -150,35 +222,6 @@ jobs:
         shell: bash
         run: npx electron-builder --publish always
 
-      # **UNE RELEASE SANS NOTES NE DIT RIEN A PERSONNE.** L'action Tauri remplissait le
-      # corps de la release ; electron-builder, lui, la cree VIDE. Les 0.59.0 et 0.59.1 sont
-      # sorties avec une page blanche, alors que le texte existait et partait deja dans
-      # `latest.json`. Etape SEPAREE de la passerelle Tauri juste en dessous : celle-la est
-      # temporaire et sera retiree, celle-ci doit lui survivre.
-      - name: Poser les notes de version sur la page de la release
-        if: runner.os == 'Linux'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-          NOTES: ${{ steps.notes.outputs.body }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Un brouillon ne se resout pas par son tag : le retrouver dans la liste.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases-notes.json
-          ID=$(python3 -c "
-          import json, os
-          tag = os.environ['TAG']
-          cibles = [r['id'] for r in json.load(open('/tmp/releases-notes.json')) if r['tag_name'] == tag]
-          print(cibles[0] if cibles else '')
-          ")
-          if [ -z "$ID" ]; then
-            echo "::error::aucune release pour $TAG — notes non posees"
-            exit 1
-          fi
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" -f body="$NOTES" > /dev/null
-          echo "notes posees sur la release $TAG"
-
       # **LA BASCULE DEPUIS TAURI, ET ELLE N'A LIEU QU'UNE FOIS.** Les installations deja
       # livrees interrogent `latest.json` et attendent une signature minisign : sans ce
       # fichier, elles ne verront JAMAIS cette version et resteront sur la derniere que
@@ -197,6 +240,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
           TAG: ${{ github.ref_name }}
           NOTES: ${{ steps.notes.outputs.body }}
+          ID: ${{ needs.preparer.outputs.release_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -242,19 +286,13 @@ jobs:
           print('latest.json :', d['version'], '|', list(d['platforms']))
           "
 
-          # **UN BROUILLON N'EST PAS ACCESSIBLE PAR SON TAG.** `gh release upload "$TAG"`
-          # rend « release not found » : l'API ne resout un tag que pour une release
-          # PUBLIEE. Il faut la retrouver dans la liste et deposer par son identifiant. La
-          # note existait deja dans le job `publier` ci-dessous ; l'ignorer ici a coute un run.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > /tmp/releases.json
-          ID=$(python3 -c "
-          import json, os
-          tag = os.environ['TAG']
-          cibles = [r['id'] for r in json.load(open('/tmp/releases.json')) if r['tag_name'] == tag]
-          print(cibles[0] if cibles else '')
-          ")
+          # **UN BROUILLON N'EST PAS ACCESSIBLE PAR SON TAG** (l'API ne resout un tag que
+          # pour une release PUBLIEE), et le CHERCHER dans la liste juste apres sa creation
+          # ne marche pas non plus : sur la v0.59.2 l'etape ne l'a pas trouvee trois secondes
+          # apres qu'electron-builder l'a creee. L'identifiant vient donc du job `preparer`,
+          # qui l'a cree bien avant.
           if [ -z "$ID" ] || [ "$ID" = "null" ]; then
-            echo "::error::aucune release pour $TAG — la passerelle ne peut pas etre posee"
+            echo "::error::le job preparer n'a pas rendu d'identifiant de release"
             exit 1
           fi
           # Un depot d'asset passe par uploads.github.com, jamais par l'API principale.
@@ -267,7 +305,7 @@ jobs:
   # meme si le job macOS a echoue : un echec la-bas ne doit pas priver les utilisateurs
   # Linux de leur mise a jour.
   publier:
-    needs: release
+    needs: [preparer, release]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
