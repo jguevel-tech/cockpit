@@ -1,5 +1,6 @@
 {
   "name": "cockpit-coquille",
+  "desktopName": "cockpit.desktop",
   "private": true,
   "description": "Coquille Electron de Cockpit : fenetre Chromium et pont vers le backend Rust.",
   "main": "main.js",
@@ -36,6 +37,9 @@
       ],
       "category": "Development",
       "icon": "../src-tauri/icons/128x128@2x.png",
+      "executableName": "cockpit",
+      "syncDesktopName": true,
+      "description": "Terminaux, notes, fichiers et git, projet par projet",
       "extraResources": [
         {
           "from": "../src-tauri/target/release/cockpit",
