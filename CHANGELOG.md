@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.59.1] — 2026-09-10
+
 ### Fixed
 
 - L'application se lance de nouveau. La 0.59.0 refusait de démarrer sur les systèmes où

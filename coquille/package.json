@@ -7,7 +7,7 @@
     "electron": "^38.2.0",
     "electron-builder": "^26.0.12"
   },
-  "version": "0.59.0",
+  "version": "0.59.1",
   "scripts": {
     "backend": ". ../../.claude/env-construction.sh && cd ../src-tauri && cargo build --release --no-default-features",
     "paquet": "npm run backend && electron-builder"
