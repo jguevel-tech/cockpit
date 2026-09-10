@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.59.0] — 2026-09-10
+
 ### Changed
 
 - L'affichage ne se fige plus. Les blocages où la fenêtre restait immobile jusqu'à ce qu'on
