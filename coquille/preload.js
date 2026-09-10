@@ -61,3 +61,25 @@ contextBridge.exposeInMainWorld('__TAURI_INTERNALS__', {
   /** Une ressource locale, servie par notre schema. Aucun fichier hors de dist/ n'est lisible. */
   convertFileSrc: (chemin) => `cockpit://interface/${String(chemin).replace(/^\/+/, '')}`
 })
+
+// --- Reprise des preferences de l'ancienne version ---------------------------------------
+//
+// **CE BLOC S'EXECUTE AVANT LE MOINDRE SCRIPT DE LA PAGE**, et c'est toute la raison de sa
+// place ici : la langue, le theme et le zoom sont lus au tout premier rendu. Pose plus tard,
+// l'interface serait deja partie en francais par defaut.
+//
+// L'appel est SYNCHRONE, ce qu'on evite partout ailleurs. Une promesse rendrait la main
+// apres que la page a lu ses preferences, donc trop tard. C'est un aller-retour, une fois,
+// au demarrage.
+try {
+  const heritees = ipcRenderer.sendSync('cockpit:preferences-heritees')
+  for (const [cle, valeur] of Object.entries(heritees || {})) {
+    // **ON N'ECRASE JAMAIS UNE VALEUR EXISTANTE.** Au deuxieme lancement, celle de Chromium
+    // est la bonne : reprendre l'ancienne annulerait chaque changement de theme ou de langue.
+    if (localStorage.getItem(cle) === null) localStorage.setItem(cle, valeur)
+  }
+} catch (e) {
+  // Une reprise ratee n'empeche pas de demarrer : on repart sur les valeurs par defaut,
+  // exactement comme une installation neuve. Mais elle se dit.
+  console.warn(`preferences de l'ancienne version non reprises : ${e}`)
+}

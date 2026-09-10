@@ -1,6 +1,7 @@
 mod agents;
 mod appearance;
 mod evenements;
+mod preferences_heritees;
 mod taches;
 pub mod pont;
 mod chemins;

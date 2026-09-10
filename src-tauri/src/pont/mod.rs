@@ -20,6 +20,28 @@ use crate::evenements::Emetteur;
 
 mod commandes;
 
+/// Le journal du pont, sur la SORTIE D'ERREUR.
+///
+/// **SANS LUI, TOUTE INSTRUMENTATION DU BACKEND PARLE DANS LE VIDE.** Le journal est pose
+/// par Tauri cote application ; en mode pont, personne ne l'installait, et les `log::warn!`
+/// des modules disparaissaient en silence. Constate le 2026-09-10 en cherchant pourquoi la
+/// reprise des preferences rendait une liste vide : elle journalisait sa cause, et pas une
+/// ligne ne sortait.
+///
+/// La sortie standard EST le tuyau : le journal ne peut donc aller que sur stderr, que
+/// l'hote recupere et affiche.
+struct JournalSurErreur;
+
+impl log::Log for JournalSurErreur {
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
+    fn log(&self, ligne: &log::Record) {
+        eprintln!("[{}] {}", ligne.level(), ligne.args());
+    }
+    fn flush(&self) {}
+}
+
 /// Un appel venu de l'hote. `id` revient tel quel dans la reponse : c'est ce qui permet a
 /// l'hote d'avoir plusieurs appels en vol sans les confondre.
 #[derive(serde::Deserialize)]
@@ -71,6 +93,12 @@ async fn repondre(
     let valeur = |v: Result<serde_json::Value, serde_json::Error>| v.map_err(|e| e.to_string());
     match commande {
         "langue_imposee" => valeur(serde_json::to_value(crate::langue_imposee_reelle())),
+        // Les preferences d'interface laissees par la version WebKitGTK. Servie par le
+        // pont et non par le catalogue genere : elle n'a pas de commande Tauri en face,
+        // c'est un geste propre a la coquille.
+        "preferences_heritees" => {
+            valeur(serde_json::to_value(crate::preferences_heritees::lire()))
+        }
         // **CHAQUE BRANCHE APPELLE LA FONCTION DE LA COMMANDE, JAMAIS SA LOGIQUE.**
         // Reecrire `etat.db.get_pending_todos()` ici donnerait deux verites pour une meme
         // reponse, et elles divergeraient au premier correctif applique d'un seul cote.
@@ -102,6 +130,13 @@ async fn repondre(
 /// processus qui tient la base et le service de terminaux, invisible et sans personne pour
 /// l'arreter — exactement le genre de dormeur que ce projet traque deja dans ses essais.
 pub async fn servir() -> Result<(), String> {
+    // Le journal AVANT tout le reste : ce qui echoue au demarrage doit pouvoir le dire.
+    // Un logger STATIQUE : `set_boxed_logger` demande la feature `std` de la crate `log`,
+    // que ce projet n'active pas. Celui-ci ne coute aucune allocation.
+    static JOURNAL: JournalSurErreur = JournalSurErreur;
+    let _ = log::set_logger(&JOURNAL);
+    log::set_max_level(log::LevelFilter::Info);
+
     let dossier = crate::chemins::dossier_donnees_sans_tauri()
         .ok_or("dossier de donnees introuvable")?;
     std::fs::create_dir_all(&dossier).map_err(|e| e.to_string())?;
