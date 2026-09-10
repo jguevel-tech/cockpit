@@ -26,6 +26,12 @@ function updater() {
   // decide, comme sous Tauri.
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
+  // **SON JOURNAL EST COUPE, ET LES ERREURS NE SONT PAS PERDUES POUR AUTANT.** Il ecrit ses
+  // pannes sur la console avant de les propager : trente lignes de trace au lancement pour
+  // une situation normale (aucune Release ne porte encore de manifeste a son format). Ce
+  // qui doit etre vu remonte par le canal de l'interface, ou `stores/update.ts` le nomme et
+  // le traduit — le meme chemin que sous Tauri.
+  autoUpdater.logger = null
   cache = autoUpdater
   return cache
 }
@@ -66,7 +72,23 @@ function suivreLeTelechargement(pousser) {
 async function traiterUneCommandeDeMiseAJour(commande, arguments_, pousser) {
   switch (commande) {
     case 'plugin:updater|check': {
-      const resultat = await updater().checkForUpdates()
+      let resultat
+      try {
+        resultat = await updater().checkForUpdates()
+      } catch (e) {
+        // **UN MANIFESTE ABSENT N'EST PAS UNE PANNE, C'EST « RIEN DE NEUF ».** Tant que la
+        // derniere Release ne porte pas de manifeste au format d'electron-updater — le cas
+        // de toutes celles construites par Tauri — la recherche rend un 404. Le laisser
+        // remonter affichait une trace de trente lignes a chaque demarrage et faisait
+        // passer une situation NORMALE pour une erreur.
+        // Tout autre echec (reseau, jeton, release corrompue) remonte, lui : le magasin de
+        // l'interface sait les nommer.
+        if (e?.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND') {
+          trouvee = null
+          return { traite: true, valeur: null }
+        }
+        throw e
+      }
       const info = resultat?.updateInfo
       // Pas de version plus recente : `null`, et c'est ce que l'interface teste.
       if (!info || info.version === updater().currentVersion.version) {
