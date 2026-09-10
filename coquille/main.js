@@ -13,6 +13,7 @@ const { app, BrowserWindow, protocol, net, shell, ipcMain, dialog } = require('e
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { spawn } = require('node:child_process')
+const { traiterUneCommandeDeMiseAJour } = require('./updater')
 const readline = require('node:readline')
 
 // L'interface buildee par Vite. Servie par un protocole a nous plutot qu'en `file://` :
@@ -336,6 +337,14 @@ function brancherLePont(fenetre) {
     if (commande === 'plugin:dialog|open' || commande === 'plugin:dialog|save') {
       return ouvrirUnDialogue(commande, arguments_?.options ?? {}, fenetre)
     }
+    // La mise a jour : les memes commandes que le plugin de Tauri, servies par
+    // electron-updater. L'interface ne voit aucune difference et n'a pas ete touchee.
+    const miseAJour = await traiterUneCommandeDeMiseAJour(
+      commande,
+      arguments_ ?? {},
+      (identifiant, message) => fenetre.webContents.send('cockpit:rappel', identifiant, message)
+    )
+    if (miseAJour.traite) return miseAJour.valeur
     return backend.appeler(commande, arguments_ ?? {})
   })
   return backend
@@ -429,7 +438,17 @@ function armerLeBanc(fenetre) {
 // `localStorage` : la langue et les preferences d'interface seraient perdues. Le backend,
 // lui, calcule le sien depuis le meme identifiant, donc la base et le fond d'ecran sont
 // retrouves quoi qu'il arrive.
-app.setPath('userData', path.join(app.getPath('appData'), 'com.cockpit.dev'))
+// **`appData` VAUT `~/.config` SOUS LINUX, PAS `~/.local/share`.** Mesure le 2026-09-10 :
+// le stockage de la page atterrissait a cote de celui du backend. La regle recopiee ici est
+// celle du backend (`chemins::dossier_donnees_sans_tauri`), XDG compris, pour que les deux
+// designent le MEME dossier.
+app.setPath(
+  'userData',
+  path.join(
+    process.env.XDG_DATA_HOME || path.join(app.getPath('home'), '.local', 'share'),
+    'com.cockpit.dev'
+  )
+)
 
 // **UNE SEULE INSTANCE, ET CE N'EST PAS COSMETIQUE.** Deux Cockpit partagent la meme base
 // ET le meme service de terminaux. Tauri posait ce verrou ; sans lui ici, lancer cette

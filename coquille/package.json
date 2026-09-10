@@ -21,6 +21,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "updater.js",
       "package.json"
     ],
     "extraResources": [
@@ -39,6 +40,16 @@
       ],
       "category": "Development",
       "icon": "../src-tauri/icons/128x128@2x.png"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jguevel-tech",
+        "repo": "cockpit"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }
