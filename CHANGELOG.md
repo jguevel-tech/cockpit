@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.59.2] — 2026-09-10
+
 ### Fixed
 
 - L'icône de Cockpit revient dans la barre des tâches, et sa fenêtre se range de nouveau sous
