@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.62.0] — 2026-09-11
+
 ### Added
 
 - Un anneau dans l'en-tête montre ce qu'il reste avant la limite de ton fournisseur d'IA, et
