@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.60.0] — 2026-09-11
+
 ### Fixed
 
 - Glisser un fichier dans un terminal écrit de nouveau son chemin. Le geste ne faisait plus
