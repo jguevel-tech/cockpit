@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.59.4] — 2026-09-11
+
 ### Fixed
 
 - Les terminaux reviennent avec leur contenu après un redémarrage du poste, au lieu de s'ouvrir
