@@ -10,7 +10,7 @@
   },
   "version": "0.60.0",
   "scripts": {
-    "backend": ". ../../.claude/env-construction.sh && cd ../backend && cargo build --release --no-default-features",
+    "backend": ". ../../.claude/env-construction.sh && cd ../backend && cargo build --release",
     "paquet": "npm run backend && electron-builder"
   },
   "build": {

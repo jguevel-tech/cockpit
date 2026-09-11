@@ -302,19 +302,6 @@ async function ouvrirUnDialogue(commande, options, fenetre) {
   return options.multiple ? filePaths : filePaths[0]
 }
 
-/**
- * Les preferences de l'ancienne version, lues UNE fois et gardees ici.
- *
- * **POURQUOI EN MEMOIRE ET PAS A LA DEMANDE.** Le preload les reclame de facon SYNCHRONE,
- * parce qu'il doit les poser avant que la page ne lise sa langue et son theme. Un handler
- * synchrone ne peut pas attendre le backend : il rend ce qui est deja la.
- */
-let preferencesHeritees = {}
-
-ipcMain.on('cockpit:preferences-heritees', (evenement) => {
-  evenement.returnValue = preferencesHeritees
-})
-
 function brancherLePont(fenetre) {
   const backend = new Backend(cheminDuBackend())
   // Ce que le backend pousse de lui-meme (sortie de terminal, fin de processus) emprunte
@@ -375,17 +362,7 @@ function ouvrirLaFenetre() {
   // Affichee seulement quand elle a quelque chose a montrer : sinon on voit un cadre vide.
   fenetre.once('ready-to-show', () => fenetre.show())
   const backend = brancherLePont(fenetre)
-  // **L'ORDRE COMPTE.** La page lit sa langue et son theme au tout premier rendu : charger
-  // avant d'avoir repris les preferences de l'ancienne version les perdrait. Un backend qui
-  // ne repond pas ne bloque pas le demarrage — on part alors sur les valeurs par defaut,
-  // comme une installation neuve.
-  backend
-    .appeler('preferences_heritees', {})
-    .then((valeurs) => {
-      preferencesHeritees = valeurs || {}
-    })
-    .catch((e) => console.warn(`preferences de l'ancienne version illisibles : ${e.message}`))
-    .finally(() => fenetre.loadURL(`${SCHEMA}://interface/`))
+  fenetre.loadURL(`${SCHEMA}://interface/`)
   if (process.env.COCKPIT_BANC_CAPTURE) armerLeBanc(fenetre)
   return fenetre
 }

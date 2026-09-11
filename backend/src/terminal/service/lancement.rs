@@ -44,7 +44,6 @@ pub fn commande_du_service(chemin: &std::path::Path) -> Result<Command, String> 
 ///
 /// **CE N'EST PAS LE BINAIRE DU SERVICE.** Depuis la 0.59.0, `$APPIMAGE` designe la
 /// coquille Electron : la lancer ouvre COCKPIT, pas le service. Voir `binaire_du_service`.
-// Son unique appelant est le guetteur, qui n'existe qu'avec l'interface graphique.
 /// Quel fichier lancer pour obtenir LE SERVICE DE TERMINAUX.
 ///
 /// **LANCER `$APPIMAGE` A OUVERT L'APPLICATION AU LIEU DU SERVICE, ET CA A COUTE TROIS

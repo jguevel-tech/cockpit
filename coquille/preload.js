@@ -65,16 +65,3 @@ contextBridge.exposeInMainWorld('cockpit', {
    */
   cheminDuFichier: (fichier) => webUtils.getPathForFile(fichier)
 })
-
-// **LES PREFERENCES DE L'ANCIENNE VERSION, POSEES AVANT QUE LA PAGE NE DEMARRE.** Elles
-// vivent dans le stockage de WebKit, que la page ne sait pas lire. Sans ca, une mise a jour
-// depuis Tauri rendait l'interface en francais par defaut, theme et zoom par defaut. On ne
-// passe JAMAIS par-dessus une valeur existante.
-try {
-  const heritees = ipcRenderer.sendSync('cockpit:preferences-heritees')
-  for (const [cle, valeur] of Object.entries(heritees || {})) {
-    if (localStorage.getItem(cle) === null) localStorage.setItem(cle, valeur)
-  }
-} catch (e) {
-  console.warn(`preferences de l'ancienne version non reprises : ${e}`)
-}

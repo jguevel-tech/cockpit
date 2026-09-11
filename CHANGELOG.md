@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Removed
+
+- Les installations restées en 0.58.x ne reçoivent plus de mise à jour automatique. Il faut
+  télécharger la dernière version depuis la page des versions, une fois. Les versions 0.59 et
+  suivantes se mettent à jour normalement.
+- La langue, le thème et le zoom de l'ancienne version ne sont plus repris lors du passage
+  depuis une 0.58.x : ils repartent de leurs valeurs par défaut, à régler une fois.
+
 ## [0.60.0] — 2026-09-11
 
 ### Fixed

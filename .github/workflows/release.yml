@@ -167,13 +167,12 @@ jobs:
       # la-dessus : `gdk-sys` introuvable a l'etape des tests, alors que le paquet, lui,
       # n'en a aucun besoin.
       - name: Tests Rust
-        run: cargo test --release --no-default-features --manifest-path backend/Cargo.toml
+        run: cargo test --release --manifest-path backend/Cargo.toml
 
-      # **LE BACKEND LIVRE EST CELUI SANS TAURI.** Construit avec la feature, il reclamerait
-      # webkit2gtk chez l'utilisateur et embarquerait le moteur qu'on cherche a quitter.
-      # Le meme chemin de sortie sert aux deux : c'est le DERNIER build qui est empaquete,
-      # d'ou cette etape juste avant l'empaquetage.
-      - name: Backend sans interface graphique
+      # Le binaire que la coquille lance : il n'ouvre aucune fenetre et ne reclame que
+      # quatre bibliotheques. C'est le DERNIER build qui est empaquete, d'ou cette etape
+      # juste avant l'empaquetage.
+      - name: Backend
         env:
           # L'adresse du serveur de suivi est figee DANS le binaire a la compilation
           # (`option_env!`), pas ecrite dans le depot — il est public. Secrets absents = la
@@ -184,7 +183,7 @@ jobs:
           COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
           # Serveur maison sans certificat : le HTTP est assume ici, explicitement.
           COCKPIT_REPORT_ALLOW_HTTP: ${{ secrets.COCKPIT_REPORT_ALLOW_HTTP }}
-        run: cargo build --release --no-default-features --manifest-path backend/Cargo.toml
+        run: cargo build --release --manifest-path backend/Cargo.toml
 
       - name: Interface
         run: npm run build
@@ -230,85 +229,6 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         shell: bash
         run: npx electron-builder --publish always
-
-      # **LA BASCULE DEPUIS TAURI, ET ELLE N'A LIEU QU'UNE FOIS.** Les installations deja
-      # livrees interrogent `latest.json` et attendent une signature minisign : sans ce
-      # fichier, elles ne verront JAMAIS cette version et resteront sur la derniere que
-      # Tauri leur a servie. On signe donc l'AppImage Electron avec la meme cle qu'avant et
-      # on publie un manifeste a leur format, a cote de celui d'electron-updater.
-      #
-      # Linux seulement : l'updater Tauri y remplace le fichier AppImage, ce qui marche quel
-      # que soit ce qu'il contient. Sous macOS et Windows la mise a jour passe par des
-      # formats qu'electron-builder ne produit pas pareil — ces installations devront etre
-      # reinstallees une fois, et c'est assume.
-      - name: Passerelle pour les installations Tauri (Linux)
-        if: runner.os == 'Linux'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-          TAG: ${{ github.ref_name }}
-          NOTES: ${{ steps.notes.outputs.body }}
-          ID: ${{ needs.preparer.outputs.release_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${TAG#v}"
-          APPIMAGE=$(ls coquille/paquet/*.AppImage)
-          echo "signature de $(basename "$APPIMAGE")"
-
-          # La CLI Tauri sert UNIQUEMENT a signer : elle ne construit plus rien ici.
-          npx --yes @tauri-apps/cli@2 signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" "$APPIMAGE"
-          SIGNATURE=$(cat "$APPIMAGE.sig")
-
-          # **LES VARIABLES SONT EXPORTEES, SINON LE SCRIPT NE LES VOIT PAS.** Une variable
-          # de shell n'est pas dans l'environnement du processus python : sans `export`,
-          # chaque lecture leve une KeyError et l'etape echoue apres avoir deja signe.
-          export APPIMAGE VERSION SIGNATURE
-          # Le format d'horodatage que l'updater Tauri attend (RFC 3339).
-          export PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-          python3 - <<'EOF' > /tmp/latest.json
-          import json, os
-          nom = os.path.basename(os.environ["APPIMAGE"])
-          print(json.dumps({
-              "version": os.environ["VERSION"],
-              "notes": os.environ["NOTES"],
-              "pub_date": os.environ["PUB_DATE"],
-              "platforms": {
-                  "linux-x86_64": {
-                      "signature": os.environ["SIGNATURE"],
-                      "url": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
-                             f"/releases/download/{os.environ['TAG']}/{nom}",
-                  }
-              },
-          }, ensure_ascii=False, indent=1))
-          EOF
-
-          # Un manifeste vide ou tronque couperait les mises a jour sans rien dire : on
-          # verifie ce qu'on vient d'ecrire avant de le publier.
-          python3 -c "
-          import json, sys
-          d = json.load(open('/tmp/latest.json'))
-          if not d['platforms']['linux-x86_64']['signature']:
-              sys.exit('::error::signature vide dans latest.json')
-          print('latest.json :', d['version'], '|', list(d['platforms']))
-          "
-
-          # **UN BROUILLON N'EST PAS ACCESSIBLE PAR SON TAG** (l'API ne resout un tag que
-          # pour une release PUBLIEE), et le CHERCHER dans la liste juste apres sa creation
-          # ne marche pas non plus : sur la v0.59.2 l'etape ne l'a pas trouvee trois secondes
-          # apres qu'electron-builder l'a creee. L'identifiant vient donc du job `preparer`,
-          # qui l'a cree bien avant.
-          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
-            echo "::error::le job preparer n'a pas rendu d'identifiant de release"
-            exit 1
-          fi
-          # Un depot d'asset passe par uploads.github.com, jamais par l'API principale.
-          gh api --method POST \
-            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=latest.json" \
-            --header "Content-Type: application/json" --input /tmp/latest.json > /dev/null
-          echo "latest.json publie : les installations Tauri basculeront a leur prochaine verification."
 
   # Leve le brouillon UNE FOIS la version Linux verifiee. Separe du build pour s'executer
   # meme si le job macOS a echoue : un echec la-bas ne doit pas priver les utilisateurs

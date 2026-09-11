@@ -96,9 +96,6 @@ async fn repondre(
         // Les preferences d'interface laissees par la version WebKitGTK. Servie par le
         // pont et non par le catalogue genere : elle n'a pas de commande Tauri en face,
         // c'est un geste propre a la coquille.
-        "preferences_heritees" => {
-            valeur(serde_json::to_value(crate::preferences_heritees::lire()))
-        }
         // **CHAQUE BRANCHE APPELLE LA FONCTION DE LA COMMANDE, JAMAIS SA LOGIQUE.**
         // Reecrire `etat.db.get_pending_todos()` ici donnerait deux verites pour une meme
         // reponse, et elles divergeraient au premier correctif applique d'un seul cote.

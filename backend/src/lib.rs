@@ -3,7 +3,6 @@ mod agents;
 mod appearance;
 mod evenements;
 mod ouvrir;
-mod preferences_heritees;
 mod taches;
 pub mod pont;
 mod chemins;
@@ -85,8 +84,8 @@ pub fn chemin_de_la_base(dossier_donnees: &std::path::Path) -> String {
 
 /// Construit l'etat applicatif. **Aucun hote en particulier n'est suppose ici** : ni
 /// `AppHandle`, ni fenetre, ni Tauri. Ce qui reste au `setup` de l'appelant, ce sont les
-/// EFFETS qui precedent (ouvrir la base, mettre le guetteur en marche, preparer les
-/// terminaux), parce qu'ils dependent de l'hote et pas de l'etat.
+/// EFFETS qui precedent (ouvrir la base, preparer les terminaux), parce qu'ils dependent
+/// de l'hote et pas de l'etat.
 ///
 /// L'orchestrateur reste construit ici et non passe en argument : il derive des projets
 /// que la base contient deja, donc le calculer dehors donnerait deux facons de l'obtenir.
@@ -1385,13 +1384,7 @@ async fn machine_report() -> report::MachineInfo {
         .unwrap_or_else(|_| report::machine_info().clone())
 }
 
-/// Relance l'application : la nouvelle instance est lancee, puis celle-ci s'arrete.
-///
-/// `async fn` car elle lance un processus externe. Le chemin est celui du guetteur : il
-/// libere le nom single-instance AVANT de lancer (sinon la nouvelle instance se tue en le
-/// trouvant pris), choisit `$APPIMAGE` sous AppImage, et journalise. La mise a jour, elle,
-/// reste sur le `relaunch()` du plugin process : son flux est verifie de bout en bout et
-/// l'AppImage le met a l'abri de la course (sa nouvelle instance demarre lentement).
+/// Ecrit une ligne dans un fichier de mise au point, hors du journal de l'application.
 #[commande]
 async fn debug_log(line: String) {
     use std::io::Write;
