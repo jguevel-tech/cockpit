@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les volets étaient perdus quand on revenait sur l'onglet Terminal en cliquant un terminal
+  dans la barre latérale, la palette ou le tableau de bord : un seul volet réapparaissait, et
+  son contenu semblait vide parce qu'il passait en pleine largeur. La disposition n'était pas
+  perdue, elle n'était simplement pas relue.
+
 ## [0.63.1] — 2026-09-11
 
 ### Fixed

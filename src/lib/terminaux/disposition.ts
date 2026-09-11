@@ -134,6 +134,111 @@ export function cheminDe(noeud: Noeud | null, cible: number, chemin: Chemin = []
 }
 
 /**
+ * Affiche la session `id` dans la disposition, sans jamais reduire le nombre de volets.
+ *
+ * **AFFICHER UN TERMINAL NE FERME PAS LES VOLETS, ET L'OUBLI A ETE LIVRE (0.63.0).** Sur une
+ * disposition VIDE, montrer un terminal donne evidemment un volet unique. Le piege est que la
+ * disposition rangee en base est relue de facon asynchrone : revenir sur l'onglet Terminal en
+ * cliquant un terminal de la barre laterale activait la session AVANT la relecture, donc sur
+ * une disposition vide, donc les volets disparaissaient — ils etaient pourtant intacts en base,
+ * simplement jamais relus. La regle vit ici, avec ses essais, et non plus dans un composant de
+ * mille lignes ou personne ne peut l'eprouver.
+ *
+ * Quand la session n'est pas affichee, elle PREND LA PLACE du volet actif : « ouvre ce
+ * terminal ICI » plutot que « ferme mes volets ».
+ */
+export function poserLaSession(
+  noeud: Noeud | null,
+  id: number,
+  actif: number | null,
+): Noeud {
+  if (!noeud) return feuille(id);
+  const affichees = sessionsAffichees(noeud);
+  if (affichees.includes(id)) return noeud;
+  const remplace = actif !== null && affichees.includes(actif) ? actif : affichees[0];
+  return remplacerFeuille(noeud, remplace, id);
+}
+
+/** Remplace la session d'un volet par une autre, sans toucher a la geometrie. */
+export function remplacerFeuille(noeud: Noeud, cible: number, remplacant: number): Noeud {
+  if (noeud.type === "feuille") {
+    return noeud.id === cible ? feuille(remplacant) : noeud;
+  }
+  return {
+    ...noeud,
+    a: remplacerFeuille(noeud.a, cible, remplacant),
+    b: remplacerFeuille(noeud.b, cible, remplacant),
+  };
+}
+
+/** Ou l'on lache un volet sur un autre. `centre` echange les deux. */
+export type Cote = "gauche" | "droite" | "haut" | "bas" | "centre";
+
+/**
+ * Insere `nouveau` a cote du volet qui affiche `cible`.
+ *
+ * **`diviser` NE SUFFIT PAS : elle met toujours le nouveau APRES.** Pour lacher un volet en
+ * haut ou a gauche, il faut pouvoir le mettre AVANT — sinon deplacer vers la gauche donnerait
+ * le meme resultat que vers la droite, et le geste mentirait.
+ */
+export function inserer(
+  noeud: Noeud,
+  cible: number,
+  sens: Division["sens"],
+  nouveau: number,
+  avant: boolean,
+): Noeud {
+  if (noeud.type === "feuille") {
+    if (noeud.id !== cible) return noeud;
+    const neuf = feuille(nouveau);
+    return {
+      type: "division",
+      sens,
+      ratio: 0.5,
+      a: avant ? neuf : noeud,
+      b: avant ? noeud : neuf,
+    };
+  }
+  return {
+    ...noeud,
+    a: inserer(noeud.a, cible, sens, nouveau, avant),
+    b: inserer(noeud.b, cible, sens, nouveau, avant),
+  };
+}
+
+/** Echange la place de deux volets, sans toucher a la forme de l'arbre ni aux ratios. */
+export function echanger(noeud: Noeud, un: number, autre: number): Noeud {
+  if (noeud.type === "feuille") {
+    if (noeud.id === un) return feuille(autre);
+    if (noeud.id === autre) return feuille(un);
+    return noeud;
+  }
+  return { ...noeud, a: echanger(noeud.a, un, autre), b: echanger(noeud.b, un, autre) };
+}
+
+/**
+ * Deplace le volet `source` contre le volet `cible`, du cote demande.
+ *
+ * **LE VOLET EST RETIRE AVANT D'ETRE REPOSE**, sinon il apparaitrait deux fois. Consequence
+ * a connaitre : retirer peut faire remonter un voisin et changer la forme de l'arbre autour
+ * de la cible — c'est voulu, c'est ce qui evite de laisser un trou la ou le volet etait.
+ *
+ * Rend l'arbre INCHANGE quand le deplacement n'a pas de sens (sur soi-meme, ou un volet
+ * ferme entre-temps) : un geste sans effet vaut mieux qu'une disposition cassee.
+ */
+export function deplacer(racine: Noeud, source: number, cible: number, cote: Cote): Noeud {
+  if (source === cible) return racine;
+  const presents = sessionsAffichees(racine);
+  if (!presents.includes(source) || !presents.includes(cible)) return racine;
+  if (cote === "centre") return echanger(racine, source, cible);
+  const sans = retirer(racine, source);
+  // Deux volets seulement : en retirer un ne laisse qu'une feuille, qui est la cible.
+  if (!sans) return racine;
+  const sens = cote === "gauche" || cote === "droite" ? "colonnes" : "lignes";
+  return inserer(sans, cible, sens, source, cote === "gauche" || cote === "haut");
+}
+
+/**
  * Relit une disposition rangee en base. **Tolerante par construction** : tout ce qui n'est pas
  * exactement la forme attendue rend `null`, et l'onglet repart sur un volet unique. Une
  * disposition illisible ne doit jamais empecher d'ouvrir ses terminaux.

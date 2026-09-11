@@ -218,8 +218,8 @@
   import ContextMenu from "../ui/ContextMenu.svelte";
   import VoletTerminal from "./VoletTerminal.svelte";
   import {
-    depuisJson, diviser, feuille, fixerRatio, nettoyer, nombreDeVolets, retirer,
-    sessionsAffichees, type Chemin, type Noeud,
+    depuisJson, diviser, feuille, fixerRatio, nettoyer, nombreDeVolets, poserLaSession,
+    retirer, sessionsAffichees, type Chemin, type Noeud,
   } from "../../terminaux/disposition";
   import { getAppSettings, setAppSetting } from "../../api/recorder";
   import {
@@ -351,6 +351,17 @@
       const existing = await listTerminals(name);
       sessions = existing.map((t) => ({ id: t.id, alive: true, name: t.name }));
 
+      // **LA DISPOSITION SE RELIT AVANT TOUTE ACTIVATION, ET C'EST LA REGRESSION DE LA
+      // 0.63.0.** Les deux lignes qui suivent SORTENT du montage quand elles ont fait leur
+      // travail ; la relecture vivait apres elles, donc revenir sur l'onglet Terminal en
+      // cliquant un terminal de la barre laterale (ou par la palette, le tableau de bord,
+      // une commande rapide, un `docker exec`) activait une session sur une disposition
+      // encore vide : `poserLaSession` repartait alors sur un volet unique et les volets
+      // disparaissaient de l'ecran. Ils etaient intacts en base, jamais relus.
+      if (sessions.length > 0) {
+        disposition = await relireLaDisposition(sessions.map((s) => s.id));
+      }
+
       // La commande d'abord : elle CREE un terminal, alors qu'une demande d'ouverture ne
       // fait qu'activer un terminal existant.
       if (commande !== null && (await honorerCommande(commande))) return;
@@ -365,9 +376,6 @@
       if (sessions.length === 0) {
         if (!restaure) await addTerminal();
       } else {
-        // La disposition d'avant, nettoyee des sessions disparues. Elle est posee AVANT
-        // d'activer : sinon `showOnly` repartirait sur un volet unique et l'ecraserait.
-        disposition = await relireLaDisposition(sessions.map((s) => s.id));
         const premier = sessionsAffichees(disposition)[0] ?? sessions[0].id;
         await activate(premier);
       }
@@ -802,27 +810,8 @@
   /// Montre `id` dans la disposition. Si la session n'y est pas encore, elle prend la place du
   /// volet actif : « ouvre ce terminal ICI » plutot que « ferme mes volets ».
   function showOnly(id: number) {
-    if (!disposition) {
-      disposition = feuille(id);
-    } else if (!sessionsAffichees(disposition).includes(id)) {
-      const remplace = activeId !== null && sessionsAffichees(disposition).includes(activeId)
-        ? activeId
-        : sessionsAffichees(disposition)[0];
-      disposition = remplacerFeuille(disposition, remplace, id);
-    }
+    disposition = poserLaSession(disposition, id, activeId);
     disposerLesVolets();
-  }
-
-  /// Remplace la session d'un volet par une autre, sans toucher a la geometrie.
-  function remplacerFeuille(noeud: Noeud, cible: number, remplacant: number): Noeud {
-    if (noeud.type === "feuille") {
-      return noeud.id === cible ? feuille(remplacant) : noeud;
-    }
-    return {
-      ...noeud,
-      a: remplacerFeuille(noeud.a, cible, remplacant),
-      b: remplacerFeuille(noeud.b, cible, remplacant),
-    };
   }
 
   // --- Recherche dans le terminal, historique compris ---
