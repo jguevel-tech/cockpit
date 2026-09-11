@@ -204,7 +204,7 @@ function cheminDuBackend() {
   const nom = process.platform === 'win32' ? 'cockpit.exe' : 'cockpit'
   return app.isPackaged
     ? path.join(process.resourcesPath, nom)
-    : path.join(__dirname, '..', 'src-tauri', 'target', 'debug', nom)
+    : path.join(__dirname, '..', 'backend', 'target', 'debug', nom)
 }
 
 // --- Le pont : ce que la page peut demander --------------------------------------------

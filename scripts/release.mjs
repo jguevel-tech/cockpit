@@ -16,14 +16,14 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG = resolve(ROOT, "package.json");
-const CARGO = resolve(ROOT, "src-tauri/Cargo.toml");
+const CARGO = resolve(ROOT, "backend/Cargo.toml");
 // La coquille Electron porte SA version, et c'est elle qu'electron-builder publie. Oubliee,
 // la release part sous l'ancien numero : le 2026-09-10 le tag disait v0.59.0 et le paquet
 // 0.58.2, donc la release attendue n'existait nulle part et le job de publication cherchait
 // un tag sans objet. Son VERROU compte aussi — `npm ci` refuse une version qui diverge.
 const COQUILLE = resolve(ROOT, "coquille/package.json");
 const COQUILLE_LOCK = resolve(ROOT, "coquille/package-lock.json");
-const LOCK = resolve(ROOT, "src-tauri/Cargo.lock");
+const LOCK = resolve(ROOT, "backend/Cargo.lock");
 const CHANGELOG = resolve(ROOT, "CHANGELOG.md");
 
 const die = (msg) => {
@@ -151,7 +151,7 @@ writeFileSync(
 // --- 5. Commit + tag (jamais de push) ---
 
 git("add", "package.json", "coquille/package.json", "coquille/package-lock.json",
-      "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "CHANGELOG.md");
+      "backend/Cargo.toml", "backend/Cargo.lock", "CHANGELOG.md");
 git("commit", "-m", `Release ${next}`);
 git("tag", "-a", `v${next}`, "-m", `Release ${next}\n\n${notes}`);
 

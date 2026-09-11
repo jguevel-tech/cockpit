@@ -141,7 +141,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: backend
           cache-on-failure: true
           # Cle fixe : le cache est reutilise d'une release a la suivante tant que
           # Cargo.lock ne bouge pas.
@@ -167,7 +167,7 @@ jobs:
       # la-dessus : `gdk-sys` introuvable a l'etape des tests, alors que le paquet, lui,
       # n'en a aucun besoin.
       - name: Tests Rust
-        run: cargo test --release --no-default-features --manifest-path src-tauri/Cargo.toml
+        run: cargo test --release --no-default-features --manifest-path backend/Cargo.toml
 
       # **LE BACKEND LIVRE EST CELUI SANS TAURI.** Construit avec la feature, il reclamerait
       # webkit2gtk chez l'utilisateur et embarquerait le moteur qu'on cherche a quitter.
@@ -184,7 +184,7 @@ jobs:
           COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
           # Serveur maison sans certificat : le HTTP est assume ici, explicitement.
           COCKPIT_REPORT_ALLOW_HTTP: ${{ secrets.COCKPIT_REPORT_ALLOW_HTTP }}
-        run: cargo build --release --no-default-features --manifest-path src-tauri/Cargo.toml
+        run: cargo build --release --no-default-features --manifest-path backend/Cargo.toml
 
       - name: Interface
         run: npm run build

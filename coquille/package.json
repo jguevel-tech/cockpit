@@ -10,7 +10,7 @@
   },
   "version": "0.59.4",
   "scripts": {
-    "backend": ". ../../.claude/env-construction.sh && cd ../src-tauri && cargo build --release --no-default-features",
+    "backend": ". ../../.claude/env-construction.sh && cd ../backend && cargo build --release --no-default-features",
     "paquet": "npm run backend && electron-builder"
   },
   "build": {
@@ -36,13 +36,13 @@
         "AppImage"
       ],
       "category": "Development",
-      "icon": "../src-tauri/icons/128x128@2x.png",
+      "icon": "../backend/icons/128x128@2x.png",
       "executableName": "cockpit",
       "syncDesktopName": true,
       "description": "Terminaux, notes, fichiers et git, projet par projet",
       "extraResources": [
         {
-          "from": "../src-tauri/target/release/cockpit",
+          "from": "../backend/target/release/cockpit",
           "to": "cockpit"
         }
       ]
@@ -60,11 +60,11 @@
         "zip"
       ],
       "category": "public.app-category.developer-tools",
-      "icon": "../src-tauri/icons/icon.icns",
+      "icon": "../backend/icons/icon.icns",
       "identity": null,
       "extraResources": [
         {
-          "from": "../src-tauri/target/release/cockpit",
+          "from": "../backend/target/release/cockpit",
           "to": "cockpit"
         }
       ]
@@ -73,10 +73,10 @@
       "target": [
         "nsis"
       ],
-      "icon": "../src-tauri/icons/icon.ico",
+      "icon": "../backend/icons/icon.ico",
       "extraResources": [
         {
-          "from": "../src-tauri/target/release/cockpit.exe",
+          "from": "../backend/target/release/cockpit.exe",
           "to": "cockpit.exe"
         }
       ]

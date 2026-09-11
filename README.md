@@ -183,7 +183,7 @@ provider declares what it can do (past conversations, subscription sign-in, writ
 transcription, plugins) and the interface only shows what exists: no button promising what your
 provider cannot do.
 
-Adding a provider takes one declaration in the app's catalogue (`src-tauri/src/llm/`), not a
+Adding a provider takes one declaration in the app's catalogue (`backend/src/llm/`), not a
 rewrite. Twelve are recognised out of the box, and an agent running in any terminal is detected
 whichever one it is.
 
@@ -260,7 +260,7 @@ On macOS, Xcode Command Line Tools are enough.
 | `npm run check` | frontend type checking |
 | `npm run test:front` | tests for the pure frontend modules (plain Node, nothing to install) |
 | `npm run i18n:audit` | fails while any displayed string is still hardcoded |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | Rust tests |
+| `cargo test --manifest-path backend/Cargo.toml` | Rust tests |
 | `npx tauri build --no-bundle` | development binary |
 
 > Always build with `npx tauri build`, never `cargo build --release` alone: without the Tauri CLI's
@@ -300,7 +300,7 @@ src/                  Svelte 5 (runes) + TypeScript frontend
   lib/stores/         Shared reactive state, notification producers
   styles/             Theme tokens and shared classes
 
-src-tauri/src/        Rust backend
+backend/src/        Rust backend
   terminal/           Terminal service (shells, screen emulator, search), command history
   workspace/          File browser, project search, file management
   llm/                AI providers: catalogue, capabilities (add one = one declaration)
@@ -334,7 +334,7 @@ A change is ready when all of these pass:
 npm run check                                   # 0 errors, 0 warnings
 npm run test:front                              # all green
 npm run i18n:audit                              # no hardcoded displayed string
-cargo test --manifest-path src-tauri/Cargo.toml # all green
+cargo test --manifest-path backend/Cargo.toml # all green
 npx tauri build --no-bundle                     # compiles
 ```
 

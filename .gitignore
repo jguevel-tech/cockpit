@@ -3,7 +3,7 @@ node_modules/
 
 # Builds
 dist/
-src-tauri/target/
+backend/target/
 
 # Cle privee de signature des mises a jour : NE JAMAIS COMMITER.
 # Elle vit en secret GitHub (TAURI_SIGNING_PRIVATE_KEY) et en local hors du repo.

@@ -61,9 +61,9 @@ def analyser(chemin):
 # de la synchro vivent ailleurs : ne lire que lib.rs les rendait injoignables hors Tauri,
 # donc l'onglet compte mort sous la coquille, sans qu'aucune erreur ne le signale.
 SOURCES = [
-    ('src-tauri/src/lib.rs', 'crate::'),
-    ('src-tauri/src/compte/mod.rs', 'crate::compte::'),
-    ('src-tauri/src/compte/synchro.rs', 'crate::compte::synchro::'),
+    ('backend/src/lib.rs', 'crate::'),
+    ('backend/src/compte/mod.rs', 'crate::compte::'),
+    ('backend/src/compte/synchro.rs', 'crate::compte::synchro::'),
 ]
 def compter_les_attributs(chemin):
     """Combien d'attributs de commande ce fichier porte VRAIMENT.

@@ -2,9 +2,9 @@
 """Capture la sortie BRUTE d'un programme dans un PTY de taille fixe (80x24).
 
 Sert a nourrir le test d'aller-retour de l'emulateur de terminal
-(src-tauri/src/terminal/ecran/) avec de VRAIES traces : c'est la seule source de cas
+(backend/src/terminal/ecran/) avec de VRAIES traces : c'est la seule source de cas
 que personne n'aurait pense a ecrire. Les traces obtenues vivent dans
-src-tauri/tests/traces/ et sont embarquees a la compilation du test.
+backend/tests/traces/ et sont embarquees a la compilation du test.
 
 Usage :
     scripts/capturer-trace.py <fichier-de-sortie> <secondes> <entrees-hex> -- cmd args...
@@ -14,8 +14,8 @@ virgules, un groupe toutes les 0,35 s (ex: "1b5b42,71" = fleche bas puis « q »
 Chaine vide pour n'envoyer rien.
 
 Exemples reellement utilises :
-    scripts/capturer-trace.py src-tauri/tests/traces/htop.raw 5 "" -- htop -d 5
-    scripts/capturer-trace.py src-tauri/tests/traces/vim.raw 7 \
+    scripts/capturer-trace.py backend/tests/traces/htop.raw 5 "" -- htop -d 5
+    scripts/capturer-trace.py backend/tests/traces/vim.raw 7 \
         "1b5b42,1b5b42,3a736574206e756d626572,0d" -- vim -u NONE -N +"syntax on" fichier.rs
 
 La taille est FIXEE a 80x24 : le test rejoue les traces dans un ecran de cette taille,
