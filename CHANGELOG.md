@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.64.0] — 2026-09-11
+
 ### Added
 
 - Les volets de terminal se déplacent : on attrape l'étiquette d'un volet et on le lâche sur
