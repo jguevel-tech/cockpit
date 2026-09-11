@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.61.0] — 2026-09-11
+
 ### Removed
 
 - Les installations restées en 0.58.x ne reçoivent plus de mise à jour automatique. Il faut
