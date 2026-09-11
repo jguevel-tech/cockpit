@@ -1,5 +1,12 @@
 # Portabilité Linux · macOS · Windows
 
+> **Études datées du 2026-08-20, à lire comme des archives.** Elles ont été écrites quand
+> l'application tournait sur Tauri et WebKitGTK. Depuis la 0.59.0 la fenêtre est celle
+> d'Electron, et depuis la 0.61.0 il ne reste rien de Tauri dans le dépôt : tout ce qui touche
+> au rendu, à la fenêtre, à l'IPC, à la signature et à la mise à jour y est **périmé**. Ce qui
+> reste vrai — terminaux, audio, chemins, processus, Docker, Git — ne dépend pas du moteur
+> d'affichage. Vérifier avant de s'appuyer sur une de leurs conclusions.
+
 Cinq études faites le 2026-08-20, une par domaine, en lecture seule. Tout ce qui est
 affirmé dedans est mesuré sur la machine ou vérifié dans les sources — pas de mémoire.
 

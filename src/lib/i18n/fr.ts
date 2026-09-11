@@ -10,13 +10,10 @@ export const fr = {
   // Termes revenant partout
   "common.rename": "Renommer",
   "common.delete": "Supprimer",
-  "common.close": "Fermer",
   "common.cancel": "Annuler",
   "common.save": "Enregistrer",
   "common.copy": "Copier",
   "common.paste": "Coller",
-  "common.open": "Ouvrir",
-  "common.done": "Fait",
   "common.and": "et",
 
   // Barre du haut
@@ -198,7 +195,6 @@ export const fr = {
   // Langue
   "common.error": "Erreur",
   "common.optional": "(optionnel)",
-  "common.retry": "Réessayer",
   "common.loading": "Chargement…",
   "common.reset": "Réinitialiser",
   "common.remove": "Retirer",
@@ -659,7 +655,6 @@ export const fr = {
   "term.copied": "Copié dans le presse-papier.",
   "term.agentMenuHint": "Reprendre une conversation {nom}",
   "term.agentNewSession": "+ Nouvelle conversation",
-  "term.loading": "Chargement…",
   "term.noPastConversation": "Aucune conversation passée sur ce projet",
   "term.renameSession": "Renommer cette session",
   "term.sessionNamePlaceholder": "Nom (vide = label auto)",
@@ -817,7 +812,6 @@ export const fr = {
   "compte.recadrer.zone": "Zone de cadrage : flèches pour déplacer, + et − pour agrandir",
   "compte.recadrer.zoom": "Agrandir",
   "compte.recadrer.valider": "Utiliser cette image",
-  "compte.profil.titre": "Mon profil",
   "compte.profil.nom": "Nom affiché",
   "compte.profil.nomExemple": "Comme vous voulez qu'on vous appelle",
   "compte.profil.nomAide": "Il suit le compte, pas la machine : il sera le même partout.",
@@ -861,9 +855,6 @@ export const fr = {
   "settings.compte.machine": "Cette machine",
   "settings.compte.ouvrirLaPage": "Ouvrir mon compte",
   "settings.compte.seConnecter": "Se connecter",
-  "settings.compte.seDeconnecter": "Se déconnecter",
-  "settings.compte.confirmerDeconnexion": "Déconnecter cette machine du compte ?\nVos données locales ne sont pas touchées.",
-  "settings.compte.deconnecte": "Machine déconnectée du compte.",
   "settings.compte.synchro": "Dernière synchronisation",
   "settings.compte.synchroEnCours": "en cours…",
   "settings.compte.synchroJamais": "jamais",

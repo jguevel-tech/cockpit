@@ -240,32 +240,33 @@ On macOS, `Cmd` works everywhere `Ctrl` does.
 ```sh
 git clone https://github.com/jguevel-tech/cockpit.git
 cd cockpit
-npm install
-npx tauri dev
+npm install && npm run build          # the shell serves dist/
+cd backend && cargo build && cd ..    # the binary the shell launches
+cd coquille && npm install && npm run dev
 ```
 
 ### Build dependencies (Linux)
 
 ```sh
-sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf libasound2-dev
+sudo apt install libasound2-dev
 ```
 
-On macOS, Xcode Command Line Tools are enough.
+That is the whole list: the backend links four libraries and opens no window — the window is
+Electron's. On macOS, Xcode Command Line Tools are enough.
 
 ### Commands
 
 | Command | What it does |
 |---|---|
-| `npx tauri dev` | development with hot reload |
+| `npm run dev` (in `coquille/`) | opens the app on the built frontend |
 | `npm run check` | frontend type checking |
 | `npm run test:front` | tests for the pure frontend modules (plain Node, nothing to install) |
 | `npm run i18n:audit` | fails while any displayed string is still hardcoded |
 | `cargo test --manifest-path backend/Cargo.toml` | Rust tests |
-| `npx tauri build --no-bundle` | development binary |
+| `npm run paquet` (in `coquille/`) | builds the backend, then the installable package |
 
-> Always build with `npx tauri build`, never `cargo build --release` alone: without the Tauri CLI's
-> environment variables the binary comes out in development mode and looks for a Vite server on
-> `localhost:5173`.
+> A packaging fix is measured on the package that comes **out of the build chain**, never on a
+> hand-edited extracted tree: the build also rewrites what it embeds.
 
 ### Screenshots
 
@@ -295,7 +296,7 @@ machine name — a hostname has no business on a public page.
 
 ```
 src/                  Svelte 5 (runes) + TypeScript frontend
-  lib/api/            Typed wrappers around Tauri commands
+  lib/api/            Typed wrappers around backend commands
   lib/components/     Components, grouped by domain (docs/ = built-in guide)
   lib/stores/         Shared reactive state, notification producers
   styles/             Theme tokens and shared classes
@@ -318,8 +319,8 @@ The terminal service is a **second process**: the same binary launched with
 `--service-terminaux`, detached so it outlives the window. It talks to the app over a Unix socket
 (a named pipe on Windows) with its own versioned protocol.
 
-Frontend and backend talk exclusively over Tauri's IPC: `invoke` for calls, events for real-time
-updates. No HTTP server, no WebSocket. Releases ship from a Linux + macOS + Windows CI matrix that
+Frontend and backend talk exclusively through the Electron shell: `invoke` for calls, events for
+real-time updates. No HTTP server, no WebSocket. Releases ship from a Linux + macOS + Windows CI matrix that
 runs the full test suite before bundling anything.
 
 ---
@@ -335,7 +336,7 @@ npm run check                                   # 0 errors, 0 warnings
 npm run test:front                              # all green
 npm run i18n:audit                              # no hardcoded displayed string
 cargo test --manifest-path backend/Cargo.toml # all green
-npx tauri build --no-bundle                     # compiles
+cd coquille && npm run paquet                   # builds the package
 ```
 
 Every displayed string lives in **both** catalogues (`src/lib/i18n/fr.ts`, then `en.ts`) — French
