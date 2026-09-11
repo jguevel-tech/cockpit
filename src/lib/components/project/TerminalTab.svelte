@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import { listen as listenGlobal } from "@tauri-apps/api/event";
+  import { ecouter as listenGlobal } from "../../coquille";
   import { cheminDuFichier } from "../../coquille";
   import { writeTerminal } from "../../api/workspace";
   import { notify as notifyGlobal } from "../../stores/toast";
