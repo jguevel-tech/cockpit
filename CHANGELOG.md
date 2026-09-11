@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.63.0] — 2026-09-11
+
 ### Added
 
 - Les terminaux se divisent en volets : clic droit dans un terminal → « Diviser à droite » ou
