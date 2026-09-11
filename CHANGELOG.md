@@ -12,6 +12,21 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les volets de terminal se déplacent : on attrape l'étiquette d'un volet et on le lâche sur
+  un bord d'un autre pour le poser à gauche, à droite, au-dessus ou en dessous, ou au milieu
+  pour échanger les deux. Les mêmes gestes sont dans le clic droit, qui ne propose que les
+  directions où il y a vraiment un volet.
+
+### Fixed
+
+- Une fenêtre d'erreur « Object has been destroyed » apparaissait au redémarrage qui suit une
+  mise à jour : le backend parlait encore à une fenêtre déjà fermée.
+- Après une mise à jour, un terminal pouvait se retrouver en deux colonnes, une lettre par
+  ligne : sa taille était calculée avant que son volet en ait une, et rien ne la rattrapait
+  ensuite.
+
 ## [0.63.2] — 2026-09-11
 
 ### Fixed

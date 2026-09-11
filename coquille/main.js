@@ -262,9 +262,19 @@ const ecoutes = new Set()
 ipcMain.on('cockpit:ecouter', (_evenement, nom) => ecoutes.add(nom))
 ipcMain.on('cockpit:ignorer', (_evenement, nom) => ecoutes.delete(nom))
 
-/** Pousse un evenement vers la page. Le pont vers le backend Rust appellera ceci. */
+/**
+ * Pousse un evenement vers la page. Le pont vers le backend Rust appellera ceci.
+ *
+ * **LA FENETRE MEURT AVANT LE BACKEND, ET CA A EXPLOSE CHEZ L'UTILISATEUR.** Vu le
+ * 2026-09-11 au redemarrage qui suit une mise a jour : la fenetre est detruite, le backend
+ * n'a pas encore fini de vider ce qu'il avait a dire, et la premiere ligne qui arrive
+ * appelle `send` sur un objet mort — `TypeError: Object has been destroyed`, une fenetre
+ * d'erreur avant l'interface. Le backend est un PROCESSUS SEPARE : il n'y a aucun instant ou
+ * l'on puisse garantir qu'il s'est taire avant elle. On verifie donc, a chaque envoi.
+ */
 function pousserEvenement(nom, charge, fenetre) {
   if (!ecoutes.has(nom)) return
+  if (!fenetre || fenetre.isDestroyed() || fenetre.webContents.isDestroyed()) return
   fenetre.webContents.send('cockpit:evenement', nom, charge)
 }
 

@@ -5,7 +5,8 @@
   /// **LE COMPOSANT NE TOUCHE JAMAIS A XTERM.** Il rend un conteneur vide et previent
   /// l'onglet, qui y deplace l'element du terminal. C'est ce qui garde le pool de terminaux
   /// intact : un xterm recree repartirait vide et exigerait un redessin complet.
-  import type { Chemin, Noeud } from "../../terminaux/disposition";
+  import type { Chemin, Cote, Noeud } from "../../terminaux/disposition";
+  import { trad } from "../../i18n";
   import Self from "./VoletTerminal.svelte";
 
   interface Props {
@@ -26,19 +27,40 @@
     libelle: (id: number) => string;
     /// Un seul volet : ni etiquette ni separateur, l'affichage d'avant.
     seul: boolean;
+    /// La poignee vient d'etre saisie : l'onglet suit le pointeur et deplace le volet.
+    surPoignee: (evenement: PointerEvent, id: number) => void;
+    /// Le volet en cours de deplacement, et l'endroit vise. Les deux viennent de l'onglet :
+    /// lui seul connait la geometrie de tous les volets.
+    deplace: number | null;
+    vise: { cible: number; cote: Cote } | null;
   }
 
-  let { noeud, chemin = [], actif, surVolet, surClic, surSeparateur, libelle, seul }: Props =
-    $props();
+  let {
+    noeud, chemin = [], actif, surVolet, surClic, surSeparateur, libelle, seul,
+    surPoignee, deplace, vise,
+  }: Props = $props();
 
   /// Le conteneur du volet est confie a l'onglet, qui y deplace l'element du terminal. Une
   /// action et non un `bind:this` : il faut aussi savoir quand le volet DISPARAIT, sinon
   /// l'onglet garderait un conteneur detache et y rangerait un terminal invisible.
   function accueillir(element: HTMLDivElement, id: number) {
-    surVolet(id, element);
+    let courant = id;
+    surVolet(courant, element);
     return {
+      /// **SANS CE `update`, DEPLACER UN VOLET NE DEPLACE QUE SON ETIQUETTE.** Une action ne
+      /// se rejoue pas quand son parametre change : quand deux volets echangent leur session,
+      /// Svelte REUTILISE les memes conteneurs et met simplement a jour les props. L'onglet
+      /// gardait alors l'ancienne association, les xterm restaient ou ils etaient, et le nom
+      /// affiche ne correspondait plus au terminal en dessous. Mesure au banc le 2026-09-11 :
+      /// les etiquettes s'echangeaient, les contenus non.
+      update(nouveau: number) {
+        if (nouveau === courant) return;
+        surVolet(courant, null);
+        courant = nouveau;
+        surVolet(courant, element);
+      },
       destroy() {
-        surVolet(id, null);
+        surVolet(courant, null);
       },
     };
   }
@@ -52,9 +74,26 @@
     onpointerdown={() => surClic(noeud.id)}
   >
     {#if !seul}
-      <span class="etiquette">{libelle(noeud.id)}</span>
+      <!-- **UN VRAI `<button>`** : la poignee se prend au clavier comme a la souris, et elle
+           herite des classes partagees. `touch-action: none` sinon le geste part en
+           defilement sur un ecran tactile. -->
+      <button
+        class="etiquette"
+        class:pris={deplace === noeud.id}
+        title={$trad("term.voletDeplacerAide")}
+        aria-label={$trad("term.voletDeplacerAide")}
+        onpointerdown={(e) => surPoignee(e, noeud.id)}
+      >
+        <span class="grip" aria-hidden="true">⠿</span>
+        {libelle(noeud.id)}
+      </button>
     {/if}
     <div class="hote" use:accueillir={noeud.id}></div>
+    {#if vise && vise.cible === noeud.id}
+      <!-- Ou le volet atterrira. Peint PAR-DESSUS le terminal, sans capter le pointeur :
+           le geste est suivi par la poignee, qui a la capture. -->
+      <div class="depot {vise.cote}" aria-hidden="true"></div>
+    {/if}
   </div>
 {:else}
   <div class="division {noeud.sens}" style:--part="{noeud.ratio * 100}%">
@@ -68,6 +107,9 @@
         {surSeparateur}
         {libelle}
         {seul}
+        {surPoignee}
+        {deplace}
+        {vise}
       />
     </div>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -87,6 +129,9 @@
         {surSeparateur}
         {libelle}
         {seul}
+        {surPoignee}
+        {deplace}
+        {vise}
       />
     </div>
   </div>
@@ -115,20 +160,57 @@
     width: 100%;
     height: 100%;
   }
+  /* La poignee : discrete au repos, franche des qu'on la survole. Elle porte un fond OPAQUE
+     parce qu'elle est posee sur un terminal, et que sous image de fond un `--bg-*` la rendrait
+     translucide au-dessus du texte. */
   .etiquette {
     position: absolute;
     top: 3px;
     right: 7px;
-    z-index: 2;
-    padding: 1px 6px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border: 1px solid transparent;
     border-radius: 999px;
-    background: var(--bg-tertiary);
+    background: var(--surface-base, var(--bg-tertiary));
     color: var(--text-muted);
     font-size: 10px;
     line-height: 1.6;
-    pointer-events: none;
-    opacity: 0.75;
+    cursor: grab;
+    opacity: 0.6;
+    touch-action: none;
   }
+  .etiquette:hover,
+  .etiquette:focus-visible {
+    opacity: 1;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+  }
+  .etiquette.pris {
+    opacity: 1;
+    cursor: grabbing;
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+  .grip { letter-spacing: -1px; }
+
+  /* La marque de depot. Un aplat d'accent tres dilue plus un bord franc du cote vise : c'est
+     le BORD qui dit ou le volet va se poser, l'aplat ne fait que designer la cible. */
+  .depot {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border: 2px solid var(--accent);
+    border-radius: 3px;
+  }
+  .depot.gauche { inset: 0 50% 0 0; }
+  .depot.droite { inset: 0 0 0 50%; }
+  .depot.haut { inset: 0 0 50% 0; }
+  .depot.bas { inset: 50% 0 0 0; }
+  .depot.centre { inset: 0; }
 
   .division {
     display: flex;

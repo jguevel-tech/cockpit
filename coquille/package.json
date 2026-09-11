@@ -12,7 +12,8 @@
   "scripts": {
     "dev": "electron . --no-sandbox",
     "backend": ". ../../.claude/env-construction.sh && cd ../backend && cargo build --release",
-    "paquet": "npm run backend && electron-builder"
+    "interface": "cd .. && npm run build",
+    "paquet": "npm run interface && npm run backend && electron-builder"
   },
   "build": {
     "appId": "com.cockpit.dev",

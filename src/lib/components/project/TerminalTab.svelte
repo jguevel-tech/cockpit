@@ -218,9 +218,10 @@
   import ContextMenu from "../ui/ContextMenu.svelte";
   import VoletTerminal from "./VoletTerminal.svelte";
   import {
-    depuisJson, diviser, feuille, fixerRatio, nettoyer, nombreDeVolets, poserLaSession,
-    retirer, sessionsAffichees, type Chemin, type Noeud,
+    deplacer, depuisJson, diviser, feuille, fixerRatio, nettoyer, nombreDeVolets,
+    poserLaSession, retirer, sessionsAffichees, type Chemin, type Cote, type Noeud,
   } from "../../terminaux/disposition";
+  import { coteVise, dansLeCadre, voisinLePlusProche } from "../../terminaux/visee";
   import { getAppSettings, setAppSetting } from "../../api/recorder";
   import {
     conversationsLlm,
@@ -251,6 +252,9 @@
   /// Le conteneur de chaque volet affiche, tenu par le composant qui le rend.
   const hotes = new Map<number, HTMLDivElement>();
   const voletsAffiches = $derived(sessionsAffichees(disposition));
+  /// Le volet qu'on est en train de deplacer, et l'endroit vise sous le pointeur.
+  let voletDeplace: number | null = $state(null);
+  let voletVise: { cible: number; cote: Cote } | null = $state(null);
   const plusieursVolets = $derived(nombreDeVolets(disposition) > 1);
 
   // Conversations passees de l'agent choisi dans les reglages. Le fournisseur vient du
@@ -1013,9 +1017,13 @@
     // les yeux de l'utilisateur. Le terminal doit donc deja etre DANS son volet, sinon il
     // est mesure a la taille du conteneur entier.
     disposerLesVolets();
-    try { entry.fit.fit(); } catch {}
-    const cols = entry.term.cols || 80;
-    const rows = entry.term.rows || 24;
+    // Meme regle qu'au recalcul : une mesure prise sur un volet sans taille donnerait deux
+    // colonnes, et le service alignerait la session dessus AVANT son redessin.
+    if (mesurable(entry.el)) {
+      try { entry.fit.fit(); } catch {}
+    }
+    const cols = Math.max(entry.term.cols || 80, COLONNES_MIN);
+    const rows = Math.max(entry.term.rows || 24, LIGNES_MIN);
     lastSentSize.set(id, `${cols}x${rows}`);
 
     try {
@@ -1050,10 +1058,39 @@
       const entry = pool.get(id);
       if (!entry || entry.el.style.display === "none") continue;
       try {
+        if (!mesurable(entry.el)) {
+          // Le volet n'a pas encore de taille : mesurer ici donnerait deux colonnes, et on
+          // les enverrait au PTY. On repasse plus tard.
+          planifierFit();
+          continue;
+        }
         entry.fit.fit();
+        if (entry.term.cols < COLONNES_MIN || entry.term.rows < LIGNES_MIN) {
+          planifierFit();
+          continue;
+        }
         queueResize(id, entry.term.cols, entry.term.rows);
       } catch {}
     }
+  }
+
+  /// **UNE TAILLE MESUREE TROP TOT DENATURE LE TERMINAL POUR DE BON, ET C'EST ARRIVE APRES
+  /// UNE MISE A JOUR (2026-09-11).** Au redemarrage, le fit tombait avant que le volet ait
+  /// sa taille : le PTY etait alors mis a deux colonnes, et tout ce que le shell ou une TUI
+  /// ecrivait ensuite s'empilait en une colonne de lettres. Rien ne le rattrape apres coup —
+  /// « une TUI se dessine a la taille du PTY et personne ne la redimensionne apres ».
+  /// Une mesure qui n'est pas plausible n'est donc jamais ENVOYEE : on repasse plus tard,
+  /// le recalcul differe et l'observateur de taille s'en chargent.
+  const COLONNES_MIN = 8;
+  const LIGNES_MIN = 3;
+  /// En dessous, le conteneur n'est pas encore dispose : ce n'est pas un petit volet, c'est
+  /// un volet qui n'a pas de taille. Le plus etroit qu'on autorise vaut un dixieme de la
+  /// largeur, soit bien plus que ca.
+  const PIXELS_MIN = 60;
+
+  function mesurable(element: HTMLElement): boolean {
+    const r = element.getBoundingClientRect();
+    return r.width >= PIXELS_MIN && r.height >= PIXELS_MIN / 2;
   }
 
   /// Le calcul de taille est DIFFERE : pendant un glissement de separateur ou de fenetre, on
@@ -1131,6 +1168,116 @@
     };
     window.addEventListener("pointermove", suivre);
     window.addEventListener("pointerup", finir);
+  }
+
+  // --- Deplacer un volet ----------------------------------------------------------------
+  //
+  // **LE GESTE PART DE LA POIGNEE, PAS DU TERMINAL.** Saisir le terminal lui-meme prendrait
+  // le geste a xterm, dont la selection de texte commence exactement pareil. La poignee est
+  // l'etiquette du volet, qui ne sert a rien d'autre.
+
+  /// En dessous, c'est un clic sur l'etiquette et pas un deplacement. Sans ce seuil, le
+  /// moindre tremblement pendant un clic ferait sauter un volet.
+  const SEUIL_GLISSEMENT = 4;
+
+  /// Les cadres des volets affiches, sauf celui qu'on deplace. La geometrie s'arrete ici :
+  /// ce qu'on en deduit vit dans `terminaux/visee.ts`, avec ses essais.
+  function cadresDesVolets(sauf: number) {
+    return sessionsAffichees(disposition).flatMap((id) => {
+      if (id === sauf) return [];
+      const hote = hotes.get(id);
+      return hote ? [{ id, cadre: hote.getBoundingClientRect() }] : [];
+    });
+  }
+
+  /// Quel volet est sous le pointeur, et de quel cote on y atterrirait.
+  function viseSousLePointeur(x: number, y: number, source: number) {
+    for (const { id, cadre } of cadresDesVolets(source)) {
+      if (!dansLeCadre(cadre, x, y)) continue;
+      return { cible: id, cote: coteVise(cadre, x, y) };
+    }
+    return null;
+  }
+
+  /// Saisie de la poignee d'un volet.
+  ///
+  /// **LA CAPTURE DU POINTEUR EST OBLIGATOIRE**, comme pour le separateur : sans elle, le
+  /// geste se perd des qu'il passe au-dessus d'un terminal.
+  function surPoignee(evenement: PointerEvent, id: number) {
+    if (evenement.button !== 0) return;
+    const poignee = evenement.currentTarget as HTMLElement | null;
+    evenement.preventDefault();
+    poignee?.setPointerCapture?.(evenement.pointerId);
+    const departX = evenement.clientX;
+    const departY = evenement.clientY;
+    let parti = false;
+    const suivre = (e: PointerEvent) => {
+      if (!parti) {
+        if (Math.hypot(e.clientX - departX, e.clientY - departY) < SEUIL_GLISSEMENT) return;
+        parti = true;
+        voletDeplace = id;
+      }
+      voletVise = viseSousLePointeur(e.clientX, e.clientY, id);
+    };
+    const finir = () => {
+      window.removeEventListener("pointermove", suivre);
+      window.removeEventListener("pointerup", finir);
+      const vise = voletVise;
+      voletDeplace = null;
+      voletVise = null;
+      // Un clic simple sur l'etiquette focalise le volet : le geste ne doit pas etre un
+      // cul-de-sac quand on le relache sans avoir bouge.
+      if (!parti) {
+        focaliserLeVolet(id);
+        return;
+      }
+      if (vise) deplacerLeVolet(id, vise.cible, vise.cote);
+    };
+    window.addEventListener("pointermove", suivre);
+    window.addEventListener("pointerup", finir);
+  }
+
+  /// Pose le volet `source` contre `cible`. Source unique du deplacement : le glissement ET
+  /// les entrees du menu contextuel passent par ici.
+  function deplacerLeVolet(source: number, cible: number, cote: Cote) {
+    if (!disposition) return;
+    const avant = disposition;
+    disposition = deplacer(disposition, source, cible, cote);
+    // Rien n'a bouge (sur soi-meme, volet ferme entre-temps) : ne pas ecrire pour rien.
+    if (disposition === avant) return;
+    enregistrerLaDisposition();
+    void assurerLesVolets();
+  }
+
+  /// Le voisin a viser quand le deplacement vient du MENU et non d'un geste : le volet
+  /// affiche le plus proche dans cette direction, sur la ligne ou la colonne du volet visé.
+  /// Rend `null` s'il n'y en a pas — l'entree de menu est alors cachee, pas inerte.
+  function voisinDans(source: number, cote: Cote): number | null {
+    const depart = hotes.get(source)?.getBoundingClientRect();
+    if (!depart) return null;
+    return voisinLePlusProche(depart, cadresDesVolets(source), cote);
+  }
+
+  /// Les entrees « Deplacer vers… » du clic droit.
+  ///
+  /// **UNE ENTREE SANS VOISIN DE CE COTE N'EXISTE PAS**, elle n'est pas grisee : un menu qui
+  /// propose un geste sans effet envoie chercher une difference qui n'existe pas. Et la
+  /// source est CAPTUREE ici, pas relue dans l'action : le menu se ferme avant qu'elle ne
+  /// s'execute, et `activeId` aura change.
+  function entreesDeDeplacement(): { label: string; action: () => void }[] {
+    const source = activeId;
+    if (source === null || !plusieursVolets) return [];
+    const directions = [
+      ["gauche", "term.ctxMoveLeft"],
+      ["droite", "term.ctxMoveRight"],
+      ["haut", "term.ctxMoveUp"],
+      ["bas", "term.ctxMoveDown"],
+    ] as const;
+    return directions.flatMap(([cote, cle]) => {
+      const voisin = voisinDans(source, cote);
+      if (voisin === null) return [];
+      return [{ label: $trad(cle), action: () => deplacerLeVolet(source, voisin, cote) }];
+    });
   }
 
   /// Le clic dans un volet lui donne le focus : c'est lui que visent ensuite la frappe, le
@@ -1436,6 +1583,9 @@
             return s ? tabLabel(s, index) : "";
           }}
           seul={!plusieursVolets}
+          {surPoignee}
+          deplace={voletDeplace}
+          vise={voletVise}
         />
       </div>
     {/if}
@@ -1456,6 +1606,7 @@
       // pour ceux qui les ont vus, mais le clic droit est le geste naturel.
       { label: $trad("term.ctxSplitRight"), action: () => void diviserLeVolet("colonnes") },
       { label: $trad("term.ctxSplitDown"), action: () => void diviserLeVolet("lignes") },
+      ...entreesDeDeplacement(),
     ]}
     onClose={() => (ctxMenu = null)}
   />

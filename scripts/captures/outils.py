@@ -120,6 +120,26 @@ def capturer(sortie: str, largeur: int = 0, racine: bool = False) -> None:
 
 # ── Pilotage ──────────────────────────────────────────────────────────────────────────────────
 
+def _origine_fenetre() -> tuple:
+    """Ou commence la fenetre sur l'ecran.
+
+    **LES CLICS SONT DONNES EN COORDONNEES DE FENETRE, PARCE QUE LES CAPTURES LE SONT.** X,
+    lui, ne connait que l'ecran. Tant que la fenetre touchait le coin haut gauche, les deux
+    se confondaient et personne ne s'en apercevait ; la coquille Electron CENTRE la sienne
+    (mesure du 2026-09-11 : 1400x900 posee en 140,75 sur un ecran de 1680x1050), et tous les
+    clics tombaient alors a cote, sans une erreur — juste des captures qui ne changeaient
+    pas. On lit donc l'origine et on la rajoute.
+    """
+    arbre = subprocess.run(
+        ["xwininfo", "-root", "-children"], capture_output=True, text=True
+    ).stdout
+    for m in re.finditer(r'0x[0-9a-f]+ "Cockpit":.*?(\d+)x(\d+)\+(\d+)\+(\d+)', arbre):
+        largeur, hauteur, x, y = (int(g) for g in m.groups())
+        if largeur > 200 and hauteur > 200:
+            return x, y
+    return 0, 0
+
+
 def _ecran():
     from Xlib import display
 
@@ -131,12 +151,43 @@ def cliquer(x: int, y: int) -> None:
     from Xlib.ext import xtest
 
     d = _ecran()
-    d.screen().root.warp_pointer(x, y)
+    ox, oy = _origine_fenetre()
+    d.screen().root.warp_pointer(x + ox, y + oy)
     d.sync()
     time.sleep(0.2)
     xtest.fake_input(d, X.ButtonPress, 1)
     d.sync()
     time.sleep(0.08)
+    xtest.fake_input(d, X.ButtonRelease, 1)
+    d.sync()
+
+
+def glisser(x1: int, y1: int, x2: int, y2: int, pas: int = 12) -> None:
+    """Presse en (x1, y1), deplace jusqu'a (x2, y2), relache.
+
+    **LE DEPLACEMENT SE FAIT EN PLUSIEURS PAS, ET CE N'EST PAS COSMETIQUE.** Un saut unique
+    ne produit qu'un seul `pointermove` : une interface qui attend un seuil avant de
+    considerer que le geste a commence ne le verrait jamais partir, et le banc conclurait que
+    le glissement ne marche pas alors que c'est le banc qui ne glisse pas.
+    """
+    from Xlib import X
+    from Xlib.ext import xtest
+
+    d = _ecran()
+    ox, oy = _origine_fenetre()
+    d.screen().root.warp_pointer(x1 + ox, y1 + oy)
+    d.sync()
+    time.sleep(0.2)
+    xtest.fake_input(d, X.ButtonPress, 1)
+    d.sync()
+    time.sleep(0.1)
+    for i in range(1, pas + 1):
+        d.screen().root.warp_pointer(
+            int(x1 + (x2 - x1) * i / pas) + ox, int(y1 + (y2 - y1) * i / pas) + oy
+        )
+        d.sync()
+        time.sleep(0.03)
+    time.sleep(0.3)
     xtest.fake_input(d, X.ButtonRelease, 1)
     d.sync()
 
@@ -543,6 +594,8 @@ if __name__ == "__main__":
         )
     elif quoi == "cliquer":
         cliquer(int(sys.argv[2]), int(sys.argv[3]))
+    elif quoi == "glisser":
+        glisser(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]))
     elif quoi == "taper":
         taper(sys.argv[2])
     elif quoi == "arreter":
