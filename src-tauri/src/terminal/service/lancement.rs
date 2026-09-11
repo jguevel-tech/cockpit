@@ -65,7 +65,7 @@ pub(crate) fn binaire_du_service() -> Result<std::path::PathBuf, String> {
     if std::env::var_os("APPIMAGE").is_none() {
         return Ok(exe);
     }
-    let donnees = crate::chemins::dossier_donnees_sans_tauri()
+    let donnees = crate::chemins::calculer_le_dossier_de_donnees()
         .ok_or_else(|| "dossier de donnees introuvable".to_string())?;
     poser_la_copie_du_service(&exe, &donnees.join("service"), env!("CARGO_PKG_VERSION"))
 }

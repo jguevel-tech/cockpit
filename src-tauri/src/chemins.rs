@@ -49,7 +49,7 @@ fn resoudre_dossier_personnel(
         .to_string())
 }
 
-/// L'identifiant du paquet, tel qu'il figure aussi dans `tauri.conf.json`. Un essai le
+/// L'identifiant du paquet, tel qu'il figure aussi dans la coquille. Un essai le
 /// verifie : les deux valeurs doivent rester egales, sinon ce chemin et celui de Tauri
 /// divergent EN SILENCE et le fichier cherche n'est jamais trouve.
 pub const IDENTIFIANT: &str = "com.cockpit.dev";
@@ -68,7 +68,7 @@ pub const IDENTIFIANT: &str = "com.cockpit.dev";
 /// L'alignement avec `app_data_dir()` n'est tenu par un essai que sous Linux, faute d'y
 /// pouvoir executer les deux autres. Les regles y sont celles des conventions du systeme,
 /// pas une mesure : `%APPDATA%` sous Windows, `~/Library/Application Support` sous macOS.
-pub fn dossier_donnees_sans_tauri() -> Option<PathBuf> {
+pub fn calculer_le_dossier_de_donnees() -> Option<PathBuf> {
     #[cfg(target_os = "linux")]
     {
         let base = std::env::var_os("XDG_DATA_HOME")
@@ -212,11 +212,11 @@ mod tests {
 
         std::env::set_var("XDG_DATA_HOME", "/tmp/essai-donnees");
         assert_eq!(
-            dossier_donnees_sans_tauri(),
+            calculer_le_dossier_de_donnees(),
             Some(PathBuf::from("/tmp/essai-donnees").join(IDENTIFIANT))
         );
         std::env::remove_var("XDG_DATA_HOME");
-        let sans_xdg = dossier_donnees_sans_tauri().expect("chemin sans XDG_DATA_HOME");
+        let sans_xdg = calculer_le_dossier_de_donnees().expect("chemin sans XDG_DATA_HOME");
         assert!(
             sans_xdg.ends_with(IDENTIFIANT) && sans_xdg.to_string_lossy().contains(".local/share"),
             "chemin inattendu sans XDG_DATA_HOME : {sans_xdg:?}"

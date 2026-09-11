@@ -137,7 +137,7 @@ pub async fn servir() -> Result<(), String> {
     let _ = log::set_logger(&JOURNAL);
     log::set_max_level(log::LevelFilter::Info);
 
-    let dossier = crate::chemins::dossier_donnees_sans_tauri()
+    let dossier = crate::chemins::calculer_le_dossier_de_donnees()
         .ok_or("dossier de donnees introuvable")?;
     std::fs::create_dir_all(&dossier).map_err(|e| e.to_string())?;
     crate::chemins::memoriser_dossier_donnees(dossier.clone());

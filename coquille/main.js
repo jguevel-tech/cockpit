@@ -432,7 +432,7 @@ function armerLeBanc(fenetre) {
 // retrouves quoi qu'il arrive.
 // **`appData` VAUT `~/.config` SOUS LINUX, PAS `~/.local/share`.** Mesure le 2026-09-10 :
 // le stockage de la page atterrissait a cote de celui du backend. La regle recopiee ici est
-// celle du backend (`chemins::dossier_donnees_sans_tauri`), XDG compris, pour que les deux
+// celle du backend (`chemins::calculer_le_dossier_de_donnees`), XDG compris, pour que les deux
 // designent le MEME dossier.
 app.setPath(
   'userData',

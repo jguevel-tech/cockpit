@@ -127,7 +127,7 @@ fn b64(donnees: &[u8]) -> String {
 /// serait perdue sans ca, et c'est justement ce qu'on reproche a un `catch` muet.
 fn journaliser(scope: &str, message: &str) {
     // **L'HOTE POSE LE DOSSIER, ON NE LE RECALCULE PAS ICI.** Le repli evident
-    // (`dossier_donnees_sans_tauri`) est sous `#[cfg(linux)]` a juste titre : il suppose
+    // (`calculer_le_dossier_de_donnees`) est sous `#[cfg(linux)]` a juste titre : il suppose
     // les chemins XDG, que Windows et macOS n'ont pas. L'appeler compilait sous Linux et
     // cassait la compilation croisee — la moitie morte du code « portable » que ce projet
     // guette. Tout hote appelle donc `chemins::memoriser_dossier_donnees` au demarrage.
