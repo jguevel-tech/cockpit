@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.65.0] — 2026-09-11
+
 ### Added
 
 - Les terminaux de la barre latérale se rangent à la souris : on attrape une ligne et on la
