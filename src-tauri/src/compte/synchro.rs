@@ -8,6 +8,7 @@
 //! Rien ici n'est sur le chemin d'une fonctionnalite : une panne se journalise et se raconte
 //! dans les reglages, elle n'interrompt rien.
 
+use marqueur_commande::commande;
 use super::{jeton, motif, serveur};
 use crate::storage::db::Database;
 use crate::storage::synchro::ChangementLocal;
@@ -272,18 +273,11 @@ pub async fn passer(db: &Database) -> Result<Resultat, String> {
     Ok(total)
 }
 
-#[cfg(feature = "interface-tauri")]
-#[tauri::command]
-pub async fn synchro_maintenant(
-    state: tauri::State<'_, crate::AppState>,
-) -> Result<Resultat, String> {
-    synchro_maintenant_pour_hote(&state).await
-}
-
 /// La logique de `synchro_maintenant`, appelable par tout hote. **Elle n'est PAS
 /// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
 /// n'est pas la. Le corps n'a pas bouge.
-pub async fn synchro_maintenant_pour_hote(state: &crate::AppState) -> Result<Resultat, String> {
+#[commande]
+pub async fn synchro_maintenant(state: &crate::AppState) -> Result<Resultat, String> {
     let resultat = passer(&state.db).await?;
 
     // L'interface se recharge SEULEMENT si quelque chose est arrive : rafraichir a vide ferait
@@ -300,16 +294,11 @@ pub async fn synchro_maintenant_pour_hote(state: &crate::AppState) -> Result<Res
     Ok(resultat)
 }
 
-#[cfg(feature = "interface-tauri")]
-#[tauri::command]
-pub async fn synchro_etat(state: tauri::State<'_, crate::AppState>) -> Result<EtatSynchro, String> {
-    synchro_etat_pour_hote(&state).await
-}
-
 /// La logique de `synchro_etat`, appelable par tout hote. **Elle n'est PAS
 /// derriere la feature** : c'est justement ce que le pont appelle quand Tauri
 /// n'est pas la. Le corps n'a pas bouge.
-pub async fn synchro_etat_pour_hote(state: &crate::AppState) -> Result<EtatSynchro, String> {
+#[commande]
+pub async fn synchro_etat(state: &crate::AppState) -> Result<EtatSynchro, String> {
     let db = &state.db;
     Ok(EtatSynchro {
         actif: jeton(db).is_some(),

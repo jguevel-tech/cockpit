@@ -45,17 +45,6 @@ pub fn commande_du_service(chemin: &std::path::Path) -> Result<Command, String> 
 /// **CE N'EST PAS LE BINAIRE DU SERVICE.** Depuis la 0.59.0, `$APPIMAGE` designe la
 /// coquille Electron : la lancer ouvre COCKPIT, pas le service. Voir `binaire_du_service`.
 // Son unique appelant est le guetteur, qui n'existe qu'avec l'interface graphique.
-#[cfg(feature = "interface-tauri")]
-pub(crate) fn binaire_de_l_application() -> Result<std::path::PathBuf, String> {
-    if let Some(appimage) = std::env::var_os("APPIMAGE") {
-        let chemin = std::path::PathBuf::from(appimage);
-        if chemin.is_file() {
-            return Ok(chemin);
-        }
-    }
-    std::env::current_exe().map_err(|e| format!("chemin de l'executable : {e}"))
-}
-
 /// Quel fichier lancer pour obtenir LE SERVICE DE TERMINAUX.
 ///
 /// **LANCER `$APPIMAGE` A OUVERT L'APPLICATION AU LIEU DU SERVICE, ET CA A COUTE TROIS

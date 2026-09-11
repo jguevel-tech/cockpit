@@ -13,19 +13,14 @@
   import { signalerErreur } from "./lib/stores/errors";
   import { loadProjects } from "./lib/stores/projects";
   import { langueImposee } from "./lib/api/workspace";
-  import { setLocale, translate } from "./lib/i18n";
+  import { setLocale } from "./lib/i18n";
   import { zoomIn, zoomOut } from "./lib/stores/ui";
   import { startUpdateWatcher } from "./lib/stores/update";
   import { startTodoDueWatcher } from "./lib/stores/todoAlerts";
   import { startSystemAlerts } from "./lib/stores/systemAlerts";
   import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
-  import { ecouter } from "./lib/coquille";
   import { rafraichirLlm } from "./lib/stores/llm";
-  import { surveillerLeRendu } from "./lib/stores/sante";
-  import { activerModeSecoursRendu, relancerApplication } from "./lib/api/sante";
-  import { demanderConfirmation } from "./lib/stores/confirm";
-  import { notify } from "./lib/stores/toast";
 
   // Ctrl+molette = zoom, y compris au-dessus d'un terminal.
   // Capture + passive:false : xterm ecoute aussi `wheel` pour faire defiler son
@@ -84,43 +79,6 @@
     }
   }
 
-  /// Quand l'affichage gèle, le guetteur recharge la vue de lui-même. La page ne sait pas
-  /// pourquoi elle vient de se remonter : le backend laisse une trace en base, lue une fois
-  /// au démarrage pour dire ce qui s'est passé, puis effacée. Un rechargement spontané sans
-  /// explication ferait croire à un plantage.
-  const CLE_GEL = "gel_vue_rechargee";
-
-  async function direSiLaVueRevientDUnGel() {
-    try {
-      const reglages = await getAppSettings();
-      if (reglages[CLE_GEL] !== "1") return;
-      await setAppSetting(CLE_GEL, "0");
-      notify(translate("app.gelRechargement"), "info", 8000);
-    } catch (e) {
-      signalerErreur("app.gel", String(e));
-    }
-  }
-
-  /// Après des gels répétés, le guetteur propose le mode secours du rendu. La proposition
-  /// arrive quand l'affichage va de nouveau : un dialogue ne se lit pas sur un écran figé.
-  /// Accepté, il écrit le fichier que `rendu::decider` lit au prochain démarrage, puis
-  /// relance tout de suite. Refusé, rien ne change et la proposition ne reviendra pas
-  /// avant le prochain lancement.
-  async function proposerLeModeSecours() {
-    try {
-      const accepte = await demanderConfirmation({
-        message: translate("watchdog.secoursProposition"),
-        action: translate("watchdog.secoursActiver"),
-        danger: false,
-      });
-      if (!accepte) return;
-      await activerModeSecoursRendu(true);
-      await relancerApplication();
-    } catch (e) {
-      signalerErreur("app.modeSecours", String(e));
-    }
-  }
-
   /// La langue imposee par l'environnement, quand il y en a une.
   ///
   /// Elle n'existe que pour le harnais de captures du site vitrine. La bascule se fait au
@@ -137,13 +95,6 @@
   }
 
   onMount(() => {
-    // En premier : si la page cesse de se peindre, on veut que le journal le dise, y compris
-    // pour un gel survenu pendant le démarrage.
-    surveillerLeRendu();
-    void direSiLaVueRevientDUnGel();
-    const stopPropositionSecours = ecouter("guetteur-proposition-secours", () => {
-      void proposerLeModeSecours();
-    });
     void appliquerLaLangueImposee();
     // Le fournisseur d'IA choisi, lu UNE fois : le bouton des conversations et l'onglet
     // Plugins le lisent dans le magasin plutot que de le redemander chacun.
@@ -158,7 +109,6 @@
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
-      stopPropositionSecours();
       stopUpdateWatcher();
       stopTodoDueWatcher();
       stopSystemAlerts();

@@ -1,7 +1,5 @@
 fn main() {
-    // **LE SCRIPT DE TAURI NE TOURNE QUE SI TAURI EST LA.** Il panique sinon
-    // (« missing cargo:dev instruction »), ce qui empeche meme de MESURER ce qui reste a
-    // decrocher : la compilation s'arrete avant d'avoir lu une seule ligne de code.
-    #[cfg(feature = "interface-tauri")]
-    tauri_build::build();
+    // Rien a preparer : le binaire ne sert que le pont et le service de terminaux. Ce
+    // fichier existait pour le script de construction de Tauri, parti avec lui. Cargo
+    // demande un `main`, pas un travail.
 }

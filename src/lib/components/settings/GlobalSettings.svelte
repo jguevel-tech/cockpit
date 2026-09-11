@@ -37,7 +37,6 @@
   import changelogRaw from "../../../../CHANGELOG.md?raw";
   import { demanderConfirmation } from "../../stores/confirm";
   import { titresEnLangue, couperLesNotes } from "../../stores/notesDeVersion";
-  import { lireModeSecoursRendu, activerModeSecoursRendu, relancerApplication } from "../../api/sante";
 
   /// Combien de sections du changelog sont rendues d'emblee. Le fichier compte 85 versions et
   /// ne fait que grossir : le rendre en entier coutait ~40 ms et posait 62 Ko de HTML dans la
@@ -115,50 +114,6 @@
   let backingUp = $state(false);
   let backupResult = $state("");
   let backupFailed = $state(false);
-
-  /// Le mode secours du rendu n'existe que sous Linux : ailleurs la carte reste absente
-  /// plutot que de proposer un bouton qui ne fait rien.
-  let secoursDisponible = $state(false);
-  let secoursActif = $state(false);
-  let secoursEnCours = false;
-
-  async function basculerModeSecours() {
-    // Un second clic pendant l'ecriture ne doit pas inverser une case que le backend n'a
-    // pas encore vue : ce serait deux verites pour un meme choix.
-    if (secoursEnCours) return;
-    secoursEnCours = true;
-    const voulu = secoursActif;
-    try {
-      await activerModeSecoursRendu(voulu);
-    } catch (e) {
-      // La case revient d'elle-meme a ce que le backend dit : sans ca elle afficherait un
-      // etat que personne n'a ecrit.
-      secoursActif = !voulu;
-      signalerErreur("global.modeSecours", String(e));
-      return;
-    } finally {
-      secoursEnCours = false;
-    }
-    // Le choix s'ecrit AVANT l'initialisation de GTK : il ne peut prendre effet qu'au
-    // prochain lancement. Redemarrer maintenant est un choix, pas une consequence subie —
-    // l'utilisateur a peut-etre des terminaux en cours.
-    const maintenant = await demanderConfirmation({
-      message: $trad("settings.secours.restartNow"),
-      action: $trad("settings.secours.restart"),
-      danger: false,
-    });
-    if (!maintenant) {
-      notify($trad("settings.secours.atNextStart"), "info", 5000);
-      return;
-    }
-    try {
-      await relancerApplication();
-    } catch (e) {
-      // Une relance refusee laisse l'application en marche : le changement s'appliquera
-      // au prochain lancement, comme l'annonce deja le message ci-dessus.
-      signalerErreur("global.modeSecours.relance", String(e));
-    }
-  }
 
   async function doBackup() {
     backingUp = true;
@@ -311,13 +266,6 @@
       attachTranscript = s.attach_transcript !== "off";
     } catch (e) {
       signalerErreur("global.reglagesApplication", String(e));}
-    // Lu en meme temps que les autres reglages : la carte est dans la meme section.
-    try {
-      const secours = await lireModeSecoursRendu();
-      secoursDisponible = secours.disponible;
-      secoursActif = secours.actif;
-    } catch (e) {
-      signalerErreur("global.modeSecours.lecture", String(e));}
     await rafraichirLlm();
     await rafraichirAbonnement();
   });
@@ -418,20 +366,6 @@
             {/if}
           </div>
         </section>
-
-        {#if secoursDisponible}
-          <section class="card">
-            <div class="card-head">
-              <h3>{$trad("settings.secours.title")}</h3>
-              <p>{$trad("settings.secours.subtitle")}</p>
-            </div>
-            <label class="check-row">
-              <input type="checkbox" bind:checked={secoursActif} onchange={basculerModeSecours} />
-              <span>{$trad("settings.secours.toggle")}</span>
-            </label>
-            <p class="field-hint">{$trad("settings.secours.help")}</p>
-          </section>
-        {/if}
 
         <section class="card">
           <div class="card-head">

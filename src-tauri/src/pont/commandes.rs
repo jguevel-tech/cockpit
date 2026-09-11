@@ -34,7 +34,7 @@ pub async fn appeler(
     let valeur = |v: Result<Value, serde_json::Error>| v.map_err(|e| e.to_string());
     Some(match commande {
         "list_projects" => typer(async {
-            valeur(serde_json::to_value(crate::list_projects_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::list_projects(etat, 
             ).await?))
         })
         .await,
@@ -44,21 +44,21 @@ pub async fn appeler(
         })
         .await,
         "start_project" => typer(async {
-            valeur(serde_json::to_value(crate::start_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::start_project(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
             ).await?))
         })
         .await,
         "stop_project" => typer(async {
-            valeur(serde_json::to_value(crate::stop_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::stop_project(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
             ).await?))
         })
         .await,
         "restart_project" => typer(async {
-            valeur(serde_json::to_value(crate::restart_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::restart_project(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
             ).await?))
@@ -133,14 +133,14 @@ pub async fn appeler(
         })
         .await,
         "get_todos" => typer(async {
-            valeur(serde_json::to_value(crate::get_todos_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_todos(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             )?))
         })
         .await,
         "create_todo" => typer(async {
-            valeur(serde_json::to_value(crate::create_todo_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_todo(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "text", "text"))
@@ -149,7 +149,7 @@ pub async fn appeler(
         })
         .await,
         "update_todo" => typer(async {
-            valeur(serde_json::to_value(crate::update_todo_pour_hote(etat,
+            valeur(serde_json::to_value(crate::update_todo(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "text", "text"))
@@ -160,7 +160,7 @@ pub async fn appeler(
         })
         .await,
         "set_todo_due" => typer(async {
-            valeur(serde_json::to_value(crate::set_todo_due_pour_hote(etat,
+            valeur(serde_json::to_value(crate::set_todo_due(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "dueDate", "due_date"))
@@ -169,7 +169,7 @@ pub async fn appeler(
         })
         .await,
         "set_todo_progress" => typer(async {
-            valeur(serde_json::to_value(crate::set_todo_progress_pour_hote(etat,
+            valeur(serde_json::to_value(crate::set_todo_progress(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "progress", "progress"))
@@ -178,21 +178,21 @@ pub async fn appeler(
         })
         .await,
         "delete_todo" => typer(async {
-            valeur(serde_json::to_value(crate::delete_todo_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_todo(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "reorder_todos" => typer(async {
-            valeur(serde_json::to_value(crate::reorder_todos_pour_hote(etat,
+            valeur(serde_json::to_value(crate::reorder_todos(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))
                     .map_err(|e| format!("argument ids : {e}"))?,
             )?))
         })
         .await,
         "move_todo" => typer(async {
-            valeur(serde_json::to_value(crate::move_todo_pour_hote(etat,
+            valeur(serde_json::to_value(crate::move_todo(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "newProject", "new_project"))
@@ -201,19 +201,19 @@ pub async fn appeler(
         })
         .await,
         "get_pending_todos" => typer(async {
-            valeur(serde_json::to_value(crate::get_pending_todos_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_pending_todos(etat, 
             )?))
         })
         .await,
         "get_note" => typer(async {
-            valeur(serde_json::to_value(crate::get_note_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_note(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             )?))
         })
         .await,
         "save_note" => typer(async {
-            valeur(serde_json::to_value(crate::save_note_pour_hote(etat,
+            valeur(serde_json::to_value(crate::save_note(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "content", "content"))
@@ -222,14 +222,14 @@ pub async fn appeler(
         })
         .await,
         "get_note_tree" => typer(async {
-            valeur(serde_json::to_value(crate::get_note_tree_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_note_tree(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             )?))
         })
         .await,
         "create_note_folder" => typer(async {
-            valeur(serde_json::to_value(crate::create_note_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_note_folder(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "parentId", "parent_id"))
@@ -240,7 +240,7 @@ pub async fn appeler(
         })
         .await,
         "rename_note_folder" => typer(async {
-            valeur(serde_json::to_value(crate::rename_note_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::rename_note_folder(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "name", "name"))
@@ -249,14 +249,14 @@ pub async fn appeler(
         })
         .await,
         "delete_note_folder" => typer(async {
-            valeur(serde_json::to_value(crate::delete_note_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_note_folder(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "create_note_file" => typer(async {
-            valeur(serde_json::to_value(crate::create_note_file_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_note_file(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "folderId", "folder_id"))
@@ -267,14 +267,14 @@ pub async fn appeler(
         })
         .await,
         "get_note_file" => typer(async {
-            valeur(serde_json::to_value(crate::get_note_file_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_note_file(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "save_note_file" => typer(async {
-            valeur(serde_json::to_value(crate::save_note_file_pour_hote(etat,
+            valeur(serde_json::to_value(crate::save_note_file(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "content", "content"))
@@ -283,7 +283,7 @@ pub async fn appeler(
         })
         .await,
         "rename_note_file" => typer(async {
-            valeur(serde_json::to_value(crate::rename_note_file_pour_hote(etat,
+            valeur(serde_json::to_value(crate::rename_note_file(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "name", "name"))
@@ -292,28 +292,28 @@ pub async fn appeler(
         })
         .await,
         "delete_note_file" => typer(async {
-            valeur(serde_json::to_value(crate::delete_note_file_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_note_file(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "reorder_note_folders" => typer(async {
-            valeur(serde_json::to_value(crate::reorder_note_folders_pour_hote(etat,
+            valeur(serde_json::to_value(crate::reorder_note_folders(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))
                     .map_err(|e| format!("argument ids : {e}"))?,
             )?))
         })
         .await,
         "reorder_note_files" => typer(async {
-            valeur(serde_json::to_value(crate::reorder_note_files_pour_hote(etat,
+            valeur(serde_json::to_value(crate::reorder_note_files(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))
                     .map_err(|e| format!("argument ids : {e}"))?,
             )?))
         })
         .await,
         "move_note_file" => typer(async {
-            valeur(serde_json::to_value(crate::move_note_file_pour_hote(etat,
+            valeur(serde_json::to_value(crate::move_note_file(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "folderId", "folder_id"))
@@ -322,7 +322,7 @@ pub async fn appeler(
         })
         .await,
         "get_urls" => typer(async {
-            valeur(serde_json::to_value(crate::get_urls_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_urls(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             )?))
@@ -336,7 +336,7 @@ pub async fn appeler(
         })
         .await,
         "create_url" => typer(async {
-            valeur(serde_json::to_value(crate::create_url_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_url(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "label", "label"))
@@ -347,7 +347,7 @@ pub async fn appeler(
         })
         .await,
         "update_url" => typer(async {
-            valeur(serde_json::to_value(crate::update_url_pour_hote(etat,
+            valeur(serde_json::to_value(crate::update_url(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "label", "label"))
@@ -358,21 +358,21 @@ pub async fn appeler(
         })
         .await,
         "delete_url" => typer(async {
-            valeur(serde_json::to_value(crate::delete_url_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_url(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "get_project_commands" => typer(async {
-            valeur(serde_json::to_value(crate::get_project_commands_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_project_commands(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             )?))
         })
         .await,
         "create_project_command" => typer(async {
-            valeur(serde_json::to_value(crate::create_project_command_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_project_command(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "label", "label"))
@@ -383,7 +383,7 @@ pub async fn appeler(
         })
         .await,
         "update_project_command" => typer(async {
-            valeur(serde_json::to_value(crate::update_project_command_pour_hote(etat,
+            valeur(serde_json::to_value(crate::update_project_command(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "label", "label"))
@@ -394,26 +394,26 @@ pub async fn appeler(
         })
         .await,
         "delete_project_command" => typer(async {
-            valeur(serde_json::to_value(crate::delete_project_command_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_project_command(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "reorder_project_commands" => typer(async {
-            valeur(serde_json::to_value(crate::reorder_project_commands_pour_hote(etat,
+            valeur(serde_json::to_value(crate::reorder_project_commands(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))
                     .map_err(|e| format!("argument ids : {e}"))?,
             )?))
         })
         .await,
         "get_project_folders" => typer(async {
-            valeur(serde_json::to_value(crate::get_project_folders_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_project_folders(etat, 
             )?))
         })
         .await,
         "create_project_folder" => typer(async {
-            valeur(serde_json::to_value(crate::create_project_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_project_folder(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
                 serde_json::from_value(prendre(a, "parentId", "parent_id"))
@@ -422,7 +422,7 @@ pub async fn appeler(
         })
         .await,
         "rename_project_folder" => typer(async {
-            valeur(serde_json::to_value(crate::rename_project_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::rename_project_folder(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "name", "name"))
@@ -431,21 +431,21 @@ pub async fn appeler(
         })
         .await,
         "delete_project_folder" => typer(async {
-            valeur(serde_json::to_value(crate::delete_project_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_project_folder(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "reorder_project_folders" => typer(async {
-            valeur(serde_json::to_value(crate::reorder_project_folders_pour_hote(etat,
+            valeur(serde_json::to_value(crate::reorder_project_folders(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))
                     .map_err(|e| format!("argument ids : {e}"))?,
             )?))
         })
         .await,
         "move_project_folder" => typer(async {
-            valeur(serde_json::to_value(crate::move_project_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::move_project_folder(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "parentId", "parent_id"))
@@ -454,7 +454,7 @@ pub async fn appeler(
         })
         .await,
         "move_project_to_folder" => typer(async {
-            valeur(serde_json::to_value(crate::move_project_to_folder_pour_hote(etat,
+            valeur(serde_json::to_value(crate::move_project_to_folder(etat,
                 serde_json::from_value(prendre(a, "projectName", "project_name"))
                     .map_err(|e| format!("argument projectName : {e}"))?,
                 serde_json::from_value(prendre(a, "folderId", "folder_id"))
@@ -477,12 +477,12 @@ pub async fn appeler(
         })
         .await,
         "get_db_projects" => typer(async {
-            valeur(serde_json::to_value(crate::get_db_projects_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_db_projects(etat, 
             )?))
         })
         .await,
         "add_project" => typer(async {
-            valeur(serde_json::to_value(crate::add_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::add_project(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
                 serde_json::from_value(prendre(a, "path", "path"))
@@ -497,7 +497,7 @@ pub async fn appeler(
         })
         .await,
         "update_db_project" => typer(async {
-            valeur(serde_json::to_value(crate::update_db_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::update_db_project(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "name", "name"))
@@ -514,21 +514,21 @@ pub async fn appeler(
         })
         .await,
         "delete_db_project" => typer(async {
-            valeur(serde_json::to_value(crate::delete_db_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_db_project(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             ).await?))
         })
         .await,
         "reorder_projects" => typer(async {
-            valeur(serde_json::to_value(crate::reorder_projects_pour_hote(etat,
+            valeur(serde_json::to_value(crate::reorder_projects(etat,
                 serde_json::from_value(prendre(a, "names", "names"))
                     .map_err(|e| format!("argument names : {e}"))?,
             )?))
         })
         .await,
         "docker_compose_detecte" => typer(async {
-            valeur(serde_json::to_value(crate::docker_compose_detecte_pour_hote(etat,
+            valeur(serde_json::to_value(crate::docker_compose_detecte(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
                 serde_json::from_value(prendre(a, "rafraichir", "rafraichir"))
@@ -537,14 +537,14 @@ pub async fn appeler(
         })
         .await,
         "get_project_settings" => typer(async {
-            valeur(serde_json::to_value(crate::get_project_settings_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_project_settings(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
             ).await?))
         })
         .await,
         "update_project_settings" => typer(async {
-            valeur(serde_json::to_value(crate::update_project_settings_pour_hote(etat,
+            valeur(serde_json::to_value(crate::update_project_settings(etat,
                 serde_json::from_value(prendre(a, "name", "name"))
                     .map_err(|e| format!("argument name : {e}"))?,
                 serde_json::from_value(prendre(a, "path", "path"))
@@ -559,7 +559,7 @@ pub async fn appeler(
         })
         .await,
         "rename_project" => typer(async {
-            valeur(serde_json::to_value(crate::rename_project_pour_hote(etat,
+            valeur(serde_json::to_value(crate::rename_project(etat,
                 serde_json::from_value(prendre(a, "oldName", "old_name"))
                     .map_err(|e| format!("argument oldName : {e}"))?,
                 serde_json::from_value(prendre(a, "newName", "new_name"))
@@ -568,12 +568,12 @@ pub async fn appeler(
         })
         .await,
         "get_system_metrics" => typer(async {
-            valeur(serde_json::to_value(crate::get_system_metrics_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_system_metrics(etat, 
             ).await?))
         })
         .await,
         "kill_process" => typer(async {
-            valeur(serde_json::to_value(crate::kill_process_pour_hote(etat,
+            valeur(serde_json::to_value(crate::kill_process(etat,
                 serde_json::from_value(prendre(a, "pid", "pid"))
                     .map_err(|e| format!("argument pid : {e}"))?,
             ).await?))
@@ -604,62 +604,62 @@ pub async fn appeler(
         })
         .await,
         "import_database" => typer(async {
-            valeur(serde_json::to_value(crate::import_database_pour_hote(etat,
+            valeur(serde_json::to_value(crate::import_database(etat,
                 serde_json::from_value(prendre(a, "path", "path"))
                     .map_err(|e| format!("argument path : {e}"))?,
             ).await?))
         })
         .await,
         "get_db_path" => typer(async {
-            valeur(serde_json::to_value(crate::get_db_path_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_db_path(etat, 
             )))
         })
         .await,
         "start_recording" => typer(async {
-            valeur(serde_json::to_value(crate::start_recording_pour_hote(etat,
+            valeur(serde_json::to_value(crate::start_recording(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             ).await?))
         })
         .await,
         "stop_recording" => typer(async {
-            valeur(serde_json::to_value(crate::stop_recording_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::stop_recording(etat, 
             ).await?))
         })
         .await,
         "get_active_recording" => typer(async {
-            valeur(serde_json::to_value(crate::get_active_recording_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_active_recording(etat, 
             )))
         })
         .await,
         "get_failed_recordings" => typer(async {
-            valeur(serde_json::to_value(crate::get_failed_recordings_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_failed_recordings(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             )?))
         })
         .await,
         "retry_recording" => typer(async {
-            valeur(serde_json::to_value(crate::retry_recording_pour_hote(etat,
+            valeur(serde_json::to_value(crate::retry_recording(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "delete_recording" => typer(async {
-            valeur(serde_json::to_value(crate::delete_recording_pour_hote(etat,
+            valeur(serde_json::to_value(crate::delete_recording(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "get_app_settings" => typer(async {
-            valeur(serde_json::to_value(crate::get_app_settings_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::get_app_settings(etat, 
             )?))
         })
         .await,
         "set_app_setting" => typer(async {
-            valeur(serde_json::to_value(crate::set_app_setting_pour_hote(etat,
+            valeur(serde_json::to_value(crate::set_app_setting(etat,
                 serde_json::from_value(prendre(a, "key", "key"))
                     .map_err(|e| format!("argument key : {e}"))?,
                 serde_json::from_value(prendre(a, "value", "value"))
@@ -668,14 +668,14 @@ pub async fn appeler(
         })
         .await,
         "get_project_summary_prompt" => typer(async {
-            valeur(serde_json::to_value(crate::get_project_summary_prompt_pour_hote(etat,
+            valeur(serde_json::to_value(crate::get_project_summary_prompt(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             ).await?))
         })
         .await,
         "set_project_summary_prompt" => typer(async {
-            valeur(serde_json::to_value(crate::set_project_summary_prompt_pour_hote(etat,
+            valeur(serde_json::to_value(crate::set_project_summary_prompt(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "prompt", "prompt"))
@@ -684,7 +684,7 @@ pub async fn appeler(
         })
         .await,
         "create_terminal" => typer(async {
-            valeur(serde_json::to_value(crate::create_terminal_pour_hote(etat,
+            valeur(serde_json::to_value(crate::create_terminal(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "cwd", "cwd"))
@@ -699,7 +699,7 @@ pub async fn appeler(
         })
         .await,
         "write_terminal" => typer(async {
-            valeur(serde_json::to_value(crate::write_terminal_pour_hote(etat,
+            valeur(serde_json::to_value(crate::write_terminal(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "data", "data"))
@@ -708,7 +708,7 @@ pub async fn appeler(
         })
         .await,
         "resize_terminal" => typer(async {
-            valeur(serde_json::to_value(crate::resize_terminal_pour_hote(etat,
+            valeur(serde_json::to_value(crate::resize_terminal(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "cols", "cols"))
@@ -719,19 +719,19 @@ pub async fn appeler(
         })
         .await,
         "close_terminal" => typer(async {
-            valeur(serde_json::to_value(crate::close_terminal_pour_hote(etat,
+            valeur(serde_json::to_value(crate::close_terminal(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             ).await?))
         })
         .await,
         "save_terminal_screens" => typer(async {
-            valeur(serde_json::to_value(crate::save_terminal_screens_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::save_terminal_screens(etat, 
             ).await?))
         })
         .await,
         "attach_terminal" => typer(async {
-            valeur(serde_json::to_value(crate::attach_terminal_pour_hote(etat,
+            valeur(serde_json::to_value(crate::attach_terminal(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "cols", "cols"))
@@ -742,7 +742,7 @@ pub async fn appeler(
         })
         .await,
         "rename_terminal" => typer(async {
-            valeur(serde_json::to_value(crate::rename_terminal_pour_hote(etat,
+            valeur(serde_json::to_value(crate::rename_terminal(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "name", "name"))
@@ -751,14 +751,14 @@ pub async fn appeler(
         })
         .await,
         "list_terminals" => typer(async {
-            valeur(serde_json::to_value(crate::list_terminals_pour_hote(etat,
+            valeur(serde_json::to_value(crate::list_terminals(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
             ).await?))
         })
         .await,
         "list_all_terminals" => typer(async {
-            valeur(serde_json::to_value(crate::list_all_terminals_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::list_all_terminals(etat, 
             ).await?))
         })
         .await,
@@ -775,19 +775,19 @@ pub async fn appeler(
         })
         .await,
         "llm_catalogue" => typer(async {
-            valeur(serde_json::to_value(crate::llm_catalogue_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::llm_catalogue(etat, 
             )))
         })
         .await,
         "llm_choisir" => typer(async {
-            valeur(serde_json::to_value(crate::llm_choisir_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_choisir(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "llm_poser_cle" => typer(async {
-            valeur(serde_json::to_value(crate::llm_poser_cle_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_poser_cle(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "cle", "cle"))
@@ -796,14 +796,14 @@ pub async fn appeler(
         })
         .await,
         "llm_conversations" => typer(async {
-            valeur(serde_json::to_value(crate::llm_conversations_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_conversations(etat,
                 serde_json::from_value(prendre(a, "projectPath", "project_path"))
                     .map_err(|e| format!("argument projectPath : {e}"))?,
             )?))
         })
         .await,
         "llm_renommer_conversation" => typer(async {
-            valeur(serde_json::to_value(crate::llm_renommer_conversation_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_renommer_conversation(etat,
                 serde_json::from_value(prendre(a, "conversationId", "conversation_id"))
                     .map_err(|e| format!("argument conversationId : {e}"))?,
                 serde_json::from_value(prendre(a, "nom", "nom"))
@@ -812,14 +812,14 @@ pub async fn appeler(
         })
         .await,
         "llm_commandes" => typer(async {
-            valeur(serde_json::to_value(crate::llm_commandes_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_commandes(etat,
                 serde_json::from_value(prendre(a, "conversationId", "conversation_id"))
                     .map_err(|e| format!("argument conversationId : {e}"))?,
             )?))
         })
         .await,
         "record_command" => typer(async {
-            valeur(serde_json::to_value(crate::record_command_pour_hote(etat,
+            valeur(serde_json::to_value(crate::record_command(etat,
                 serde_json::from_value(prendre(a, "project", "project"))
                     .map_err(|e| format!("argument project : {e}"))?,
                 serde_json::from_value(prendre(a, "command", "command"))
@@ -828,7 +828,7 @@ pub async fn appeler(
         })
         .await,
         "terminal_search" => typer(async {
-            valeur(serde_json::to_value(crate::terminal_search_pour_hote(etat,
+            valeur(serde_json::to_value(crate::terminal_search(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
                 serde_json::from_value(prendre(a, "action", "action"))
@@ -839,33 +839,33 @@ pub async fn appeler(
         })
         .await,
         "llm_reunions" => typer(async {
-            valeur(serde_json::to_value(crate::llm_reunions_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::llm_reunions(etat, 
             )))
         })
         .await,
         "llm_abonnement" => typer(async {
-            valeur(serde_json::to_value(crate::llm_abonnement_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_abonnement(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "llm_connexion_demarrer" => typer(async {
-            valeur(serde_json::to_value(crate::llm_connexion_demarrer_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_connexion_demarrer(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             )?))
         })
         .await,
         "llm_connexion_entrer" => typer(async {
-            valeur(serde_json::to_value(crate::llm_connexion_entrer_pour_hote(etat,
+            valeur(serde_json::to_value(crate::llm_connexion_entrer(etat,
                 serde_json::from_value(prendre(a, "data", "data"))
                     .map_err(|e| format!("argument data : {e}"))?,
             )?))
         })
         .await,
         "llm_connexion_annuler" => typer(async {
-            valeur(serde_json::to_value(crate::llm_connexion_annuler_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::llm_connexion_annuler(etat, 
             )))
         })
         .await,
@@ -877,7 +877,7 @@ pub async fn appeler(
         })
         .await,
         "report_error" => typer(async {
-            valeur(serde_json::to_value(crate::report_error_pour_hote(etat,
+            valeur(serde_json::to_value(crate::report_error(etat,
                 serde_json::from_value(prendre(a, "scope", "scope"))
                     .map_err(|e| format!("argument scope : {e}"))?,
                 serde_json::from_value(prendre(a, "message", "message"))
@@ -890,31 +890,6 @@ pub async fn appeler(
             ).await))
         })
         .await,
-        "sante_page" => typer(async {
-            valeur(serde_json::to_value(crate::sante_page(
-                serde_json::from_value(prendre(a, "aPeint", "a_peint"))
-                    .map_err(|e| format!("argument aPeint : {e}"))?,
-                serde_json::from_value(prendre(a, "visible", "visible"))
-                    .map_err(|e| format!("argument visible : {e}"))?,
-                serde_json::from_value(prendre(a, "concentre", "concentre"))
-                    .map_err(|e| format!("argument concentre : {e}"))?,
-                serde_json::from_value(prendre(a, "entreeRecente", "entree_recente"))
-                    .map_err(|e| format!("argument entreeRecente : {e}"))?,
-            ).await))
-        })
-        .await,
-        "mode_secours_rendu" => typer(async {
-            valeur(serde_json::to_value(crate::mode_secours_rendu(
-            )))
-        })
-        .await,
-        "activer_mode_secours_rendu" => typer(async {
-            valeur(serde_json::to_value(crate::activer_mode_secours_rendu(
-                serde_json::from_value(prendre(a, "activer", "activer"))
-                    .map_err(|e| format!("argument activer : {e}"))?,
-            ).await?))
-        })
-        .await,
         "debug_log" => typer(async {
             valeur(serde_json::to_value(crate::debug_log(
                 serde_json::from_value(prendre(a, "line", "line"))
@@ -923,7 +898,7 @@ pub async fn appeler(
         })
         .await,
         "search_command_history" => typer(async {
-            valeur(serde_json::to_value(crate::search_command_history_pour_hote(etat,
+            valeur(serde_json::to_value(crate::search_command_history(etat,
                 serde_json::from_value(prendre(a, "query", "query"))
                     .map_err(|e| format!("argument query : {e}"))?,
                 serde_json::from_value(prendre(a, "limit", "limit"))
@@ -979,7 +954,7 @@ pub async fn appeler(
         })
         .await,
         "backup_database" => typer(async {
-            valeur(serde_json::to_value(crate::backup_database_pour_hote(etat,
+            valeur(serde_json::to_value(crate::backup_database(etat,
                 serde_json::from_value(prendre(a, "dest", "dest"))
                     .map_err(|e| format!("argument dest : {e}"))?,
             ).await?))
@@ -1037,7 +1012,7 @@ pub async fn appeler(
         })
         .await,
         "goto_definition" => typer(async {
-            valeur(serde_json::to_value(crate::goto_definition_pour_hote(etat,
+            valeur(serde_json::to_value(crate::goto_definition(etat,
                 serde_json::from_value(prendre(a, "projectPath", "project_path"))
                     .map_err(|e| format!("argument projectPath : {e}"))?,
                 serde_json::from_value(prendre(a, "lang", "lang"))
@@ -1361,22 +1336,22 @@ pub async fn appeler(
         })
         .await,
         "compte_google_disponible" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_google_disponible_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_google_disponible(etat, 
             ).await?))
         })
         .await,
         "compte_google_direct" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_google_direct_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_google_direct(etat, 
             ).await?))
         })
         .await,
         "compte_etat" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_etat_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_etat(etat, 
             ).await?))
         })
         .await,
         "compte_inscription" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_inscription_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_inscription(etat,
                 serde_json::from_value(prendre(a, "email", "email"))
                     .map_err(|e| format!("argument email : {e}"))?,
                 serde_json::from_value(prendre(a, "motDePasse", "mot_de_passe"))
@@ -1387,7 +1362,7 @@ pub async fn appeler(
         })
         .await,
         "compte_connexion" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_connexion_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_connexion(etat,
                 serde_json::from_value(prendre(a, "email", "email"))
                     .map_err(|e| format!("argument email : {e}"))?,
                 serde_json::from_value(prendre(a, "motDePasse", "mot_de_passe"))
@@ -1396,41 +1371,41 @@ pub async fn appeler(
         })
         .await,
         "compte_connexion_google" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_connexion_google_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_connexion_google(etat, 
             ).await?))
         })
         .await,
         "compte_appairage_demarrer" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_appairage_demarrer_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_appairage_demarrer(etat, 
             ).await?))
         })
         .await,
         "compte_appairage_etat" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_appairage_etat_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_appairage_etat(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
                     .map_err(|e| format!("argument id : {e}"))?,
             ).await?))
         })
         .await,
         "compte_deconnexion" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_deconnexion_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_deconnexion(etat, 
             ).await?))
         })
         .await,
         "compte_machines" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_machines_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_machines(etat, 
             ).await?))
         })
         .await,
         "compte_definir_nom" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_definir_nom_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_definir_nom(etat,
                 serde_json::from_value(prendre(a, "nom", "nom"))
                     .map_err(|e| format!("argument nom : {e}"))?,
             ).await?))
         })
         .await,
         "compte_deposer_avatar" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_deposer_avatar_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_deposer_avatar(etat,
                 serde_json::from_value(prendre(a, "chemin", "chemin"))
                     .map_err(|e| format!("argument chemin : {e}"))?,
             ).await?))
@@ -1444,31 +1419,31 @@ pub async fn appeler(
         })
         .await,
         "compte_deposer_image" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_deposer_image_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_deposer_image(etat,
                 serde_json::from_value(prendre(a, "donnees", "donnees"))
                     .map_err(|e| format!("argument donnees : {e}"))?,
             ).await?))
         })
         .await,
         "compte_retirer_avatar" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_retirer_avatar_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::compte_retirer_avatar(etat, 
             ).await?))
         })
         .await,
         "compte_definir_serveur" => typer(async {
-            valeur(serde_json::to_value(crate::compte::compte_definir_serveur_pour_hote(etat,
+            valeur(serde_json::to_value(crate::compte::compte_definir_serveur(etat,
                 serde_json::from_value(prendre(a, "url", "url"))
                     .map_err(|e| format!("argument url : {e}"))?,
             ).await?))
         })
         .await,
         "synchro_maintenant" => typer(async {
-            valeur(serde_json::to_value(crate::compte::synchro::synchro_maintenant_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::synchro::synchro_maintenant(etat, 
             ).await?))
         })
         .await,
         "synchro_etat" => typer(async {
-            valeur(serde_json::to_value(crate::compte::synchro::synchro_etat_pour_hote(etat, 
+            valeur(serde_json::to_value(crate::compte::synchro::synchro_etat(etat, 
             ).await?))
         })
         .await,

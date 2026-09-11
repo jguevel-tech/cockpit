@@ -1,10 +1,9 @@
 //! Ce que le backend dit a l'interface, sans savoir laquelle l'ecoute.
 //!
-//! **POURQUOI CE TRAIT EXISTE.** L'implementation des terminaux recevait un `AppHandle` et
-//! le gardait pour emettre la sortie. C'etait le SEUL lien entre le coeur du backend et
-//! Tauri sur ce chemin, et il suffisait a rendre le reste inutilisable ailleurs. Le trait
-//! le remplace : Tauri en est une implementation parmi d'autres, au meme titre que la
-//! coquille qui ecrit sur son tuyau.
+//! **POURQUOI CE TRAIT EXISTE.** L'implementation des terminaux gardait de quoi emettre la
+//! sortie, fourni par l'interface graphique. C'etait le SEUL lien entre le coeur du backend
+//! et elle sur ce chemin, et il suffisait a rendre le reste inutilisable ailleurs. Le trait
+//! le remplace : qui veut recevoir l'implemente, et le coeur ne sait pas qui ecoute.
 //!
 //! **LA CHARGE PASSE PAR `serde_json::Value`, ET C'EST MESURE.** Une methode generique
 //! rendrait le trait inutilisable derriere un `dyn`. Le cout d'une `Value` serait
@@ -23,13 +22,3 @@ pub trait Emetteur: Send + Sync {
 /// L'emetteur tel qu'on le fait circuler. `Arc` parce que plusieurs fils l'utilisent :
 /// la boucle qui lit le service de terminaux, et celle qui les rebranche apres coupure.
 pub type Emetteurs = Arc<dyn Emetteur>;
-
-/// L'implementation de Tauri. Elle ne survit pas au retrait de la crate : sans elle, le
-/// trait reste, et c'est bien ce qu'on cherchait.
-#[cfg(feature = "interface-tauri")]
-impl Emetteur for tauri::AppHandle {
-    fn emettre(&self, evenement: &str, charge: serde_json::Value) {
-        use tauri::Emitter;
-        let _ = self.emit(evenement, charge);
-    }
-}

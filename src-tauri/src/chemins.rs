@@ -193,21 +193,21 @@ mod tests {
         assert!(!dossier.as_os_str().is_empty());
     }
 
-    /// `dossier_donnees_sans_tauri` recopie la regle de Tauri : `XDG_DATA_HOME` (sinon
-    /// `~/.local/share`) puis l'identifiant. Si l'identifiant diverge de `tauri.conf.json`,
-    /// le chemin calcule avant GTK ne designe plus le meme dossier que celui de
-    /// `app_data_dir()` et le fichier pose d'un cote est invisible de l'autre — sans aucune
-    /// erreur nulle part. D'ou cet essai.
+    /// **LE BACKEND ET LA COQUILLE DOIVENT DESIGNER LE MEME DOSSIER.** Le premier le calcule
+    /// ici, la seconde le pose sur la page. Si les deux identifiants divergent, le stockage
+    /// de l'interface atterrit a cote de celui du backend et chacun lit un dossier vide —
+    /// sans une erreur nulle part. C'est arrive une fois, en 0.59.0, faute de cet essai.
     #[cfg(target_os = "linux")]
     #[test]
-    fn le_chemin_sans_tauri_monte_vers_le_dossier_de_tauri() {
-        let conf = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tauri.conf.json"))
-            .expect("tauri.conf.json lisible");
-        let conf: serde_json::Value = serde_json::from_str(&conf).expect("tauri.conf.json valide");
-        assert_eq!(
-            conf["identifier"].as_str(),
-            Some(IDENTIFIANT),
-            "l'identifiant recopie dans chemins.rs a diverge de tauri.conf.json"
+    fn le_dossier_du_backend_est_celui_de_la_coquille() {
+        let coquille = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../coquille/main.js"
+        ))
+        .expect("main.js de la coquille lisible");
+        assert!(
+            coquille.contains(&format!("'{IDENTIFIANT}'")),
+            "l'identifiant de chemins.rs ({IDENTIFIANT}) n'apparait pas dans la coquille"
         );
 
         std::env::set_var("XDG_DATA_HOME", "/tmp/essai-donnees");

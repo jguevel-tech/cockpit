@@ -103,16 +103,16 @@ async fn repondre(
         // Reecrire `etat.db.get_pending_todos()` ici donnerait deux verites pour une meme
         // reponse, et elles divergeraient au premier correctif applique d'un seul cote.
         "get_pending_todos" => {
-            valeur(serde_json::to_value(crate::get_pending_todos_pour_hote(etat)?))
+            valeur(serde_json::to_value(crate::get_pending_todos(etat)?))
         }
         "get_system_metrics" => {
-            valeur(serde_json::to_value(crate::get_system_metrics_pour_hote(etat).await?))
+            valeur(serde_json::to_value(crate::get_system_metrics(etat).await?))
         }
         "list_projects" => {
-            valeur(serde_json::to_value(crate::list_projects_pour_hote(etat).await?))
+            valeur(serde_json::to_value(crate::list_projects(etat).await?))
         }
         "get_app_settings" => {
-            valeur(serde_json::to_value(crate::get_app_settings_pour_hote(etat)?))
+            valeur(serde_json::to_value(crate::get_app_settings(etat)?))
         }
         "get_wallpaper" => {
             let dossier = crate::chemins::dossier_donnees()
@@ -154,6 +154,22 @@ pub async fn servir() -> Result<(), String> {
     terminaux.preparer(emetteur.clone(), &db);
 
     let etat = crate::construire_etat(db, chemin_base, terminaux, emetteur.clone());
+
+    // **CE QUE LE DEMARRAGE DE TAURI FAISAIT ET QUE PERSONNE NE FAISAIT PLUS.** Ces deux
+    // taches vivaient dans le `setup` de Tauri : en 0.59.0 elles sont parties avec lui, sans
+    // qu'une seule erreur ne le dise. La surveillance des conteneurs ne tournait donc plus —
+    // l'etat d'une pile ne changeait a l'ecran qu'en rouvrant l'onglet.
+    let orchestrateur = etat.orchestrator.clone();
+    let pour_evenements = emetteur.clone();
+    crate::taches::lancer(async move {
+        crate::docker::monitor::start_status_monitor(orchestrateur, 5, move || {
+            pour_evenements.emettre("status_update", serde_json::Value::Null);
+        })
+        .await;
+    });
+    // Le PATH du shell de connexion, demande UNE fois et en tache de fond : le premier
+    // lancement de docker le paierait sinon sur le fil de l'appel.
+    crate::commande::precharger_les_chemins();
 
     let entree = std::io::stdin();
     for ligne in entree.lock().lines() {

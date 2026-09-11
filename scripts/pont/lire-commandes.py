@@ -29,16 +29,15 @@ def decouper(args):
 def analyser(chemin):
     s = io.open(chemin, encoding='utf-8').read()
     trouvees = []
-    # **DEUX PIEGES DANS CE SEUL MOTIF, PAYES CHACUN UNE FOIS.** L'attribut peut etre
-    # conditionne (`cfg_attr`) : ne reconnaitre que la forme nue faisait disparaitre 72
-    # commandes du dispatch SANS AUCUN SIGNAL, le generateur annoncant juste un total plus
-    # petit. Et un commentaire de doc ou un `#[cfg]` se glisse entre l'attribut et le `fn` :
-    # deux commandes sur 165 avaient ete manquees comme ca. Le controle qui attrape les deux,
-    # c'est de compter les attributs presents dans les fichiers et de comparer.
+    # **UN PIEGE PAYE DEUX FOIS DANS CE SEUL MOTIF.** Un commentaire de doc ou un `#[cfg]`
+    # se glisse entre la marque et le `fn` : deux commandes sur 165 avaient ete manquees
+    # comme ca, et une forme d'attribut non reconnue en avait fait disparaitre 72 SANS AUCUN
+    # SIGNAL. Le controle qui attrape les deux, c'est de compter les marques presentes dans
+    # les fichiers et de comparer.
     for m in re.finditer(
-        r'#\[(?:tauri::command|cfg_attr\(feature = "interface-tauri", tauri::command\))\]\s*\n'
+        r'#\[commande\]\s*\n'
         r'(?:\s*(?://[^\n]*|#\[[^\]]*\])\n)*'
-        r'\s*((?:pub\s+)?(async\s+)?fn\s+(\w+)\s*)\(', s):
+        r'\s*((?:pub(?:\(crate\))?\s+)?(async\s+)?fn\s+(\w+)\s*)\(', s):
         nom = m.group(3)
         ouvre = s.index('(', m.end(1) - 1)
         ferme = fermeture(s, ouvre)
@@ -46,7 +45,9 @@ def analyser(chemin):
         reste = s[ferme + 1:]
         accolade = reste.index('{')
         retour = reste[:accolade].strip()
-        etat = [a for a in args if 'State<' in a]
+        # **L'ETAT EST UN ARGUMENT COMME UN AUTRE DEPUIS QUE TAURI EST PARTI**, et il ne
+        # faut surtout pas le lire depuis le JSON de l'appel : c'est le pont qui le detient.
+        etat = [a for a in args if 'AppState' in a]
         handle = [a for a in args if 'AppHandle' in a]
         autres = [a for a in args if a not in etat and a not in handle]
         trouvees.append({
@@ -72,7 +73,7 @@ def compter_les_attributs(chemin):
     lever le moindre signal, parce qu'il ne reconnaissait qu'une des deux formes d'attribut.
     Compter puis COMPARER est ce qui l'a revele."""
     t = io.open(chemin, encoding='utf-8').read()
-    return len(re.findall(r'#\[tauri::command\]', t)) + len(re.findall(r'tauri::command\)\]', t))
+    return len(re.findall(r'#\[commande\]', t))
 
 cmds = []
 for chemin, prefixe in SOURCES:

@@ -901,18 +901,6 @@ export const fr = {
   "settings.import.running": "Import…",
   "settings.language": "Langue",
   "settings.languageHelp": "L'interface bascule immédiatement, sans redémarrage.",
-  "settings.secours.title": "Affichage",
-  "settings.secours.subtitle": "Quand la fenêtre cesse de se redessiner à répétition.",
-  "settings.secours.toggle": "Mode secours de l'affichage",
-  "settings.secours.help": "Évite les gels d'affichage constatés avec certains pilotes graphiques. En échange tout devient plus lent, et dans les terminaux ce qu'on tape s'affiche avec une touche de retard. Prend effet au prochain démarrage.",
-  "settings.secours.restartNow": "Redémarrer maintenant pour appliquer le changement ?",
-  "settings.secours.restart": "Redémarrer",
-  "settings.secours.atNextStart": "Le changement s'appliquera au prochain démarrage.",
-  "app.gelRechargement": "L'affichage s'était figé : la vue a été rechargée automatiquement.",
-  "watchdog.secoursProposition": "L'affichage s'est figé plusieurs fois. Activer le mode secours de l'affichage ? Ces gels disparaissent, mais tout devient plus lent : dans les terminaux, ce qu'on tape s'affiche avec une touche de retard. L'application redémarrera.",
-  "watchdog.secoursActiver": "Activer le mode secours",
-  "docs.appearance.secours": "Si la fenêtre cesse de se redessiner (gel de l'affichage), l'application se répare toute seule : elle recharge la vue et, après des gels répétés, propose le <strong>mode secours de l'affichage</strong>. On peut aussi l'activer à tout moment dans <em>Paramètres → Général</em> (Linux). Les gels disparaissent, mais tout devient plus lent : dans les terminaux, ce qu'on tape s'affiche avec une touche de retard.",
-  "docs.appearance.secoursDemo": "Redémarrage nécessaire", 
 } as const;
 
 /** Cles disponibles pour la traduction : le francais fait foi. */

@@ -16,6 +16,14 @@ le script de release.
 
 - Glisser un fichier dans un terminal écrit de nouveau son chemin. Le geste ne faisait plus
   rien depuis la 0.59.0.
+- L'état des conteneurs se rafraîchit de nouveau tout seul. Depuis la 0.59.0, une pile
+  démarrée ou arrêtée ailleurs ne changeait à l'écran qu'en rouvrant l'onglet.
+
+### Removed
+
+- Le réglage « mode secours de l'affichage » disparaît des paramètres, avec le texte qui
+  l'accompagnait dans la documentation. Il corrigeait un défaut du moteur d'affichage
+  précédent, remplacé en 0.59.0 : depuis, la case ne pilotait plus rien.
 
 ## [0.59.4] — 2026-09-11
 

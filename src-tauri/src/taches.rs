@@ -1,19 +1,15 @@
-//! Lancer une tache de fond, avec ou sans Tauri.
+//! Lancer une tache de fond, en un seul endroit.
 //!
-//! **POURQUOI UN SEUL ENDROIT.** `tauri::async_runtime::spawn` est un enrobage autour de
-//! tokio, mais il pose SON runtime global : appeler `tokio::spawn` sous Tauri hors de ce
-//! contexte panique, et appeler celui de Tauri sans Tauri ne compile pas. Sans ce module,
-//! chaque appelant aurait invente sa propre condition, et l'un d'eux se serait trompe de
-//! sens sans que rien ne le signale avant l'execution.
+//! **POURQUOI UN SEUL ENDROIT.** Il y a eu deux runtimes a une epoque (celui de Tauri et
+//! tokio), et chaque appelant inventait sa propre condition pour choisir. L'un d'eux se
+//! serait trompe de sens sans que rien ne le signale avant l'execution. Il n'en reste qu'un,
+//! et ce module garde la trace unique de ce choix.
 
 /// Lance une tache asynchrone qui ne rend rien.
 pub fn lancer<F>(tache: F)
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
-    #[cfg(feature = "interface-tauri")]
-    tauri::async_runtime::spawn(tache);
-    #[cfg(not(feature = "interface-tauri"))]
     tokio::spawn(tache);
 }
 
@@ -23,9 +19,6 @@ where
     F: FnOnce() -> T + Send + 'static,
     T: Send + 'static,
 {
-    #[cfg(feature = "interface-tauri")]
-    let attente = tauri::async_runtime::spawn_blocking(travail);
-    #[cfg(not(feature = "interface-tauri"))]
     let attente = tokio::task::spawn_blocking(travail);
     async move { attente.await.map_err(|e| e.to_string()) }
 }

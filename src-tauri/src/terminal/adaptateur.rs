@@ -229,7 +229,6 @@ impl TerminauxService {
             .ok_or("le serveur de terminaux n'est pas encore pret")?;
         let chemin = self.chemin()?.to_path_buf();
         // Nomme l'attente : si la fenetre se fige pendant ce temps, le journal dira quoi.
-        let _marque = crate::guetteur::marquer("lancement du service de terminaux");
         lancement::demarrer(&chemin)?;
         let contexte_pour_relance = contexte.clone();
         let client = match Client::connecter(&chemin, move |pousse| traiter_poussee(&contexte, pousse))

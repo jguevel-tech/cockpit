@@ -23,10 +23,12 @@ for c in cmds:
     # **TOUT TYPE DE TAURI EST UN REFUS.** Un `WebviewWindow` ne se deserialise pas depuis du
     # JSON : ne guetter que `AppHandle` laissait passer la fenetre, et l'erreur ne sortait
     # qu'a la compilation du fichier genere.
-    tauriens = [x for x in args if any(
+    # Il ne doit plus rester un seul argument venu d'une interface graphique : le backend
+    # ne connait plus que l'etat et des donnees.
+    etrangers = [x for x in args if any(
         m in x['type'] for m in ('tauri::', 'WebviewWindow', 'Window', 'Webview', 'State<'))]
-    if tauriens:
-        sautees.append((nom, f"argument lie a Tauri : {tauriens[0]['type']}")); continue
+    if etrangers:
+        sautees.append((nom, f"argument lie a une interface : {etrangers[0]['type']}")); continue
 
     appel_args = ''.join(
         f'\n                serde_json::from_value(prendre(a, "{camel(x["nom"])}", "{x["nom"]}"))\n'
@@ -34,7 +36,10 @@ for c in cmds:
         for x in args)
 
     if c['etat']:
-        cible = f'{c.get("module", "crate::")}{nom}_pour_hote'
+        # L'etat est passe par le pont, jamais lu dans l'appel. Il n'y a plus de « facade »
+        # a viser : la commande EST la fonction, depuis que les enveloppes de Tauri sont
+        # parties.
+        cible = f'{c.get("module", "crate::")}{nom}'
         tete = 'etat, ' if not args else 'etat,'
         portees.append(nom)
     else:

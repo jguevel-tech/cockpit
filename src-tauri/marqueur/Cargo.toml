@@ -1,0 +1,8 @@
+[package]
+name = "marqueur-commande"
+version = "0.1.0"
+edition = "2021"
+description = "L'attribut qui marque une commande de Cockpit. Ne genere aucun code."
+
+[lib]
+proc-macro = true
