@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.63.2] — 2026-09-11
+
 ### Fixed
 
 - Les volets étaient perdus quand on revenait sur l'onglet Terminal en cliquant un terminal
