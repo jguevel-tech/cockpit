@@ -436,6 +436,16 @@
         </div>
       </div>
 
+      <div class="block">
+        <p>{@html $trad("docs.appearance.conso")}</p>
+        <div class="demo">
+          <div class="d-row">
+            <span class="d-btn small">◔ 36 %</span>
+            <span class="d-note">{$trad("docs.appearance.consoDemo")}</span>
+          </div>
+        </div>
+      </div>
+
     {:else if section === "compte"}
       <h3>{$trad("docs.account.heading")}</h3>
 

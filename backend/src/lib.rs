@@ -1260,8 +1260,6 @@ fn llm_reunions(state: &AppState) -> AffectationsReunion {
 // --- Tauri Commands: abonnement d'un fournisseur ---
 
 /// L'etat de connexion du fournisseur donne, ou du fournisseur choisi.
-/// La logique de `llm_abonnement`, appelable par tout hote. La commande ci-dessus
-/// n'en est plus que la facade : le corps, lui, n'a pas bouge.
 #[commande]
 fn llm_abonnement(state: &AppState, id: Option<String>) -> Result<llm::EtatAbonnement, String> {
     let fournisseur = match id {
@@ -1269,6 +1267,39 @@ fn llm_abonnement(state: &AppState, id: Option<String>) -> Result<llm::EtatAbonn
         None => llm::prefere(&state.db),
     };
     Ok(llm::abonnement::etat(fournisseur))
+}
+
+/// Ce qu'il reste avant la limite du fournisseur, et quand le compteur repart.
+///
+/// **`async fn` parce que c'est un appel reseau** : le pont sert ses appels sur un fil, et une
+/// attente de quinze secondes y bloquerait tout le reste, terminaux compris.
+///
+/// **Un fournisseur qui ne sait pas rend `gere: false` et AUCUNE fenetre.** L'interface
+/// n'affiche alors rien du tout : une jauge vide ferait croire a une consommation nulle.
+#[commande]
+async fn llm_consommation(
+    state: &AppState,
+    id: Option<String>,
+) -> Result<llm::EtatConsommation, String> {
+    let fournisseur = match id {
+        Some(id) => llm::par_id(&id).ok_or_else(|| format!("fournisseur inconnu : {id}"))?,
+        None => llm::prefere(&state.db),
+    };
+    let mut etat = llm::EtatConsommation {
+        fournisseur: fournisseur.id().to_string(),
+        nom: fournisseur.nom().to_string(),
+        gere: fournisseur.consommation().is_some(),
+        fenetres: Vec::new(),
+        probleme: None,
+    };
+    if let Some(capacite) = fournisseur.consommation() {
+        match capacite.fenetres(crate::compte::client()).await {
+            Ok(fenetres) => etat.fenetres = fenetres,
+            // Une panne se DIT : sans ce champ, un reseau coupe se lirait « tout va bien ».
+            Err(e) => etat.probleme = Some(e),
+        }
+    }
+    Ok(etat)
 }
 
 

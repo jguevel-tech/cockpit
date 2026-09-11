@@ -36,11 +36,13 @@
 //! normal — Claude ne transcrit pas — mais ca ne doit pas se decouvrir apres coup.
 
 pub mod abonnement;
+pub mod consommation;
 pub mod conversations;
 pub mod fournisseurs;
 pub mod texte;
 
 pub use abonnement::{Abonnement, EtatAbonnement};
+pub use consommation::EtatConsommation;
 pub use conversations::{Conversation, Conversations};
 pub use texte::{ModeleTexte, Transcription};
 
@@ -94,6 +96,11 @@ pub trait Fournisseur: Send + Sync {
 
     /// Sait dire si l'on est connecte a son abonnement, et guider la connexion.
     fn abonnement(&self) -> Option<&'static dyn Abonnement> {
+        None
+    }
+
+    /// Sait dire ce qu'il reste avant sa limite, et quand le compteur repart.
+    fn consommation(&self) -> Option<&'static dyn consommation::Consommation> {
         None
     }
 

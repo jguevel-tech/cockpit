@@ -12,6 +12,13 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Un anneau dans l'en-tête montre ce qu'il reste avant la limite de ton fournisseur d'IA, et
+  vire à l'orange puis au rouge quand ça approche. Un clic donne le détail : la fenêtre de
+  session, celle de la semaine, et l'heure à laquelle chaque compteur repart. Il n'apparaît que
+  si le fournisseur choisi sait répondre.
+
 ## [0.61.0] — 2026-09-11
 
 ### Removed

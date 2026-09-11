@@ -5,6 +5,7 @@
   import { trad, tradN } from "../../i18n";
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
   import BoutonCompte from "../compte/BoutonCompte.svelte";
+  import JaugeConsommation from "./JaugeConsommation.svelte";
 
   // Cloche TOUJOURS visible : c'est le point d'entree unique des notifications, l'utilisateur
   // ne doit pas avoir a fouiller les parametres pour savoir s'il y a du neuf. Le badge porte
@@ -22,6 +23,7 @@
     <button class="logo-btn" onclick={goHome}>{$trad("header.appName")}</button>
   </h1>
   <div class="header-right">
+    <JaugeConsommation />
     <button
       class="header-btn bell-btn"
       class:has-unread={$unreadCount > 0}

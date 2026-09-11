@@ -7,6 +7,7 @@
 //! connaissance est enfermee dans ce fichier, et rien ailleurs n'en depend.
 
 use crate::llm::abonnement::{self, Abonnement, ConnexionGuidee, Etat};
+use crate::llm::consommation::{fenetre_depuis, Consommation, Fenetre};
 use crate::llm::conversations::{ConversationBrute, Conversations};
 use crate::llm::Fournisseur;
 use std::io::{BufRead, BufReader, Read};
@@ -21,6 +22,7 @@ const LONGUEUR_LIBELLE: usize = 90;
 pub static CLAUDE: ClaudeCode = ClaudeCode;
 static CONVERSATIONS: ConversationsClaude = ConversationsClaude;
 static ABONNEMENT: AbonnementClaude = AbonnementClaude;
+static CONSOMMATION: ConsommationClaude = ConsommationClaude;
 
 pub struct ClaudeCode;
 
@@ -43,6 +45,10 @@ impl Fournisseur for ClaudeCode {
     fn conversations(&self) -> Option<&'static dyn Conversations> {
         Some(&CONVERSATIONS)
     }
+    fn consommation(&self) -> Option<&'static dyn Consommation> {
+        Some(&CONSOMMATION)
+    }
+
     fn abonnement(&self) -> Option<&'static dyn Abonnement> {
         Some(&ABONNEMENT)
     }
@@ -174,39 +180,73 @@ fn texte_du_message(valeur: &serde_json::Value) -> Option<String> {
 
 pub struct AbonnementClaude;
 
+/// Ce que la lecture du fichier de jetons du CLI a donne.
+///
+/// **« PAS CONNECTE » ET « ON N'A PAS SU REGARDER » NE SE CONFONDENT PAS.** Le fichier absent
+/// est le cas NORMAL d'une machine ou personne ne s'est connecte ; un fichier illisible est une
+/// panne a nommer. Les deux rendaient « pas connecte » avant qu'on les separe.
+enum LectureOauth {
+    /// Aucun fichier : personne ne s'est connecte sur cette machine.
+    Absent,
+    /// Le bloc `claudeAiOauth`, tel que le CLI l'ecrit.
+    Bloc(serde_json::Value),
+    /// La raison pour laquelle on n'a rien pu lire.
+    Probleme(String),
+}
+
+/// Lit le bloc OAuth du CLI. Partage par l'abonnement et par la consommation : deux lectures
+/// du meme fichier, c'etait deux occasions de diverger.
+fn lire_bloc_oauth_detail() -> LectureOauth {
+    let chemin = match crate::chemins::dossier_personnel() {
+        Ok(maison) => maison.join(".claude").join(".credentials.json"),
+        Err(e) => return LectureOauth::Probleme(e),
+    };
+    let brut = match std::fs::read_to_string(&chemin) {
+        Ok(brut) => brut,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return LectureOauth::Absent,
+        Err(e) => return LectureOauth::Probleme(format!("{} illisible : {e}", chemin.display())),
+    };
+    let json = match serde_json::from_str::<serde_json::Value>(&brut) {
+        Ok(json) => json,
+        Err(e) => {
+            return LectureOauth::Probleme(format!(
+                "{} n'est pas du JSON valide : {e}",
+                chemin.display()
+            ))
+        }
+    };
+    match json.get("claudeAiOauth") {
+        Some(oauth) => LectureOauth::Bloc(oauth.clone()),
+        None => LectureOauth::Probleme(format!(
+            "{} ne contient pas de bloc claudeAiOauth",
+            chemin.display()
+        )),
+    }
+}
+
+/// Le bloc OAuth, ou de quoi dire pourquoi il manque.
+fn lire_bloc_oauth() -> Result<serde_json::Value, String> {
+    match lire_bloc_oauth_detail() {
+        LectureOauth::Bloc(oauth) => Ok(oauth),
+        LectureOauth::Absent => Err("connecte-toi a Claude pour voir ta consommation".to_string()),
+        LectureOauth::Probleme(e) => Err(e),
+    }
+}
+
 impl Abonnement for AbonnementClaude {
     fn etat(&self) -> Etat {
         let mut etat = Etat::default();
 
-        let chemin = match crate::chemins::dossier_personnel() {
-            Ok(maison) => maison.join(".claude").join(".credentials.json"),
-            Err(e) => {
+        let oauth = match lire_bloc_oauth_detail() {
+            LectureOauth::Bloc(oauth) => oauth,
+            // Pas de fichier : pas connecte, et rien a signaler.
+            LectureOauth::Absent => return etat,
+            LectureOauth::Probleme(e) => {
                 etat.probleme = Some(e);
                 return etat;
             }
         };
-        // Fichier absent = pas encore connecte. C'est le cas normal, pas un probleme a
-        // signaler.
-        let brut = match std::fs::read_to_string(&chemin) {
-            Ok(brut) => brut,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return etat,
-            Err(e) => {
-                etat.probleme = Some(format!("{} illisible : {e}", chemin.display()));
-                return etat;
-            }
-        };
-        let json = match serde_json::from_str::<serde_json::Value>(&brut) {
-            Ok(json) => json,
-            Err(e) => {
-                etat.probleme = Some(format!("{} n'est pas du JSON valide : {e}", chemin.display()));
-                return etat;
-            }
-        };
-        let Some(oauth) = json.get("claudeAiOauth") else {
-            etat.probleme =
-                Some(format!("{} ne contient pas de bloc claudeAiOauth", chemin.display()));
-            return etat;
-        };
+        let oauth = &oauth;
 
         etat.connecte = oauth
             .get("accessToken")
@@ -287,4 +327,68 @@ mod tests {
             .expect("un dossier absent n'est pas une erreur");
         assert!(liste.is_empty());
     }
+}
+
+// ---------- La consommation ----------
+
+/// Ce que Claude Code interroge lui-meme pour afficher ses limites.
+const URL_CONSOMMATION: &str = "https://api.anthropic.com/api/oauth/usage";
+/// L'en-tete que l'API exige pour accepter un jeton OAuth issu du CLI.
+const ENTETE_BETA: &str = "oauth-2025-04-20";
+
+pub struct ConsommationClaude;
+
+impl Consommation for ConsommationClaude {
+    fn fenetres<'a>(
+        &'a self,
+        client: &'a reqwest::Client,
+    ) -> crate::llm::texte::Futur<'a, Vec<Fenetre>> {
+        Box::pin(async move {
+            let jeton = jeton_oauth()?;
+            let reponse = client
+                .get(URL_CONSOMMATION)
+                .bearer_auth(jeton)
+                .header("anthropic-beta", ENTETE_BETA)
+                // **L'API REFUSE UN JETON OAUTH A UN CLIENT QU'ELLE NE CONNAIT PAS.** Ce jeton
+                // appartient au CLI : on se presente comme lui, parce que c'est lui qui l'a
+                // obtenu et pour son propre usage.
+                .header(reqwest::header::USER_AGENT, "claude-code/2.1.0")
+                .send()
+                .await
+                .map_err(|e| format!("consommation Claude : {e}"))?;
+            let statut = reponse.status();
+            if !statut.is_success() {
+                // 401 : le jeton a expire, le CLI le renouvellera a sa prochaine utilisation.
+                return Err(format!("consommation Claude : reponse {statut}"));
+            }
+            let json: serde_json::Value = reponse
+                .json()
+                .await
+                .map_err(|e| format!("consommation Claude : reponse illisible ({e})"))?;
+            Ok(fenetres_depuis_reponse(&json))
+        })
+    }
+}
+
+/// Les fenetres portees par la reponse de l'API.
+///
+/// Fonction LIBRE et non methode : elle s'eprouve sur une reponse enregistree, sans reseau et
+/// sans jeton. C'est la seule partie qui peut se tromper en silence.
+pub fn fenetres_depuis_reponse(json: &serde_json::Value) -> Vec<Fenetre> {
+    [("session", "five_hour"), ("semaine", "seven_day")]
+        .into_iter()
+        .filter_map(|(cle, champ)| fenetre_depuis(cle, json.get(champ)))
+        .collect()
+}
+
+/// Le jeton OAuth que le CLI a range dans son fichier. **On ne le garde pas** : il est lu a
+/// chaque demande et ne quitte pas cette fonction autrement que pour l'en-tete d'un appel.
+fn jeton_oauth() -> Result<String, String> {
+    let oauth = lire_bloc_oauth()?;
+    oauth
+        .get("accessToken")
+        .and_then(|t| t.as_str())
+        .filter(|t| !t.is_empty())
+        .map(String::from)
+        .ok_or_else(|| "aucun jeton : connecte-toi a Claude".to_string())
 }

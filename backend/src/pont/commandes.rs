@@ -850,6 +850,13 @@ pub async fn appeler(
             )?))
         })
         .await,
+        "llm_consommation" => typer(async {
+            valeur(serde_json::to_value(crate::llm_consommation(etat,
+                serde_json::from_value(prendre(a, "id", "id"))
+                    .map_err(|e| format!("argument id : {e}"))?,
+            ).await?))
+        })
+        .await,
         "llm_connexion_demarrer" => typer(async {
             valeur(serde_json::to_value(crate::llm_connexion_demarrer(etat,
                 serde_json::from_value(prendre(a, "id", "id"))
