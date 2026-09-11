@@ -84,7 +84,14 @@
         aria-label={$trad("term.voletDeplacerAide")}
         onpointerdown={(e) => surPoignee(e, noeud.id)}
       >
-        <span class="grip" aria-hidden="true">⠿</span>
+        <!-- Une croix de fleches, dessinee et non prise dans une police : le caractere
+             equivalent manque dans beaucoup de polices et tombe alors en rectangle vide. -->
+        <svg class="grip" viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M8 1.5 L10 4 H6 Z M8 14.5 L6 12 H10 Z M1.5 8 L4 6 V10 Z M14.5 8 L12 10 V6 Z"
+            fill="currentColor"
+          />
+        </svg>
         {libelle(noeud.id)}
       </button>
     {/if}
@@ -163,9 +170,12 @@
   /* La poignee : discrete au repos, franche des qu'on la survole. Elle porte un fond OPAQUE
      parce qu'elle est posee sur un terminal, et que sous image de fond un `--bg-*` la rendrait
      translucide au-dessus du texte. */
+  /* **EN BAS A DROITE, PAS EN HAUT.** En haut, elle se posait sur la ligne que le shell vient
+     d'ecrire : le nom du volet chevauchait le prompt. Le bas d'un terminal est presque
+     toujours la zone la moins chargee. */
   .etiquette {
     position: absolute;
-    top: 3px;
+    bottom: 4px;
     right: 7px;
     z-index: 4;
     display: flex;
@@ -179,8 +189,11 @@
     font-size: 10px;
     line-height: 1.6;
     cursor: grab;
-    opacity: 0.6;
+    /* Assez visible pour qu'on la voie et qu'on ait envie de la prendre : posee a 0.6, elle
+       se lisait comme une simple etiquette de nom et personne ne l'a essayee. */
+    opacity: 0.85;
     touch-action: none;
+    transition: opacity 120ms ease, border-color 120ms ease;
   }
   .etiquette:hover,
   .etiquette:focus-visible {
@@ -194,7 +207,14 @@
     border-color: var(--accent);
     color: var(--text-primary);
   }
-  .grip { letter-spacing: -1px; }
+  .grip {
+    width: 11px;
+    height: 11px;
+    flex: 0 0 auto;
+    opacity: 0.8;
+  }
+  .etiquette:hover .grip,
+  .etiquette.pris .grip { opacity: 1; }
 
   /* La marque de depot. Un aplat d'accent tres dilue plus un bord franc du cote vise : c'est
      le BORD qui dit ou le volet va se poser, l'aplat ne fait que designer la cible. */

@@ -5,6 +5,18 @@
     action: () => void;
   }
 
+  /// Un titre de section. **CE MENU S'ALLONGE A CHAQUE FONCTIONNALITE**, et une liste plate
+  /// de dix entrees se lit mal : on range par sujet plutot que d'empiler.
+  export interface MenuSection {
+    section: string;
+  }
+
+  export type MenuEntry = MenuItem | MenuSection;
+
+  function estUneSection(entree: MenuEntry): entree is MenuSection {
+    return "section" in entree;
+  }
+
   import { portal } from "../../actions/portal";
 
   let {
@@ -15,7 +27,7 @@
   }: {
     x: number;
     y: number;
-    items: MenuItem[];
+    items: MenuEntry[];
     onClose: () => void;
   } = $props();
 
@@ -48,10 +60,19 @@
 
 <div class="overlay" role="presentation" use:portal onclick={onClose} oncontextmenu={(e) => { e.preventDefault(); onClose(); }}>
   <div bind:this={menuEl} class="menu" style="left: {pos.left}px; top: {pos.top}px" role="menu" tabindex="-1">
-    {#each items as item}
-      <button class="item" class:danger={item.danger} role="menuitem" onclick={() => pick(item)}>
-        {item.label}
-      </button>
+    {#each items as entree}
+      {#if estUneSection(entree)}
+        <div class="section" role="presentation">{entree.section}</div>
+      {:else}
+        <button
+          class="item"
+          class:danger={entree.danger}
+          role="menuitem"
+          onclick={() => pick(entree)}
+        >
+          {entree.label}
+        </button>
+      {/if}
     {/each}
   </div>
 </div>
@@ -74,6 +95,21 @@
     padding: 0.4rem 0.6rem; border-radius: var(--radius-sm, 6px);
   }
   .item:hover { background: var(--bg-tertiary); }
+  /* Le titre n'est pas cliquable : il separe, il ne propose rien. */
+  .section {
+    padding: 0.45rem 0.6rem 0.2rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  /* Un trait au-dessus de chaque section SAUF la premiere : elle n'a rien a separer. */
+  .section:not(:first-child) {
+    margin-top: 0.2rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.4rem;
+  }
   .item.danger { color: var(--error); }
   .item.danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
 </style>

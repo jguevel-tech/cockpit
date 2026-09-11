@@ -247,6 +247,23 @@ impl Database {
         // conversation en cours et pas seulement un shell nu.
         let _ = conn.execute("ALTER TABLE terminals ADD COLUMN agent TEXT NOT NULL DEFAULT ''", []);
 
+        // Migration : l'ordre des terminaux dans la barre laterale, choisi a la souris.
+        //
+        // **LES LIGNES DEJA LA PRENNENT L'ORDRE QU'ELLES AVAIENT**, c'est-a-dire celui de leur
+        // identifiant. Un `DEFAULT 0` sans ce rattrapage mettrait tout le monde a egalite, et
+        // l'ordre affiche changerait au premier reordonnancement d'un seul element.
+        if conn
+            .execute("ALTER TABLE terminals ADD COLUMN position INTEGER NOT NULL DEFAULT 0", [])
+            .is_ok()
+        {
+            let _ = conn.execute(
+                "UPDATE terminals SET position = (
+                     SELECT COUNT(*) FROM terminals AS avant WHERE avant.id < terminals.id
+                 )",
+                [],
+            );
+        }
+
         // Migration: le nom de session tmux n'existe plus (chantier des terminaux, aout 2026).
         // Tolere : sur un SQLite anterieur a 3.35 le DROP COLUMN echoue, et la colonne reste
         // avec sa valeur par defaut — plus personne ne la lit ni ne l'ecrit.

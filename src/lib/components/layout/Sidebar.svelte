@@ -2,7 +2,7 @@
   import { projects } from "../../stores/projects";
   import { selectedProject, selectProject, activeTab, pendingTerminalId } from "../../stores/ui";
   import { terminals, loadTerminals } from "../../stores/terminals";
-  import { renameTerminal, closeTerminal } from "../../api/workspace";
+  import { renameTerminal, closeTerminal, reorderTerminals } from "../../api/workspace";
   import type { TerminalInfo } from "../../types";
   import { reorderProjects, getProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, reorderProjectFolders, moveProjectFolder, moveProjectToFolder } from "../../api/scanner";
   import { loadProjects, renommerProjet } from "../../stores/projects";
@@ -11,6 +11,8 @@
   import InlineEdit from "../ui/InlineEdit.svelte";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import { notify } from "../../stores/toast";
+  import { reorderable } from "../../actions/reorderable";
+  import { reorder, type DropPosition } from "../../utils/reorder";
   import { onMount } from "svelte";
   import { trad, tradN } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
@@ -64,6 +66,24 @@
 
   function terminalLabel(t: TerminalInfo): string {
     return t.name || "Terminal";
+  }
+
+  /// Range les terminaux dans l'ordre qu'on vient de poser a la souris.
+  ///
+  /// **L'ORDRE EST GLOBAL, PAS PAR PROJET** : on met en tete celui sur lequel on travaille,
+  /// quel que soit son projet. Chaque ligne affiche deja le nom de son projet, donc les
+  /// regrouper n'apporterait rien et interdirait le geste.
+  ///
+  /// La liste affichee est reordonnee TOUT DE SUITE et la base suit : attendre la reponse
+  /// ferait sauter la ligne sous le doigt. Si l'ecriture echoue, on le dit et on recharge —
+  /// l'ordre affiche doit etre celui qui est range, jamais une illusion.
+  function deplacerTerminal(from: number, to: number, pos: DropPosition) {
+    const ordonne = reorder($terminals, from, to, pos);
+    terminals.set(ordonne);
+    reorderTerminals(ordonne.map((t) => t.id)).catch((e) => {
+      notify(String(e));
+      loadTerminals();
+    });
   }
 
   // Menu contextuel + renommage inline des terminaux
@@ -676,8 +696,15 @@
     </div>
     {#if !terminalsCollapsed}
       <ul class="terminals-list">
-        {#each $terminals as t (t.id)}
-          <li>
+        {#each $terminals as t, i (t.id)}
+          <li
+            use:reorderable={{
+              index: i,
+              group: "terminaux",
+              onDrop: deplacerTerminal,
+              disabled: renamingTermId === t.id,
+            }}
+          >
             {#if renamingTermId === t.id}
               <div class="terminal-item">
                 {#if t.llm}<span class="term-llm" title={$trad("sidebar.agentRunning")} aria-label={$trad("sidebar.agentRunning")}>✳</span>{:else}<span class="term-dot" title={$trad("sidebar.terminal")}></span>{/if}

@@ -1600,13 +1600,27 @@
     x={ctxMenu.x}
     y={ctxMenu.y}
     items={[
+      // **RANGE PAR SUJET, PARCE QUE CE MENU S'ALLONGE.** Une liste plate melangeait deja le
+      // presse-papiers, les volets et le terminal lui-meme.
+      { section: $trad("term.ctxSectionClipboard") },
       { label: $trad("common.copy"), action: copySelection },
       { label: $trad("common.paste"), action: pasteClipboard },
       // C'est ici qu'on cherche la division : les boutons de la barre d'onglets restent,
       // pour ceux qui les ont vus, mais le clic droit est le geste naturel.
+      { section: $trad("term.ctxSectionPanes") },
       { label: $trad("term.ctxSplitRight"), action: () => void diviserLeVolet("colonnes") },
       { label: $trad("term.ctxSplitDown"), action: () => void diviserLeVolet("lignes") },
       ...entreesDeDeplacement(),
+      { section: $trad("term.ctxSectionTerminal") },
+      // La cible est CAPTUREE : le menu se ferme avant que l'action ne s'execute, et
+      // `activeId` aura change. Meme piege que pour les deplacements.
+      ...(activeId === null
+        ? []
+        : [{ label: $trad("term.ctxClose"), danger: true, cible: activeId }].map((e) => ({
+            label: e.label,
+            danger: e.danger,
+            action: () => void closeTab(e.cible),
+          }))),
     ]}
     onClose={() => (ctxMenu = null)}
   />

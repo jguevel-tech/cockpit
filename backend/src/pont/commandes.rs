@@ -184,6 +184,13 @@ pub async fn appeler(
             )?))
         })
         .await,
+        "reorder_terminals" => typer(async {
+            valeur(serde_json::to_value(crate::reorder_terminals(etat,
+                serde_json::from_value(prendre(a, "ids", "ids"))
+                    .map_err(|e| format!("argument ids : {e}"))?,
+            )?))
+        })
+        .await,
         "reorder_todos" => typer(async {
             valeur(serde_json::to_value(crate::reorder_todos(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))

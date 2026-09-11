@@ -349,6 +349,13 @@ fn delete_todo(state: &AppState, id: i64) -> Result<(), String> {
 }
 
 
+/// L'ordre des terminaux dans la barre laterale, pose a la souris.
+#[commande]
+fn reorder_terminals(state: &AppState, ids: Vec<i64>) -> Result<(), String> {
+    state.db.reorder_terminals(&ids)
+}
+
+
 /// La logique de `reorder_todos`, appelable par tout hote. La commande ci-dessus
 /// n'en est plus que la facade : le corps, lui, n'a pas bouge.
 #[commande]

@@ -12,6 +12,20 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les terminaux de la barre latérale se rangent à la souris : on attrape une ligne et on la
+  pose où on veut, y compris en tête, quel que soit son projet. L'ordre est gardé, et un
+  terminal neuf se met à la fin.
+- Le clic droit dans un terminal permet de le fermer.
+
+### Changed
+
+- La poignée d'un volet passe en bas à droite : en haut, elle se posait sur la ligne que le
+  shell venait d'écrire. Elle porte une croix de flèches, pour qu'on la voie comme une prise.
+- Le clic droit dans un terminal est rangé par sections (presse-papiers, volets, terminal) :
+  la liste s'allongeait et tout s'y mélangeait.
+
 ## [0.64.0] — 2026-09-11
 
 ### Added

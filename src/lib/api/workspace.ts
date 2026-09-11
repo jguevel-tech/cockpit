@@ -23,6 +23,10 @@ export const renameTerminal = (id: number, name: string) => invoke("rename_termi
 export const saveTerminalScreens = () => invoke("save_terminal_screens");
 export const listTerminals = (project: string) => invoke<TerminalInfo[]>("list_terminals", { project });
 export const listAllTerminals = () => invoke<TerminalInfo[]>("list_all_terminals");
+
+/// L'ordre des terminaux dans la barre laterale. Global : on met en tete celui sur lequel
+/// on travaille, quel que soit son projet.
+export const reorderTerminals = (ids: number[]) => invoke("reorder_terminals", { ids });
 export const openUrl = (url: string) => invoke("open_url", { url });
 
 export const recordCommand = (project: string, command: string) =>

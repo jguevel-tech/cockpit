@@ -304,6 +304,7 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
     case 'coquille:zoom':
       // Le zoom appartient a l'HOTE, pas au backend : sous Tauri la commande recevait la
       // fenetre, ici c'est Chromium qui l'applique. Le backend n'a jamais eu a le savoir.
+      if (fenetre.isDestroyed() || fenetre.webContents.isDestroyed()) return { traite: true }
       fenetre.webContents.setZoomFactor(arguments_.factor)
       return { traite: true, valeur: null }
     case 'coquille:version':
@@ -358,6 +359,13 @@ function brancherLePont(fenetre) {
   // le meme chemin qu'un evenement emis dans la coquille : l'interface ne voit pas la
   // difference, et n'a pas a la voir.
   backend.surEvenement = (nom, charge) => pousserEvenement(nom, charge, fenetre)
+  // **ON TAIT LE BACKEND DES QUE LA FENETRE PART, ET PAS SEULEMENT AU MOMENT D'ENVOYER.**
+  // La garde de `pousserEvenement` protege ce chemin-la ; celle-ci protege TOUS ceux qu'on
+  // ajouterait ensuite, parce que le backend n'a alors plus personne a qui parler. `close`
+  // arrive AVANT `closed`, donc avant que l'objet soit detruit : c'est le bon moment.
+  fenetre.on('close', () => {
+    backend.surEvenement = () => {}
+  })
   fenetre.on('closed', () => backend.arreter())
 
   ipcMain.handle('cockpit:commande', async (_evenement, commande, arguments_) => {

@@ -63,9 +63,15 @@ impl Database {
             max + 1
         };
         let name = format!("{}{}", prefix, next);
+        // **UN TERMINAL NEUF VA A LA FIN DE LA LISTE.** Sans cette position, il naitrait a
+        // zero — donc EN TETE des que l'utilisateur a range sa barre laterale une fois, et
+        // il pousserait devant celui qu'on venait d'y mettre.
+        let position: i64 = conn
+            .query_row("SELECT COALESCE(MAX(position), -1) + 1 FROM terminals", [], |r| r.get(0))
+            .unwrap_or(0);
         conn.execute(
-            "INSERT INTO terminals (project, name, cwd) VALUES (?1, ?2, ?3)",
-            [project, &name, cwd],
+            "INSERT INTO terminals (project, name, cwd, position) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![project, &name, cwd, position],
         )
         .map_err(|e| e.to_string())?;
         let id = conn.last_insert_rowid();
@@ -93,7 +99,7 @@ impl Database {
             Some(p) => {
                 let mut stmt = conn
                     .prepare(&format!(
-                        "SELECT {} FROM terminals WHERE project=?1 ORDER BY id",
+                        "SELECT {} FROM terminals WHERE project=?1 ORDER BY position, id",
                         TerminalRow::SELECT_COLS
                     ))
                     .map_err(|e| e.to_string())?;
@@ -103,7 +109,7 @@ impl Database {
             None => {
                 let mut stmt = conn
                     .prepare(&format!(
-                        "SELECT {} FROM terminals ORDER BY project, id",
+                        "SELECT {} FROM terminals ORDER BY position, id",
                         TerminalRow::SELECT_COLS
                     ))
                     .map_err(|e| e.to_string())?;
@@ -118,6 +124,16 @@ impl Database {
             .execute("UPDATE terminals SET name=?1 WHERE id=?2", rusqlite::params![name, id])
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    /// Range l'ordre des terminaux de la barre laterale, tel qu'on vient de le poser.
+    ///
+    /// **L'ORDRE EST GLOBAL, PAS PAR PROJET.** C'est ce qui permet de mettre le terminal sur
+    /// lequel on travaille en tete, quel que soit son projet : la barre laterale affiche le
+    /// nom du projet a cote de chaque ligne, donc les regrouper n'apporterait rien et
+    /// interdirait le geste.
+    pub fn reorder_terminals(&self, ids: &[i64]) -> Result<(), String> {
+        self.reorder_by_ids("terminals", "id", ids)
     }
 
     pub fn delete_terminal_row(&self, id: i64) -> Result<(), String> {
@@ -242,5 +258,59 @@ mod tests {
         db.rename_terminal_row(t2.id, "logs api").unwrap();
         let t4 = db.create_terminal_row("cockpit").unwrap();
         assert_eq!(t4.name, "COCKPIT - 4");
+    }
+
+    /// **L'ORDRE DE LA BARRE LATERALE EST GLOBAL, ET IL TRAVERSE LES PROJETS.** C'est tout
+    /// l'interet du geste : mettre en tete le terminal sur lequel on travaille, meme s'il
+    /// appartient a un autre projet que ses voisins.
+    #[test]
+    fn l_ordre_des_terminaux_se_pose_et_se_relit() {
+        let db = Database::new(":memory:").unwrap();
+        let a = db.create_terminal_row("api").unwrap();
+        let b = db.create_terminal_row("site").unwrap();
+        let c = db.create_terminal_row("api").unwrap();
+
+        let ordre = |db: &Database| {
+            db.get_terminal_rows(None).unwrap().into_iter().map(|t| t.id).collect::<Vec<_>>()
+        };
+        // Sans rien demander, l'ordre est celui de la creation.
+        assert_eq!(ordre(&db), vec![a.id, b.id, c.id]);
+
+        db.reorder_terminals(&[c.id, a.id, b.id]).unwrap();
+        assert_eq!(ordre(&db), vec![c.id, a.id, b.id], "l'ordre pose est celui qu'on relit");
+
+        // Et il ne se regroupe pas par projet en chemin.
+        db.reorder_terminals(&[b.id, c.id, a.id]).unwrap();
+        assert_eq!(ordre(&db), vec![b.id, c.id, a.id]);
+    }
+
+    /// **UN TERMINAL NEUF VA A LA FIN, PAS EN TETE.** Le defaut de la colonne vaut zero :
+    /// sans position posee a la creation, tout terminal cree apres un rangement passerait
+    /// devant celui qu'on venait de mettre en premier.
+    #[test]
+    fn un_terminal_neuf_se_range_a_la_fin() {
+        let db = Database::new(":memory:").unwrap();
+        let a = db.create_terminal_row("api").unwrap();
+        let b = db.create_terminal_row("api").unwrap();
+        db.reorder_terminals(&[b.id, a.id]).unwrap();
+
+        let neuf = db.create_terminal_row("site").unwrap();
+        let ids: Vec<i64> =
+            db.get_terminal_rows(None).unwrap().into_iter().map(|t| t.id).collect();
+        assert_eq!(ids, vec![b.id, a.id, neuf.id]);
+    }
+
+    /// La liste d'UN projet suit le meme ordre, sans que les autres s'y invitent.
+    #[test]
+    fn l_ordre_vaut_aussi_dans_un_seul_projet() {
+        let db = Database::new(":memory:").unwrap();
+        let a = db.create_terminal_row("api").unwrap();
+        let ailleurs = db.create_terminal_row("site").unwrap();
+        let c = db.create_terminal_row("api").unwrap();
+
+        db.reorder_terminals(&[c.id, ailleurs.id, a.id]).unwrap();
+        let ids: Vec<i64> =
+            db.get_terminal_rows(Some("api")).unwrap().into_iter().map(|t| t.id).collect();
+        assert_eq!(ids, vec![c.id, a.id]);
     }
 }
