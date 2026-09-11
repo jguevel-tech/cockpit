@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Les terminaux reviennent avec leur contenu après un redémarrage du poste, au lieu de s'ouvrir
+  vides. Depuis la 0.59.0, ce qui les tient en vie ne démarrait plus : chaque ouverture
+  attendait dix secondes, échouait, et repartait sur un terminal neuf.
+- La liste des projets et des terminaux s'affiche de nouveau tout de suite au démarrage. Elle
+  attendait ces mêmes dix secondes, plusieurs fois.
+- Cockpit ne se rouvre plus tout seul après avoir été quitté.
+
 ## [0.59.3] — 2026-09-10
 
 ### Fixed

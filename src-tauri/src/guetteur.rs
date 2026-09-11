@@ -540,7 +540,7 @@ fn proposer_mode_secours(app: &AppHandle) {
 #[cfg(feature = "interface-tauri")]
 pub(crate) fn relancer_l_application(app: &AppHandle) -> Result<(), String> {
     tauri_plugin_single_instance::destroy(app);
-    let binaire = crate::terminal::service::lancement::binaire_a_relancer().map_err(|e| {
+    let binaire = crate::terminal::service::lancement::binaire_de_l_application().map_err(|e| {
         journaliser(app, &format!("relance impossible, executable introuvable : {e}"));
         e
     })?;

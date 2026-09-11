@@ -27,20 +27,26 @@ const ATTENTE_DEMARRAGE: std::time::Duration = std::time::Duration::from_secs(10
 
 /// La commande qui relance CE binaire en mode service.
 pub fn commande_du_service(chemin: &std::path::Path) -> Result<Command, String> {
-    let mut commande = Command::new(binaire_a_relancer()?);
+    let mut commande = Command::new(binaire_du_service()?);
     commande.arg(DRAPEAU_SERVICE).arg(chemin);
+    // **L'ENVIRONNEMENT DE L'APPIMAGE NE SUIT PAS LE SERVICE.** Il designe un montage qui
+    // disparait a la fermeture de l'application : un `LD_LIBRARY_PATH` qui pointe dedans
+    // ferait charger au service des bibliotheques qui s'evaporent sous lui.
+    for variable in crate::terminal::environnement::VARIABLES_APPIMAGE {
+        commande.env_remove(variable);
+    }
     Ok(commande)
 }
 
-/// Quel fichier relancer. NE PAS SIMPLIFIER en `current_exe()` (voir plus bas).
+/// Quel fichier relancer pour rouvrir L'APPLICATION. Sous AppImage, c'est le fichier
+/// `.AppImage` pose sur le disque, jamais l'executable monte dans `/tmp/.mount_*` qui
+/// disparait avec elle.
 ///
-/// Sous AppImage, `current_exe()` pointe dans le montage `/tmp/.mount_cockpi*`, que le
-/// runtime demonte a la fermeture de l'application. Or le service doit lui SURVIVRE : son
-/// executable disparaitrait sous lui. La variable `APPIMAGE` designe, elle, le fichier
-/// `.AppImage` pose sur le disque : le service en obtient son propre montage, vivant tant
-/// qu'il tourne. C'est la meme lecon que le tmux embarque, qu'il fallait copier hors du
-/// montage avant de le lancer.
-pub(crate) fn binaire_a_relancer() -> Result<std::path::PathBuf, String> {
+/// **CE N'EST PAS LE BINAIRE DU SERVICE.** Depuis la 0.59.0, `$APPIMAGE` designe la
+/// coquille Electron : la lancer ouvre COCKPIT, pas le service. Voir `binaire_du_service`.
+// Son unique appelant est le guetteur, qui n'existe qu'avec l'interface graphique.
+#[cfg(feature = "interface-tauri")]
+pub(crate) fn binaire_de_l_application() -> Result<std::path::PathBuf, String> {
     if let Some(appimage) = std::env::var_os("APPIMAGE") {
         let chemin = std::path::PathBuf::from(appimage);
         if chemin.is_file() {
@@ -48,6 +54,87 @@ pub(crate) fn binaire_a_relancer() -> Result<std::path::PathBuf, String> {
         }
     }
     std::env::current_exe().map_err(|e| format!("chemin de l'executable : {e}"))
+}
+
+/// Quel fichier lancer pour obtenir LE SERVICE DE TERMINAUX.
+///
+/// **LANCER `$APPIMAGE` A OUVERT L'APPLICATION AU LIEU DU SERVICE, ET CA A COUTE TROIS
+/// PANNES D'UN COUP (2026-09-11).** Jusqu'a la 0.58.x, `$APPIMAGE` et le binaire du service
+/// etaient le MEME programme : le relancer avec `--service-terminaux` marchait. Depuis la
+/// 0.59.0, `$APPIMAGE` est la coquille Electron, qui ne connait pas ce drapeau : elle
+/// ouvrait donc une fenetre et n'ouvrait aucun socket. Consequences vues par l'utilisateur :
+/// chaque terminal attendait dix secondes puis repartait a vide, la barre laterale ramait
+/// d'autant, et quand il quittait Cockpit le lancement suivant du « service » ROUVRAIT
+/// l'application.
+///
+/// Le service doit donc partir du binaire Rust courant — mais `current_exe()` seul ne suffit
+/// pas : il vit dans le montage de l'AppImage, que le runtime demonte a la fermeture de
+/// l'application, et le service doit lui SURVIVRE. On en pose donc une copie hors du
+/// montage, une fois par version, et c'est elle qu'on lance.
+pub(crate) fn binaire_du_service() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("chemin de l'executable : {e}"))?;
+    if std::env::var_os("APPIMAGE").is_none() {
+        return Ok(exe);
+    }
+    let donnees = crate::chemins::dossier_donnees_sans_tauri()
+        .ok_or_else(|| "dossier de donnees introuvable".to_string())?;
+    poser_la_copie_du_service(&exe, &donnees.join("service"), env!("CARGO_PKG_VERSION"))
+}
+
+/// Pose (si besoin) une copie du binaire dans `dossier` et rend son chemin.
+///
+/// Ecrite a part de toute variable d'environnement pour etre eprouvable : c'est une
+/// fonction LIBRE, rien de Tauri n'entre dans le binaire d'essais.
+///
+/// - La copie porte la VERSION : une mise a jour en pose une neuve au lieu d'ecraser celle
+///   qu'un service en cours d'execution utilise peut-etre.
+/// - Elle est ecrite a cote puis RENOMMEE : un service ne demarre jamais sur un fichier a
+///   moitie copie.
+/// - Les copies des autres versions sont retirees. Sans danger pour un service qui tourne :
+///   sous Unix il garde son inode ouvert.
+pub(crate) fn poser_la_copie_du_service(
+    exe: &std::path::Path,
+    dossier: &std::path::Path,
+    version: &str,
+) -> Result<std::path::PathBuf, String> {
+    let nom = format!("cockpit-service-{version}{}", std::env::consts::EXE_SUFFIX);
+    let cible = dossier.join(&nom);
+    let taille_source = std::fs::metadata(exe)
+        .map_err(|e| format!("lecture de l'executable : {e}"))?
+        .len();
+    let deja_bonne = std::fs::metadata(&cible).map(|m| m.len() == taille_source).unwrap_or(false);
+    if !deja_bonne {
+        std::fs::create_dir_all(dossier)
+            .map_err(|e| format!("creation de {} : {e}", dossier.display()))?;
+        let temporaire = dossier.join(format!(".{nom}.{}", std::process::id()));
+        std::fs::copy(exe, &temporaire).map_err(|e| format!("copie du service : {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temporaire, std::fs::Permissions::from_mode(0o755))
+                .map_err(|e| format!("droits de la copie du service : {e}"))?;
+        }
+        std::fs::rename(&temporaire, &cible).map_err(|e| {
+            let _ = std::fs::remove_file(&temporaire);
+            format!("mise en place du service : {e}")
+        })?;
+    }
+    retirer_les_copies_perimees(dossier, &nom);
+    Ok(cible)
+}
+
+/// Retire les copies des versions precedentes. Les fichiers temporaires (prefixe `.`) sont
+/// laisses : ils peuvent appartenir a un autre lancement en train de copier.
+fn retirer_les_copies_perimees(dossier: &std::path::Path, nom_courant: &str) {
+    let Ok(entrees) = std::fs::read_dir(dossier) else { return };
+    for entree in entrees.flatten() {
+        let nom = entree.file_name();
+        let Some(nom) = nom.to_str() else { continue };
+        if nom == nom_courant || nom.starts_with('.') {
+            continue;
+        }
+        let _ = std::fs::remove_file(entree.path());
+    }
 }
 
 /// Detache une commande de l'application et la lance.
@@ -159,4 +246,100 @@ pub fn tourner_si_demande() -> bool {
         eprintln!("service de terminaux : {e}");
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Un dossier a soi, retire a la fin meme si l'essai tombe.
+    struct DossierDEssai(PathBuf);
+    impl DossierDEssai {
+        fn neuf(nom: &str) -> Self {
+            let chemin =
+                std::env::temp_dir().join(format!("cockpit-{nom}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&chemin);
+            std::fs::create_dir_all(&chemin).expect("dossier d'essai");
+            Self(chemin)
+        }
+        fn chemin(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for DossierDEssai {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn faux_binaire(dossier: &std::path::Path, contenu: &str) -> PathBuf {
+        let chemin = dossier.join("cockpit");
+        std::fs::write(&chemin, contenu).expect("ecriture du faux binaire");
+        chemin
+    }
+
+    /// **LA REGRESSION DE LA 0.59.0.** Le service partait de `$APPIMAGE`, c'est-a-dire de la
+    /// coquille Electron : elle ouvrait l'application et n'ouvrait aucun socket. La copie
+    /// doit donc etre celle du binaire COURANT, posee ailleurs que dans le montage.
+    #[test]
+    fn la_copie_du_service_est_le_binaire_courant_pose_hors_du_montage() {
+        let bac = DossierDEssai::neuf("service-copie");
+        let montage = bac.chemin().join("mount");
+        std::fs::create_dir_all(&montage).unwrap();
+        let exe = faux_binaire(&montage, "le binaire rust");
+        let dossier = bac.chemin().join("service");
+
+        let pose = poser_la_copie_du_service(&exe, &dossier, "1.2.3").expect("copie");
+
+        assert!(pose.starts_with(&dossier), "la copie doit vivre hors du montage : {pose:?}");
+        assert_ne!(pose, exe, "on ne relance pas le fichier du montage");
+        assert_eq!(std::fs::read_to_string(&pose).unwrap(), "le binaire rust");
+        assert!(pose.to_string_lossy().contains("1.2.3"), "la copie porte la version");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn la_copie_du_service_est_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        let bac = DossierDEssai::neuf("service-droits");
+        let exe = faux_binaire(bac.chemin(), "x");
+        let pose = poser_la_copie_du_service(&exe, &bac.chemin().join("service"), "0.1.0").unwrap();
+        let mode = std::fs::metadata(&pose).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "sans droit d'execution, le service ne demarre pas");
+    }
+
+    #[test]
+    fn une_copie_deja_a_jour_n_est_pas_refaite() {
+        let bac = DossierDEssai::neuf("service-idempotent");
+        let exe = faux_binaire(bac.chemin(), "abcd");
+        let dossier = bac.chemin().join("service");
+        let pose = poser_la_copie_du_service(&exe, &dossier, "9.9.9").unwrap();
+        // Un contenu de MEME taille : si la copie etait refaite, il serait ecrase.
+        std::fs::write(&pose, "ZZZZ").unwrap();
+        let repose = poser_la_copie_du_service(&exe, &dossier, "9.9.9").unwrap();
+        assert_eq!(pose, repose);
+        assert_eq!(std::fs::read_to_string(&repose).unwrap(), "ZZZZ", "copie refaite pour rien");
+    }
+
+    #[test]
+    fn une_version_neuve_remplace_la_copie_precedente_et_ne_laisse_rien_derriere() {
+        let bac = DossierDEssai::neuf("service-versions");
+        let exe = faux_binaire(bac.chemin(), "v1");
+        let dossier = bac.chemin().join("service");
+        let ancienne = poser_la_copie_du_service(&exe, &dossier, "1.0.0").unwrap();
+
+        std::fs::write(&exe, "v2222").unwrap();
+        let neuve = poser_la_copie_du_service(&exe, &dossier, "2.0.0").unwrap();
+
+        assert!(neuve.exists());
+        assert!(!ancienne.exists(), "la copie de l'ancienne version reste sur le disque");
+        let restants: Vec<_> = std::fs::read_dir(&dossier)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(restants, vec![neuve.file_name().unwrap().to_string_lossy().into_owned()],
+            "un fichier temporaire est reste : {restants:?}");
+    }
 }
