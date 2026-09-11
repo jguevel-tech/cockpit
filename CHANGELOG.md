@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.63.1] — 2026-09-11
+
 ### Fixed
 
 - Quand une erreur survient au démarrage, Cockpit affiche ce qui s'est passé et où c'est
