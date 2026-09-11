@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les terminaux se divisent en volets : clic droit dans un terminal → « Diviser à droite » ou
+  « Diviser en dessous », les deux boutons à côté du « + », ou <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+
+  <kbd>D</kbd> et <kbd>B</kbd>. Les séparateurs se tirent à la souris, le volet encadré est
+  celui qui reçoit la frappe, et fermer un volet rend la place à son voisin. La disposition
+  revient au prochain lancement, comme le contenu des terminaux.
+
 ## [0.62.0] — 2026-09-11
 
 ### Added

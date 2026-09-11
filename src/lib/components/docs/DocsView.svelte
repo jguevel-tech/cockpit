@@ -111,6 +111,18 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.term.volets")}</p>
+        <div class="demo">
+          <div class="d-tabs"><span class="d-tab active">MON-PROJET - 1 ×</span><span class="d-btn small">+</span><span class="d-btn small">▥</span><span class="d-btn small">▤</span></div>
+          <div class="d-volets">
+            <div class="d-term">$ npm run dev</div>
+            <div class="d-term">$ git status</div>
+          </div>
+          <div class="d-note">{$trad("docs.term.voletsDemo")}</div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.term.search")}</p>
         <div class="demo">
           <div class="d-term">…<br />ERROR connection <mark>timeout</mark> after 30s <span class="d-float">(1/4)</span><br />retrying…</div>
@@ -535,6 +547,9 @@
 </div>
 
 <style>
+  /* Deux volets cote a cote, pour montrer ce que donne une division. */
+  .d-volets { display: flex; gap: 4px; }
+  .d-volets :global(.d-term) { flex: 1; }
   .docs { display: flex; gap: 1.25rem; max-width: 1100px; margin: 0 auto; }
   nav {
     width: 220px; flex-shrink: 0; align-self: flex-start;

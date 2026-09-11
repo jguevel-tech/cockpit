@@ -216,6 +216,12 @@
   } from "../../api/workspace";
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
+  import VoletTerminal from "./VoletTerminal.svelte";
+  import {
+    depuisJson, diviser, feuille, fixerRatio, nettoyer, nombreDeVolets, retirer,
+    sessionsAffichees, type Chemin, type Noeud,
+  } from "../../terminaux/disposition";
+  import { getAppSettings, setAppSetting } from "../../api/recorder";
   import {
     conversationsLlm,
     renommerConversationLlm,
@@ -235,6 +241,17 @@
   let renameValue = $state("");
   // Un fichier survole le terminal : on l'annonce, sinon on ne sait pas que le geste est permis.
   let dropOver = $state(false);
+
+  // --- Les volets ---------------------------------------------------------------------
+  //
+  // **UN VOLET AFFICHE UNE SESSION QUI EXISTE DEJA.** L'arbre ne cree jamais de terminal :
+  // c'est toujours `addTerminal` qui le fait, parce que lui seul mesure son conteneur (une
+  // TUI se dessine a la taille du PTY et personne ne la redimensionne apres).
+  let disposition: Noeud | null = $state(null);
+  /// Le conteneur de chaque volet affiche, tenu par le composant qui le rend.
+  const hotes = new Map<number, HTMLDivElement>();
+  const voletsAffiches = $derived(sessionsAffichees(disposition));
+  const plusieursVolets = $derived(nombreDeVolets(disposition) > 1);
 
   // Conversations passees de l'agent choisi dans les reglages. Le fournisseur vient du
   // magasin : ce composant ne sait pas lequel c'est, et n'a pas a le savoir.
@@ -348,7 +365,11 @@
       if (sessions.length === 0) {
         if (!restaure) await addTerminal();
       } else {
-        await activate(sessions[0].id);
+        // La disposition d'avant, nettoyee des sessions disparues. Elle est posee AVANT
+        // d'activer : sinon `showOnly` repartirait sur un volet unique et l'ecraserait.
+        disposition = await relireLaDisposition(sessions.map((s) => s.id));
+        const premier = sessionsAffichees(disposition)[0] ?? sessions[0].id;
+        await activate(premier);
       }
       // Un echec de chargement laissait l'onglet vide sans un mot : la liste des terminaux
       // vient du backend, son absence doit se voir.
@@ -357,7 +378,7 @@
     // Debounce : pendant un drag de fenetre, on n'envoie que la taille finale
     resizeObserver = new ResizeObserver(() => {
       if (fitTimer) clearTimeout(fitTimer);
-      fitTimer = setTimeout(() => fitActive(), 80);
+      fitTimer = setTimeout(() => fitLesVolets(), 80);
     });
     if (container) resizeObserver.observe(container);
 
@@ -749,11 +770,59 @@
     }
   }
 
-  function showOnly(id: number) {
+  /// Place chaque terminal affiche dans SON volet, et gare les autres.
+  ///
+  /// **RIEN N'EST RECREE, LES ELEMENTS SONT DEPLACES.** Un xterm recree repartirait vide et
+  /// exigerait un redessin complet : clignotement, et retour en bas de l'historique a chaque
+  /// aller-retour. C'est la meme raison qui fait vivre le pool au niveau du module.
+  function disposerLesVolets() {
+    const affiches = new Set(sessionsAffichees(disposition));
     mounted.forEach((tid) => {
       const e = pool.get(tid);
-      if (e) e.el.style.display = tid === id ? "block" : "none";
+      if (!e) return;
+      if (!affiches.has(tid)) {
+        e.el.style.display = "none";
+        return;
+      }
+      e.el.style.display = "block";
+      const hote = hotes.get(tid);
+      if (hote && e.el.parentElement !== hote) hote.appendChild(e.el);
     });
+  }
+
+  /// Le composant des volets confie (ou reprend) le conteneur d'un volet.
+  function surVolet(id: number, element: HTMLDivElement | null) {
+    if (element) hotes.set(id, element);
+    else hotes.delete(id);
+    // Le conteneur arrive APRES le premier rendu : on replace, puis on recalcule la taille.
+    disposerLesVolets();
+    planifierFit();
+  }
+
+  /// Montre `id` dans la disposition. Si la session n'y est pas encore, elle prend la place du
+  /// volet actif : « ouvre ce terminal ICI » plutot que « ferme mes volets ».
+  function showOnly(id: number) {
+    if (!disposition) {
+      disposition = feuille(id);
+    } else if (!sessionsAffichees(disposition).includes(id)) {
+      const remplace = activeId !== null && sessionsAffichees(disposition).includes(activeId)
+        ? activeId
+        : sessionsAffichees(disposition)[0];
+      disposition = remplacerFeuille(disposition, remplace, id);
+    }
+    disposerLesVolets();
+  }
+
+  /// Remplace la session d'un volet par une autre, sans toucher a la geometrie.
+  function remplacerFeuille(noeud: Noeud, cible: number, remplacant: number): Noeud {
+    if (noeud.type === "feuille") {
+      return noeud.id === cible ? feuille(remplacant) : noeud;
+    }
+    return {
+      ...noeud,
+      a: remplacerFeuille(noeud.a, cible, remplacant),
+      b: remplacerFeuille(noeud.b, cible, remplacant),
+    };
   }
 
   // --- Recherche dans le terminal, historique compris ---
@@ -870,10 +939,20 @@
   }
 
   function onSearchShortcut(e: KeyboardEvent) {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+    const touche = e.key.toLowerCase();
+    if (touche === "f") {
       e.preventDefault();
       e.stopPropagation();
       openSearch();
+      return;
+    }
+    // D comme droite, B comme bas. **Capture avant xterm** : sans ca la combinaison part
+    // dans le shell, qui n'en fait rien et l'avale.
+    if (touche === "d" || touche === "b") {
+      e.preventDefault();
+      e.stopPropagation();
+      void diviserLeVolet(touche === "d" ? "colonnes" : "lignes");
     }
   }
 
@@ -882,28 +961,51 @@
     return () => window.removeEventListener("keydown", onSearchShortcut, { capture: true });
   });
 
+  /// Monte une session et la place dans son volet, SANS toucher au focus ni au volet actif.
+  ///
+  /// **CHAQUE VOLET AFFICHE DOIT PASSER PAR LA.** Un volet dont la session n'est pas branchee
+  /// reste VIDE : le contenu d'un terminal n'arrive que par son attache. C'est ce qui manquait
+  /// aux volets autres que l'actif, et ca se voyait a la relance : deux volets, un seul rempli.
+  async function assurerMonte(id: number) {
+    const existing = pool.get(id);
+    if (!existing) {
+      await attachExisting(id);
+      return;
+    }
+    if (mounted.has(id)) return;
+    // RE-ADOPTION : le xterm a survecu au demontage precedent, avec tout son ecran et son
+    // historique — on remet simplement l'element en place. Rien n'est redemande au serveur,
+    // donc rien ne clignote et le defilement ne bouge pas.
+    container?.appendChild(existing.el);
+    mounted.add(id);
+    disposerLesVolets();
+    try { existing.fit.fit(); } catch {}
+    // Sans effet si le terminal est deja branche (le cas normal) ; s'il ne l'est plus
+    // — service redemarre — cet appel le rebranche et le serveur renvoie un redessin.
+    try { await attachTerminal(id, existing.term.cols || 80, existing.term.rows || 24); }
+    catch (e) { signalerErreur("terminal.reattache", String(e)); }
+  }
+
+  /// Monte TOUS les volets affiches. Appelee des que la disposition change.
+  async function assurerLesVolets() {
+    for (const id of sessionsAffichees(disposition)) {
+      await assurerMonte(id);
+    }
+    disposerLesVolets();
+    planifierFit();
+  }
+
   async function activate(id: number) {
     // Une recherche ouverte concerne l'ANCIEN terminal : on la clot chez lui
     if (searchOpen) await closeSearch(activeId, false);
     activeId = id;
-    const existing = pool.get(id);
-    if (existing && !mounted.has(id)) {
-      // RE-ADOPTION : le xterm a survecu au demontage precedent, avec tout son ecran et
-      // son historique — on remet simplement l'element dans le conteneur. Rien n'est
-      // redemande au serveur, donc rien ne clignote et le defilement ne bouge pas.
-      container?.appendChild(existing.el);
-      mounted.add(id);
-      // Sans effet si le terminal est deja branche (le cas normal) ; s'il ne l'est plus
-      // — service redemarre — cet appel le rebranche et le serveur renvoie un redessin.
-      try { existing.fit.fit(); } catch {}
-      try { await attachTerminal(id, existing.term.cols || 80, existing.term.rows || 24); }
-      catch (e) { signalerErreur("terminal.reattache", String(e)); }
-    } else if (!existing) {
-      await attachExisting(id);
-    }
+    await assurerMonte(id);
     showOnly(id);
+    // Les autres volets peuvent avoir besoin d'etre montes eux aussi (relecture d'une
+    // disposition, session remplacee dans un volet).
+    await assurerLesVolets();
     requestAnimationFrame(() => {
-      fitActive();
+      fitLesVolets();
       pool.get(id)?.term.focus();
     });
   }
@@ -919,8 +1021,9 @@
 
     // Fit AVANT l'attach : le serveur aligne la session sur cette taille AVANT d'envoyer
     // son redessin, sinon le premier dessin arrive a l'ancienne taille et se recadre sous
-    // les yeux de l'utilisateur.
-    showOnly(id);
+    // les yeux de l'utilisateur. Le terminal doit donc deja etre DANS son volet, sinon il
+    // est mesure a la taille du conteneur entier.
+    disposerLesVolets();
     try { entry.fit.fit(); } catch {}
     const cols = entry.term.cols || 80;
     const rows = entry.term.rows || 24;
@@ -947,14 +1050,28 @@
     brancherEntree(entry, (data) => sendInput(id, data));
   }
 
-  function fitActive() {
-    if (activeId === null) return;
-    const entry = pool.get(activeId);
-    if (!entry || entry.el.style.display === "none") return;
-    try {
-      entry.fit.fit();
-      queueResize(activeId, entry.term.cols, entry.term.rows);
-    } catch {}
+  /// Recalcule la taille de CHAQUE volet affiche.
+  ///
+  /// **UNE TUI SE DESSINE A LA TAILLE DU PTY ET PERSONNE NE LA REDIMENSIONNE APRES** : un
+  /// volet dont on oublie la taille garde celle qu'il avait avant la division, et htop y
+  /// deborde. `queueResize` ecarte deja les tailles identiques, donc appeler large ne coute
+  /// rien.
+  function fitLesVolets() {
+    for (const id of sessionsAffichees(disposition)) {
+      const entry = pool.get(id);
+      if (!entry || entry.el.style.display === "none") continue;
+      try {
+        entry.fit.fit();
+        queueResize(id, entry.term.cols, entry.term.rows);
+      } catch {}
+    }
+  }
+
+  /// Le calcul de taille est DIFFERE : pendant un glissement de separateur ou de fenetre, on
+  /// n'envoie que la taille finale. Meme raison que le debounce du redimensionnement.
+  function planifierFit() {
+    if (fitTimer) clearTimeout(fitTimer);
+    fitTimer = setTimeout(() => fitLesVolets(), 80);
   }
 
   async function closeTab(id: number) {
@@ -962,11 +1079,101 @@
     mounted.delete(id);
     disposePoolEntry(id);
     sessions = sessions.filter((s) => s.id !== id);
+    // Le voisin prend toute la place : c'est ce a quoi on s'attend en fermant un volet.
+    disposition = retirer(disposition, id);
     if (activeId === id) {
-      if (sessions.length > 0) await activate(sessions[sessions.length - 1].id);
+      const restants = sessionsAffichees(disposition);
+      if (restants.length > 0) await activate(restants[restants.length - 1]);
+      else if (sessions.length > 0) await activate(sessions[sessions.length - 1].id);
       else activeId = null;
     }
+    disposerLesVolets();
+    planifierFit();
+    enregistrerLaDisposition();
     loadTerminals();
+  }
+
+  /// Divise le volet actif et ouvre un terminal NEUF a cote.
+  ///
+  /// La creation passe par `addTerminal`, seul endroit qui cree une session : il mesure son
+  /// conteneur, et une session ouverte a une taille arbitraire garde cette taille pour ses
+  /// TUI.
+  async function diviserLeVolet(sens: "colonnes" | "lignes") {
+    if (activeId === null) return;
+    const cible = activeId;
+    // La disposition d'AVANT est gardee ici : en creant le terminal, `addTerminal` l'affiche,
+    // donc il prend la place du volet actif. On repart de l'etat d'avant pour diviser.
+    const avant = disposition ?? feuille(cible);
+    const connus = new Set(sessions.map((s) => s.id));
+    await addTerminal();
+    const nouveau = sessions.map((s) => s.id).find((id) => !connus.has(id));
+    if (nouveau === undefined) return;
+    disposition = diviser(avant, cible, sens, nouveau);
+    disposerLesVolets();
+    planifierFit();
+    enregistrerLaDisposition();
+  }
+
+  /// Un separateur vient d'etre saisi : on suit le pointeur et on met le ratio a jour.
+  ///
+  /// **LA CAPTURE EST OBLIGATOIRE** : sans elle, un glissement qui passe au-dessus d'un
+  /// terminal fait perdre les evenements au separateur, et le volet se fige a mi-chemin.
+  function surSeparateur(evenement: PointerEvent, chemin: Chemin, sens: "colonnes" | "lignes") {
+    const separateur = evenement.currentTarget as HTMLElement | null;
+    const division = separateur?.parentElement;
+    if (!division || !disposition) return;
+    evenement.preventDefault();
+    separateur?.setPointerCapture?.(evenement.pointerId);
+    const cadre = division.getBoundingClientRect();
+    const suivre = (e: PointerEvent) => {
+      if (!disposition) return;
+      const part =
+        sens === "colonnes"
+          ? (e.clientX - cadre.left) / cadre.width
+          : (e.clientY - cadre.top) / cadre.height;
+      disposition = fixerRatio(disposition, chemin, part);
+      planifierFit();
+    };
+    const finir = () => {
+      window.removeEventListener("pointermove", suivre);
+      window.removeEventListener("pointerup", finir);
+      planifierFit();
+      enregistrerLaDisposition();
+    };
+    window.addEventListener("pointermove", suivre);
+    window.addEventListener("pointerup", finir);
+  }
+
+  /// Le clic dans un volet lui donne le focus : c'est lui que visent ensuite la frappe, le
+  /// bouton de commande et le depot de fichier.
+  function focaliserLeVolet(id: number) {
+    if (activeId === id) return;
+    void activate(id);
+  }
+
+  // --- Garder la disposition d'un lancement a l'autre ----------------------------------
+  //
+  // Elle vit dans les reglages, sous le nom du projet : les terminaux, eux, sont deja en base
+  // et reviennent seuls. **Une disposition qui parle de sessions disparues est nettoyee a la
+  // relecture** — sinon un volet resterait vide et ne se fermerait pas.
+  const cleDisposition = $derived(`terminaux.volets.${name}`);
+
+  function enregistrerLaDisposition() {
+    const valeur = disposition ? JSON.stringify(disposition) : "";
+    setAppSetting(cleDisposition, valeur).catch((e) =>
+      signalerErreur("terminal.dispositionEcriture", String(e)),
+    );
+  }
+
+  async function relireLaDisposition(vivantes: number[]): Promise<Noeud | null> {
+    try {
+      const reglages = await getAppSettings();
+      return nettoyer(depuisJson(reglages[cleDisposition]), vivantes);
+    } catch (e) {
+      // Une disposition illisible ne doit jamais empecher d'ouvrir ses terminaux.
+      signalerErreur("terminal.dispositionLecture", String(e));
+      return null;
+    }
   }
 
   // --- Renommage des onglets ---
@@ -1092,6 +1299,7 @@
         <button
           class="term-tab"
           class:active={activeId === s.id}
+          class:affiche={plusieursVolets && voletsAffiches.includes(s.id)}
           class:dead={!s.alive}
           onclick={() => activate(s.id)}
           ondblclick={() => startRename(s, i)}
@@ -1110,6 +1318,22 @@
       {/if}
     {/each}
     <button class="term-add" onclick={() => addTerminal()} title={$trad("term.new")}>+</button>
+    <!-- Diviser ouvre un terminal NEUF a cote de celui qui a le focus. Les deux boutons ne
+         s'affichent que s'il y a un volet a diviser. -->
+    {#if activeId !== null}
+      <button
+        class="term-split"
+        onclick={() => diviserLeVolet("colonnes")}
+        title={$trad("term.splitRight")}
+        aria-label={$trad("term.splitRight")}
+      >▥</button>
+      <button
+        class="term-split"
+        onclick={() => diviserLeVolet("lignes")}
+        title={$trad("term.splitDown")}
+        aria-label={$trad("term.splitDown")}
+      >▤</button>
+    {/if}
 
     {#if searchOpen}
       <span class="term-search">
@@ -1207,6 +1431,24 @@
         <p>{$trad("term.empty")}</p>
         <button class="btn" onclick={() => addTerminal()}>{$trad("term.openOne")}</button>
       </div>
+    {:else if disposition}
+      <!-- L'arbre ne rend que des conteneurs VIDES : c'est l'onglet qui y deplace les
+           terminaux du pool, et c'est ce qui les garde intacts d'un volet a l'autre. -->
+      <div class="volets">
+        <VoletTerminal
+          noeud={disposition}
+          actif={activeId}
+          {surVolet}
+          surClic={focaliserLeVolet}
+          {surSeparateur}
+          libelle={(id) => {
+            const s = sessions.find((s) => s.id === id);
+            const index = sessions.findIndex((s) => s.id === id);
+            return s ? tabLabel(s, index) : "";
+          }}
+          seul={!plusieursVolets}
+        />
+      </div>
     {/if}
     {#if dropOver}
       <div class="drop-hint">{$trad("term.dropHint")}</div>
@@ -1221,6 +1463,10 @@
     items={[
       { label: $trad("common.copy"), action: copySelection },
       { label: $trad("common.paste"), action: pasteClipboard },
+      // C'est ici qu'on cherche la division : les boutons de la barre d'onglets restent,
+      // pour ceux qui les ont vus, mais le clic droit est le geste naturel.
+      { label: $trad("term.ctxSplitRight"), action: () => void diviserLeVolet("colonnes") },
+      { label: $trad("term.ctxSplitDown"), action: () => void diviserLeVolet("lignes") },
     ]}
     onClose={() => (ctxMenu = null)}
   />
@@ -1332,6 +1578,25 @@
   :global(html.has-wallpaper) .term-container { background: #111318; backdrop-filter: none; }
   :global(html.has-wallpaper:not(.dark)) .term-container { background: #ffffff; }
   .term-container :global(.term-host) { width: 100%; height: 100%; }
+  /* L'arbre des volets occupe toute la zone ; chaque volet accueille un terminal du pool. */
+  .volets { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+  .term-split {
+    padding: 0 0.35rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .term-split:hover { color: var(--text-primary); }
+  /* Un onglet AFFICHE dans un volet, sans avoir le focus : un point suffit a le dire, sans
+     ajouter une seconde couleur qui entrerait en concurrence avec l'onglet actif. */
+  .term-tab.affiche:not(.active)::before {
+    content: "•";
+    margin-right: 0.3rem;
+    color: var(--accent);
+  }
   /* Depot de fichier en cours : la cible doit etre evidente pendant le survol. */
   .term-container.drop-over { border-color: var(--accent); }
   .drop-hint {
