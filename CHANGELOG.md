@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Quand une erreur survient au démarrage, Cockpit affiche ce qui s'est passé et où c'est
+  enregistré, au lieu d'une fenêtre du système sans détail qui disparaît sans laisser de trace.
+- Amélioration des journaux techniques.
+
 ## [0.63.0] — 2026-09-11
 
 ### Added

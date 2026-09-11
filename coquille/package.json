@@ -21,9 +21,7 @@
       "output": "paquet"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "updater.js",
+      "*.js",
       "package.json"
     ],
     "extraResources": [

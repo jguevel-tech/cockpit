@@ -180,7 +180,78 @@ fn detacher(commande: &mut Command) {
 /// Ne rend la main qu'une fois le socket joignable : l'appelant peut enchainer sur une
 /// creation de terminal sans course.
 pub fn demarrer(chemin: &std::path::Path) -> Result<(), String> {
-    demarrer_avec(chemin, || commande_du_service(chemin))
+    let deja_la = super::tuyau::connecter(chemin).is_ok();
+    let resultat = demarrer_avec(chemin, || commande_du_service(chemin));
+    if deja_la {
+        signaler_un_service_d_une_autre_version();
+    }
+    resultat
+}
+
+/// Ecrit dans le journal quand le service qui repond n'est pas de notre version.
+///
+/// **UNE MISE A JOUR NE REMPLACE PAS LE SERVICE, ET C'EST VOULU.** `demarrer` ne lance rien
+/// quand un service repond deja : le remplacer tuerait les shells en cours, puisque deux
+/// services ne se passent pas des pseudo-terminaux vivants. Un service d'une version
+/// anterieure continue donc de servir tant que le poste n'a pas redemarre, ce qui est le bon
+/// compromis — le protocole est compare a l'egalite stricte, donc un service incompatible
+/// serait de toute facon arrete (`arreter_le_service_incompatible`).
+///
+/// **CE QUI MANQUAIT, C'EST DE LE SAVOIR.** Constate le 2026-09-11 chez l'utilisateur : une
+/// application 0.63.0 servie par un service 0.59.4, sans une ligne nulle part. Un terminal
+/// qui se comporte mal envoie alors chercher la panne dans du code qui n'est pas celui qui
+/// tourne.
+fn signaler_un_service_d_une_autre_version() {
+    let Some(donnees) = crate::chemins::dossier_donnees() else { return };
+    let Some(posee) = version_du_service_pose(&donnees.join("service")) else { return };
+    if posee == env!("CARGO_PKG_VERSION") {
+        return;
+    }
+    journaliser(
+        "terminal.service",
+        &format!(
+            "le service de terminaux qui repond est en {posee}, cette application est en {} : \
+             il sera remplace au prochain demarrage du poste (le remplacer maintenant tuerait \
+             les shells en cours)",
+            env!("CARGO_PKG_VERSION")
+        ),
+    );
+}
+
+/// La version portee par la copie du service presente dans `dossier`, s'il y en a une.
+///
+/// Fonction LIBRE et sans environnement, donc eprouvable. On lit le NOM du fichier plutot
+/// que d'interroger le service : lui demander sa version voudrait dire changer la forme de
+/// la poignee de main, donc la version du protocole, donc perdre les terminaux detaches une
+/// fois. Le nom suffit : poser une copie purge celles des autres versions, donc il n'en
+/// reste qu'une, celle de la version qui a lance le service.
+pub(crate) fn version_du_service_pose(dossier: &std::path::Path) -> Option<String> {
+    let prefixe = "cockpit-service-";
+    let mut trouvees: Vec<String> = std::fs::read_dir(dossier)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter_map(|nom| {
+            // Le nom est compare DEPUIS LE DEBUT, et c'est ce qui ecarte une copie en cours
+            // d'ecriture : `poser_la_copie_du_service` la prefixe d'un point, donc elle n'a
+            // pas ce prefixe-ci. Un `contains` la prendrait, et deux entrees feraient
+            // renoncer la fonction juste au moment ou elle est utile.
+            let reste = nom.strip_prefix(prefixe)?;
+            let version = reste.strip_suffix(std::env::consts::EXE_SUFFIX).unwrap_or(reste);
+            (!version.is_empty()).then(|| version.to_string())
+        })
+        .collect();
+    // Plusieurs copies ne devraient pas coexister ; si ca arrive, ne rien affirmer vaut
+    // mieux que de nommer la mauvaise.
+    (trouvees.len() == 1).then(|| trouvees.pop()).flatten()
+}
+
+/// Ecrit dans le journal local, au meme endroit que le reste du backend.
+fn journaliser(scope: &str, message: &str) {
+    if let Some(dir) = crate::chemins::dossier_donnees() {
+        let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        crate::report::append_log(&dir, &crate::report::format_log_line(&horodatage, scope, message));
+    }
 }
 
 /// La meme chose, avec une fabrique de commande a soi (les tests s'en servent pour lancer
@@ -329,5 +400,53 @@ mod tests {
             .collect();
         assert_eq!(restants, vec![neuve.file_name().unwrap().to_string_lossy().into_owned()],
             "un fichier temporaire est reste : {restants:?}");
+    }
+
+    #[test]
+    fn la_version_du_service_pose_se_lit_sur_le_nom_du_fichier() {
+        let bac = DossierDEssai::neuf("service-version");
+        let source = faux_binaire(bac.chemin(), "binaire");
+        let dossier = bac.chemin().join("service");
+        let pose = poser_la_copie_du_service(&source, &dossier, "0.59.4").unwrap();
+        assert!(pose.exists());
+        assert_eq!(version_du_service_pose(&dossier).as_deref(), Some("0.59.4"));
+    }
+
+    #[test]
+    fn sans_copie_posee_on_n_affirme_rien() {
+        let bac = DossierDEssai::neuf("service-vide");
+        let dossier = bac.chemin();
+        // Dossier vide : le cas du binaire nu, qui ne pose aucune copie.
+        assert_eq!(version_du_service_pose(dossier), None);
+        // Dossier absent : le cas du tout premier lancement.
+        assert_eq!(version_du_service_pose(&dossier.join("jamais_cree")), None);
+    }
+
+    #[test]
+    fn deux_copies_ne_permettent_pas_de_nommer_la_bonne() {
+        let bac = DossierDEssai::neuf("service-deux");
+        let dossier = bac.chemin();
+        for version in ["0.59.4", "0.63.0"] {
+            std::fs::write(
+                dossier.join(format!(
+                    "cockpit-service-{version}{}",
+                    std::env::consts::EXE_SUFFIX
+                )),
+                b"x",
+            )
+            .unwrap();
+        }
+        // Nommer la mauvaise enverrait chercher une panne dans du code qui ne tourne pas.
+        assert_eq!(version_du_service_pose(dossier), None);
+    }
+
+    #[test]
+    fn une_copie_a_moitie_ecrite_ne_compte_pas() {
+        let bac = DossierDEssai::neuf("service-moitie");
+        let dossier = bac.chemin();
+        std::fs::write(dossier.join("cockpit-service-0.63.0"), b"x").unwrap();
+        // Le nom temporaire qu'utilise `poser_la_copie_du_service` avant de renommer.
+        std::fs::write(dossier.join(".cockpit-service-0.64.0.1234"), b"x").unwrap();
+        assert_eq!(version_du_service_pose(dossier).as_deref(), Some("0.63.0"));
     }
 }

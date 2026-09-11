@@ -14,6 +14,7 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { spawn } = require('node:child_process')
 const { traiterUneCommandeDeMiseAJour } = require('./updater')
+const { journaliser, dossierDeDonnees } = require('./journal')
 const readline = require('node:readline')
 
 // **LE NOM DE L'APPLICATION EST CE QUE LA FENETRE ANNONCE AU BUREAU, ET LES RACCOURCIS
@@ -25,6 +26,45 @@ const readline = require('node:readline')
 // Pose AVANT que la fenetre existe, sinon elle garde l'ancien nom. Le dossier de donnees ne
 // bouge pas : il est fixe explicitement plus bas.
 app.setName('cockpit')
+
+// **UNE PANNE DU PROCESSUS PRINCIPAL DOIT LAISSER UNE TRACE, ET LA BOITE PAR DEFAUT N'EN
+// LAISSE AUCUNE.** Le 2026-09-11, apres une mise a jour, une fenetre du systeme s'est
+// affichee avant l'interface chez l'utilisateur puis a disparu : introuvable ensuite dans
+// le journal de l'application, dans celui de la session et dans Crashpad. Sans ces deux
+// ecouteurs, Electron affiche « A JavaScript error occurred in the main process », un texte
+// que personne ne peut rapporter et qui n'est ecrit nulle part.
+//
+// On NE QUITTE PAS : l'application survit a la plupart de ces erreurs (c'est ce que
+// l'utilisateur a constate), et se fermer la rendrait plus grave qu'elle n'est. On ne
+// montre la fenetre QU'UNE FOIS par lancement — une erreur qui se repete afficherait sinon
+// une boite a chaque tour, et c'est exactement le genre de boucle qui prend le poste en
+// otage.
+let panneDejaMontree = false
+function signalerUnePanne(portee, erreur) {
+  const texte = erreur && erreur.stack ? erreur.stack : String(erreur)
+  journaliser(portee, texte)
+  if (panneDejaMontree) return
+  panneDejaMontree = true
+  // **LA LANGUE CHOISIE N'EST PAS LISIBLE ICI.** Elle vit dans le `localStorage` de la page,
+  // et cette boite s'affiche justement quand la page n'a pas demarre. On prend donc celle du
+  // systeme, et le francais par defaut, comme partout dans le projet. Deux libelles courts
+  // ecrits sur place : les catalogues de `src/` sont chargés par l'interface, pas par nous.
+  const enAnglais = !`${app.getLocale() || 'fr'}`.toLowerCase().startsWith('fr')
+  const journal = path.join(dossierDeDonnees(), 'logs', 'cockpit.log')
+  const titre = enAnglais ? 'Cockpit ran into an error' : 'Cockpit a rencontre une erreur'
+  const corps = enAnglais
+    ? `${texte}\n\nCockpit keeps running. The details are saved here:\n${journal}`
+    : `${texte}\n\nCockpit continue de fonctionner. Le detail est enregistre ici :\n${journal}`
+  // `showErrorBox` marche avant que l'application soit prete, contrairement a `showMessageBox`.
+  try {
+    dialog.showErrorBox(titre, corps)
+  } catch {
+    // Pas d'affichage possible (tres tot au demarrage, ou sans serveur graphique) : la
+    // ligne de journal ecrite juste au-dessus reste, et c'est elle qui compte.
+  }
+}
+process.on('uncaughtException', (e) => signalerUnePanne('coquille.exception', e))
+process.on('unhandledRejection', (e) => signalerUnePanne('coquille.promesse', e))
 
 // L'interface buildee par Vite. Servie par un protocole a nous plutot qu'en `file://` :
 // **une origine stable est ce qui garde le localStorage**, ou vivent la langue et les
@@ -109,7 +149,7 @@ class Backend {
     this.processus = spawn(chemin, ['--pont'], { stdio: ['pipe', 'pipe', 'pipe'] })
     this.processus.stderr.on('data', (bloc) => {
       const texte = `${bloc}`.trimEnd()
-      console.error(`[backend] ${texte}`)
+      journaliser('backend.stderr', texte)
       // Gardees pour les JOINDRE au rejet : sans elles, une panne de demarrage du backend
       // arrive dans l'interface comme une erreur de flux, qui ne nomme rien.
       this.dernieresPlaintes.push(texte)
@@ -146,7 +186,7 @@ class Backend {
     } catch {
       // Une ligne illisible ne tue pas le pont cote backend ; elle ne doit pas le tuer ici
       // non plus. On la signale et on continue de lire.
-      console.error(`[backend] ligne illisible : ${ligne.slice(0, 200)}`)
+      journaliser('backend.pont', `ligne illisible : ${ligne.slice(0, 200)}`)
       return
     }
     if (message.evenement !== undefined) {
@@ -361,6 +401,11 @@ function ouvrirLaFenetre() {
 
   // Affichee seulement quand elle a quelque chose a montrer : sinon on voit un cadre vide.
   fenetre.once('ready-to-show', () => fenetre.show())
+  // La mort du moteur de rendu laissait une fenetre blanche sans un mot : c'est l'autre
+  // forme que prend « une erreur au lancement » vue de l'utilisateur.
+  fenetre.webContents.on('render-process-gone', (_e, details) =>
+    journaliser('coquille.rendu', `le rendu s'est arrete : ${details.reason} (${details.exitCode})`)
+  )
   const backend = brancherLePont(fenetre)
   fenetre.loadURL(`${SCHEMA}://interface/`)
   if (process.env.COCKPIT_BANC_CAPTURE) armerLeBanc(fenetre)
@@ -437,6 +482,16 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(() => {
+  // Une ligne par lancement, et elle porte ce qu'on redemande a chaque diagnostic : la
+  // version, et si le bac a sable de Chromium est actif. **Il ne l'est PAS sous AppImage** :
+  // le montage est `nosuid`, donc le bit SUID de `chrome-sandbox` ne peut pas servir et le
+  // lanceur ajoute `--no-sandbox` de lui-meme. Mesure le 2026-09-11 ; ce n'est pas un
+  // oubli d'empaquetage, c'est la limite du format.
+  journaliser(
+    'coquille',
+    `demarrage ${app.getVersion()} — ${app.isPackaged ? 'paquet' : 'developpement'}, ` +
+      `bac a sable ${process.argv.includes('--no-sandbox') ? 'DESACTIVE' : 'actif'}`
+  )
   servirInterface()
   ouvrirLaFenetre()
   app.on('activate', () => {
