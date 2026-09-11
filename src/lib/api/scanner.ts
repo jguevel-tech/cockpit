@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 import type { ScanResult, DbProject, ProjectFolder } from "../types";
 
 export const scanDir = (path: string) => invoke<ScanResult>("scan_dir", { path });

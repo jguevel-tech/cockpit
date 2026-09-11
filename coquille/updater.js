@@ -67,11 +67,11 @@ function suivreLeTelechargement(pousser) {
 /**
  * Repond a une commande du plugin, ou rend `{ traite: false }` si ce n'en est pas une.
  *
- * `pousser` envoie un message a un canal de la page, par son identifiant.
+ * `pousser` emet l'avancement du telechargement vers la page.
  */
 async function traiterUneCommandeDeMiseAJour(commande, arguments_, pousser) {
   switch (commande) {
-    case 'plugin:updater|check': {
+    case 'coquille:maj-chercher': {
       let resultat
       try {
         resultat = await updater().checkForUpdates()
@@ -99,36 +99,24 @@ async function traiterUneCommandeDeMiseAJour(commande, arguments_, pousser) {
       return {
         traite: true,
         valeur: {
-          rid: 1,
-          currentVersion: updater().currentVersion.version,
           version: info.version,
+          versionActuelle: updater().currentVersion.version,
           date: info.releaseDate ?? null,
           // Les notes de version viennent du CHANGELOG, publiees dans la Release.
-          body: typeof info.releaseNotes === 'string' ? info.releaseNotes : null,
-          rawJson: {}
+          notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : null
         }
       }
     }
-    case 'plugin:updater|download':
-    case 'plugin:updater|download_and_install': {
+    case 'coquille:maj-installer': {
       if (!trouvee) throw new Error('aucune mise a jour a telecharger')
-      const canal = arguments_?.onEvent
-      const detacher = suivreLeTelechargement((message) => {
-        if (typeof canal === 'string' && canal.startsWith('__CHANNEL__:')) {
-          pousser(Number(canal.slice('__CHANNEL__:'.length)), message)
-        }
-      })
+      // L'avancement part comme n'importe quel evenement : la page s'y abonne par son nom,
+      // sans identifiant a faire circuler.
+      const detacher = suivreLeTelechargement(pousser)
       try {
         await updater().downloadUpdate()
       } finally {
         detacher()
       }
-      if (commande === 'plugin:updater|download_and_install') {
-        updater().quitAndInstall()
-      }
-      return { traite: true, valeur: null }
-    }
-    case 'plugin:updater|install': {
       // Ne rend jamais la main : l'application se ferme pour se remplacer.
       updater().quitAndInstall()
       return { traite: true, valeur: null }

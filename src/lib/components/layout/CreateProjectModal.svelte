@@ -2,7 +2,7 @@
   import { addProject } from "../../api/scanner";
   import { loadProjects, projects } from "../../stores/projects";
   import { selectProject, activeTab, DEFAULT_TAB } from "../../stores/ui";
-  import { open as openDialog } from "@tauri-apps/plugin-dialog";
+  import { ouvrirUnDialogue as openDialog } from "../../coquille";
   import { portal } from "../../actions/portal";
   import { trad } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";

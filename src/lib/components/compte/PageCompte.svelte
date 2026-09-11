@@ -35,7 +35,7 @@
   import { notify } from "../../stores/toast";
   import { signalerErreur } from "../../stores/errors";
   import { texteDuRefus } from "../../stores/refusCompte";
-  import { open as ouvrirUnFichier } from "@tauri-apps/plugin-dialog";
+  import { ouvrirUnDialogue as ouvrirUnFichier } from "../../coquille";
 
   let nom = $state("");
   let enCours = $state(false);

@@ -1,7 +1,10 @@
 import { writable } from "svelte/store";
-import { check, type Update } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { getVersion } from "@tauri-apps/api/app";
+import {
+  chercherUneMiseAJour,
+  installerLaMiseAJour,
+  versionDeLApplication,
+  type MiseAJourTrouvee,
+} from "../coquille";
 import { notify } from "./toast";
 import { pushNotice, removeNoticesByPrefix } from "./notifications";
 import { translate } from "../i18n";
@@ -39,20 +42,20 @@ const INITIAL: UpdateState = {
 
 export const updateState = writable<UpdateState>(INITIAL);
 
-/// Handle renvoye par check(), garde de cote entre la detection et l'installation :
-/// downloadAndInstall() doit etre appele sur CET objet, pas sur un nouveau check().
-let pending: Update | null = null;
+/// Ce qu'a rendu la derniere recherche, garde entre la detection et l'installation : sans
+/// elle, installer ne saurait pas quelle version poser.
+let pending: MiseAJourTrouvee | null = null;
 
 /// Promesse gardee : la premiere verification peut partir avant que getVersion() ait repondu,
 /// et le titre de la notice a besoin de la version installee. On l'attend explicitement plutot
 /// que de lire un store qui vaudrait encore "".
-const versionReady = getVersion()
+const versionReady = versionDeLApplication()
   .then((v) => {
     updateState.update((s) => ({ ...s, currentVersion: v }));
     return v;
   })
   .catch((e) => {
-    console.error("getVersion", e);
+    console.error("version de l'application", e);
     return "";
   });
 
@@ -76,14 +79,14 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
   updateState.update((s) => ({ ...s, phase: "checking", error: null }));
   try {
     const current = await versionReady;
-    const update = await check();
+    const update = await chercherUneMiseAJour();
     pending = update;
     if (update) {
       updateState.update((s) => ({
         ...s,
         phase: "available",
         newVersion: update.version,
-        notes: update.body ?? null,
+        notes: update.notes ?? null,
       }));
       // L'id porte la version : une nouvelle version cree une nouvelle notice, donc non lue,
       // meme si l'utilisateur avait lu (ou ecarte) celle de la version precedente.
@@ -93,7 +96,7 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
         title: current
           ? translate("update.available", { from: current, to: update.version })
           : translate("update.availableShort", { version: update.version }),
-        body: update.body ?? undefined,
+        body: update.notes ?? undefined,
         createdAt: update.date ?? new Date().toISOString(),
         dismissible: true,
         action: { label: translate("update.install"), run: installUpdate },
@@ -118,9 +121,8 @@ export async function checkForUpdate(opts: { silent?: boolean } = {}) {
   }
 }
 
-/// Telecharge, installe, puis relance. Sous Linux l'installation ne fonctionne que si
-/// l'app tourne depuis un AppImage : un binaire brut (cargo/tauri build) n'est pas
-/// remplacable, l'erreur est alors remontee telle quelle.
+/// Telecharge et installe. Sous Linux l'installation ne remplace qu'une AppImage : un
+/// binaire brut n'est pas remplacable, et l'erreur est alors remontee telle quelle.
 export async function installUpdate() {
   if (!pending) {
     notify(translate("update.nonePending"));
@@ -130,18 +132,18 @@ export async function installUpdate() {
   let total: number | null = null;
   updateState.update((s) => ({ ...s, phase: "downloading", progress: null, error: null }));
   try {
-    await pending.downloadAndInstall((event) => {
-      if (event.event === "Started") {
-        total = event.data.contentLength ?? null;
-      } else if (event.event === "Progress") {
-        downloaded += event.data.chunkLength;
+    await installerLaMiseAJour((avancement) => {
+      if (avancement.event === "Started") {
+        total = avancement.data.contentLength ?? null;
+      } else if (avancement.event === "Progress") {
+        downloaded += avancement.data.chunkLength;
         const progress = total ? Math.round((downloaded / total) * 100) : null;
         updateState.update((s) => ({ ...s, progress }));
-      } else if (event.event === "Finished") {
+      } else if (avancement.event === "Finished") {
         updateState.update((s) => ({ ...s, phase: "installing", progress: 100 }));
       }
     });
-    await relaunch();
+    // Pas de relance a demander : l'application se ferme pour se remplacer.
   } catch (e) {
     const brut = String(e);
     updateState.update((s) => ({ ...s, phase: "error", error: brut }));

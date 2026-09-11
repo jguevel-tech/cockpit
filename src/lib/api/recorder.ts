@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 import type { Recording, RecordingStatus } from "../types";
 
 // Enregistrement de reunions

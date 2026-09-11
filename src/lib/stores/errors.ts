@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 import { getAppSettings, setAppSetting } from "../api/recorder";
 import type { MachineReport } from "../types";
 

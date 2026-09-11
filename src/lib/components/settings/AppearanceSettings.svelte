@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { ouvrirUnDialogue as open } from "../../coquille";
   import {
     THEMES, theme, accent, wallpaper, surfaceAlpha, wallpaperDim, wallpaperBlur,
     applyWallpaper, removeWallpaper, resetAppearance,

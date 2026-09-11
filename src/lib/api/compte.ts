@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 
 /** L'etat du compte tel que le backend le voit. */
 export type EtatCompte = {

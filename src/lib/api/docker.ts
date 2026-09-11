@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 import type { Project, DockerContainer, DiskUsage, DockerVolume, DockerImage } from "../types";
 
 export const listProjects = () => invoke<Project[]>("list_projects");

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 
 /// La page a-t-elle peint depuis son dernier passage, la fenetre etait-elle visible et
 /// concentree, et l'utilisateur a-t-il touche le clavier ou la souris recemment ?

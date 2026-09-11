@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import { listen } from "@tauri-apps/api/event";
+import { ecouter } from "../coquille";
 import { getActiveRecording } from "../api/recorder";
 import { notify } from "./toast";
 import { translate } from "../i18n";
@@ -16,7 +16,7 @@ getActiveRecording()
   .then((s) => { if (s) recordingStatus.set(s); })
   .catch(() => {});
 
-listen<RecordingStatus>("recording_status", (e) => {
+ecouter<RecordingStatus>("recording_status", (e) => {
   const s = e.payload;
   lastRecordingEvent.set(s);
   recordingStatus.set(s.state === "done" || s.state === "error" ? null : s);

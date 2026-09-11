@@ -8,7 +8,7 @@
 import { writable, get } from "svelte/store";
 import * as api from "../api/compte";
 import type { EtatCompte, DemandeAppairage, EtatSynchro } from "../api/compte";
-import { listen } from "@tauri-apps/api/event";
+import { ecouter } from "../coquille";
 import { loadProjects } from "./projects";
 import { openUrl } from "../api/workspace";
 import { signalerErreur } from "./errors";
@@ -186,12 +186,12 @@ export function demarrerLaSynchro(): () => void {
   // Ce qui arrive d'une autre machine doit se voir sans avoir a redemarrer. On ne recharge que
   // la liste des projets : recharger tout ferait sauter la selection et le defilement de ce
   // que l'utilisateur est en train de lire.
-  const arretEcoute = listen<number>("synchro-recue", () => {
+  const arretEcoute = ecouter<number>("synchro-recue", () => {
     void loadProjects();
   });
 
   return () => {
     clearInterval(minuteur);
-    void arretEcoute.then((stop) => stop());
+    arretEcoute();
   };
 }

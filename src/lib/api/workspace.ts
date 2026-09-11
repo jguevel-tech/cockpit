@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 import type { TerminalInfo, TerminalSearchResult, DirEntry, FileContent, FileStat, GitStatus, FileDiff, BranchInfo, CommitInfo, HistoryEntry, GotoDefinitionResult, SearchResults, Worktree } from "../types";
 
 // Terminaux integres

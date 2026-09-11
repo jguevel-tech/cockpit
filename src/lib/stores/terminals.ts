@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import { listen } from "@tauri-apps/api/event";
+import { ecouter } from "../coquille";
 import { listAllTerminals } from "../api/workspace";
 import type { TerminalInfo } from "../types";
 import { signalerErreur } from "./errors";
@@ -34,7 +34,7 @@ export async function loadTerminals() {
 loadTerminals();
 
 // Un shell qui se termine disparait de la liste
-listen("terminal_exit", () => {
+ecouter("terminal_exit", () => {
   loadTerminals();
 });
 

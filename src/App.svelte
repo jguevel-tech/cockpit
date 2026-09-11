@@ -20,7 +20,7 @@
   import { startSystemAlerts } from "./lib/stores/systemAlerts";
   import { wallpaper, wallpaperDim, wallpaperBlur, loadWallpaper } from "./lib/stores/appearance";
   import { onMount } from "svelte";
-  import { listen } from "@tauri-apps/api/event";
+  import { ecouter } from "./lib/coquille";
   import { rafraichirLlm } from "./lib/stores/llm";
   import { surveillerLeRendu } from "./lib/stores/sante";
   import { activerModeSecoursRendu, relancerApplication } from "./lib/api/sante";
@@ -141,7 +141,7 @@
     // pour un gel survenu pendant le démarrage.
     surveillerLeRendu();
     void direSiLaVueRevientDUnGel();
-    const stopPropositionSecours = listen("guetteur-proposition-secours", () => {
+    const stopPropositionSecours = ecouter("guetteur-proposition-secours", () => {
       void proposerLeModeSecours();
     });
     void appliquerLaLangueImposee();
@@ -158,7 +158,7 @@
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
-      void stopPropositionSecours.then((stop) => stop());
+      stopPropositionSecours();
       stopUpdateWatcher();
       stopTodoDueWatcher();
       stopSystemAlerts();

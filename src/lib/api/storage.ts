@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../coquille";
 import type { Todo, Note, NoteTree, NoteFolder, NoteFile, Url, UrlHealth, ProjectCommand } from "../types";
 
 // Todos

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
-  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+  import { invoke } from "../../coquille";
+  import { ecouter, type Detacher } from "../../coquille";
   import { getDbProjects, deleteDbProject } from "../../api/scanner";
   import { backupDatabase } from "../../api/storage";
-  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+  import { enregistrerParUnDialogue as saveDialog } from "../../coquille";
   import { getAppSettings, setAppSetting } from "../../api/recorder";
   import { openUrl } from "../../api/workspace";
   import {
@@ -203,7 +203,7 @@
   let loginActive = $state(false);
   let loginLog = $state("");
   let loginCode = $state("");
-  let loginUnlisteners: UnlistenFn[] = [];
+  let loginUnlisteners: Detacher[] = [];
 
   const loginUrl = $derived.by(() => {
     const m = loginLog.match(/https:\/\/[^\s\x1b"']+/);
@@ -256,12 +256,12 @@
     loginCode = "";
     loginActive = true;
     loginUnlisteners.push(
-      await listen<string>(EVENEMENT_CONNEXION_SORTIE, (e) => {
+      await ecouter<string>(EVENEMENT_CONNEXION_SORTIE, (e) => {
         loginLog = (loginLog + stripAnsi(e.payload)).slice(-4000);
       })
     );
     loginUnlisteners.push(
-      await listen(EVENEMENT_CONNEXION_FIN, async () => {
+      await ecouter(EVENEMENT_CONNEXION_FIN, async () => {
         cleanupLoginListeners();
         loginActive = false;
         await rafraichirAbonnement();

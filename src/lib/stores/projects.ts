@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { listen } from "@tauri-apps/api/event";
+import { ecouter } from "../coquille";
 import { listProjects } from "../api/docker";
 import { renameProject } from "../api/scanner";
 import { renameProjectTab, selectProject, selectedProject } from "./ui";
@@ -63,6 +63,6 @@ export async function renommerProjet(oldName: string, newName: string): Promise<
 }
 
 // Listen for status updates from backend
-listen("status_update", async () => {
+ecouter("status_update", async () => {
   await loadProjects();
 });

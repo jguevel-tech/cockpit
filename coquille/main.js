@@ -210,26 +210,22 @@ function cheminDuBackend() {
 // --- Le pont : ce que la page peut demander --------------------------------------------
 
 /**
- * Les abonnements de la page, par nom d'evenement. Tauri tient cette table cote Rust et
- * reveille la page en EVALUANT du JavaScript ; ici elle vit dans le processus principal et
- * la page n'est rappelee que par identifiant. Rien n'est evalue nulle part.
+ * Les noms d'evenements que la page ecoute. Le preload les annonce : le premier ecouteur
+ * d'un nom l'ajoute, le dernier a partir le retire.
+ *
+ * **ON N'ENVOIE QUE CE QUI EST ECOUTE.** Une surveillance qui tourne sur un minuteur emet
+ * meme quand personne ne regarde ; sans ce filtre, chaque passage traverserait le pont
+ * pour rien.
  */
-const abonnements = new Map()
-let prochainAbonnement = 1
+const ecoutes = new Set()
+
+ipcMain.on('cockpit:ecouter', (_evenement, nom) => ecoutes.add(nom))
+ipcMain.on('cockpit:ignorer', (_evenement, nom) => ecoutes.delete(nom))
 
 /** Pousse un evenement vers la page. Le pont vers le backend Rust appellera ceci. */
 function pousserEvenement(nom, charge, fenetre) {
-  const parNom = abonnements.get(nom)
-  if (!parNom) return
-  for (const [identifiantAbonnement, rappel] of parNom) {
-    // La forme est celle que `listen` attend : sans `payload`, chaque ecouteur de
-    // l'interface lirait `undefined` sans qu'une seule erreur ne soit levee.
-    fenetre.webContents.send('cockpit:rappel', rappel, {
-      event: nom,
-      id: identifiantAbonnement,
-      payload: charge
-    })
-  }
+  if (!ecoutes.has(nom)) return
+  fenetre.webContents.send('cockpit:evenement', nom, charge)
 }
 
 /**
@@ -241,23 +237,6 @@ function pousserEvenement(nom, charge, fenetre) {
  */
 function traiterDansLaCoquille(commande, arguments_, fenetre) {
   switch (commande) {
-    case 'plugin:event|listen': {
-      const { event: nom, handler } = arguments_
-      const identifiantAbonnement = prochainAbonnement++
-      if (!abonnements.has(nom)) abonnements.set(nom, new Map())
-      abonnements.get(nom).set(identifiantAbonnement, handler)
-      return { traite: true, valeur: identifiantAbonnement }
-    }
-    case 'plugin:event|unlisten': {
-      const { event: nom, eventId } = arguments_
-      abonnements.get(nom)?.delete(eventId)
-      return { traite: true, valeur: null }
-    }
-    case 'plugin:event|emit':
-    case 'plugin:event|emit_to': {
-      pousserEvenement(arguments_.event, arguments_.payload, fenetre)
-      return { traite: true, valeur: null }
-    }
     // **`relancer_application` N'EST PAS TRAITEE ICI, ET C'EST DELIBERE.**
     //
     // Elle l'a ete, avec `app.relaunch()` + `app.quit()`, et le 2026-09-09 ca a rendu une
@@ -272,17 +251,17 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
     // boucle qui prend le poste en otage.
     //
     // En attendant, la commande est REFUSEE et nommee, comme toute commande inconnue.
-    case 'set_webview_zoom':
+    case 'coquille:zoom':
       // Le zoom appartient a l'HOTE, pas au backend : sous Tauri la commande recevait la
       // fenetre, ici c'est Chromium qui l'applique. Le backend n'a jamais eu a le savoir.
       fenetre.webContents.setZoomFactor(arguments_.factor)
       return { traite: true, valeur: null }
-    case 'plugin:app|version':
+    case 'coquille:version':
       // `app.getVersion()` et non un `require` du package.json parent : celui-ci n'est
       // PAS dans le paquet, et l'appel echouait des le demarrage de l'AppImage alors
       // qu'il marchait en developpement.
       return { traite: true, valeur: app.getVersion() }
-    case 'plugin:app|name':
+    case 'coquille:nom':
       return { traite: true, valeur: 'Cockpit' }
     default:
       return { traite: false }
@@ -310,7 +289,7 @@ async function ouvrirUnDialogue(commande, options, fenetre) {
     ...(options.filters ? { filters: options.filters } : {})
   }
 
-  if (commande === 'plugin:dialog|save') {
+  if (commande === 'coquille:dialogue-enregistrer') {
     const { canceled, filePath } = await dialog.showSaveDialog(fenetre, commun)
     return canceled ? null : filePath
   }
@@ -347,7 +326,7 @@ function brancherLePont(fenetre) {
   ipcMain.handle('cockpit:commande', async (_evenement, commande, arguments_) => {
     const dansLaCoquille = traiterDansLaCoquille(commande, arguments_ ?? {}, fenetre)
     if (dansLaCoquille.traite) return dansLaCoquille.valeur
-    if (commande === 'plugin:dialog|open' || commande === 'plugin:dialog|save') {
+    if (commande === 'coquille:dialogue-ouvrir' || commande === 'coquille:dialogue-enregistrer') {
       return ouvrirUnDialogue(commande, arguments_?.options ?? {}, fenetre)
     }
     // La mise a jour : les memes commandes que le plugin de Tauri, servies par
@@ -355,7 +334,7 @@ function brancherLePont(fenetre) {
     const miseAJour = await traiterUneCommandeDeMiseAJour(
       commande,
       arguments_ ?? {},
-      (identifiant, message) => fenetre.webContents.send('cockpit:rappel', identifiant, message)
+      (avancement) => pousserEvenement('maj:avancement', avancement, fenetre)
     )
     if (miseAJour.traite) return miseAJour.valeur
     return backend.appeler(commande, arguments_ ?? {})

@@ -1,6 +1,6 @@
 <script lang="ts" module>
   import { listen as listenGlobal } from "@tauri-apps/api/event";
-  import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import { cheminDuFichier } from "../../coquille";
   import { writeTerminal } from "../../api/workspace";
   import { notify as notifyGlobal } from "../../stores/toast";
   import type { Terminal as XTerminal } from "@xterm/xterm";
@@ -117,16 +117,13 @@
   /// GLISSER-DEPOSER DE FICHIERS -> chemin insere dans le terminal.
   ///
   /// Pourquoi ca ne marchait pas : Tauri intercepte le glisser-deposer natif du webview
-  /// (`dragDropEnabled`, actif par defaut) et l'expose comme un evenement applicatif. Les
-  /// handlers HTML5 `ondrop` ne voient donc rien passer, et personne n'ecoutait cet
-  /// evenement — le fichier lache sur le terminal disparaissait dans le vide.
+  /// Le glisser-deposer est celui du NAVIGATEUR. Tauri interceptait ces evenements et les
+  /// remplacait par les siens ; en 0.59.0 la coquille Electron ne les a pas remplaces, donc
+  /// un fichier lache sur un terminal ne faisait plus rien. Les evenements du DOM suffisent,
+  /// a une chose pres : le CHEMIN, que seule la coquille peut rendre.
   ///
-  /// C'est aussi le SEUL canal qui porte le CHEMIN du fichier : `DataTransfer` ne l'expose
-  /// plus depuis Tauri v2. Or le chemin est precisement ce qu'on veut ecrire — un shell le
-  /// consomme tel quel, et Claude Code lit l'image qu'il designe.
-  ///
-  /// Une seule inscription pour la vie de l'app (le listener est global) ; le montage actif
-  /// de TerminalTab declare sa cible ci-dessous.
+  /// Une seule inscription pour la vie de l'app (les ecouteurs sont globaux) ; le montage
+  /// actif de TerminalTab declare sa cible ci-dessous.
   type DropTarget = {
     el: HTMLElement;
     /// Lu a chaque evenement, jamais capture : l'onglet actif change sans reinscription.
@@ -138,15 +135,12 @@
     dropTarget = t;
   }
 
-  /// La position d'un evenement de depot est PHYSIQUE. Les coordonnees CSS s'en deduisent en
-  /// divisant par devicePixelRatio : mesure faite dans le WebKitGTK systeme, il suit
-  /// exactement le zoom de la page (zoom 1.15 -> dpr 1.15, zoom 2 -> dpr 2) en plus de la
-  /// densite de l'ecran. Sans cette division, un depot serait mal route des que le zoom
-  /// global de Cockpit n'est pas a 100 %.
-  function overTerminal(pos: { x: number; y: number }): boolean {
+  /// **LES COORDONNEES D'UN EVENEMENT DU DOM SONT DEJA EN PIXELS CSS**, zoom compris : il n'y
+  /// a rien a diviser. L'evenement de Tauri, lui, donnait des pixels PHYSIQUES, et il fallait
+  /// le ramener a l'echelle de la page.
+  function overTerminal(x: number, y: number): boolean {
     if (!dropTarget) return false;
-    const ratio = window.devicePixelRatio || 1;
-    const el = document.elementFromPoint(pos.x / ratio, pos.y / ratio);
+    const el = document.elementFromPoint(x, y);
     return !!el && dropTarget.el.contains(el);
   }
 
@@ -158,41 +152,50 @@
     return path.replace(/[ \t\n"'`$&|;<>()!*?[\]\\#]/g, (c) => "\\" + c);
   }
 
-  getCurrentWebview()
-    .onDragDropEvent((event) => {
-      const p = event.payload;
-      if (p.type === "leave") {
-        dropTarget?.over(false);
-        return;
-      }
-      if (p.type === "enter" || p.type === "over") {
-        dropTarget?.over(overTerminal(p.position));
-        return;
-      }
-      // p.type === "drop"
-      dropTarget?.over(false);
-      if (p.paths.length === 0) return;
-      // Un depot est un geste delibere : s'il n'aboutit pas, on dit pourquoi plutot que de
-      // ne rien faire (un silence, c'est un bug).
-      if (!overTerminal(p.position)) {
-        notifyGlobal(translate("term.dropOnTerminal"));
-        return;
-      }
-      const id = dropTarget?.activeId() ?? null;
-      if (id === null) {
-        notifyGlobal(translate("term.noTerminalOpen"));
-        return;
-      }
-      queueWrite(id, p.paths.map(escapeForShell).join(" ") + " ");
-      pool.get(id)?.term.focus();
-    })
-    .catch((e) => notifyGlobal(`Glisser-déposer indisponible : ${e}`));
+  /// Les chemins des fichiers laches. **`File.path` N'EXISTE PLUS DEPUIS ELECTRON 32** :
+  /// seule la coquille sait rendre le chemin d'un fichier depose.
+  function cheminsDeposes(transfert: DataTransfer | null): string[] {
+    if (!transfert) return [];
+    return Array.from(transfert.files)
+      .map((fichier) => cheminDuFichier(fichier))
+      .filter((chemin) => chemin.length > 0);
+  }
+
+  window.addEventListener("dragover", (e) => {
+    // **SANS CE `preventDefault`, LE DEPOT N'A JAMAIS LIEU** : le navigateur refuse par
+    // defaut de laisser tomber quoi que ce soit sur la page.
+    e.preventDefault();
+    dropTarget?.over(overTerminal(e.clientX, e.clientY));
+  });
+
+  window.addEventListener("dragleave", () => dropTarget?.over(false));
+
+  window.addEventListener("drop", (e) => {
+    // Sans ca, Chromium OUVRE le fichier a la place de l'interface.
+    e.preventDefault();
+    dropTarget?.over(false);
+    const chemins = cheminsDeposes(e.dataTransfer);
+    if (chemins.length === 0) return;
+    // Un depot est un geste delibere : s'il n'aboutit pas, on dit pourquoi plutot que de
+    // ne rien faire (un silence, c'est un bug).
+    if (!overTerminal(e.clientX, e.clientY)) {
+      notifyGlobal(translate("term.dropOnTerminal"));
+      return;
+    }
+    const id = dropTarget?.activeId() ?? null;
+    if (id === null) {
+      notifyGlobal(translate("term.noTerminalOpen"));
+      return;
+    }
+    queueWrite(id, chemins.map(escapeForShell).join(" ") + " ");
+    pool.get(id)?.term.focus();
+  });
 </script>
 
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { get } from "svelte/store";
-  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+  import { ecouter, type Detacher } from "../../coquille";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebglAddon } from "@xterm/addon-webgl";
@@ -246,7 +249,7 @@
   // Les instances xterm vivent dans le POOL persistant (script module ci-dessus) : elles
   // survivent au demontage. Ce Set trace uniquement les ids adoptes par CE montage.
   const mounted = new Set<number>();
-  let unlisteners: UnlistenFn[] = [];
+  let unlisteners: Detacher[] = [];
   let resizeObserver: ResizeObserver | null = null;
   let fitTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -313,7 +316,7 @@
       // La sortie et le message de fin sont geres par les listeners GLOBAUX du pool
       // (script module) : ici on ne suit que l'etat d'UI de ce montage.
       unlisteners.push(
-        await listen<number>("terminal_exit", (e) => {
+        await ecouter<number>("terminal_exit", (e) => {
           const s = sessions.find((s) => s.id === e.payload);
           if (s) s.alive = false;
         })
