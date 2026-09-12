@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.68.0] — 2026-09-12
+
 ### Added
 
 - Les dossiers de travail dont le dossier a disparu restent visibles, marqués « absent », avec
