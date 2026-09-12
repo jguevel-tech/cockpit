@@ -65,15 +65,25 @@ export function teintes(worktrees: Worktree[]): Map<string, string> {
   return new Map(ordonnes.map((w, i) => [w.chemin, TEINTES[i % TEINTES.length]]));
 }
 
-/** Ce qu'on affiche pour un dossier de travail : sa branche, sinon sa tete. */
-export function libelleDe(worktree: Worktree): string {
-  return worktree.branche ?? `(${worktree.tete})`;
-}
-
 /** Le chemin, sans separateur final, pour que deux ecritures du meme dossier se comparent. */
 function normaliser(chemin: string): string {
   const sans = chemin.replace(/[\\/]+$/, "");
   return sans.length > 0 ? sans : chemin;
+}
+
+/**
+ * Ce qu'on affiche pour un dossier de travail.
+ *
+ * **UN HASH NE DIT RIEN A PERSONNE.** Premiere version : la branche, et a defaut le debut du
+ * hash de la tete. Vu chez l'utilisateur, ca donnait deux dossiers nommes `(b897940b)` et
+ * `(8b66e238)` — impossible de savoir lequel est lequel. Un worktree a tete detachee garde
+ * pourtant un nom de DOSSIER, et ce nom vient de la branche qui l'a cree : c'est lui qu'on
+ * montre. Le hash reste, en infobulle, pour situer la tete quand on en a besoin.
+ */
+export function libelleDe(worktree: Worktree): string {
+  if (worktree.branche) return worktree.branche;
+  const nom = normaliser(worktree.chemin).split(/[\\/]/).pop();
+  return nom && nom.length > 0 ? nom : `(${worktree.tete})`;
 }
 
 /**

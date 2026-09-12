@@ -684,6 +684,8 @@ export const fr = {
   "worktree.supprimePrincipal": "Le dossier principal du dépôt ne se supprime pas ici.",
   "worktree.ouvrirTerminal": "Ouvrir un terminal ici",
   "worktree.vide": "Aucun terminal dans « {branche} » pour l'instant.",
+  "worktree.selecteurAide": "Dossier de travail : {branche}. Cliquer pour en changer",
+  "worktree.sectionActions": "Actions",
   "term.splitDown": "Diviser en dessous — un terminal neuf sous celui-ci (Ctrl+Maj+B)",
   "term.searchOlder": "Occurrence plus ancienne",
   "term.searchNewer": "Occurrence plus récente",

@@ -68,9 +68,25 @@ pub fn nom_de_dossier(branche: &str) -> Result<String, String> {
 /// `git worktree list --porcelain` rend des blocs separes par une ligne vide. Le format est
 /// STABLE (git le documente comme tel), au contraire de la sortie lisible : c'est pour ca qu'on
 /// l'utilise plutot que de decouper des colonnes.
+/// Les dossiers de travail du depot.
+///
+/// **« CE N'EST PAS UN DEPOT GIT » ET « LE DOSSIER A DISPARU » NE SE RESSEMBLENT PAS, ET LES
+/// CONFONDRE A COUTE UNE ENQUETE (2026-09-12).** L'appelant affiche la liste et n'affiche rien
+/// quand elle est vide : un projet qui est juste un dossier n'a donc aucun dossier de travail,
+/// et c'est normal. Mais un projet dont le DOSSIER n'existe plus rendait la meme chose — rien
+/// a l'ecran, et l'utilisateur cherche pourquoi une fonctionnalite ne s'affiche pas alors que
+/// c'est son projet qui pointe dans le vide. Le premier cas rend une liste VIDE, le second une
+/// ERREUR qui nomme le chemin.
 pub async fn lister(repo: &str) -> Result<Vec<Worktree>, String> {
-    let brut = run_git(repo, &["worktree", "list", "--porcelain"]).await?;
-    Ok(analyser(&brut))
+    if !Path::new(repo).is_dir() {
+        return Err(format!("le dossier du projet est introuvable : {repo}"));
+    }
+    match run_git(repo, &["worktree", "list", "--porcelain"]).await {
+        Ok(brut) => Ok(analyser(&brut)),
+        // Le dossier existe mais git n'en veut pas : ce n'est pas un depot, et ca n'a rien
+        // d'anormal. On le dit par une liste vide, pas par une erreur.
+        Err(_) => Ok(Vec::new()),
+    }
 }
 
 /// La partie PURE de `lister`, pour qu'elle soit testable sans depot.
@@ -297,5 +313,28 @@ mod tests {
             assert_eq!(fini.len(), 1, "{fini:?}");
             assert!(!std::path::Path::new(&chemin).exists(), "le dossier doit avoir disparu");
         });
+    }
+
+    /// **UN DOSSIER DISPARU SE DIT, UN DOSSIER SANS GIT NON.** Les deux rendaient « rien »,
+    /// et l'utilisateur cherchait pourquoi la barre des dossiers de travail ne s'affichait
+    /// pas alors que son projet pointait dans le vide.
+    #[tokio::test]
+    async fn un_dossier_introuvable_est_une_erreur_qui_le_nomme() {
+        let manquant = std::env::temp_dir().join("cockpit-projet-qui-n-existe-pas-42");
+        let _ = std::fs::remove_dir_all(&manquant);
+        let erreur = lister(&manquant.to_string_lossy()).await.unwrap_err();
+        assert!(erreur.contains("introuvable"), "message peu clair : {erreur}");
+        assert!(erreur.contains("cockpit-projet-qui-n-existe-pas-42"), "le chemin doit y etre");
+    }
+
+    /// Un dossier ordinaire, qui n'est pas un depot : liste vide, et rien a signaler.
+    #[tokio::test]
+    async fn un_dossier_sans_depot_rend_une_liste_vide() {
+        let bac = std::env::temp_dir().join(format!("cockpit-sans-git-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&bac);
+        std::fs::create_dir_all(&bac).unwrap();
+        let liste = lister(&bac.to_string_lossy()).await.expect("pas une erreur");
+        assert!(liste.is_empty());
+        let _ = std::fs::remove_dir_all(&bac);
     }
 }

@@ -2,6 +2,13 @@
   export interface MenuItem {
     label: string;
     danger?: boolean;
+    /// Pastille de couleur devant le libelle. Sert aux listes ou la couleur EST
+    /// l'information : les dossiers de travail se reconnaissent a elle.
+    couleur?: string;
+    /// Entree deja selectionnee : elle se lit comme telle au lieu de se cliquer pour rien.
+    courant?: boolean;
+    /// Petit texte a droite (un compte, un raccourci).
+    suffixe?: string;
     action: () => void;
   }
 
@@ -67,10 +74,15 @@
         <button
           class="item"
           class:danger={entree.danger}
+          class:courant={entree.courant}
           role="menuitem"
           onclick={() => pick(entree)}
         >
-          {entree.label}
+          {#if entree.couleur}
+            <span class="pastille" style:background={entree.couleur} aria-hidden="true"></span>
+          {/if}
+          <span class="libelle">{entree.label}</span>
+          {#if entree.suffixe}<span class="suffixe">{entree.suffixe}</span>{/if}
         </button>
       {/if}
     {/each}
@@ -90,10 +102,15 @@
     display: flex; flex-direction: column;
   }
   .item {
+    display: flex; align-items: center; gap: 7px;
     background: none; border: none; text-align: left; cursor: pointer;
     color: var(--text-primary); font-size: 0.85rem;
     padding: 0.4rem 0.6rem; border-radius: var(--radius-sm, 6px);
   }
+  .libelle { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .suffixe { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .pastille { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+  .item.courant { background: var(--bg-tertiary); }
   .item:hover { background: var(--bg-tertiary); }
   /* Le titre n'est pas cliquable : il separe, il ne propose rien. */
   .section {

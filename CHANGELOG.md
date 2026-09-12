@@ -12,6 +12,20 @@ le script de release.
 
 ## [Unreleased]
 
+### Changed
+
+- Les dossiers de travail ne prennent plus une ligne entière : ils tiennent dans un sélecteur
+  posé à gauche des onglets de terminal, qui montre en permanence la branche où l'on tape.
+  Le clic ouvre la liste, avec le nombre de terminaux de chacun, et les actions dessous.
+- Un dossier de travail sans branche s'affiche avec le nom de son dossier plutôt qu'un numéro
+  de version illisible.
+
+### Fixed
+
+- Un projet dont le dossier n'existe plus le disait nulle part : les dossiers de travail ne
+  s'affichaient simplement pas, sans explication. L'erreur est maintenant signalée et nomme
+  le chemin introuvable.
+
 ## [0.66.0] — 2026-09-12
 
 ### Added

@@ -217,7 +217,7 @@
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import VoletTerminal from "./VoletTerminal.svelte";
-  import BarreWorktrees from "./BarreWorktrees.svelte";
+  import SelecteurWorktree from "./SelecteurWorktree.svelte";
   import { grouper, teintes, worktreeDe, type Groupe } from "../../terminaux/worktrees";
   import { gitWorktrees, gitWorktreeAdd, gitWorktreeRemove } from "../../api/workspace";
   import { demanderTexte } from "../../stores/saisie";
@@ -246,7 +246,7 @@
   let ctxMenu: { x: number; y: number } | null = $state(null);
   /// Le clic droit sur une puce de dossier de travail. Le groupe est GARDE ICI et repasse en
   /// parametre aux actions : le menu se ferme avant qu'elles ne s'executent.
-  let menuWorktree: { x: number; y: number; groupe: Groupe } | null = $state(null);
+  let menuWorktree: { x: number; y: number } | null = $state(null);
   let renamingId: number | null = $state(null);
   let renameValue = $state("");
   // Un fichier survole le terminal : on l'annonce, sinon on ne sait pas que le geste est permis.
@@ -303,8 +303,13 @@
     }
     try {
       worktrees = await gitWorktrees(project.path);
-    } catch {
+    } catch (e) {
+      // **CE CATCH NE COUVRE PLUS LE CAS ORDINAIRE.** Un projet qui n'est pas un depot git
+      // rend desormais une liste VIDE cote backend ; ce qui arrive ici est une vraie panne
+      // (dossier disparu, git absent), et elle se dit — sinon on cherche pendant vingt
+      // minutes pourquoi une barre ne s'affiche pas.
       worktrees = [];
+      signalerErreur("terminal.worktrees", String(e));
     }
     if (worktrees.length === 0) {
       worktreeActif = null;
@@ -320,10 +325,19 @@
     worktreeActif = duTerminal ?? worktrees.find((w) => w.principal)?.chemin ?? worktrees[0].chemin;
   }
 
-  function ouvrirLeMenuDuWorktree(evenement: MouseEvent, groupe: Groupe) {
-    evenement.preventDefault();
-    menuWorktree = { x: evenement.clientX, y: evenement.clientY, groupe };
+  /// Ouvre la liste des dossiers de travail sous le selecteur.
+  ///
+  /// **SOUS LE BOUTON, PAS SOUS LE POINTEUR** : un menu qui s'ouvre la ou le pointeur se
+  /// trouvait donne l'impression d'un menu contextuel, alors que c'est une liste de choix.
+  function ouvrirLeMenuDuWorktree(evenement: MouseEvent) {
+    const bouton = (evenement.currentTarget as HTMLElement | null)?.getBoundingClientRect();
+    menuWorktree = bouton
+      ? { x: bouton.left, y: bouton.bottom + 4 }
+      : { x: evenement.clientX, y: evenement.clientY };
   }
+
+  /// Le dossier affiche, quand il y en a un. Capture avant d'entrer dans un menu.
+  const groupeActif = $derived(groupes.find((g) => g.chemin === worktreeActif) ?? null);
 
   /// Le nom du dossier affiche, pour les textes qui le nomment.
   const libelleDuWorktreeActif = $derived(
@@ -1601,15 +1615,16 @@
 </script>
 
 <div class="terminal-tab">
-  <BarreWorktrees
-    {groupes}
-    actif={worktreeActif}
-    couleurs={couleursWorktree}
-    surChoix={(chemin) => void choisirLeWorktree(chemin)}
-    surCreer={() => void creerUnWorktree()}
-    surMenu={ouvrirLeMenuDuWorktree}
-  />
   <div class="term-tabs">
+    {#if groupes.length > 0}
+      <SelecteurWorktree
+        libelle={libelleDuWorktreeActif}
+        couleur={couleurActive}
+        nombre={groupes.length}
+        surOuvrir={ouvrirLeMenuDuWorktree}
+      />
+      <span class="term-separateur" aria-hidden="true"></span>
+    {/if}
     {#each sessionsVisibles as s, i (s.id)}
       {#if renamingId === s.id}
         <!-- svelte-ignore a11y_autofocus -->
@@ -1794,19 +1809,32 @@
 </div>
 
 {#if menuWorktree}
-  {@const groupe = menuWorktree.groupe}
+  <!-- La liste des dossiers de travail. **CHAQUE ENTREE EST CAPTUREE EN PARAMETRE** : le menu
+       se ferme avant que l'action ne s'execute, et relire l'etat a ce moment donnerait null. -->
   <ContextMenu
     x={menuWorktree.x}
     y={menuWorktree.y}
     items={[
-      { label: $trad("worktree.ouvrirTerminal"), action: () => void ouvrirDansLeWorktree(groupe) },
-      ...(groupe.principal
-        ? []
-        : [{
+      { section: $trad("worktree.barreTitre") },
+      ...groupes.map((g) => ({
+        label: g.libelle,
+        couleur: couleursWorktree.get(g.chemin),
+        courant: g.chemin === worktreeActif,
+        suffixe: String(g.terminaux.length),
+        action: () => void choisirLeWorktree(g.chemin),
+      })),
+      { section: $trad("worktree.sectionActions") },
+      { label: $trad("worktree.creerTitre"), action: () => void creerUnWorktree() },
+      ...(groupeActif
+        ? [{ label: $trad("worktree.ouvrirTerminal"), action: () => void ouvrirDansLeWorktree(groupeActif) }]
+        : []),
+      ...(groupeActif && !groupeActif.principal
+        ? [{
             label: $trad("worktree.supprimer"),
             danger: true,
-            action: () => void supprimerUnWorktree(groupe),
-          }]),
+            action: () => void supprimerUnWorktree(groupeActif),
+          }]
+        : []),
     ]}
     onClose={() => (menuWorktree = null)}
   />

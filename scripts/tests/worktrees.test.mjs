@@ -108,7 +108,12 @@ test("au-dela de la palette, les couleurs se reprennent sans casser", () => {
   assert.equal(table.size, beaucoup.length, "chaque dossier a une couleur");
 });
 
-test("une tete detachee s'affiche quand meme", () => {
+test("une tete detachee montre son DOSSIER, pas son hash", () => {
   assert.equal(libelleDe(ticket), "feat/ccm-10200");
-  assert.equal(libelleDe({ ...ticket, branche: null }), "(def5678)");
+  // Vu chez l'utilisateur : deux dossiers nommes « (b897940b) » et « (8b66e238) », impossible
+  // de savoir lequel est lequel. Le nom du dossier, lui, vient de la branche qui l'a cree.
+  assert.equal(libelleDe({ ...ticket, branche: null }), "ccm-10200");
+  assert.equal(libelleDe({ ...ticket, branche: null, chemin: "/code/projet.worktrees/hotfix/" }), "hotfix");
+  // Plus de nom du tout : le hash reste le dernier recours, plutot que du vide.
+  assert.equal(libelleDe({ ...ticket, branche: null, chemin: "" }), "(def5678)");
 });

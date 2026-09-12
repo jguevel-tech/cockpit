@@ -675,6 +675,8 @@ export const en: Catalog = {
   "worktree.supprimePrincipal": "The repository's main folder cannot be deleted here.",
   "worktree.ouvrirTerminal": "Open a terminal here",
   "worktree.vide": "No terminal in \u201c{branche}\u201d yet.",
+  "worktree.selecteurAide": "Working folder: {branche}. Click to switch",
+  "worktree.sectionActions": "Actions",
   "term.splitDown": "Split down — a new terminal below this one (Ctrl+Shift+B)",
   "term.searchOlder": "Older match",
   "term.searchNewer": "Newer match",
