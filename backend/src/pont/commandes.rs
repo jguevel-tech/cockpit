@@ -184,6 +184,13 @@ pub async fn appeler(
             )?))
         })
         .await,
+        "git_worktree_prune" => typer(async {
+            valeur(serde_json::to_value(crate::git_worktree_prune(
+                serde_json::from_value(prendre(a, "projectPath", "project_path"))
+                    .map_err(|e| format!("argument projectPath : {e}"))?,
+            ).await?))
+        })
+        .await,
         "reorder_terminals" => typer(async {
             valeur(serde_json::to_value(crate::reorder_terminals(etat,
                 serde_json::from_value(prendre(a, "ids", "ids"))

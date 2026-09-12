@@ -183,6 +183,21 @@ pub async fn retirer(repo: &str, chemin: &str, force: bool) -> Result<(), String
     Ok(())
 }
 
+/// Oublie les dossiers de travail dont le dossier a disparu.
+///
+/// **CA NE TOUCHE NI AU CODE NI AUX BRANCHES** : `git worktree prune` ne fait que retirer du
+/// depot les references vers des dossiers qui n'existent plus. C'est pour ca qu'on peut le
+/// proposer sans crainte — mais on le PROPOSE quand meme au lieu de le faire tout seul : un
+/// dossier momentanement absent (un disque non monte) est « elagable » lui aussi, et
+/// l'utilisateur est le seul a savoir s'il compte le remonter.
+///
+/// Rend le nombre de dossiers oublies, pour pouvoir le dire.
+pub async fn elaguer(repo: &str) -> Result<usize, String> {
+    let avant = lister(repo).await?.iter().filter(|w| w.elagable).count();
+    run_git_strict(repo, &["worktree", "prune"]).await?;
+    Ok(avant)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

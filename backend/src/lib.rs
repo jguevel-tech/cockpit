@@ -1618,6 +1618,12 @@ async fn git_worktrees(project_path: String) -> Result<Vec<gitdiff::worktree::Wo
     gitdiff::worktree::lister(&project_path).await
 }
 
+/// Oublie les dossiers de travail disparus. Rend combien ont ete oublies.
+#[commande]
+async fn git_worktree_prune(project_path: String) -> Result<usize, String> {
+    gitdiff::worktree::elaguer(&project_path).await
+}
+
 /// Ajoute un dossier de travail sur `branche`, en la creant si `creer`. Rend son chemin.
 #[commande]
 async fn git_worktree_add(

@@ -16,9 +16,14 @@ import type { Worktree } from "../types";
 export interface Groupe {
   /** Chemin du dossier. C'est lui l'identite : deux branches ne partagent pas un dossier. */
   chemin: string;
-  /** Ce qu'on affiche : la branche, ou le debut du hash quand la tete est detachee. */
+  /** Ce qu'on affiche : la branche, sinon le nom du dossier. */
   libelle: string;
   principal: boolean;
+  /**
+   * Le dossier n'existe plus, git en garde seulement la trace. On ne peut rien y ouvrir, et
+   * l'interface doit le DIRE plutot que de laisser cliquer dans le vide.
+   */
+  disparu: boolean;
   /** Identifiants des terminaux qui y sont ouverts, dans l'ordre recu. */
   terminaux: number[];
 }
@@ -111,6 +116,20 @@ export function worktreeDe(cwd: string | null | undefined, worktrees: Worktree[]
 }
 
 /**
+ * Les dossiers dont git garde la trace alors que le dossier n'existe plus.
+ *
+ * **ON LES MONTRE, ON NE LES CACHE PAS.** Ils viennent surtout des agents, qui creent leur
+ * worktree sous `/tmp` — efface ensuite par le nettoyage du systeme, mais toujours inscrit
+ * dans le depot. Les masquer reviendrait a repondre « il n'y a rien » a quelqu'un qui vient
+ * justement de voir un agent travailler quelque part. On les AFFICHE donc, marques comme
+ * absents, avec de quoi les oublier — c'est la seule facon de comprendre ce que le depot
+ * traine.
+ */
+export function disparus(worktrees: Worktree[]): Worktree[] {
+  return worktrees.filter((w) => w.elagable);
+}
+
+/**
  * Range les terminaux par dossier de travail.
  *
  * L'ordre des groupes suit celui des worktrees rendus par git (le principal d'abord), et
@@ -127,6 +146,7 @@ export function grouper(
     chemin: w.chemin,
     libelle: libelleDe(w),
     principal: w.principal,
+    disparu: w.elagable,
     terminaux: [] as number[],
   }));
   if (groupes.length === 0) return [];

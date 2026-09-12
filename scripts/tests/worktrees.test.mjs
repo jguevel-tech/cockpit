@@ -13,6 +13,7 @@ import {
   grouper,
   teintes,
   libelleDe,
+  disparus,
   TEINTES,
 } from "../../src/lib/terminaux/worktrees.ts";
 
@@ -116,4 +117,23 @@ test("une tete detachee montre son DOSSIER, pas son hash", () => {
   assert.equal(libelleDe({ ...ticket, branche: null, chemin: "/code/projet.worktrees/hotfix/" }), "hotfix");
   // Plus de nom du tout : le hash reste le dernier recours, plutot que du vide.
   assert.equal(libelleDe({ ...ticket, branche: null, chemin: "" }), "(def5678)");
+});
+
+test("un dossier disparu reste AFFICHE, et il est marque", () => {
+  // Le cas reel : des worktrees crees par des sessions d'agent sous /tmp, effaces depuis par
+  // le nettoyage du systeme. Les masquer reviendrait a repondre « il n'y a rien » a quelqu'un
+  // qui vient de voir un agent travailler la.
+  const reste = { ...ticket, chemin: "/tmp/session/wt6", branche: null, elagable: true };
+  const groupes = grouper([principal, reste], [{ id: 1, cwd: "/code/projet" }]);
+  assert.equal(groupes.length, 2, "il est dans la liste");
+  const vu = groupes.find((g) => g.chemin === reste.chemin);
+  assert.equal(vu.disparu, true, "et il est marque comme absent");
+  assert.equal(vu.libelle, "wt6", "avec un nom qui parle, pas un hash");
+  assert.equal(groupes.find((g) => g.principal).disparu, false);
+});
+
+test("on sait lesquels sont a oublier", () => {
+  const reste = { ...ticket, chemin: "/tmp/session/wt6", elagable: true };
+  assert.deepEqual(disparus([principal, reste, urgent]), [reste]);
+  assert.deepEqual(disparus([principal, ticket]), []);
 });

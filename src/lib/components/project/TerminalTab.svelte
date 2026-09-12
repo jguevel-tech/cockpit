@@ -218,8 +218,8 @@
   import ContextMenu from "../ui/ContextMenu.svelte";
   import VoletTerminal from "./VoletTerminal.svelte";
   import SelecteurWorktree from "./SelecteurWorktree.svelte";
-  import { grouper, teintes, worktreeDe, type Groupe } from "../../terminaux/worktrees";
-  import { gitWorktrees, gitWorktreeAdd, gitWorktreeRemove } from "../../api/workspace";
+  import { grouper, teintes, worktreeDe, disparus, type Groupe } from "../../terminaux/worktrees";
+  import { gitWorktrees, gitWorktreeAdd, gitWorktreeRemove, gitWorktreePrune } from "../../api/workspace";
   import { demanderTexte } from "../../stores/saisie";
   import { demanderConfirmation } from "../../stores/confirm";
   import type { Worktree } from "../../types";
@@ -364,6 +364,32 @@
       disposition = null;
     }
     enregistrerLaDisposition();
+  }
+
+  /// Combien de dossiers de travail git garde alors qu'ils n'existent plus.
+  const nombreDisparus = $derived(disparus(worktrees).length);
+
+  /// Oublie les dossiers de travail disparus.
+  ///
+  /// **ON LE PROPOSE, ON NE LE FAIT PAS TOUT SEUL** : un dossier momentanement absent (disque
+  /// non monte) est « elagable » lui aussi, et seul l'utilisateur sait s'il compte le
+  /// remonter. Le texte dit ce que ca touche : les references du depot, ni le code ni les
+  /// branches.
+  async function oublierLesDisparus() {
+    if (!project?.path) return;
+    const ok = await demanderConfirmation({
+      message: $trad("worktree.oublierQuestion", { n: nombreDisparus }),
+      action: $trad("worktree.oublier"),
+    });
+    if (!ok) return;
+    try {
+      const oublies = await gitWorktreePrune(project.path);
+      notify($trad("worktree.oublies", { n: oublies }), "success");
+      worktreeActif = null;
+      await relireLesWorktrees();
+    } catch (e) {
+      notify(String(e));
+    }
   }
 
   /// Ouvre un terminal dans un dossier de travail, en y basculant d'abord.
@@ -1772,12 +1798,22 @@
            entrer donnait une grande zone noire et un « + » minuscule dans un coin : le geste
            menait a un cul-de-sac. On dit ou l'on est, et on propose la seule chose a faire. -->
       <div class="term-empty">
-        <p>
-          {worktreeActif && worktrees.length > 0
-            ? $trad("worktree.vide", { branche: libelleDuWorktreeActif })
-            : $trad("term.empty")}
-        </p>
-        <button class="btn" onclick={() => addTerminal()}>{$trad("term.openOne")}</button>
+        {#if groupeActif?.disparu}
+          <!-- Y ouvrir un terminal echouerait : on explique, et on propose la seule action
+               qui ait un sens. -->
+          <p>{$trad("worktree.disparu", { branche: libelleDuWorktreeActif })}</p>
+          <p class="chemin">{groupeActif.chemin}</p>
+          <button class="btn" onclick={() => void oublierLesDisparus()}>
+            {$trad("worktree.oublier")}
+          </button>
+        {:else}
+          <p>
+            {worktreeActif && worktrees.length > 0
+              ? $trad("worktree.vide", { branche: libelleDuWorktreeActif })
+              : $trad("term.empty")}
+          </p>
+          <button class="btn" onclick={() => addTerminal()}>{$trad("term.openOne")}</button>
+        {/if}
       </div>
     {:else if disposition}
       <!-- L'arbre ne rend que des conteneurs VIDES : c'est l'onglet qui y deplace les
@@ -1820,11 +1856,19 @@
         label: g.libelle,
         couleur: couleursWorktree.get(g.chemin),
         courant: g.chemin === worktreeActif,
-        suffixe: String(g.terminaux.length),
+        // Un dossier absent le DIT au lieu d'afficher un compte de terminaux qui vaut zero
+        // pour une raison qu'on ne devinerait pas.
+        suffixe: g.disparu ? $trad("worktree.absent") : String(g.terminaux.length),
         action: () => void choisirLeWorktree(g.chemin),
       })),
       { section: $trad("worktree.sectionActions") },
       { label: $trad("worktree.creerTitre"), action: () => void creerUnWorktree() },
+      ...(nombreDisparus > 0
+        ? [{
+            label: $trad("worktree.oublierN", { n: nombreDisparus }),
+            action: () => void oublierLesDisparus(),
+          }]
+        : []),
       ...(groupeActif
         ? [{ label: $trad("worktree.ouvrirTerminal"), action: () => void ouvrirDansLeWorktree(groupeActif) }]
         : []),
@@ -2011,4 +2055,11 @@
     color: var(--text-muted); font-size: 0.85rem;
   }
   .term-empty p { margin: 0; }
+  .term-empty .chemin {
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--text-muted);
+    word-break: break-all;
+    max-width: 520px;
+  }
 </style>

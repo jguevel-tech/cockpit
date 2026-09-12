@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les dossiers de travail dont le dossier a disparu restent visibles, marqués « absent », avec
+  une action pour les oublier. Ils viennent surtout des agents, qui créent leur dossier sous
+  /tmp : le système l'efface, le dépôt en garde la trace. Oublier ne touche ni au code ni aux
+  branches, seulement aux références du dépôt.
+- Entrer dans un de ces dossiers explique ce qui s'est passé et donne le chemin, au lieu de
+  proposer d'y ouvrir un terminal qui échouerait.
+
 ## [0.67.0] — 2026-09-12
 
 ### Changed

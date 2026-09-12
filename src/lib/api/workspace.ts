@@ -88,6 +88,9 @@ export const gitCommitDiff = (projectPath: string, hash: string) =>
   invoke<FileDiff[]>("git_commit_diff", { projectPath, hash });
 export const gitBranches = (projectPath: string) => invoke<BranchInfo[]>("git_branches", { projectPath });
 export const gitWorktrees = (projectPath: string) => invoke<Worktree[]>("git_worktrees", { projectPath });
+/// Oublie les dossiers de travail disparus. Rend combien ont ete oublies.
+export const gitWorktreePrune = (projectPath: string) =>
+  invoke<number>("git_worktree_prune", { projectPath });
 export const gitWorktreeAdd = (projectPath: string, branche: string, creer: boolean) =>
   invoke<string>("git_worktree_add", { projectPath, branche, creer });
 export const gitWorktreeRemove = (projectPath: string, chemin: string, force: boolean) =>
