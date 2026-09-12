@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.66.0] — 2026-09-12
+
 ### Added
 
 - Les dossiers de travail git se voient et se prennent depuis l'onglet Terminal : une barre
