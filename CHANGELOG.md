@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.67.0] — 2026-09-12
+
 ### Changed
 
 - Les dossiers de travail ne prennent plus une ligne entière : ils tiennent dans un sélecteur
