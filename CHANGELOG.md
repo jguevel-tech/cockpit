@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Les dossiers de travail git se voient et se prennent depuis l'onglet Terminal : une barre
+  au-dessus des onglets montre chaque branche avec sa couleur et le nombre de terminaux
+  ouverts dedans. On clique, et les terminaux de cette branche reviennent avec leur
+  disposition en volets. Le volet actif porte la couleur de sa branche, donc on sait toujours
+  où l'on tape.
+- Le « + » de cette barre crée la branche, son dossier et un terminal dedans, d'un seul geste.
+  Le clic droit sur une branche permet d'y ouvrir un terminal, ou de supprimer le dossier
+  après avoir dit ce que ça emporte.
+
 ## [0.65.0] — 2026-09-11
 
 ### Added

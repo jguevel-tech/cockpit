@@ -217,6 +217,12 @@
   import { notify } from "../../stores/toast";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import VoletTerminal from "./VoletTerminal.svelte";
+  import BarreWorktrees from "./BarreWorktrees.svelte";
+  import { grouper, teintes, worktreeDe, type Groupe } from "../../terminaux/worktrees";
+  import { gitWorktrees, gitWorktreeAdd, gitWorktreeRemove } from "../../api/workspace";
+  import { demanderTexte } from "../../stores/saisie";
+  import { demanderConfirmation } from "../../stores/confirm";
+  import type { Worktree } from "../../types";
   import {
     deplacer, depuisJson, diviser, feuille, fixerRatio, nettoyer, nombreDeVolets,
     poserLaSession, retirer, sessionsAffichees, type Chemin, type Cote, type Noeud,
@@ -233,11 +239,14 @@
 
   let { name }: { name: string } = $props();
 
-  let sessions: { id: number; alive: boolean; name: string }[] = $state([]);
+  let sessions: { id: number; alive: boolean; name: string; cwd: string }[] = $state([]);
   let activeId: number | null = $state(null);
   let container: HTMLDivElement | undefined = $state(undefined);
   // Menu contextuel Copier/Coller du terminal
   let ctxMenu: { x: number; y: number } | null = $state(null);
+  /// Le clic droit sur une puce de dossier de travail. Le groupe est GARDE ICI et repasse en
+  /// parametre aux actions : le menu se ferme avant qu'elles ne s'executent.
+  let menuWorktree: { x: number; y: number; groupe: Groupe } | null = $state(null);
   let renamingId: number | null = $state(null);
   let renameValue = $state("");
   // Un fichier survole le terminal : on l'annonce, sinon on ne sait pas que le geste est permis.
@@ -252,6 +261,159 @@
   /// Le conteneur de chaque volet affiche, tenu par le composant qui le rend.
   const hotes = new Map<number, HTMLDivElement>();
   const voletsAffiches = $derived(sessionsAffichees(disposition));
+  // --- Les dossiers de travail (worktrees) ---------------------------------------------
+  //
+  // **UN SUJET, UNE BRANCHE, UN DOSSIER, UN LOT DE TERMINAUX.** Le rattachement existait deja
+  // (chaque terminal garde le dossier ou il a ete ouvert), il n'etait simplement pas montre.
+  let worktrees: Worktree[] = $state([]);
+  let worktreeActif: string | null = $state(null);
+
+  const groupes = $derived(grouper(worktrees, sessions));
+  const couleursWorktree = $derived(teintes(worktrees));
+  /// La couleur du dossier affiche, reprise sur le liseré du volet actif : meme reperage aux
+  /// deux endroits.
+  const couleurActive = $derived(
+    worktreeActif ? (couleursWorktree.get(worktreeActif) ?? null) : null,
+  );
+
+  /// Les onglets du dossier affiche.
+  ///
+  /// **CE FILTRE PORTE SUR LE DOSSIER, JAMAIS SUR `alive`.** Un terminal endormi reste
+  /// visible dans son dossier : le filtre sur `alive` a deja fait disparaitre tous les
+  /// onglets a chaque extinction du poste. Et rien ne se perd ici non plus, puisque chaque
+  /// puce affiche COMBIEN de terminaux elle contient, et que la barre laterale les montre
+  /// tous.
+  const sessionsVisibles = $derived.by(() => {
+    if (!worktreeActif || worktrees.length === 0) return sessions;
+    const groupe = groupes.find((g) => g.chemin === worktreeActif);
+    if (!groupe) return sessions;
+    const dedans = new Set(groupe.terminaux);
+    return sessions.filter((s) => dedans.has(s.id));
+  });
+
+  /// Relit les dossiers de travail du projet.
+  ///
+  /// Un projet qui n'est pas un depot git n'en a aucun : ce n'est PAS une panne, c'est le cas
+  /// ordinaire d'un projet qui est juste un dossier. On ne dit donc rien et la barre ne
+  /// s'affiche pas — le silence est ici volontaire, et c'est pour ca qu'il est ecrit.
+  async function relireLesWorktrees() {
+    if (!project?.path) {
+      worktrees = [];
+      return;
+    }
+    try {
+      worktrees = await gitWorktrees(project.path);
+    } catch {
+      worktrees = [];
+    }
+    if (worktrees.length === 0) {
+      worktreeActif = null;
+      return;
+    }
+    // Le dossier affiche reste celui qu'on regardait s'il existe encore ; sinon on retombe
+    // sur celui du terminal actif, et a defaut sur le principal.
+    const connus = new Set(worktrees.map((w) => w.chemin));
+    if (worktreeActif && connus.has(worktreeActif)) return;
+    const duTerminal = activeId === null
+      ? null
+      : worktreeDe(sessions.find((s) => s.id === activeId)?.cwd, worktrees);
+    worktreeActif = duTerminal ?? worktrees.find((w) => w.principal)?.chemin ?? worktrees[0].chemin;
+  }
+
+  function ouvrirLeMenuDuWorktree(evenement: MouseEvent, groupe: Groupe) {
+    evenement.preventDefault();
+    menuWorktree = { x: evenement.clientX, y: evenement.clientY, groupe };
+  }
+
+  /// Le nom du dossier affiche, pour les textes qui le nomment.
+  const libelleDuWorktreeActif = $derived(
+    groupes.find((g) => g.chemin === worktreeActif)?.libelle ?? "",
+  );
+
+  /// Change de dossier de travail : les onglets, leurs volets et leur disposition suivent.
+  async function choisirLeWorktree(chemin: string) {
+    if (chemin === worktreeActif) return;
+    // La disposition du dossier qu'on QUITTE est rangee avant de changer : sinon le dernier
+    // agencement se perdrait au passage.
+    enregistrerLaDisposition();
+    worktreeActif = chemin;
+    const groupe = groupes.find((g) => g.chemin === chemin);
+    const premier = groupe?.terminaux[0] ?? null;
+    disposition = await relireLaDisposition(groupe?.terminaux ?? []);
+    if (premier !== null) {
+      await activate(premier);
+    } else {
+      // Un dossier sans terminal : on n'en ouvre PAS un d'office. Ouvrir un shell parce que
+      // l'utilisateur a clique sur une puce serait une action qu'il n'a pas demandee, et
+      // elle survit a la fermeture de l'application.
+      activeId = null;
+      disposition = null;
+    }
+    enregistrerLaDisposition();
+  }
+
+  /// Ouvre un terminal dans un dossier de travail, en y basculant d'abord.
+  async function ouvrirDansLeWorktree(groupe: Groupe) {
+    await choisirLeWorktree(groupe.chemin);
+    await addTerminal(undefined, groupe.chemin);
+  }
+
+  /// Cree une branche, son dossier de travail, et y ouvre un terminal.
+  ///
+  /// **UN SEUL GESTE POUR CE QUI EN DEMANDAIT SIX** : c'est tout l'interet. Le chemin complet
+  /// est ANNONCE apres coup — rien ne doit apparaitre sur le disque de quelqu'un sans qu'il
+  /// sache ou.
+  async function creerUnWorktree() {
+    if (!project?.path) return;
+    const branche = await demanderTexte({
+      message: $trad("worktree.creerTitre"),
+      action: $trad("worktree.creerQuestion"),
+      exemple: "feat/mon-sujet",
+    });
+    if (!branche?.trim()) return;
+    try {
+      const chemin = await gitWorktreeAdd(project.path, branche.trim(), true);
+      await relireLesWorktrees();
+      worktreeActif = chemin;
+      disposition = null;
+      activeId = null;
+      notify($trad("worktree.cree", { chemin }), "success");
+      await addTerminal(undefined, chemin);
+    } catch (e) {
+      notify(String(e));
+    }
+  }
+
+  /// Retire un dossier de travail, et DIT ce que ca emporte avant de le faire.
+  async function supprimerUnWorktree(groupe: Groupe) {
+    if (!project?.path) return;
+    if (groupe.principal) {
+      notify($trad("worktree.supprimePrincipal"));
+      return;
+    }
+    const ok = await demanderConfirmation({
+      message: $trad("worktree.supprimerQuestion", {
+        branche: groupe.libelle,
+        chemin: groupe.chemin,
+        n: groupe.terminaux.length,
+      }),
+      action: $trad("common.delete"),
+      danger: true,
+    });
+    if (!ok) return;
+    // Les terminaux partent AVANT le dossier : leur shell y a son dossier courant, et un
+    // dossier efface sous un shell vivant laisse un processus dans le vide.
+    for (const id of [...groupe.terminaux]) await closeTab(id);
+    try {
+      await gitWorktreeRemove(project.path, groupe.chemin, false);
+    } catch (e) {
+      notify(String(e));
+    }
+    worktreeActif = null;
+    await relireLesWorktrees();
+    if (worktreeActif) await choisirLeWorktree(worktreeActif);
+  }
+
   /// Le volet qu'on est en train de deplacer, et l'endroit vise sous le pointeur.
   let voletDeplace: number | null = $state(null);
   let voletVise: { cible: number; cote: Cote } | null = $state(null);
@@ -353,7 +515,11 @@
       // meurt sous les yeux de l'utilisateur (evenement `terminal_exit`), pas un terminal
       // qui dort.
       const existing = await listTerminals(name);
-      sessions = existing.map((t) => ({ id: t.id, alive: true, name: t.name }));
+      sessions = existing.map((t) => ({ id: t.id, alive: true, name: t.name, cwd: t.cwd }));
+
+      // Les dossiers de travail AVANT la disposition : c'est le dossier affiche qui decide
+      // quelle disposition relire, et quels onglets montrer.
+      await relireLesWorktrees();
 
       // **LA DISPOSITION SE RELIT AVANT TOUTE ACTIVATION, ET C'EST LA REGRESSION DE LA
       // 0.63.0.** Les deux lignes qui suivent SORTENT du montage quand elles ont fait leur
@@ -363,7 +529,9 @@
       // encore vide : `poserLaSession` repartait alors sur un volet unique et les volets
       // disparaissaient de l'ecran. Ils etaient intacts en base, jamais relus.
       if (sessions.length > 0) {
-        disposition = await relireLaDisposition(sessions.map((s) => s.id));
+        // Les terminaux du dossier AFFICHE, pas tous : sinon la disposition garderait des
+        // volets qui appartiennent a une autre branche, et `nettoyer` les laisserait passer.
+        disposition = await relireLaDisposition(sessionsVisibles.map((s) => s.id));
       }
 
       // La commande d'abord : elle CREE un terminal, alors qu'une demande d'ouverture ne
@@ -380,7 +548,7 @@
       if (sessions.length === 0) {
         if (!restaure) await addTerminal();
       } else {
-        const premier = sessionsAffichees(disposition)[0] ?? sessions[0].id;
+        const premier = sessionsAffichees(disposition)[0] ?? sessionsVisibles[0]?.id ?? sessions[0].id;
         await activate(premier);
       }
       // Un echec de chargement laissait l'onglet vide sans un mot : la liste des terminaux
@@ -454,7 +622,7 @@
     for (const t of frais) {
       const connue = sessions.find((s) => s.id === t.id);
       if (connue) connue.name = t.name;
-      else sessions.push({ id: t.id, alive: true, name: t.name });
+      else sessions.push({ id: t.id, alive: true, name: t.name, cwd: t.cwd });
     }
   }
 
@@ -726,6 +894,10 @@
   }
 
   async function addTerminal(initCommand?: string, dossier?: string) {
+    // **UN TERMINAL NEUF S'OUVRE DANS LE DOSSIER QU'ON REGARDE.** Sans ca, le bouton « + »
+    // ouvrirait a la racine du projet alors que la barre affiche une branche : on taperait
+    // dans un autre dossier que celui qu'on croit.
+    dossier = dossier ?? worktreeActif ?? undefined;
     // JAMAIS de retour silencieux ici : c'est exactement ce qui a laisse le premier
     // utilisateur externe cliquer sur + sans que rien ne se passe ni ne s'affiche.
     // Y COMPRIS pour le conteneur : c'est lui qui donne la taille du PTY, et une commande
@@ -768,7 +940,9 @@
       // pour que l'onglet affiche la meme chose que la sidebar, au lieu de pousser un nom
       // vide qui retombait sur le fallback « Terminal N ».
       const created = (await listTerminals(name)).find((t) => t.id === id);
-      sessions.push({ id, alive: true, name: created?.name ?? "" });
+      // Le dossier vient de la BASE et pas de la variable locale : c'est lui qui range le
+      // terminal dans son dossier de travail, et il doit dire la meme chose des deux cotes.
+      sessions.push({ id, alive: true, name: created?.name ?? "", cwd: created?.cwd ?? "" });
       try { await attachTerminal(id, cols, rows); }
       catch (e) { signalerErreur("terminal.attache", String(e)); }
       brancherEntree(entry, (data) => sendInput(id, data));
@@ -1292,7 +1466,15 @@
   // Elle vit dans les reglages, sous le nom du projet : les terminaux, eux, sont deja en base
   // et reviennent seuls. **Une disposition qui parle de sessions disparues est nettoyee a la
   // relecture** — sinon un volet resterait vide et ne se fermerait pas.
-  const cleDisposition = $derived(`terminaux.volets.${name}`);
+  /// **LA DISPOSITION EST RANGEE PAR DOSSIER DE TRAVAIL**, pour que chaque sujet retrouve
+  /// son ecran. Le dossier PRINCIPAL garde la cle d'avant, sans suffixe : les dispositions
+  /// deja enregistrees continuent donc d'etre relues au lieu d'etre perdues a la mise a jour.
+  const cleDisposition = $derived.by(() => {
+    const base = `terminaux.volets.${name}`;
+    if (!worktreeActif) return base;
+    const w = worktrees.find((x) => x.chemin === worktreeActif);
+    return !w || w.principal ? base : `${base}#${worktreeActif}`;
+  });
 
   function enregistrerLaDisposition() {
     const valeur = disposition ? JSON.stringify(disposition) : "";
@@ -1419,8 +1601,16 @@
 </script>
 
 <div class="terminal-tab">
+  <BarreWorktrees
+    {groupes}
+    actif={worktreeActif}
+    couleurs={couleursWorktree}
+    surChoix={(chemin) => void choisirLeWorktree(chemin)}
+    surCreer={() => void creerUnWorktree()}
+    surMenu={ouvrirLeMenuDuWorktree}
+  />
   <div class="term-tabs">
-    {#each sessions as s, i (s.id)}
+    {#each sessionsVisibles as s, i (s.id)}
       {#if renamingId === s.id}
         <!-- svelte-ignore a11y_autofocus -->
         <input
@@ -1562,9 +1752,16 @@
     role="application"
     oncontextmenu={openCtxMenu}
   >
-    {#if sessions.length === 0}
+    {#if sessionsVisibles.length === 0}
+      <!-- **UN DOSSIER DE TRAVAIL SANS TERMINAL N'EST PAS UN ECRAN VIDE.** Sans ce bloc, y
+           entrer donnait une grande zone noire et un « + » minuscule dans un coin : le geste
+           menait a un cul-de-sac. On dit ou l'on est, et on propose la seule chose a faire. -->
       <div class="term-empty">
-        <p>{$trad("term.empty")}</p>
+        <p>
+          {worktreeActif && worktrees.length > 0
+            ? $trad("worktree.vide", { branche: libelleDuWorktreeActif })
+            : $trad("term.empty")}
+        </p>
         <button class="btn" onclick={() => addTerminal()}>{$trad("term.openOne")}</button>
       </div>
     {:else if disposition}
@@ -1586,6 +1783,7 @@
           {surPoignee}
           deplace={voletDeplace}
           vise={voletVise}
+          couleur={couleurActive}
         />
       </div>
     {/if}
@@ -1594,6 +1792,25 @@
     {/if}
   </div>
 </div>
+
+{#if menuWorktree}
+  {@const groupe = menuWorktree.groupe}
+  <ContextMenu
+    x={menuWorktree.x}
+    y={menuWorktree.y}
+    items={[
+      { label: $trad("worktree.ouvrirTerminal"), action: () => void ouvrirDansLeWorktree(groupe) },
+      ...(groupe.principal
+        ? []
+        : [{
+            label: $trad("worktree.supprimer"),
+            danger: true,
+            action: () => void supprimerUnWorktree(groupe),
+          }]),
+    ]}
+    onClose={() => (menuWorktree = null)}
+  />
+{/if}
 
 {#if ctxMenu}
   <ContextMenu

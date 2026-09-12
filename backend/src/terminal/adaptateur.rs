@@ -579,6 +579,7 @@ impl Terminaux for TerminauxService {
                     name: row.name,
                     alive: session.is_some_and(|s| s.vivant),
                     llm: session.is_some_and(|s| s.llm),
+                    cwd: row.cwd,
                 }
             })
             .collect()

@@ -28,6 +28,13 @@ pub struct TerminalInfo {
     pub alive: bool,
     /// Un CLI d'agent LLM (claude, codex, gemini...) tourne dans la session.
     pub llm: bool,
+    /// Le dossier ou le terminal a ete OUVERT, tel qu'il est range en base.
+    ///
+    /// **C'EST LUI QUI DIT A QUEL DOSSIER DE TRAVAIL APPARTIENT LE TERMINAL**, et pas le
+    /// dossier courant du shell : un `cd /tmp` ne doit pas faire sortir un terminal de son
+    /// worktree sous les yeux de l'utilisateur. Il servait deja a rouvrir un terminal au bon
+    /// endroit apres une extinction ; il est desormais AFFICHE.
+    pub cwd: String,
 }
 
 /// Taille de la grille, en cellules. Nommee pour elle-meme parce que l'ordre

@@ -33,11 +33,14 @@
     /// lui seul connait la geometrie de tous les volets.
     deplace: number | null;
     vise: { cible: number; cote: Cote } | null;
+    /// La couleur du dossier de travail affiche. Le liseré du volet actif la reprend, pour
+    /// qu'on sache dans quelle branche on tape sans lever les yeux vers la barre.
+    couleur: string | null;
   }
 
   let {
     noeud, chemin = [], actif, surVolet, surClic, surSeparateur, libelle, seul,
-    surPoignee, deplace, vise,
+    surPoignee, deplace, vise, couleur,
   }: Props = $props();
 
   /// Le conteneur du volet est confie a l'onglet, qui y deplace l'element du terminal. Une
@@ -71,6 +74,7 @@
   <div
     class="volet"
     class:actif={actif === noeud.id && !seul}
+    style:--liseré={couleur ?? "var(--accent)"}
     onpointerdown={() => surClic(noeud.id)}
   >
     {#if !seul}
@@ -117,6 +121,7 @@
         {surPoignee}
         {deplace}
         {vise}
+        {couleur}
       />
     </div>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -139,6 +144,7 @@
         {surPoignee}
         {deplace}
         {vise}
+        {couleur}
       />
     </div>
   </div>
@@ -160,7 +166,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    border: 1px solid var(--accent);
+    border: 1px solid var(--liseré);
     border-radius: 3px;
   }
   .hote {
