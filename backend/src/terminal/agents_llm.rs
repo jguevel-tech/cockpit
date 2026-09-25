@@ -191,6 +191,11 @@ impl ArbreProcess {
 }
 
 impl ArbreProcess {
+    /// Le shell fait-il tourner quelque chose ? Un shell a l'invite n'a aucun enfant.
+    pub fn a_des_enfants(&self, pid: u32) -> bool {
+        !self.enfants(pid).is_empty()
+    }
+
     /// Un CLI LLM tourne-t-il quelque part sous `racine` (elle comprise) ?
     ///
     /// Sortie DES QUE trouve : c'est ce qui rend la passe gratuite sur les terminaux ou un

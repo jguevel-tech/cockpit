@@ -160,6 +160,9 @@ pub struct Session {
     vivant: Arc<AtomicBool>,
     partage: Arc<(Mutex<Tampon>, Condvar)>,
     taille: Mutex<Taille>,
+    /// Le shell faisait-il tourner un programme a la derniere liste ? Sert a voir le moment
+    /// ou ce programme disparait.
+    occupe_vu: AtomicBool,
 }
 
 /// La ligne qui separe le terminal restaure du shell qui vient de naitre.
@@ -272,6 +275,7 @@ impl Session {
             vivant: Arc::new(AtomicBool::new(true)),
             partage: Arc::clone(&partage),
             taille: Mutex::new(taille),
+            occupe_vu: AtomicBool::new(false),
         });
 
         {
@@ -518,6 +522,44 @@ impl Session {
     /// est construit UNE FOIS par passe de `Lister`, pour tous les terminaux.
     pub fn llm(&self, arbre: &crate::terminal::agents_llm::ArbreProcess) -> bool {
         self.pid.is_some_and(|pid| arbre.contient_un_llm(pid))
+    }
+
+    /// Le shell fait-il tourner un programme (claude, vim, un build) ?
+    pub fn occupe(&self, arbre: &crate::terminal::agents_llm::ArbreProcess) -> bool {
+        self.pid.is_some_and(|pid| arbre.a_des_enfants(pid))
+    }
+
+    /// Note si le shell fait tourner un programme, et rend le curseur quand ce programme
+    /// vient de finir.
+    ///
+    /// **UN PROGRAMME QUI MEURT SANS REMETTRE LE CURSEUR LE LAISSE MASQUE POUR TOUJOURS.**
+    /// claude, vim ou htop masquent le curseur tant qu'ils dessinent ; tues (manque de
+    /// memoire, `kill`), ils ne le remettent jamais, et le shell qui reprend la main ne le
+    /// fait pas non plus. Signale le 2026-09-25 : « j'ai perdu le trait pour voir ou je
+    /// suis ». Quand le shell n'a plus d'enfant et que le curseur est encore masque, on le
+    /// rend, dans l'ecran du service ET chez l'application — sinon le prochain redessin le
+    /// masquerait de nouveau. Rien ne change tant qu'un programme tourne : c'est lui qui
+    /// decide de son curseur.
+    pub fn noter_le_premier_plan(&self, occupe: bool) {
+        let avant = self.occupe_vu.swap(occupe, Ordering::SeqCst);
+        if avant && !occupe {
+            self.rendre_le_curseur();
+        }
+    }
+
+    fn rendre_le_curseur(&self) {
+        const MONTRER: &[u8] = b"\x1b[?25h";
+        let (tampon, signal) = &*self.partage;
+        let mut t = tampon.lock().unwrap_or_else(|e| e.into_inner());
+        if t.ecran.curseur_visible() {
+            return;
+        }
+        t.ecran.avaler(MONTRER);
+        if t.abonne.is_some() {
+            t.en_attente.extend_from_slice(MONTRER);
+        }
+        drop(t);
+        signal.notify_all();
     }
 
     /// Tue le shell, et rend la main quand il est VRAIMENT parti.
@@ -1063,6 +1105,38 @@ mod tests {
     ///
     /// Sans cet essai, ecrire le separateur sans condition passerait inapercu — et chaque
     /// terminal neuf s'ouvrirait avec une ligne grise en haut.
+    /// **L'AGENT PARTI, LE CURSEUR REVIENT.** L'ecran initial masque le curseur, comme un
+    /// agent qui dessine ; l'agent disparait de l'arbre : le curseur doit revenir, dans
+    /// l'ecran du service ET dans ce qui part vers l'application.
+    #[test]
+    fn le_curseur_revient_quand_l_agent_disparait() {
+        let s = session_avec_ecran(None, b"\x1b[?25l");
+        let (boite, recu) = boite();
+        s.attacher(boite);
+        let visible = |s: &Session| s.partage.0.lock().unwrap().ecran.curseur_visible();
+        assert!(!visible(&s), "l'ecran initial devait masquer le curseur");
+        // Le redessin de l'attache part d'abord : sans l'attendre, il pourrait partir APRES
+        // et porter lui-meme le curseur visible, et l'essai ne prouverait plus rien.
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < fin {
+            if let Ok(Pousse::Redessin { .. }) = recu.recv_timeout(std::time::Duration::from_millis(100)) {
+                break;
+            }
+        }
+        s.noter_le_premier_plan(true);
+        assert!(!visible(&s), "tant que l'agent tourne, on ne touche a rien");
+        s.noter_le_premier_plan(false);
+        assert!(visible(&s), "l'agent parti, le curseur doit etre rendu");
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut vu = String::new();
+        while std::time::Instant::now() < fin && !vu.contains("\x1b[?25h") {
+            if let Ok(Pousse::Sortie { octets, .. }) = recu.recv_timeout(std::time::Duration::from_millis(100)) {
+                vu.push_str(&String::from_utf8_lossy(&octets));
+            }
+        }
+        assert!(vu.contains("\x1b[?25h"), "l'application doit recevoir le curseur visible");
+    }
+
     #[test]
     fn un_terminal_neuf_n_a_pas_de_separateur() {
         let session = session(None);

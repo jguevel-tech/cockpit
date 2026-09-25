@@ -583,14 +583,31 @@ fn la_photo_d_etat_decrit_bien_l_ecran() {
 /// restituee telle quelle, elle rend un terminal ou l'on tape sans voir ou l'on est. Et le
 /// shell qui repart derriere une restauration est NEUF : il ne remettra pas un mode qu'il n'a
 /// pas pose lui-meme.
+/// **XTERM.JS NE REND PAS LE CURSEUR A LA REMISE A ZERO** (`CoreService.reset` garde
+/// `isCursorHidden`). Un terminal qu'un agent avait masque restait donc sans curseur apres un
+/// redessin ou une photo qui le croyaient visible « par defaut ». Constate le 2026-09-25 au
+/// banc, apres un service tue : l'essai porte ici sur les OCTETS, parce que c'est le
+/// destinataire qui ne suit pas le defaut.
+#[test]
+fn un_redessin_dit_toujours_que_le_curseur_est_visible() {
+    let ecran = ecran_avale(b"\x1b[?25l\x1b[?25hbonjour");
+    for (quoi, octets) in [("redessin", ecran.redessiner()), ("photo", ecran.photographier())] {
+        let texte = String::from_utf8_lossy(&octets);
+        assert!(texte.contains("\x1b[?25h"), "le {quoi} doit poser le curseur visible");
+    }
+    let masque = ecran_avale(b"\x1b[?25lbonjour");
+    assert!(String::from_utf8_lossy(&masque.redessiner()).contains("\x1b[?25l"));
+}
+
 #[test]
 fn une_photo_rend_toujours_le_curseur_visible() {
     let ecran = ecran_avale(b"\x1b[?25lbonjour");
     let photo = ecran.photographier();
     // **C'EST L'ETAT D'ARRIVEE QUI COMPTE, PAS LES OCTETS.** Premiere version de cet essai :
     // elle exigeait un `?25h` dans la photo. Or « curseur visible » est le DEFAUT, et la
-    // photo commence par une remise a zero complete : ne rien emettre suffit. L'essai
-    // decrivait une forme, pas la propriete voulue — et il aurait refuse une bonne photo.
+    // photo commence par une remise a zero complete : ne rien emettre suffisait POUR NOTRE
+    // emulateur. Pas pour xterm.js, dont la remise a zero laisse le curseur masque : voir
+    // `un_redessin_dit_toujours_que_le_curseur_est_visible`.
     let relu = ecran_avale(&photo);
     assert!(
         relu.term().mode().contains(alacritty_terminal::term::TermMode::SHOW_CURSOR),

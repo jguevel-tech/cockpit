@@ -162,6 +162,37 @@ if [ -n "${COCKPIT_BANC_COLLER:-}" ]; then
   exit 0
 fi
 
+# **LE CURSEUR REVIENT QUAND LE PROGRAMME QUI L'AVAIT MASQUE N'EST PLUS LA.** Signale le
+# 2026-09-25 apres un manque de memoire qui a tout arrete : les terminaux sont revenus sans
+# curseur. Un programme comme claude masque le curseur ; s'il meurt sans le remettre, plus
+# personne ne le remet. Deux cas : le programme seul est tue, puis tout le service.
+if [ -n "${COCKPIT_BANC_CURSEUR:-}" ]; then
+  printf '#!/bin/bash\nprintf "\\e[?25l"\necho curseur-masque\necho $$ > %s/masquer.pid\nexec sleep 600\n' "$TRAVAIL" > "$TRAVAIL/bin/masquer"
+  clic 900 500 1
+  clic 900 500 1
+  python3 "$OUTILS" taper "bash $TRAVAIL/bin/masquer"
+  sleep 2
+  image curseur-1-masque
+  kill "$(cat "$TRAVAIL/masquer.pid")" || true   # le programme seul meurt, le shell reprend la main
+  sleep 8                 # la liste des terminaux passe toutes les cinq secondes
+  image curseur-2-programme-mort
+  python3 "$OUTILS" taper "bash $TRAVAIL/bin/masquer"
+  sleep 2
+  # Le service tue d'un coup, comme systemd l'a fait : SIGKILL, sans photo.
+  for pid in $(pgrep -f -- "--service-terminaux"); do
+    if tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep -q "COCKPIT_HARNAIS=$JETON"; then
+      kill -9 $pid; echo "  service $pid tue"
+    fi
+  done
+  kill "$(cat "$TRAVAIL/masquer.pid")" 2>/dev/null || true
+  sleep 3
+  clic 862 127 3; clic 727 127 8    # Git puis Terminal : l'onglet se rouvre
+  clic 900 500 3
+  image curseur-3-apres-le-service
+  echo "images curseur : $TRAVAIL/img"
+  exit 0
+fi
+
 if [ -n "${COCKPIT_BANC_NS:-}" ]; then
   # **LE NAMESPACE CHOISI DOIT REVENIR.** Signale par le mainteneur : il choisit celui de son
   # projet, part, revient, et retrouve celui du contexte. On pose le choix EN BASE, comme s'il

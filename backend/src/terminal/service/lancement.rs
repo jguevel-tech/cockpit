@@ -35,7 +35,84 @@ pub fn commande_du_service(chemin: &std::path::Path) -> Result<Command, String> 
     for variable in crate::terminal::environnement::VARIABLES_APPIMAGE {
         commande.env_remove(variable);
     }
+    #[cfg(target_os = "linux")]
+    if let Some(systemd_run) = systemd_run_utilisable() {
+        let nom = format!(
+            "cockpit-terminaux-{}-{}",
+            std::process::id(),
+            chrono::Local::now().timestamp_millis()
+        );
+        return Ok(dans_son_propre_scope(&commande, &systemd_run, &nom));
+    }
     Ok(commande)
+}
+
+/// **LE SERVICE VIT DANS SON PROPRE GROUPE SYSTEMD, ET UNE MEMOIRE EPUISEE NE L'EMPORTE PLUS.**
+/// Constate le 2026-09-25 : un programme lance dans un terminal a pris 16 Go, le noyau l'a
+/// tue, et systemd a ARRETE tout le groupe de l'application (`Failed with result
+/// 'oom-kill'`) : le service, ses shells et tous les agents qui y tournaient. Le bureau range
+/// chaque application dans un groupe (`app-gnome-cockpit-<pid>.scope`), et `setsid` n'en fait
+/// pas sortir : c'est le cgroup qui compte, pas la session. La regle par defaut d'un tel
+/// groupe est d'arreter TOUT ce qu'il contient des qu'un de ses processus est tue faute de
+/// memoire.
+///
+/// Le service part donc dans un groupe a lui, avec `OOMPolicy=continue` : seul le programme
+/// tue disparait, ses voisins continuent. Eprouve sur la machine avec une limite de 80 Mo :
+/// avec la regle par defaut le voisin meurt, avec celle-ci il survit. Il ne depend plus non
+/// plus de la vie du groupe de l'application.
+#[cfg(target_os = "linux")]
+pub(crate) fn dans_son_propre_scope(
+    commande: &Command,
+    systemd_run: &std::path::Path,
+    nom: &str,
+) -> Command {
+    let mut enveloppe = Command::new(systemd_run);
+    enveloppe
+        .args(["--user", "--scope", "--quiet", "--collect", "--unit", nom])
+        .args(["-p", "OOMPolicy=continue", "--"])
+        .arg(commande.get_program())
+        .args(commande.get_args());
+    // Ce qui a ete retire ou pose sur la commande d'origine vaut pour le service : un scope
+    // garde l'environnement de celui qui le lance.
+    for (cle, valeur) in commande.get_envs() {
+        match valeur {
+            Some(v) => enveloppe.env(cle, v),
+            None => enveloppe.env_remove(cle),
+        };
+    }
+    enveloppe
+}
+
+/// `systemd-run`, s'il est la ET que le gestionnaire de la session accepte un groupe regle
+/// ainsi. Un chemin FIXE plutot que le PATH : on ne lance pas en service un programme que le
+/// PATH du moment designerait. Sans systemd (autre init, conteneur), on lance comme avant.
+#[cfg(target_os = "linux")]
+pub(crate) fn systemd_run_utilisable() -> Option<std::path::PathBuf> {
+    use crate::commande::SansConsole;
+    let chemin = ["/usr/bin/systemd-run", "/bin/systemd-run"]
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .find(|p| p.is_file())?;
+    // L'essai coute une cinquantaine de millisecondes, une fois par lancement du service.
+    // Il verifie ce que le lancement demandera vraiment, regle comprise : un systemd trop
+    // ancien pour `OOMPolicy` sur un groupe refuserait ici, et non en perdant le service.
+    let accepte = Command::new(&chemin)
+        .sans_console()
+        .args(["--user", "--scope", "--quiet", "--collect", "-p", "OOMPolicy=continue", "--", "true"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !accepte {
+        journaliser(
+            "terminal.service",
+            "systemd-run refuse un groupe a part : le service partage celui de l'application",
+        );
+        return None;
+    }
+    Some(chemin)
 }
 
 /// Quel fichier relancer pour rouvrir L'APPLICATION. Sous AppImage, c'est le fichier
@@ -341,6 +418,26 @@ mod tests {
     /// **LA REGRESSION DE LA 0.59.0.** Le service partait de `$APPIMAGE`, c'est-a-dire de la
     /// coquille Electron : elle ouvrait l'application et n'ouvrait aucun socket. La copie
     /// doit donc etre celle du binaire COURANT, posee ailleurs que dans le montage.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn le_service_part_dans_un_groupe_qui_ne_s_arrete_pas_sur_un_manque_de_memoire() {
+        let mut origine = Command::new("/chemin/cockpit-service-1.2.3");
+        origine.arg(DRAPEAU_SERVICE).arg("/run/x.sock").env_remove("APPDIR").env("A", "b");
+        let c = dans_son_propre_scope(&origine, std::path::Path::new("/usr/bin/systemd-run"), "nom");
+        assert_eq!(c.get_program(), "/usr/bin/systemd-run");
+        let args: Vec<_> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        let fin = args.iter().position(|a| a == "--").expect("separateur");
+        // La regle qui protege les voisins, et le groupe a part.
+        assert!(args[..fin].windows(2).any(|w| w == ["-p", "OOMPolicy=continue"]));
+        assert!(args[..fin].contains(&"--scope".to_string()));
+        assert!(args[..fin].contains(&"--user".to_string()));
+        // Le service lui-meme, intact, apres le separateur.
+        assert_eq!(args[fin + 1..], ["/chemin/cockpit-service-1.2.3", DRAPEAU_SERVICE, "/run/x.sock"]);
+        let envs: Vec<_> = c.get_envs().collect();
+        assert!(envs.contains(&(std::ffi::OsStr::new("APPDIR"), None)));
+        assert!(envs.contains(&(std::ffi::OsStr::new("A"), Some(std::ffi::OsStr::new("b")))));
+    }
+
     #[test]
     fn la_copie_du_service_est_le_binaire_courant_pose_hors_du_montage() {
         let bac = DossierDEssai::neuf("service-copie");

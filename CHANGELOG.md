@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Terminaux : un programme qui épuise la mémoire de la machine n'emporte plus tous les
+  terminaux avec lui. Jusqu'ici, quand le système tuait ce programme, il arrêtait aussi tous
+  les shells et les agents ouverts dans Cockpit. Sous Linux, seul le programme fautif disparaît
+  maintenant (effectif au prochain démarrage du service des terminaux).
+- Terminaux : le curseur revient quand le programme qui l'avait masqué (claude, vim, htop)
+  s'arrête sans le remettre, et après un redémarrage du service des terminaux.
+
 ## [0.89.0] — 2026-09-24
 
 ### Added

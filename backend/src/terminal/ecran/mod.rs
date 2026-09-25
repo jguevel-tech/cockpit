@@ -166,6 +166,10 @@ impl Ecran {
         self.term.mode().contains(TermMode::ALT_SCREEN)
     }
 
+    pub fn curseur_visible(&self) -> bool {
+        self.term.mode().contains(TermMode::SHOW_CURSOR)
+    }
+
     /// Ramasse ce que l'emulateur a a dire, et vide la file.
     pub fn sortants(&self) -> Vec<Sortant> {
         match self.sortants.lock() {

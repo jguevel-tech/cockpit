@@ -413,6 +413,39 @@ impl Drop for BancDetache {
     }
 }
 
+/// **UN SERVICE LANCE PAR COCKPIT VIT DANS SON PROPRE GROUPE, REGLE POUR NE PAS S'ARRETER
+/// QUAND LA MEMOIRE MANQUE.** Le vrai chemin : double fork, `systemd-run`, puis le service. On
+/// lit le groupe du processus qui repond sur le socket, et la regle de ce groupe chez systemd.
+/// Sans gestionnaire systemd de session (certains runners), il n'y a rien a eprouver.
+#[cfg(target_os = "linux")]
+#[test]
+fn le_service_detache_vit_dans_son_propre_groupe_systemd() {
+    use interprocess::local_socket::traits::StreamCommon as _;
+    let Some(systemd_run) = lancement::systemd_run_utilisable() else {
+        eprintln!("pas de systemd de session : essai sans objet ici");
+        return;
+    };
+    let (dossier, chemin) = emplacement("scope");
+    let nom = format!("cockpit-terminaux-essai-{}", std::process::id());
+    lancement::demarrer_avec(&chemin, || {
+        Ok(lancement::dans_son_propre_scope(&service_dans_le_binaire_de_test(&chemin)?, &systemd_run, &nom))
+    })
+    .expect("le service doit demarrer dans son groupe");
+    let banc = BancDetache { dossier, chemin: chemin.clone() };
+
+    let flux = tuyau::connecter(&chemin).expect("connexion au service");
+    let pid = flux.peer_creds().expect("identite du pair").pid().expect("pid du pair");
+    let groupe = std::fs::read_to_string(format!("/proc/{pid}/cgroup")).expect("cgroup du service");
+    assert!(groupe.contains(&format!("{nom}.scope")), "le service n'est pas dans son groupe : {groupe}");
+    let regle = std::process::Command::new("systemctl")
+        .args(["--user", "show", "-p", "OOMPolicy", &format!("{nom}.scope")])
+        .output()
+        .expect("systemctl");
+    assert_eq!(String::from_utf8_lossy(&regle.stdout).trim(), "OOMPolicy=continue");
+    drop(flux);
+    drop(banc);
+}
+
 /// Le double fork a-t-il fait son travail ? Le service ne doit plus etre notre enfant.
 ///
 /// PIEGE : sur un bureau Linux moderne, l'orphelin n'est PAS adopte par le pid 1 mais par

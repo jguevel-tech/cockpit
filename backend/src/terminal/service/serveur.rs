@@ -415,11 +415,10 @@ fn lister(service: &Arc<Service>) -> Vec<InfoSession> {
     let mut sessions = service.sessions.lock().unwrap_or_else(|e| e.into_inner());
     let mut infos: Vec<InfoSession> = sessions
         .values()
-        .map(|s| InfoSession {
-            id: s.id,
-            vivant: s.vivant(),
-            llm: s.vivant() && s.llm(&arbre),
-            taille: s.taille(),
+        .map(|s| {
+            let llm = s.vivant() && s.llm(&arbre);
+            s.noter_le_premier_plan(s.vivant() && s.occupe(&arbre));
+            InfoSession { id: s.id, vivant: s.vivant(), llm, taille: s.taille() }
         })
         .collect();
     infos.sort_by_key(|i| i.id);

@@ -554,7 +554,11 @@ impl Redessin<'_> {
             } else {
                 actuels.contains(bit)
             };
-            if pose == defaut.contains(bit) {
+            // **LE CURSEUR SE DIT TOUJOURS, MEME VISIBLE.** La remise a plat d'xterm.js ne le
+            // rend PAS visible (`CoreService.reset` laisse `isCursorHidden` tel quel) : un
+            // terminal ou un agent l'avait masque restait donc sans curseur apres un redessin
+            // qui, lui, le croyait visible par defaut. Vu le 2026-09-25 apres un service tue.
+            if pose == defaut.contains(bit) && bit != TermMode::SHOW_CURSOR {
                 continue;
             }
             let action = if pose { 'h' } else { 'l' };
