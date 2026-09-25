@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [0.89.1] — 2026-09-25
+
 ### Fixed
 
 - Terminaux : un programme qui épuise la mémoire de la machine n'emporte plus tous les
