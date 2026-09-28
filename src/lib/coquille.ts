@@ -123,6 +123,27 @@ export function versionDeLApplication(): Promise<string> {
   return invoke<string>("coquille:version");
 }
 
+/** Un profil de fenetre, tel que la coquille le liste. `nom: null` = le profil par defaut. */
+export interface ProfilDeFenetre {
+  nom: string | null;
+  ouvert: boolean;
+}
+
+export interface EtatDesProfils {
+  /** Le profil de CETTE fenetre. */
+  courant: string | null;
+  profils: ProfilDeFenetre[];
+}
+
+export function profilsDesFenetres(): Promise<EtatDesProfils> {
+  return invoke<EtatDesProfils>("coquille:profils");
+}
+
+/** Ouvre la fenetre d'un profil (cree s'il est nouveau), ou ramene celle qui l'a deja. */
+export function ouvrirLeProfil(nom: string | null): Promise<null> {
+  return invoke<null>("coquille:ouvrir-profil", { nom });
+}
+
 /** Options communes aux deux dialogues de fichier. */
 export interface OptionsDeDialogue {
   title?: string;

@@ -110,6 +110,7 @@ export const fr = {
   "header.docs": "Documentation — toutes les fonctionnalités en exemples",
   "header.settings": "Paramètres",
   "header.theme": "Changer le thème",
+  "header.profils": "Fenêtres et profils",
 
   // Colonne de gauche
   "sidebar.terminals": "Terminaux",
@@ -949,6 +950,7 @@ export const fr = {
   "palette.dashMonitoring": "Tableau de bord — Monitoring",
   "palette.dashTerminals": "Tableau de bord — Terminaux",
   "palette.dashContainers": "Tableau de bord — Conteneurs",
+  "palette.newWindow": "Nouvelle fenêtre…",
   "settings.ia.title": "Fournisseurs d'IA",
   "settings.ia.retourListe": "Tous les agents",
   "settings.ia.section.consignes": "Consignes",
@@ -1189,6 +1191,16 @@ export const fr = {
   "jira.creation.demarrer": "Démarrer tout de suite",
   "jira.creation.creer": "Créer",
   "jira.ticketCree": "Ticket {cle} créé",
+
+  // Fenetres a profil
+  "profils.titre": "Ouvrir une fenêtre",
+  "profils.defaut": "Par défaut",
+  "profils.courant": "cette fenêtre",
+  "profils.ouvert": "ouvert",
+  "profils.nouveau": "Nouveau profil",
+  "profils.nouveauPlaceholder": "nom-du-profil",
+  "profils.creer": "Créer et ouvrir",
+  "profils.regle": "1 à 32 caractères : a-z, 0-9 et -, sans - au début.",
 } as const;
 
 /** Cles disponibles pour la traduction : le francais fait foi. */

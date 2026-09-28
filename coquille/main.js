@@ -9,7 +9,9 @@
 // **CE QUI NE CHANGE PAS.** Le service de terminaux reste le binaire Rust, detache, avec son
 // protocole binaire a lui. Il ne sait pas qui l'affiche et n'a pas a le savoir.
 
-const { app, BrowserWindow, protocol, net, shell, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, protocol, net, shell, ipcMain, dialog, session } = require('electron')
+const fs = require('node:fs')
+const profils = require('./profils')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { spawn } = require('node:child_process')
@@ -84,8 +86,19 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
-function servirInterface() {
-  protocol.handle(SCHEMA, async (requete) => {
+/**
+ * Les sessions deja servies. **`protocol.handle` NE VAUT QUE POUR LA SESSION OU ON
+ * L'APPELLE** : la page d'un profil nomme, dans sa propre partition, resterait blanche.
+ */
+const sessionsServies = new WeakSet()
+function servirLaSession(cible) {
+  if (sessionsServies.has(cible)) return
+  sessionsServies.add(cible)
+  servirInterface(cible)
+}
+
+function servirInterface(cible) {
+  cible.protocol.handle(SCHEMA, async (requete) => {
     const url = new URL(requete.url)
     const relatif = decodeURIComponent(url.pathname)
     // Tout ce qui n'est pas un fichier connu retombe sur index.html : la navigation de
@@ -139,18 +152,24 @@ function servirInterface() {
  * survit a un rechargement de la vue.
  */
 class Backend {
-  constructor(chemin) {
+  constructor(chemin, nom) {
     this.enAttente = new Map()
     this.prochainAppel = 1
     this.surEvenement = () => {}
+    // Garde pour nommer CE backend dans le journal et dans le message de panne : sans lui,
+    // plusieurs fenetres ecrivent au meme endroit et on ne sait plus laquelle a crie.
+    this.nom = nom
     // La sortie d'erreur du backend n'est PAS le protocole : elle va au journal de la
     // coquille, sinon une panne de demarrage serait invisible.
     this.vivant = true
     this.dernieresPlaintes = []
-    this.processus = spawn(chemin, ['--pont'], { stdio: ['pipe', 'pipe', 'pipe'] })
+    this.processus = spawn(chemin, ['--pont'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: profils.environnementDuBackend(process.env, nom)
+    })
     this.processus.stderr.on('data', (bloc) => {
       const texte = `${bloc}`.trimEnd()
-      journaliser('backend.stderr', texte)
+      journaliser(`backend.stderr[${this.nom ?? 'defaut'}]`, texte)
       // Gardees pour les JOINDRE au rejet : sans elles, une panne de demarrage du backend
       // arrive dans l'interface comme une erreur de flux, qui ne nomme rien.
       this.dernieresPlaintes.push(texte)
@@ -162,7 +181,9 @@ class Backend {
     // exception qui ne dit ni quel binaire, ni pourquoi.
     this.processus.on('error', (e) => {
       this.vivant = false
-      this.echouer(new Error(`backend introuvable ou illisible (${chemin}) : ${e.message}`))
+      this.echouer(
+        new Error(`backend [${this.nom ?? 'defaut'}] introuvable ou illisible (${chemin}) : ${e.message}`)
+      )
     })
     this.processus.on('exit', (code) => {
       this.vivant = false
@@ -171,7 +192,7 @@ class Backend {
       const plaintes = this.dernieresPlaintes.join(' | ')
       this.echouer(
         new Error(
-          `le backend s'est arrete (code ${code})${plaintes ? ` : ${plaintes}` : ''}`
+          `le backend [${this.nom ?? 'defaut'}] s'est arrete (code ${code})${plaintes ? ` : ${plaintes}` : ''}`
         )
       )
     })
@@ -251,17 +272,20 @@ function cheminDuBackend() {
 // --- Le pont : ce que la page peut demander --------------------------------------------
 
 /**
- * Les noms d'evenements que la page ecoute. Le preload les annonce : le premier ecouteur
- * d'un nom l'ajoute, le dernier a partir le retire.
+ * Les fenetres ouvertes, par profil (`null` = defaut). **UNE AU PLUS PAR PROFIL** : deux
+ * backends sur la meme base et le meme service se marcheraient dessus.
  *
- * **ON N'ENVOIE QUE CE QUI EST ECOUTE.** Une surveillance qui tourne sur un minuteur emet
- * meme quand personne ne regarde ; sans ce filtre, chaque passage traverserait le pont
- * pour rien.
+ * Chaque entree : `{ nom, fenetre, backend, ecoutes }`. `ecoutes` est PROPRE a la fenetre —
+ * un ensemble commun enverrait a chaque page ce qu'une autre ecoute.
  */
-const ecoutes = new Set()
+const fenetres = new Map()
+/** La meme entree, retrouvee depuis la page qui appelle : `webContents.id → entree`. */
+const parPage = new Map()
+/** Ce que ramene une relance depuis le bureau. */
+let derniereActive = null
 
-ipcMain.on('cockpit:ecouter', (_evenement, nom) => ecoutes.add(nom))
-ipcMain.on('cockpit:ignorer', (_evenement, nom) => ecoutes.delete(nom))
+ipcMain.on('cockpit:ecouter', (evenement, nom) => parPage.get(evenement.sender.id)?.ecoutes.add(nom))
+ipcMain.on('cockpit:ignorer', (evenement, nom) => parPage.get(evenement.sender.id)?.ecoutes.delete(nom))
 
 /**
  * Pousse un evenement vers la page. Le pont vers le backend Rust appellera ceci.
@@ -273,8 +297,9 @@ ipcMain.on('cockpit:ignorer', (_evenement, nom) => ecoutes.delete(nom))
  * d'erreur avant l'interface. Le backend est un PROCESSUS SEPARE : il n'y a aucun instant ou
  * l'on puisse garantir qu'il s'est taire avant elle. On verifie donc, a chaque envoi.
  */
-function pousserEvenement(nom, charge, fenetre) {
-  if (!ecoutes.has(nom)) return
+function pousserEvenement(nom, charge, entree) {
+  if (!entree.ecoutes.has(nom)) return
+  const { fenetre } = entree
   if (!fenetre || fenetre.isDestroyed() || fenetre.webContents.isDestroyed()) return
   fenetre.webContents.send('cockpit:evenement', nom, charge)
 }
@@ -286,7 +311,7 @@ function pousserEvenement(nom, charge, fenetre) {
  * interface qui s'affiche et ment : des listes vides, des reglages muets, et rien dans le
  * journal. Le refus dit laquelle manque, ce qui donne aussi l'ordre de portage.
  */
-function traiterDansLaCoquille(commande, arguments_, fenetre) {
+function traiterDansLaCoquille(commande, arguments_, entree) {
   switch (commande) {
     // **`relancer_application` N'EST PAS TRAITEE ICI, ET C'EST DELIBERE.**
     //
@@ -302,12 +327,14 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
     // boucle qui prend le poste en otage.
     //
     // En attendant, la commande est REFUSEE et nommee, comme toute commande inconnue.
-    case 'coquille:zoom':
+    case 'coquille:zoom': {
       // Le zoom appartient a l'HOTE, pas au backend : sous Tauri la commande recevait la
       // fenetre, ici c'est Chromium qui l'applique. Le backend n'a jamais eu a le savoir.
+      const { fenetre } = entree
       if (fenetre.isDestroyed() || fenetre.webContents.isDestroyed()) return { traite: true }
       fenetre.webContents.setZoomFactor(arguments_.factor)
       return { traite: true, valeur: null }
+    }
     case 'coquille:version':
       // `app.getVersion()` et non un `require` du package.json parent : celui-ci n'est
       // PAS dans le paquet, et l'appel echouait des le demarrage de l'AppImage alors
@@ -315,6 +342,23 @@ function traiterDansLaCoquille(commande, arguments_, fenetre) {
       return { traite: true, valeur: app.getVersion() }
     case 'coquille:nom':
       return { traite: true, valeur: 'Cockpit' }
+    case 'coquille:profils':
+      return {
+        traite: true,
+        valeur: {
+          courant: entree.nom,
+          profils: profils
+            .listerProfils(app.getPath('userData'))
+            .map((nom) => ({ nom, ouvert: fenetres.has(nom) }))
+        }
+      }
+    case 'coquille:ouvrir-profil': {
+      // Un nom invalide leve ici : l'appel est rejete avec la regle, que la page affiche.
+      const nom = arguments_.nom ?? null
+      if (nom !== null) profils.validerNom(nom)
+      ouvrirLaFenetre(nom)
+      return { traite: true, valeur: null }
+    }
     default:
       return { traite: false }
   }
@@ -354,12 +398,13 @@ async function ouvrirUnDialogue(commande, options, fenetre) {
   return options.multiple ? filePaths : filePaths[0]
 }
 
-function brancherLePont(fenetre) {
-  const backend = new Backend(cheminDuBackend())
+function brancherLePont(entree) {
+  const { fenetre } = entree
+  const backend = new Backend(cheminDuBackend(), entree.nom)
   // Ce que le backend pousse de lui-meme (sortie de terminal, fin de processus) emprunte
   // le meme chemin qu'un evenement emis dans la coquille : l'interface ne voit pas la
   // difference, et n'a pas a la voir.
-  backend.surEvenement = (nom, charge) => pousserEvenement(nom, charge, fenetre)
+  backend.surEvenement = (nom, charge) => pousserEvenement(nom, charge, entree)
   // **ON TAIT LE BACKEND DES QUE LA FENETRE PART, ET PAS SEULEMENT AU MOMENT D'ENVOYER.**
   // La garde de `pousserEvenement` protege ce chemin-la ; celle-ci protege TOUS ceux qu'on
   // ajouterait ensuite, parce que le backend n'a alors plus personne a qui parler. `close`
@@ -368,31 +413,62 @@ function brancherLePont(fenetre) {
     backend.surEvenement = () => {}
   })
   fenetre.on('closed', () => backend.arreter())
-
-  ipcMain.handle('cockpit:commande', async (_evenement, commande, arguments_) => {
-    const dansLaCoquille = traiterDansLaCoquille(commande, arguments_ ?? {}, fenetre)
-    if (dansLaCoquille.traite) return dansLaCoquille.valeur
-    if (commande === 'coquille:dialogue-ouvrir' || commande === 'coquille:dialogue-enregistrer') {
-      return ouvrirUnDialogue(commande, arguments_?.options ?? {}, fenetre)
-    }
-    // La mise a jour : les memes commandes que le plugin de Tauri, servies par
-    // electron-updater. L'interface ne voit aucune difference et n'a pas ete touchee.
-    const miseAJour = await traiterUneCommandeDeMiseAJour(
-      commande,
-      arguments_ ?? {},
-      (avancement) => pousserEvenement('maj:avancement', avancement, fenetre)
-    )
-    if (miseAJour.traite) return miseAJour.valeur
-    return backend.appeler(commande, arguments_ ?? {})
-  })
   return backend
 }
 
-function ouvrirLaFenetre() {
+/**
+ * **UN SEUL `handle` POUR TOUTES LES FENETRES**, route par la page qui appelle : chaque
+ * fenetre parle a SON backend.
+ */
+ipcMain.handle('cockpit:commande', async (evenement, commande, arguments_) => {
+  const entree = parPage.get(evenement.sender.id)
+  if (!entree) throw new Error(`commande ${commande} venue d'une page inconnue`)
+  const { fenetre, backend } = entree
+  const dansLaCoquille = traiterDansLaCoquille(commande, arguments_ ?? {}, entree)
+  if (dansLaCoquille.traite) return dansLaCoquille.valeur
+  if (commande === 'coquille:dialogue-ouvrir' || commande === 'coquille:dialogue-enregistrer') {
+    return ouvrirUnDialogue(commande, arguments_?.options ?? {}, fenetre)
+  }
+  // La mise a jour : les memes commandes que le plugin de Tauri, servies par
+  // electron-updater. L'interface ne voit aucune difference et n'a pas ete touchee.
+  const miseAJour = await traiterUneCommandeDeMiseAJour(
+    commande,
+    arguments_ ?? {},
+    (avancement) => pousserEvenement('maj:avancement', avancement, entree)
+  )
+  if (miseAJour.traite) return miseAJour.valeur
+  return backend.appeler(commande, arguments_ ?? {})
+})
+
+function ramener(fenetre) {
+  // Entre `close` et `closed` la fenetre est encore dans la table mais deja detruite :
+  // la ramener leverait sur `isMinimized`.
+  if (fenetre.isDestroyed()) return
+  if (fenetre.isMinimized()) fenetre.restore()
+  fenetre.focus()
+}
+
+/** Ouvre la fenetre d'un profil, ou ramene celle qui l'a deja. */
+function ouvrirLaFenetre(nom = null) {
+  const existante = fenetres.get(nom)
+  if (existante && !existante.fenetre.isDestroyed()) {
+    ramener(existante.fenetre)
+    return existante.fenetre
+  }
+  // Une entree dont la fenetre est deja detruite (entre `close` et `closed`) ne sert plus
+  // a rien : la garder ferait ramener un cadre mort au lieu d'en ouvrir un nouveau.
+  if (existante) fenetres.delete(nom)
+  // Cree ici et non par le backend : un profil tout juste cree doit deja figurer dans la
+  // liste que la page redemande.
+  fs.mkdirSync(profils.dossierDuProfil(app.getPath('userData'), nom), { recursive: true })
+  const partition = profils.partitionDuProfil(nom)
+  servirLaSession(partition ? session.fromPartition(partition) : session.defaultSession)
+
   const fenetre = new BrowserWindow({
     width: 1400,
     height: 900,
     show: false,
+    title: profils.titreDuProfil(nom),
     backgroundColor: '#1a1a1a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -400,8 +476,26 @@ function ouvrirLaFenetre() {
       // principal, et tourne dans le bac a sable de Chromium.
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      ...(partition ? { partition } : {})
     }
+  })
+  // Le titre dit le profil : celui que pose la page ne doit pas l'effacer.
+  fenetre.on('page-title-updated', (evenement) => evenement.preventDefault())
+
+  const entree = { nom, fenetre, backend: null, ecoutes: new Set() }
+  const idDeLaPage = fenetre.webContents.id
+  fenetres.set(nom, entree)
+  parPage.set(idDeLaPage, entree)
+  fenetre.on('focus', () => {
+    derniereActive = entree
+  })
+  fenetre.on('closed', () => {
+    // Une entree deja remplacee (fenetre detruite reouverte entre-temps pour ce meme
+    // profil) ne doit pas etre effacee ici : ce serait celle de la fenetre NEUVE.
+    if (fenetres.get(nom) === entree) fenetres.delete(nom)
+    parPage.delete(idDeLaPage)
+    if (derniereActive === entree) derniereActive = null
   })
 
   // Rien ne navigue hors de notre schema, et un lien externe part dans le NAVIGATEUR de
@@ -432,7 +526,7 @@ function ouvrirLaFenetre() {
   fenetre.webContents.on('render-process-gone', (_e, details) =>
     journaliser('coquille.rendu', `le rendu s'est arrete : ${details.reason} (${details.exitCode})`)
   )
-  const backend = brancherLePont(fenetre)
+  entree.backend = brancherLePont(entree)
   fenetre.loadURL(`${SCHEMA}://interface/`)
   if (process.env.COCKPIT_BANC_CAPTURE) armerLeBanc(fenetre)
   return fenetre
@@ -447,7 +541,6 @@ function ouvrirLaFenetre() {
  * ouvrir de fenetre sur l'ecran de quelqu'un.
  */
 function armerLeBanc(fenetre) {
-  const fs = require('node:fs')
   const destination = process.env.COCKPIT_BANC_CAPTURE
   const plaintes = []
   // Les erreurs de la page ne remontent pas dans stdout du processus principal : sans cet
@@ -490,20 +583,18 @@ app.setPath(
   )
 )
 
-// **UNE SEULE INSTANCE, ET CE N'EST PAS COSMETIQUE.** Deux Cockpit partagent la meme base
-// ET le meme service de terminaux. Tauri posait ce verrou ; sans lui ici, lancer cette
-// version pendant que l'ancienne tourne fait travailler deux applications sur les memes
-// donnees. Le verrou est pris AVANT tout le reste : plus tard, la seconde instance aurait
-// deja ouvert sa fenetre et parle au backend.
+// **UN SEUL PROCESSUS, ET CE N'EST PAS COSMETIQUE.** Deux Cockpit partagent la meme base ET
+// le meme service de terminaux. Tauri posait ce verrou ; sans lui ici, lancer cette version
+// pendant que l'ancienne tourne fait travailler deux applications sur les memes donnees. Le
+// verrou est pris AVANT tout le reste : plus tard, la seconde instance aurait deja ouvert sa
+// fenetre et parle au backend. Ce processus unique tient desormais une fenetre par profil.
 if (!app.requestSingleInstanceLock()) {
   app.exit(0)
 } else {
-  // Relancer depuis le bureau doit ramener la fenetre existante, pas ne rien faire.
+  // Relancer depuis le bureau doit ramener une fenetre existante, pas ne rien faire.
   app.on('second-instance', () => {
-    const [fenetre] = BrowserWindow.getAllWindows()
-    if (!fenetre) return
-    if (fenetre.isMinimized()) fenetre.restore()
-    fenetre.focus()
+    const cible = derniereActive ?? [...fenetres.values()].at(-1)
+    if (cible) ramener(cible.fenetre)
   })
 }
 
@@ -518,10 +609,9 @@ app.whenReady().then(() => {
     `demarrage ${app.getVersion()} — ${app.isPackaged ? 'paquet' : 'developpement'}, ` +
       `bac a sable ${process.argv.includes('--no-sandbox') ? 'DESACTIVE' : 'actif'}`
   )
-  servirInterface()
   ouvrirLaFenetre()
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) ouvrirLaFenetre()
+    if (fenetres.size === 0) ouvrirLaFenetre()
   })
 })
 

@@ -96,23 +96,46 @@ impl Default for TerminauxService {
     }
 }
 
-/// Le socket du service, avec un service PROPRE a une installation de developpement.
+/// Le socket du service, avec un service PROPRE a une installation de developpement ou a un
+/// profil nomme.
 ///
-/// `COCKPIT_TERMINAUX_SOCKET` l'emporte toujours. Sinon, `COCKPIT_DB` (mode developpement
-/// ou recette) donne son propre socket : sans cela, la reconciliation du demarrage verrait
-/// les terminaux de l'installation NORMALE comme des sessions orphelines — la base de
-/// developpement ne les connait pas — et les tuerait. C'est exactement le scenario qui a
-/// coute des sessions vieilles de plusieurs jours du temps de tmux, ou il fallait une
-/// exception en dur dans la purge.
+/// ORDRE : `COCKPIT_TERMINAUX_SOCKET` > `COCKPIT_DB` (mode developpement ou recette) > profil
+/// nomme > defaut (profil par defaut).
+///
+/// La raison : sans socket propre, la reconciliation d'un profil tuerait les terminaux de
+/// l'autre. Avant le profil, une base de developpement est prioritaire : c'est exactement le
+/// scenario qui a coute des sessions vieilles de plusieurs jours du temps de tmux, ou il
+/// fallait une exception en dur dans la purge.
 fn chemin_socket() -> Result<PathBuf, String> {
     let defaut = tuyau::chemin().map_err(|e| e.to_string())?;
-    if std::env::var_os(tuyau::VARIABLE_SOCKET).is_some() {
-        return Ok(defaut);
-    }
-    let Some(base) = std::env::var_os("COCKPIT_DB") else {
-        return Ok(defaut);
+    let dossier_profil = match crate::chemins::profil()? {
+        Some(_) => crate::chemins::calculer_le_dossier_de_donnees(),
+        None => None,
     };
-    Ok(defaut.with_file_name(format!("terminaux-{}.sock", empreinte(&base.to_string_lossy()))))
+    Ok(choisir_le_socket(
+        defaut,
+        std::env::var_os(tuyau::VARIABLE_SOCKET).is_some(),
+        std::env::var_os("COCKPIT_DB"),
+        dossier_profil,
+    ))
+}
+
+/// La regle de `chemin_socket`, separee de l'environnement pour etre testable.
+fn choisir_le_socket(
+    defaut: PathBuf,
+    force: bool,
+    base: Option<std::ffi::OsString>,
+    dossier_profil: Option<PathBuf>,
+) -> PathBuf {
+    if force {
+        return defaut;
+    }
+    let cle = match (base, dossier_profil) {
+        (Some(base), _) => base.to_string_lossy().into_owned(),
+        (None, Some(dossier)) => dossier.to_string_lossy().into_owned(),
+        (None, None) => return defaut,
+    };
+    defaut.with_file_name(format!("terminaux-{}.sock", empreinte(&cle)))
 }
 
 /// Une empreinte courte et stable d'un chemin, pour nommer un socket sans y recopier des
@@ -731,5 +754,46 @@ mod tests {
     #[test]
     fn l_empreinte_ne_contient_que_des_chiffres_hexadecimaux() {
         assert!(empreinte("/un/chemin/quelconque").chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn le_socket_force_l_emporte_sur_tout() {
+        let defaut = PathBuf::from("/run/c/terminaux.sock");
+        let choisi = choisir_le_socket(
+            defaut.clone(),
+            true,
+            Some("/tmp/x.db".into()),
+            Some(PathBuf::from("/d/profils/travail")),
+        );
+        assert_eq!(choisi, defaut);
+    }
+
+    #[test]
+    fn la_base_de_developpement_l_emporte_sur_le_profil() {
+        let defaut = PathBuf::from("/run/c/terminaux.sock");
+        let avec_base = choisir_le_socket(defaut.clone(), false, Some("/tmp/x.db".into()), None);
+        let avec_les_deux = choisir_le_socket(
+            defaut,
+            false,
+            Some("/tmp/x.db".into()),
+            Some(PathBuf::from("/d/profils/travail")),
+        );
+        assert_eq!(avec_base, avec_les_deux);
+    }
+
+    #[test]
+    fn un_profil_nomme_a_son_propre_socket() {
+        let defaut = PathBuf::from("/run/c/terminaux.sock");
+        let travail = choisir_le_socket(defaut.clone(), false, None, Some("/d/profils/travail".into()));
+        let perso = choisir_le_socket(defaut.clone(), false, None, Some("/d/profils/perso".into()));
+        assert_ne!(travail, defaut);
+        assert_ne!(travail, perso);
+        assert_eq!(travail.parent(), defaut.parent(), "meme dossier protege en 0700");
+    }
+
+    #[test]
+    fn le_profil_par_defaut_garde_le_socket_par_defaut() {
+        let defaut = PathBuf::from("/run/c/terminaux.sock");
+        assert_eq!(choisir_le_socket(defaut.clone(), false, None, None), defaut);
     }
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goHome, openSettings, openDocs, zoom, zoomIn, zoomOut, zoomReset, ZOOM_LEVELS, zoomPourcent } from "../../stores/ui";
   import { toggleBase } from "../../stores/appearance";
   import { unreadCount } from "../../stores/notifications";
@@ -6,6 +7,8 @@
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
   import BoutonCompte from "../compte/BoutonCompte.svelte";
   import JaugeConsommation from "./JaugeConsommation.svelte";
+  import { choixDeProfilOuvert, profilCourant, chargerLeProfilCourant } from "../../stores/profil";
+  import { signalerErreur } from "../../stores/errors";
 
   // Cloche TOUJOURS visible : c'est le point d'entree unique des notifications, l'utilisateur
   // ne doit pas avoir a fouiller les parametres pour savoir s'il y a du neuf. Le badge porte
@@ -16,6 +19,11 @@
   const zoomPercent = $derived(zoomPourcent($zoom));
   const atMin = $derived($zoom <= ZOOM_LEVELS[0]);
   const atMax = $derived($zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]);
+
+  // Le nom du profil ne change pas pendant la vie de la fenetre : lu une fois.
+  onMount(() => {
+    chargerLeProfilCourant().catch((e) => signalerErreur("entete.profil", String(e)));
+  });
 </script>
 
 <header>
@@ -42,6 +50,14 @@
       <button class="header-btn zoom-btn" onclick={zoomIn} disabled={atMax} aria-label={$trad("header.zoomIn")}>&#43;</button>
     </div>
     <button class="header-btn docs-btn" onclick={openDocs} title={$trad("header.docs")}>i</button>
+    <button
+      class="header-btn profil-btn"
+      onclick={() => choixDeProfilOuvert.set(true)}
+      title={$profilCourant ? `${$trad("header.profils")} — ${$profilCourant}` : $trad("header.profils")}
+      aria-label={$trad("header.profils")}
+    >
+      &#10697;{#if $profilCourant}<span class="profil-nom">{$profilCourant}</span>{/if}
+    </button>
     <button class="header-btn" onclick={openSettings} title={$trad("header.settings")}>&#9881;</button>
     <button class="header-btn" onclick={toggleBase} title={$trad("header.theme")}>&#9681;</button>
     <BoutonCompte />
@@ -96,4 +112,9 @@
     min-width: 3.4em; text-align: center; cursor: pointer; padding: 0;
   }
   .zoom-value:hover { color: var(--text-primary); }
+  .profil-btn { width: auto; gap: 0.35rem; padding: 0 0.5rem; }
+  .profil-nom {
+    font-size: 0.8rem; font-weight: 600;
+    max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
 </style>

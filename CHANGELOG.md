@@ -12,6 +12,14 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Fenêtres à profils isolés : ouvre autant de fenêtres que tu veux, chacune attachée à son
+  propre profil (ses données, ses terminaux et ses préférences UI). Le bouton ⧉ de l'en-tête
+  affiche le nom du profil courant ou te laisse en choisir un autre ; la palette (Ctrl+K) offre
+  un raccourci « Nouvelle fenêtre… ». Revenir sur un profil déjà ouvert ramène sa fenêtre au
+  premier plan.
+
 ## [0.91.1] — 2026-09-28
 
 ### Fixed
