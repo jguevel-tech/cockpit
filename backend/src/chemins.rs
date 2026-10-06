@@ -8,7 +8,7 @@
 //! mot pour expliquer pourquoi.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 /// Le dossier personnel de l'utilisateur courant.
@@ -54,11 +54,65 @@ fn resoudre_dossier_personnel(
 /// divergent EN SILENCE et le fichier cherche n'est jamais trouve.
 pub const IDENTIFIANT: &str = "com.cockpit.dev";
 
-/// Le dossier de donnees de l'application, calcule SANS Tauri.
+/// La variable qui designe le profil de ce processus. Absente ou vide : le profil par defaut.
 ///
-/// Pour les chemins qui servent AVANT que la fenetre existe — `rendu::decider()` tourne
-/// avant l'initialisation de GTK, donc avant tout `AppHandle` — et pour tout hote qui n'est
-/// pas Tauri, le pont compris.
+/// La coquille la pose sur le backend de chaque fenetre. Un profil nomme a son propre
+/// dossier de donnees, donc sa base, ses journaux et son service de terminaux.
+pub const VARIABLE_PROFIL: &str = "COCKPIT_PROFIL";
+
+/// La regle d'un nom de profil, la meme que `coquille/profils.js` et `src/lib/utils/profils.ts`.
+///
+/// Restreinte a dessein : le nom devient un nom de dossier et de partition Chromium, donc ni
+/// separateur, ni `..`, ni majuscule qu'un systeme de fichiers insensible a la casse
+/// confondrait.
+pub fn valider_nom_de_profil(nom: &str) -> Result<(), String> {
+    let mut caracteres = nom.chars();
+    let permis = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit();
+    let valide = nom.len() <= 32
+        && caracteres.next().is_some_and(permis)
+        && caracteres.all(|c| permis(c) || c == '-');
+    if valide {
+        Ok(())
+    } else {
+        Err(format!(
+            "nom de profil invalide « {nom} » : 1 a 32 caracteres parmi a-z, 0-9 et -, \
+             sans - au debut"
+        ))
+    }
+}
+
+/// Le profil de ce processus. `None` pour le profil par defaut.
+pub fn profil() -> Result<Option<String>, String> {
+    lire_profil(&|nom| std::env::var_os(nom))
+}
+
+/// La regle de `profil`, separee de l'environnement pour etre testable.
+fn lire_profil(lire: &dyn Fn(&str) -> Option<OsString>) -> Result<Option<String>, String> {
+    let Some(brut) = lire(VARIABLE_PROFIL) else { return Ok(None) };
+    let nom = brut
+        .into_string()
+        .map_err(|_| format!("{VARIABLE_PROFIL} n'est pas de l'UTF-8"))?;
+    if nom.is_empty() {
+        return Ok(None);
+    }
+    valider_nom_de_profil(&nom).map_err(|e| format!("{VARIABLE_PROFIL} : {e}"))?;
+    Ok(Some(nom))
+}
+
+/// Le dossier d'un profil sous la racine. Le profil par defaut EST la racine : les donnees
+/// d'avant les profils restent ou elles sont, sans migration.
+pub fn dossier_du_profil(racine: &Path, profil: Option<&str>) -> PathBuf {
+    match profil {
+        Some(nom) => racine.join("profils").join(nom),
+        None => racine.to_path_buf(),
+    }
+}
+
+/// La racine du dossier de donnees de l'application, commune a tous les profils.
+///
+/// Calcule SANS Tauri. Pour les chemins qui servent AVANT que la fenetre existe —
+/// `rendu::decider()` tourne avant l'initialisation de GTK, donc avant tout `AppHandle` —
+/// et pour tout hote qui n'est pas Tauri, le pont compris.
 ///
 /// **ELLE ETAIT SOUS `#[cfg(linux)]` ET CA A CASSE DEUX FOIS LA COMPILATION CROISEE**, le
 /// 2026-09-09, une fois dans le journal des terminaux et une fois dans le pont. Une
@@ -68,7 +122,7 @@ pub const IDENTIFIANT: &str = "com.cockpit.dev";
 /// L'alignement avec `app_data_dir()` n'est tenu par un essai que sous Linux, faute d'y
 /// pouvoir executer les deux autres. Les regles y sont celles des conventions du systeme,
 /// pas une mesure : `%APPDATA%` sous Windows, `~/Library/Application Support` sous macOS.
-pub fn calculer_le_dossier_de_donnees() -> Option<PathBuf> {
+pub fn calculer_la_racine_des_donnees() -> Option<PathBuf> {
     #[cfg(target_os = "linux")]
     {
         let base = std::env::var_os("XDG_DATA_HOME")
@@ -96,6 +150,16 @@ pub fn calculer_le_dossier_de_donnees() -> Option<PathBuf> {
             .or_else(|| dossier_personnel().ok().map(|d| d.join("AppData").join("Roaming")))?;
         Some(base.join(IDENTIFIANT))
     }
+}
+
+/// Le dossier de donnees de CE processus : la racine, plus celui du profil s'il y en a un.
+///
+/// `None` si le profil est invalide : l'hote doit alors appeler `profil()` pour dire
+/// pourquoi, plutot que d'ouvrir une base ailleurs.
+pub fn calculer_le_dossier_de_donnees() -> Option<PathBuf> {
+    let racine = calculer_la_racine_des_donnees()?;
+    let profil = profil().ok()?;
+    Some(dossier_du_profil(&racine, profil.as_deref()))
 }
 
 /// Le dossier de donnees de l'application, memorise au demarrage.
@@ -212,14 +276,66 @@ mod tests {
 
         std::env::set_var("XDG_DATA_HOME", "/tmp/essai-donnees");
         assert_eq!(
-            calculer_le_dossier_de_donnees(),
+            calculer_la_racine_des_donnees(),
             Some(PathBuf::from("/tmp/essai-donnees").join(IDENTIFIANT))
         );
         std::env::remove_var("XDG_DATA_HOME");
-        let sans_xdg = calculer_le_dossier_de_donnees().expect("chemin sans XDG_DATA_HOME");
+        let sans_xdg = calculer_la_racine_des_donnees().expect("chemin sans XDG_DATA_HOME");
         assert!(
             sans_xdg.ends_with(IDENTIFIANT) && sans_xdg.to_string_lossy().contains(".local/share"),
             "chemin inattendu sans XDG_DATA_HOME : {sans_xdg:?}"
+        );
+    }
+
+    #[test]
+    fn les_noms_de_profil_valides_sont_acceptes() {
+        let long = "a".repeat(32);
+        for nom in ["travail", "a", "perso-2", "0", long.as_str()] {
+            assert!(valider_nom_de_profil(nom).is_ok(), "{nom}");
+        }
+    }
+
+    #[test]
+    fn les_noms_de_profil_invalides_sont_refuses_et_la_regle_est_citee() {
+        let trop_long = "a".repeat(33);
+        for nom in ["", "-a", "Perso", "a b", "a/b", "..", "é", trop_long.as_str()] {
+            let erreur = valider_nom_de_profil(nom).unwrap_err();
+            assert!(erreur.contains("a-z"), "« {erreur} » ne cite pas la regle");
+        }
+    }
+
+    #[test]
+    fn sans_variable_le_profil_est_celui_par_defaut() {
+        assert_eq!(lire_profil(&faux(&[])).unwrap(), None);
+        assert_eq!(lire_profil(&faux(&[("COCKPIT_PROFIL", "")])).unwrap(), None);
+    }
+
+    #[test]
+    fn la_variable_designe_le_profil() {
+        assert_eq!(
+            lire_profil(&faux(&[("COCKPIT_PROFIL", "travail")])).unwrap().as_deref(),
+            Some("travail")
+        );
+    }
+
+    #[test]
+    fn un_profil_invalide_est_une_erreur_qui_nomme_la_variable() {
+        let erreur = lire_profil(&faux(&[("COCKPIT_PROFIL", "../x")])).unwrap_err();
+        assert!(erreur.contains("COCKPIT_PROFIL"), "{erreur}");
+    }
+
+    #[test]
+    fn le_profil_par_defaut_garde_la_racine() {
+        let racine = PathBuf::from("/d/com.cockpit.dev");
+        assert_eq!(dossier_du_profil(&racine, None), racine);
+    }
+
+    #[test]
+    fn un_profil_nomme_vit_sous_profils() {
+        let racine = PathBuf::from("/d/com.cockpit.dev");
+        assert_eq!(
+            dossier_du_profil(&racine, Some("travail")),
+            PathBuf::from("/d/com.cockpit.dev/profils/travail")
         );
     }
 }

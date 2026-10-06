@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::time::Duration;
 use tokio::process::Command;
 
+pub mod branches;
 pub mod depart;
 pub mod worktree;
 

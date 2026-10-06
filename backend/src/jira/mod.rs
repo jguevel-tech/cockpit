@@ -282,23 +282,67 @@ pub struct Demarrage {
     pub erreur_transition: Option<String>,
 }
 
-#[commande]
-pub async fn jira_demarrer(state: &crate::AppState, projet: String, cle: String) -> Result<Demarrage, String> {
-    let jira = Jira::depuis(&state.db)?;
-    let nom = crate::resolve_db_project_name(state, &projet).await;
+/// Le dossier du depot et la liaison d'un projet Cockpit.
+async fn depot_et_liaison(state: &crate::AppState, projet: &str) -> Result<(String, LiaisonJira), String> {
+    let nom = crate::resolve_db_project_name(state, projet).await;
     let depot = state.db.get_project_by_name(&nom)?.path;
     if depot.trim().is_empty() {
         return Err(format!("le projet {projet} n'a pas de dossier sur cette machine"));
     }
-    let liaison = config::liaison(&state.db, &nom)?;
-    let ticket = lire_le_ticket(&jira, &cle).await?.ticket;
-    let branche = branche::nom_de_branche(
+    Ok((depot, config::liaison(&state.db, &nom)?))
+}
+
+fn branche_du_ticket(state: &crate::AppState, liaison: &LiaisonJira, ticket: &Ticket) -> String {
+    branche::nom_de_branche(
         &liaison.gabarit,
         &ticket.cle,
         &ticket.type_ticket,
         &ticket.resume,
         &config::types_branche(&state.db),
-    );
+    )
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct BrancheJira {
+    pub nom: String,
+    /// Vide : branche sans ticket.
+    pub cles: Vec<String>,
+}
+
+/// Les branches locales du projet et les tickets qu'elles citent. Pas d'appel a Jira : un
+/// ticket cite mais absent de mes tickets (assigne a un autre) compte quand meme.
+#[commande]
+pub async fn jira_branches(state: &crate::AppState, projet: String) -> Result<Vec<BrancheJira>, String> {
+    let (depot, liaison) = depot_et_liaison(state, &projet).await?;
+    Ok(crate::gitdiff::branches::lister(&depot)
+        .await?
+        .into_iter()
+        .map(|nom| BrancheJira { cles: branche::cles_dans(&nom, &liaison.cles), nom })
+        .collect())
+}
+
+/// Renomme une branche d'apres le gabarit du ticket, et rend le nouveau nom. Locale
+/// seulement : une branche deja poussee garde son ancien nom sur le depot distant.
+#[commande]
+pub async fn jira_renommer_branche(
+    state: &crate::AppState,
+    projet: String,
+    branche: String,
+    cle: String,
+) -> Result<String, String> {
+    let (depot, liaison) = depot_et_liaison(state, &projet).await?;
+    let ticket = lire_le_ticket(&Jira::depuis(&state.db)?, &cle).await?.ticket;
+    let nouvelle = branche_du_ticket(state, &liaison, &ticket);
+    crate::gitdiff::branches::renommer(&depot, &branche, &nouvelle).await?;
+    Ok(nouvelle)
+}
+
+#[commande]
+pub async fn jira_demarrer(state: &crate::AppState, projet: String, cle: String) -> Result<Demarrage, String> {
+    let jira = Jira::depuis(&state.db)?;
+    let (depot, liaison) = depot_et_liaison(state, &projet).await?;
+    let ticket = lire_le_ticket(&jira, &cle).await?.ticket;
+    let branche = branche_du_ticket(state, &liaison, &ticket);
     let depart = crate::gitdiff::depart::partir_de_la_base(&depot, &branche).await?;
     let (transition, erreur_transition) = passer_en_cours(&jira, &ticket).await;
     Ok(Demarrage { branche, creee: depart.creee, base: depart.base, transition, erreur_transition })

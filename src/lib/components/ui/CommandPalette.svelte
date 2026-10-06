@@ -20,6 +20,7 @@
   import type { ProjectCommand, SearchNameHit } from "../../types";
   import { trad, translate } from "../../i18n";
   import { signalerErreur } from "../../stores/errors";
+  import { choixDeProfilOuvert } from "../../stores/profil";
 
   let open = $state(false);
   let query = $state("");
@@ -99,6 +100,7 @@
       { section: $trad("palette.sectionViews"), label: $trad("palette.dashTerminals"), run: () => { openView("dashboard"); dashboardView.set("terminals"); } },
       { section: $trad("palette.sectionViews"), label: $trad("palette.dashContainers"), run: () => { openView("dashboard"); dashboardView.set("containers"); } },
       { section: $trad("palette.sectionViews"), label: $trad("settings.title"), run: () => openView("settings") },
+      { section: $trad("palette.sectionViews"), label: $trad("palette.newWindow"), run: () => choixDeProfilOuvert.set(true) },
     ];
     out.push(...views.filter((v) => match(v.label)));
 

@@ -6,7 +6,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { grouperParCategorie, liaisonDuTicket, clesDuFiltre } from "../../src/lib/jira/tickets.ts";
+import { grouperParCategorie, liaisonDuTicket, clesDuFiltre, rapprocher, resumeDeBranche } from "../../src/lib/jira/tickets.ts";
 
 const ticket = (cle, categorie_statut) => ({
   cle, resume: "", description: "", statut: "", categorie_statut, type_ticket: "Bug",
@@ -33,4 +33,24 @@ test("sans filtre on demande tout, un projet sans cle ne demande rien", () => {
   assert.equal(clesDuFiltre("", liaisons), null);
   assert.deepEqual(clesDuFiltre("site", liaisons), ["PROJ", "ABC"]);
   assert.deepEqual(clesDuFiltre("inconnu", liaisons), []);
+});
+
+test("les branches sont rangees par ticket, celles sans cle a part", () => {
+  const r = rapprocher({
+    site: [
+      { nom: "fix/CCM-1/a", cles: ["CCM-1"] },
+      { nom: "fix/CCM-1/b", cles: ["CCM-1"] },
+      { nom: "essai", cles: [] },
+    ],
+    outil: [{ nom: "OUT-2_CCM-1", cles: ["OUT-2", "CCM-1"] }],
+  });
+  assert.deepEqual(r.parTicket["CCM-1"], ["fix/CCM-1/a", "fix/CCM-1/b", "OUT-2_CCM-1"]);
+  assert.deepEqual(r.parTicket["OUT-2"], ["OUT-2_CCM-1"]);
+  assert.deepEqual(r.orphelines, [{ projet: "site", nom: "essai" }]);
+});
+
+test("le resume d'une branche vient de son dernier segment", () => {
+  assert.equal(resumeDeBranche("feature/refonte-login"), "Refonte login");
+  assert.equal(resumeDeBranche("essai__rapide"), "Essai rapide");
+  assert.equal(resumeDeBranche("feature/"), "");
 });

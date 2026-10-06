@@ -41,6 +41,9 @@ export interface DemarrageJira {
   erreur_transition: string | null;
 }
 
+/** Une branche locale et les tickets qu'elle cite ; `cles` vide : branche sans ticket. */
+export interface BrancheJira { nom: string; cles: string[] }
+
 export const jiraConfig = () => invoke<ConfigJira>("jira_config");
 export const jiraPoserConfig = (
   url: string,
@@ -68,3 +71,6 @@ export const jiraTypesTicket = (cleProjet: string) => invoke<TypeTicketJira[]>("
 export const jiraCreerTicket = (cleProjet: string, typeId: string, resume: string, description: string | null) =>
   invoke<string>("jira_creer_ticket", { cleProjet, typeId, resume, description });
 export const jiraDemarrer = (projet: string, cle: string) => invoke<DemarrageJira>("jira_demarrer", { projet, cle });
+export const jiraBranches = (projet: string) => invoke<BrancheJira[]>("jira_branches", { projet });
+export const jiraRenommerBranche = (projet: string, branche: string, cle: string) =>
+  invoke<string>("jira_renommer_branche", { projet, branche, cle });

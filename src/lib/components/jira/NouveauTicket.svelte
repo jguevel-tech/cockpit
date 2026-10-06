@@ -2,16 +2,23 @@
   /**
    * Creer un ticket qui m'est assigne. Les types se chargent quand la cle de projet est
    * validee (sortie du champ), pas a chaque frappe : « C », « CC » ne sont pas des projets.
+   * `depuisBranche` : le ticket d'une branche qui n'en a pas ; on propose alors de la renommer
+   * d'apres lui, et non d'en demarrer une autre.
    */
   import { onMount } from "svelte";
   import Modal from "../ui/Modal.svelte";
   import { trad } from "../../i18n";
   import { notify } from "../../stores/toast";
-  import { jiraTypesTicket, jiraCreerTicket, jiraDemarrer, type LiaisonJira, type TypeTicketJira } from "../../api/jira";
+  import {
+    jiraTypesTicket, jiraCreerTicket, jiraDemarrer, jiraRenommerBranche,
+    type LiaisonJira, type TypeTicketJira,
+  } from "../../api/jira";
+  import { resumeDeBranche, type BrancheOrpheline } from "../../jira/tickets";
 
-  let { liaisons, cleParDefaut, onClose, onCree }: {
+  let { liaisons, cleParDefaut, depuisBranche = null, onClose, onCree }: {
     liaisons: LiaisonJira[];
     cleParDefaut: string;
+    depuisBranche?: BrancheOrpheline | null;
     onClose: () => void;
     onCree: (cle: string) => void;
   } = $props();
@@ -22,6 +29,7 @@
   let resume = $state("");
   let description = $state("");
   let demarrerAussi = $state(false);
+  let renommer = $state(true);
   let occupe = $state(false);
 
   const clesConnues = $derived([...new Set(liaisons.flatMap((l) => l.cles))]);
@@ -30,6 +38,7 @@
 
   onMount(() => {
     cleProjet = cleParDefaut;
+    if (depuisBranche) resume = resumeDeBranche(depuisBranche.nom);
     if (cleProjet) void chargerTypes();
   });
 
@@ -60,8 +69,15 @@
       occupe = false;
       return;
     }
-    // Le ticket existe : un echec du demarrage ne doit pas le faire oublier.
-    if (demarrerAussi && liaisonDuProjet) {
+    // Le ticket existe : un echec du renommage ou du demarrage ne doit pas le faire oublier.
+    if (depuisBranche && renommer) {
+      try {
+        const branche = await jiraRenommerBranche(depuisBranche.projet, depuisBranche.nom, cle);
+        notify($trad("jira.brancheRenommee", { branche }), "success");
+      } catch (e) {
+        notify(String(e));
+      }
+    } else if (!depuisBranche && demarrerAussi && liaisonDuProjet) {
       try {
         const d = await jiraDemarrer(liaisonDuProjet.projet, cle);
         notify($trad(d.creee ? "jira.brancheCreee" : "jira.brancheReprise", { branche: d.branche }), "success");
@@ -98,7 +114,12 @@
       <span class="field-label">{$trad("jira.creation.description")}</span>
       <textarea class="input" rows="5" bind:value={description}></textarea>
     </label>
-    {#if liaisonDuProjet}
+    {#if depuisBranche}
+      <label class="case">
+        <input type="checkbox" bind:checked={renommer} />
+        {$trad("jira.creation.renommer", { branche: depuisBranche.nom })}
+      </label>
+    {:else if liaisonDuProjet}
       <label class="case">
         <input type="checkbox" bind:checked={demarrerAussi} />
         {$trad("jira.creation.demarrer")}

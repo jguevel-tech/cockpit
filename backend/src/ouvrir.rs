@@ -31,3 +31,27 @@ pub fn adresse(url: &str) -> Result<(), String> {
         .map(|_| ())
         .map_err(|e| format!("{programme} : {e}"))
 }
+
+/// Ouvre un dossier dans PhpStorm. Le lanceur doit etre dans le PATH (`phpstorm`, cree par
+/// la Toolbox ou le snap) ; sous macOS, c'est l'application qui est cherchee par son nom.
+pub fn phpstorm(dossier: &str) -> Result<(), String> {
+    use crate::commande::SansConsole;
+    let mut commande = if cfg!(target_os = "macos") {
+        let mut c = std::process::Command::new("open");
+        c.args(["-na", "PhpStorm.app", "--args"]);
+        c
+    } else if cfg!(target_os = "windows") {
+        // Le lanceur de la Toolbox est un `.cmd` : seul cmd sait le trouver par le PATH.
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "phpstorm"]);
+        c
+    } else {
+        std::process::Command::new("phpstorm")
+    };
+    commande
+        .sans_console()
+        .arg(dossier)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("PhpStorm : {e}"))
+}

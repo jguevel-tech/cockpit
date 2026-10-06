@@ -28,6 +28,7 @@ export const listAllTerminals = () => invoke<TerminalInfo[]>("list_all_terminals
 /// on travaille, quel que soit son projet.
 export const reorderTerminals = (ids: number[]) => invoke("reorder_terminals", { ids });
 export const openUrl = (url: string) => invoke("open_url", { url });
+export const ouvrirPhpstorm = (projet: string) => invoke("ouvrir_phpstorm", { projet });
 
 export const recordCommand = (project: string, command: string) =>
   invoke("record_command", { project, command });

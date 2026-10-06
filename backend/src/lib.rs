@@ -1654,6 +1654,13 @@ fn open_url(url: String) -> Result<(), String> {
     ouvrir::adresse(&url)
 }
 
+/// Ouvre le dossier du projet dans PhpStorm. Le chemin vient de la base, jamais du client.
+#[commande]
+fn ouvrir_phpstorm(state: &AppState, projet: String) -> Result<(), String> {
+    let chemin = state.db.get_project_by_name(&projet)?.path;
+    ouvrir::phpstorm(&chemin)
+}
+
 
 /// La logique de `report_error`, appelable par tout hote.
 ///

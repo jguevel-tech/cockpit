@@ -9,9 +9,11 @@
     type DetailTicketJira, type LiaisonJira, type TransitionJira,
   } from "../../api/jira";
 
-  let { cle, liaison, onClose, onChange }: {
+  let { cle, liaison, branches = null, onClose, onChange }: {
     cle: string;
     liaison: LiaisonJira | null;
+    /** Branches locales qui citent ce ticket ; `null` : inconnu. */
+    branches?: string[] | null;
     onClose: () => void;
     onChange: () => void;
   } = $props();
@@ -128,6 +130,10 @@
       {#if liaison}
         <button class="btn primary" disabled={occupe} onclick={demarrer}>{$trad("jira.demarrer")}</button>
         {#if apercu}<code>{apercu}</code>{/if}
+        {#if branches}
+          <span class="field-label">{$trad("jira.branchesDuTicket", { n: branches.length })}</span>
+          {#each branches as b (b)}<code>{b}</code>{/each}
+        {/if}
       {:else}
         <p class="field-hint">{$trad("jira.demarrerSansProjet")}</p>
       {/if}

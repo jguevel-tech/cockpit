@@ -1089,6 +1089,13 @@ pub async fn appeler(
             )?))
         })
         .await,
+        "ouvrir_phpstorm" => typer(async {
+            valeur(serde_json::to_value(crate::ouvrir_phpstorm(etat,
+                serde_json::from_value(prendre(a, "projet", "projet"))
+                    .map_err(|e| format!("argument projet : {e}"))?,
+            )?))
+        })
+        .await,
         "report_error" => typer(async {
             valeur(serde_json::to_value(crate::report_error(etat,
                 serde_json::from_value(prendre(a, "scope", "scope"))
@@ -1790,6 +1797,24 @@ pub async fn appeler(
                     .map_err(|e| format!("argument resume : {e}"))?,
                 serde_json::from_value(prendre(a, "description", "description"))
                     .map_err(|e| format!("argument description : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "jira_branches" => typer(async {
+            valeur(serde_json::to_value(crate::jira::jira_branches(etat,
+                serde_json::from_value(prendre(a, "projet", "projet"))
+                    .map_err(|e| format!("argument projet : {e}"))?,
+            ).await?))
+        })
+        .await,
+        "jira_renommer_branche" => typer(async {
+            valeur(serde_json::to_value(crate::jira::jira_renommer_branche(etat,
+                serde_json::from_value(prendre(a, "projet", "projet"))
+                    .map_err(|e| format!("argument projet : {e}"))?,
+                serde_json::from_value(prendre(a, "branche", "branche"))
+                    .map_err(|e| format!("argument branche : {e}"))?,
+                serde_json::from_value(prendre(a, "cle", "cle"))
+                    .map_err(|e| format!("argument cle : {e}"))?,
             ).await?))
         })
         .await,

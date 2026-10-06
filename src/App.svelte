@@ -7,6 +7,8 @@
   import SaisieDialog from "./lib/components/ui/SaisieDialog.svelte";
   import CommandPalette from "./lib/components/ui/CommandPalette.svelte";
   import EcranConnexion from "./lib/components/compte/EcranConnexion.svelte";
+  import FenetreProfil from "./lib/components/layout/FenetreProfil.svelte";
+  import { choixDeProfilOuvert } from "./lib/stores/profil";
   import { reportingConsent, loadReportingSettings, setReportingConsent } from "./lib/stores/errors";
   import { chargerCompte, demarrerLaSynchro } from "./lib/stores/compte";
   import { getAppSettings, setAppSetting } from "./lib/api/recorder";
@@ -153,6 +155,7 @@
   <Toast />
   <ConfirmDialog />
   <SaisieDialog />
+  {#if $choixDeProfilOuvert}<FenetreProfil />{/if}
   <CommandPalette />
   {#if accueilOuvert}
     <EcranConnexion onClose={fermerLAccueil} />

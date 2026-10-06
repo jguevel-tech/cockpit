@@ -78,6 +78,21 @@ pub fn nom_de_branche(gabarit: &str, cle: &str, type_ticket: &str, resume: &str,
         .replace("{slug}", &s)
 }
 
+/// Les cles de ticket citees dans un nom de branche, limitees aux projets Jira lies : sans ce
+/// filtre, `utf-8` ou `v-2` ne passent pas, mais `PR-12` d'un autre outil passerait.
+pub fn cles_dans(nom: &str, cles_projets: &[String]) -> Vec<String> {
+    static MOTIF: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"(?:^|[^A-Za-z0-9])([A-Z][A-Z0-9_]*)-([0-9]+)").unwrap());
+    let mut cles: Vec<String> = Vec::new();
+    for c in MOTIF.captures_iter(nom) {
+        let cle = format!("{}-{}", &c[1], &c[2]);
+        if cles_projets.iter().any(|p| p == &c[1]) && !cles.contains(&cle) {
+            cles.push(cle);
+        }
+    }
+    cles
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +142,29 @@ mod tests {
     fn un_gabarit_vide_prend_le_gabarit_par_defaut() {
         let c = correspondance_par_defaut();
         assert_eq!(nom_de_branche("  ", "ABC-1", "Task", "Truc", &c), "feature/ABC-1/truc");
+    }
+
+    #[test]
+    fn trouve_la_cle_du_gabarit() {
+        let p = vec!["CCM".to_string()];
+        assert_eq!(cles_dans("fix/tl/CCM-1234/correction-login", &p), vec!["CCM-1234"]);
+    }
+
+    #[test]
+    fn ignore_les_projets_non_lies_et_les_minuscules() {
+        let p = vec!["CCM".to_string()];
+        assert!(cles_dans("feature/PR-12/ccm-3-truc", &p).is_empty());
+    }
+
+    #[test]
+    fn une_cle_collee_a_un_mot_n_en_est_pas_une() {
+        let p = vec!["CCM".to_string()];
+        assert!(cles_dans("feature/XCCM-12", &p).is_empty());
+    }
+
+    #[test]
+    fn plusieurs_cles_sans_doublon() {
+        let p = vec!["CCM".to_string(), "ABC".to_string()];
+        assert_eq!(cles_dans("CCM-1_ABC-2/CCM-1", &p), vec!["CCM-1", "ABC-2"]);
     }
 }

@@ -2,7 +2,7 @@
   import { projects } from "../../stores/projects";
   import { selectedProject, selectProject, activeTab, pendingTerminalId } from "../../stores/ui";
   import { terminals, loadTerminals } from "../../stores/terminals";
-  import { renameTerminal, closeTerminal, reorderTerminals } from "../../api/workspace";
+  import { renameTerminal, closeTerminal, reorderTerminals, ouvrirPhpstorm } from "../../api/workspace";
   import type { TerminalInfo } from "../../types";
   import { reorderProjects, getProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, reorderProjectFolders, moveProjectFolder, moveProjectToFolder } from "../../api/scanner";
   import { loadProjects, renommerProjet } from "../../stores/projects";
@@ -542,6 +542,7 @@
      drop, la garder paresseuse conserve exactement ce comportement. -->
 {#snippet ligneProjet(proj: Project, liste: () => Project[], profondeur: number)}
   <li
+    class="project-row"
     draggable="true"
     ondragstart={(e) => onProjectDragStart(e, proj.name)}
     ondragover={(e) => onProjectDragOver(e, proj.name)}
@@ -587,6 +588,13 @@
           {/if}
         </div>
       </button>
+      <!-- Hors du bouton du projet : un bouton ne se niche pas dans un autre. -->
+      <button
+        class="project-ide"
+        title={$trad("sidebar.openPhpstorm")}
+        aria-label={$trad("sidebar.openPhpstorm")}
+        onclick={() => ouvrirPhpstorm(proj.name).catch((e) => notify(String(e), "error", 4000, { scope: "projet.phpstorm" }))}
+      >PS</button>
     {/if}
   </li>
 {/snippet}
@@ -996,6 +1004,16 @@
     border-bottom: 1px solid var(--border-color);
   }
   .project-item:hover { background: var(--bg-tertiary); }
+  .project-row { position: relative; }
+  .project-ide {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    padding: 0.1rem 0.3rem; border: 1px solid var(--border-color); border-radius: 3px;
+    background: var(--bg-secondary); color: var(--text-muted);
+    font-size: 0.65rem; font-weight: 700; cursor: pointer;
+    opacity: 0; transition: opacity 0.1s ease;
+  }
+  .project-row:hover .project-ide, .project-ide:focus-visible { opacity: 1; }
+  .project-ide:hover { color: var(--accent); border-color: var(--accent); }
   /* Meme boite pendant la saisie : la ligne ne saute pas quand on entre en renommage. */
   .project-item.renaming { flex-direction: row; align-items: center; gap: 0.5rem; cursor: default; }
   .project-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }

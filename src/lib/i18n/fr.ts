@@ -110,6 +110,7 @@ export const fr = {
   "header.docs": "Documentation — toutes les fonctionnalités en exemples",
   "header.settings": "Paramètres",
   "header.theme": "Changer le thème",
+  "header.profils": "Fenêtres et profils",
 
   // Colonne de gauche
   "sidebar.terminals": "Terminaux",
@@ -130,6 +131,7 @@ export const fr = {
   "sidebar.containers.one": "{n} conteneur",
   "sidebar.containers.other": "{n} conteneurs",
   "sidebar.projectHint": "Ouvrir ce projet — double-clic ou clic droit pour le renommer",
+  "sidebar.openPhpstorm": "Ouvrir dans PhpStorm",
   "sidebar.projectNamePlaceholder": "Nom du projet",
   "sidebar.folderHint": "Clic pour replier ou déplier — double-clic pour renommer, clic droit pour le menu, glisser pour ranger ailleurs",
   "sidebar.folderCount.one": "{n} projet dans ce dossier et ses sous-dossiers",
@@ -745,7 +747,7 @@ export const fr = {
   "docs.menu.jira": "Jira",
   "docs.jira.heading": "Jira",
   "docs.jira.connexion": "Cockpit se connecte à ta <strong>Jira Cloud</strong> (e-mail du compte et jeton d'API) ou à ta <strong>Jira Server / Data Center</strong> (jeton d'accès personnel), dans Réglages → Jira. Il reconnaît Cloud à son adresse en <strong>atlassian.net</strong>. L'adresse doit commencer par <strong>https://</strong> : le jeton part à chaque requête et ne doit pas circuler en clair. Il reste sur cette machine et ne voyage pas avec ton compte.",
-  "docs.jira.tickets": "Le tableau de bord et l'onglet d'un projet listent <strong>tes tickets assignés</strong>, filtrés sur les clés Jira du projet (Paramètres du projet). Change un statut, commente, saisis du temps ou crée un ticket. <strong>Démarrer</strong> crée la branche du ticket depuis <strong>main</strong> à jour, nommée selon le gabarit du projet, et passe le ticket en cours. Il refuse si des fichiers suivis sont modifiés.",
+  "docs.jira.tickets": "Le tableau de bord et l'onglet d'un projet listent <strong>tes tickets assignés</strong>, filtrés sur les clés Jira du projet (Paramètres du projet). Change un statut, commente, saisis du temps ou crée un ticket. <strong>Démarrer</strong> crée la branche du ticket depuis <strong>main</strong> à jour, nommée selon le gabarit du projet, et passe le ticket en cours. Il refuse si des fichiers suivis sont modifiés. Chaque ticket montre ses <strong>branches locales</strong> (celles dont le nom contient sa clé) ; <strong>+ Branche</strong> la crée s'il n'en a pas. La carte <strong>Branches sans ticket</strong> liste les autres : <strong>Créer un ticket</strong> crée le ticket et renomme la branche d'après le gabarit.",
   "docs.jira.demoCle": "PROJ-1234",
   "docs.jira.demoResume": "Corriger l'export des factures",
   "docs.jira.demoBranche": "fix/PROJ-1234/corriger-l-export-des-factures",
@@ -949,6 +951,7 @@ export const fr = {
   "palette.dashMonitoring": "Tableau de bord — Monitoring",
   "palette.dashTerminals": "Tableau de bord — Terminaux",
   "palette.dashContainers": "Tableau de bord — Conteneurs",
+  "palette.newWindow": "Nouvelle fenêtre…",
   "settings.ia.title": "Fournisseurs d'IA",
   "settings.ia.retourListe": "Tous les agents",
   "settings.ia.section.consignes": "Consignes",
@@ -1192,6 +1195,24 @@ export const fr = {
   "jira.creation.demarrer": "Démarrer tout de suite",
   "jira.creation.creer": "Créer",
   "jira.ticketCree": "Ticket {cle} créé",
+  "jira.sansBranche": "Ce ticket n'a pas de branche locale",
+  "jira.creerBranche": "+ Branche",
+  "jira.branchesSansTicket": "Branches sans ticket",
+  "jira.aucuneOrpheline": "Toutes les branches ont leur ticket.",
+  "jira.creerTicket": "Créer un ticket",
+  "jira.branchesDuTicket": "Branches ({n})",
+  "jira.brancheRenommee": "Branche renommée en {branche} (localement : une branche déjà poussée garde son ancien nom sur le dépôt distant)",
+  "jira.creation.renommer": "Renommer {branche} d'après le ticket",
+
+  // Fenetres a profil
+  "profils.titre": "Ouvrir une fenêtre",
+  "profils.defaut": "Par défaut",
+  "profils.courant": "cette fenêtre",
+  "profils.ouvert": "ouvert",
+  "profils.nouveau": "Nouveau profil",
+  "profils.nouveauPlaceholder": "nom-du-profil",
+  "profils.creer": "Créer et ouvrir",
+  "profils.regle": "1 à 32 caractères : a-z, 0-9 et -, sans - au début.",
 } as const;
 
 /** Cles disponibles pour la traduction : le francais fait foi. */
