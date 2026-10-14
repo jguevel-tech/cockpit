@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-14
+
 ### Added
 
 - Notes : un champ au-dessus de la liste cherche un mot dans le nom et le texte de toutes les
