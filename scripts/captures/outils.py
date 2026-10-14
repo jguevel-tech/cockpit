@@ -240,7 +240,11 @@ def taper(texte: str, entree: bool = True) -> None:
 
     d = _ecran()
     noms = {" ": "space", "-": "minus", ".": "period", "/": "slash", "@": "at",
-            ":": "colon", "_": "underscore", "\n": "Return"}
+            ":": "colon", "_": "underscore", "\n": "Return",
+            # Sans leur nom X, ces symboles etaient sautes EN SILENCE : « ```yaml » arrivait
+            # « yaml », et l'on croyait l'editeur fautif.
+            "`": "grave", "{": "braceleft", "}": "braceright", '"': "quotedbl", ",": "comma",
+            ";": "semicolon", "=": "equal"}
 
     def touche(car: str):
         sym = XK.string_to_keysym(noms.get(car, car))

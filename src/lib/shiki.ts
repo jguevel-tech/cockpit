@@ -56,7 +56,13 @@ function getHighlighter(): Promise<Highlighter> {
     // quel script de la page de compiler du code. Le moteur JavaScript traduit les grammaires
     // en expressions regulieres natives : les 32 langages ci-dessus passent (verifie le
     // 2026-09-28), et il n'y a plus de fichier .wasm a embarquer.
-    engine: createJavaScriptRegexEngine(),
+    //
+    // **CIBLE ES2024, PAS « auto ».** Le V8 de Chromium 140 sait les modificateurs de regex
+    // (`(?i:…)`), donc « auto » les lui confie, et il rate alors les motifs insensibles a la
+    // casse : `SELECT` restait sans couleur quand `select` en prenait une (mesure le
+    // 2026-10-14 avec le V8 d'Electron). Node 22 ne les sait pas, donc un essai sous node
+    // passait. En ES2024, le moteur emule la casse lui-meme et les deux V8 rendent pareil.
+    engine: createJavaScriptRegexEngine({ target: "ES2024" }),
   }));
 }
 
@@ -75,5 +81,23 @@ export async function highlightCode(code: string, lang: string, dark: boolean): 
   } catch (e) {
       signalerErreur("shiki.highlightCode", String(e));
     return `<pre class="shiki"><code>${escapeHtml(code)}</code></pre>`;
+  }
+}
+
+/** Jetons colores d'un bout de code, ou null si le langage n'est pas embarque. */
+export async function jetonsDuCode(
+  code: string,
+  lang: string,
+  dark: boolean,
+): Promise<{ lignes: { content: string; color?: string }[][]; couleurParDefaut?: string } | null> {
+  const h = await getHighlighter();
+  // Un langage inconnu est une saisie ordinaire (« ```truc »), pas une panne : pas de signalement.
+  if (!h.getLoadedLanguages().includes(lang)) return null;
+  try {
+    const r = h.codeToTokens(code, { lang, theme: dark ? "github-dark" : "github-light" });
+    return { lignes: r.tokens, couleurParDefaut: r.fg };
+  } catch (e) {
+    signalerErreur("shiki.jetonsDuCode", String(e));
+    return null;
   }
 }

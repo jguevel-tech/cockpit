@@ -434,6 +434,23 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.notesSearch")}</p>
+        <div class="demo">
+          <div class="d-input">{$trad("docs.tasks.notesSearchDemoQuery")}</div>
+          <div class="d-row sel">📄 {$trad("docs.tasks.notesSearchDemoName")} <span class="d-count">2</span></div>
+          <div class="d-row indent d-muted">{$trad("docs.tasks.notesSearchDemoExtract")}</div>
+        </div>
+      </div>
+
+      <div class="block">
+        <p>{@html $trad("docs.tasks.notesColor")}</p>
+        <div class="demo">
+          <div class="d-row"><span class="kbd">```json</span> <span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span> <span class="d-muted">{$trad("docs.tasks.notesColorOpen")}</span></div>
+          <div class="d-row"><span class="d-btn small">{$trad("note.codeLanguageGuessed", { langue: "json" })}</span> <span class="d-muted">{$trad("docs.tasks.notesColorPick")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.reading")}</p>
         <div class="demo">
           <div class="d-tabs">

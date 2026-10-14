@@ -12,13 +12,24 @@
   import { ouvrirLien } from "../../utils/liens";
   import { analyserLien, SCHEMAS_OUVRABLES } from "../../utils/adresses";
   import { demanderTexte } from "../../stores/saisie";
+  import { themeBase } from "../../stores/appearance";
+  import { jetonsDuCode } from "../../shiki";
+  import { occurrences } from "../../notes/recherche";
+  import { devinerLangue, ouvertureDeBloc, segmentsDepuisJetons } from "../../notes/coloration";
 
   let {
     file,
     onRename,
+    onSaved,
+    recherche = "",
   }: {
     file: NoteFile;
     onRename?: (name: string) => void;
+    /// Le Markdown vient d'etre enregistre : la liste des notes s'en sert pour chercher dans
+    /// ce qu'on vient d'ecrire, sans relire la base.
+    onSaved?: (id: number, content: string) => void;
+    /// Mot cherche depuis la liste des notes : la note s'ouvre avec ses occurrences surlignees.
+    recherche?: string;
   } = $props();
 
   const turndown = creerTurndown();
@@ -65,6 +76,8 @@
       editorEl.innerHTML = marked.parse(markdownContent) as string;
       // Pas de `dirty` ici : un paragraphe vide en fin de note ne produit aucun Markdown.
       garantirParagrapheFinal();
+      findIdx = 0;
+      rafraichirSurlignages();
     });
   }
 
@@ -91,7 +104,10 @@
     const content = versMarkdown(turndown, el.innerHTML, document);
     markdownContent = content;
     dirty = false;
-    try { await saveNoteFile(id, content); } catch (e) { notify(String(e)); }
+    try {
+      await saveNoteFile(id, content);
+      onSaved?.(id, content);
+    } catch (e) { notify(String(e)); }
   }
 
   /// Ouvre un lien de la note dans le navigateur du systeme.
@@ -164,6 +180,14 @@
   /// panneau de notifications se ferment aussi sur Echap sans arreter la propagation, et
   /// vivent dans <body> (use:portal). Sans cette garde, un seul Echap fermerait la palette ET
   /// deplierait les colonnes.
+  /// Ctrl+F dans le panneau de la note : chercher dans la note.
+  function onRaccourcis(e: KeyboardEvent) {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== "f") return;
+    if (!panneauEl || !(e.target instanceof Node) || !panneauEl.contains(e.target)) return;
+    e.preventDefault();
+    ouvrirRecherche();
+  }
+
   function onEchap(e: KeyboardEvent) {
     if (e.key !== "Escape" || !$readingMode) return;
     if (!panneauEl || !(e.target instanceof Node) || !panneauEl.contains(e.target)) return;
@@ -373,7 +397,13 @@
   function onEditorKeydown(e: KeyboardEvent) {
     if (e.key !== "Enter") return;
     const bloc = blocDeCodeCourant();
-    if (!bloc) return;
+    if (!bloc) {
+      if (!e.shiftKey && ouvrirUnBlocTape()) {
+        e.preventDefault();
+        onEditorInput();
+      }
+      return;
+    }
     e.preventDefault();
 
     if (e.ctrlKey || e.metaKey) {
@@ -396,6 +426,7 @@
     garantirParagrapheFinal();
     dirty = true;
     scheduleSave();
+    planifierSurlignages();
   }
 
   function scheduleSave() {
@@ -565,13 +596,312 @@
     editorEl?.focus();
     onEditorInput();
   }
+
+  // --- Surlignages : recherche et coloration des blocs de code ---
+  //
+  // **AUCUN DES DEUX NE TOUCHE AU DOM EDITE.** Ils passent par `CSS.highlights`, qui peint des
+  // `Range` sans inserer de balise : le curseur ne bouge pas pendant qu'on tape, et la
+  // conversion en Markdown ne voit ni `<mark>` ni `<span>` de couleur. Envelopper le texte,
+  // comme le fait la vue d'un fichier, aurait demande de tout defaire avant chaque
+  // enregistrement, et deplace le curseur a chaque frappe.
+
+  const BLOCS_SEPARES = new Set(["P", "DIV", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "PRE", "BLOCKQUOTE", "TR", "TD", "TH"]);
+  const NOM_RECHERCHE = "note-recherche";
+  const NOM_COURANTE = "note-recherche-courante";
+  const PREFIXE_COULEUR = "note-c-";
+
+  /// Le texte d'un noeud et, pour chaque noeud texte, sa position dans ce texte. Un `<br>` et
+  /// une limite de bloc comptent pour un saut de ligne : un mot cherche ne doit pas se
+  /// trouver a cheval sur deux paragraphes, et le code passe a Shiki doit avoir ses lignes.
+  interface Carte { texte: string; morceaux: { noeud: Text; debut: number }[] }
+
+  function carteDuTexte(racine: Node): Carte {
+    const carte: Carte = { texte: "", morceaux: [] };
+    const saut = () => { if (carte.texte && !carte.texte.endsWith("\n")) carte.texte += "\n"; };
+    const visiter = (n: Node) => {
+      for (const enfant of Array.from(n.childNodes)) {
+        if (enfant.nodeType === Node.TEXT_NODE) {
+          carte.morceaux.push({ noeud: enfant as Text, debut: carte.texte.length });
+          carte.texte += enfant.nodeValue ?? "";
+        } else if (enfant.nodeName === "BR") {
+          carte.texte += "\n";
+        } else {
+          const bloc = BLOCS_SEPARES.has(enfant.nodeName);
+          if (bloc) saut();
+          visiter(enfant);
+          if (bloc) saut();
+        }
+      }
+    };
+    visiter(racine);
+    return carte;
+  }
+
+  /// La `Range` qui couvre [debut, fin) dans le texte d'une carte, ou null.
+  function plage(carte: Carte, debut: number, fin: number): Range | null {
+    const depart = carte.morceaux.find((m) => m.debut <= debut && debut < m.debut + m.noeud.length)
+      ?? carte.morceaux.find((m) => m.debut >= debut && m.noeud.length > 0);
+    let arrivee: { noeud: Text; debut: number } | undefined;
+    for (const m of carte.morceaux) {
+      if (m.debut < fin && fin <= m.debut + m.noeud.length) { arrivee = m; break; }
+      if (m.debut + m.noeud.length <= fin) arrivee = m;
+    }
+    if (!depart || !arrivee) return null;
+    const r = document.createRange();
+    r.setStart(depart.noeud, Math.max(0, debut - depart.debut));
+    r.setEnd(arrivee.noeud, Math.min(arrivee.noeud.length, fin - arrivee.debut));
+    return r.collapsed ? null : r;
+  }
+
+  /// `CSS.highlights` n'existe pas partout (un banc sous un autre moteur) : sans lui, la note
+  /// reste lisible et la recherche compte encore ses occurrences.
+  const surlignages = typeof CSS !== "undefined" && "highlights" in CSS ? CSS.highlights : null;
+
+  // Recherche dans la note (Ctrl+F)
+  let findOpen = $state(false);
+  let findQuery = $state("");
+  let findIdx = $state(0);
+  let findCount = $state(0);
+  let findInputEl: HTMLInputElement | undefined = $state(undefined);
+  let derniereRecherche = "";
+
+  // La liste des notes cherche un mot : la note s'ouvre dessus.
+  $effect(() => {
+    const r = recherche.trim();
+    untrack(() => {
+      if (r) {
+        findOpen = true;
+        if (findQuery !== r) { findQuery = r; findIdx = 0; }
+      } else if (derniereRecherche && findQuery === derniereRecherche) {
+        findOpen = false;
+        findQuery = "";
+      }
+      derniereRecherche = r;
+      rafraichirRecherche(true);
+    });
+  });
+
+  function ouvrirRecherche() {
+    findOpen = true;
+    const sel = selectionDansEditeur();
+    const choisi = sel?.toString().trim();
+    if (choisi && !choisi.includes("\n")) { findQuery = choisi; findIdx = 0; }
+    tick().then(() => { findInputEl?.focus(); findInputEl?.select(); rafraichirRecherche(true); });
+  }
+
+  function fermerRecherche() {
+    findOpen = false;
+    rafraichirRecherche(false);
+    editorEl?.focus();
+  }
+
+  function allerA(sens: 1 | -1) {
+    if (!findCount) return;
+    findIdx = ((findIdx + sens) % findCount + findCount) % findCount;
+    rafraichirRecherche(true);
+  }
+
+  function onFindKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") { e.preventDefault(); allerA(e.shiftKey ? -1 : 1); }
+    else if (e.key === "Escape") {
+      // Sinon l'Echap remonte a la fenetre et quitte aussi le mode lecture.
+      e.stopPropagation();
+      fermerRecherche();
+    }
+  }
+
+  function rafraichirRecherche(defiler: boolean) {
+    surlignages?.delete(NOM_RECHERCHE);
+    surlignages?.delete(NOM_COURANTE);
+    if (!editorEl || !findOpen || !findQuery.trim()) { findCount = 0; return; }
+    const carte = carteDuTexte(editorEl);
+    const longueur = findQuery.trim().length;
+    const plages = occurrences(carte.texte, findQuery)
+      .map((d) => plage(carte, d, d + longueur))
+      .filter((r): r is Range => r !== null);
+    findCount = plages.length;
+    if (findIdx >= plages.length) findIdx = 0;
+    if (!plages.length) return;
+    const courante = plages[findIdx];
+    if (surlignages) {
+      surlignages.set(NOM_RECHERCHE, new Highlight(...plages.filter((r) => r !== courante)));
+      surlignages.set(NOM_COURANTE, new Highlight(courante));
+    }
+    if (defiler) {
+      const conteneur = courante.startContainer.parentElement;
+      conteneur?.scrollIntoView({ block: "center" });
+    }
+  }
+
+  // Coloration des blocs de code
+  let styleCouleurs: HTMLStyleElement | null = null;
+  const couleursDeclarees = new Set<string>();
+  let couleursPosees: string[] = [];
+  let numeroColoration = 0;
+
+  /// Une regle `::highlight` par couleur, posee une fois. La couleur vient du theme de Shiki,
+  /// mais elle entre dans du CSS : on n'accepte qu'un code hexadecimal.
+  function declarerCouleur(couleur: string): string | null {
+    if (!/^#[0-9a-f]{3,8}$/.test(couleur)) return null;
+    const nom = PREFIXE_COULEUR + couleur.slice(1);
+    if (!couleursDeclarees.has(nom)) {
+      styleCouleurs ??= document.head.appendChild(document.createElement("style"));
+      styleCouleurs.append(`::highlight(${nom}) { color: ${couleur}; }\n`);
+      couleursDeclarees.add(nom);
+    }
+    return nom;
+  }
+
+  function effacerCouleurs() {
+    for (const nom of couleursPosees) surlignages?.delete(nom);
+    couleursPosees = [];
+  }
+
+  /// La langue d'un bloc : celle qu'il declare, sinon celle qu'on devine.
+  function langueDeclaree(pre: HTMLElement): string {
+    return pre.querySelector("code")?.className.match(/language-(\S+)/)?.[1] ?? "";
+  }
+
+  async function colorier() {
+    if (!editorEl || !surlignages) return;
+    const numero = ++numeroColoration;
+    const sombre = $themeBase === "dark";
+    const parCouleur = new Map<string, Range[]>();
+    for (const pre of Array.from(editorEl.querySelectorAll<HTMLElement>("pre"))) {
+      const carte = carteDuTexte(pre);
+      const langue = langueDeclaree(pre) || devinerLangue(carte.texte);
+      if (!langue) continue;
+      const jetons = await jetonsDuCode(carte.texte, langue, sombre);
+      // Une frappe est arrivee pendant le calcul : celui-ci est deja perime.
+      if (numero !== numeroColoration) return;
+      if (!jetons) continue;
+      for (const s of segmentsDepuisJetons(jetons.lignes, jetons.couleurParDefaut)) {
+        const nom = declarerCouleur(s.couleur);
+        const r = nom ? plage(carte, s.debut, s.fin) : null;
+        if (!nom || !r) continue;
+        if (!parCouleur.has(nom)) parCouleur.set(nom, []);
+        parCouleur.get(nom)!.push(r);
+      }
+    }
+    effacerCouleurs();
+    for (const [nom, plages] of parCouleur) {
+      surlignages.set(nom, new Highlight(...plages));
+      couleursPosees.push(nom);
+    }
+  }
+
+  function rafraichirSurlignages() {
+    rafraichirRecherche(false);
+    void colorier();
+    suivreLeBlocCourant();
+  }
+
+  /// Apres une frappe, on attend une courte pause : recolorier un long bloc a chaque touche
+  /// couterait sur le chemin de frappe. Les `Range` posees suivent le texte entre-temps.
+  let minuteurSurlignages: ReturnType<typeof setTimeout> | null = null;
+  function planifierSurlignages() {
+    if (minuteurSurlignages) clearTimeout(minuteurSurlignages);
+    minuteurSurlignages = setTimeout(() => { minuteurSurlignages = null; rafraichirSurlignages(); }, 200);
+  }
+
+  // Le theme change : les couleurs aussi.
+  $effect(() => {
+    void $themeBase;
+    untrack(() => void colorier());
+  });
+
+  onDestroy(() => {
+    if (minuteurSurlignages) clearTimeout(minuteurSurlignages);
+    effacerCouleurs();
+    surlignages?.delete(NOM_RECHERCHE);
+    surlignages?.delete(NOM_COURANTE);
+    styleCouleurs?.remove();
+  });
+
+  // Langue du bloc de code ou se trouve le curseur, pour la barre d'outils
+  const LANGUES = ["json", "yaml", "sql", "shellscript", "php", "javascript", "typescript", "html",
+    "xml", "css", "twig", "python", "rust", "go", "java", "dockerfile", "ini", "toml", "markdown"];
+  let blocCourant: HTMLElement | null = $state(null);
+  let langueCourante = $state("");
+  let langueDevinee = $state<string | null>(null);
+
+  let corpsEl: HTMLDivElement | undefined = $state(undefined);
+  let langueEl: HTMLSelectElement | undefined = $state(undefined);
+  let posLangue: { top: number; left: number } | null = $state(null);
+
+  function suivreLeBlocCourant() {
+    const bloc = blocDeCodeCourant();
+    blocCourant = bloc;
+    langueCourante = bloc ? langueDeclaree(bloc) : "";
+    langueDevinee = bloc && !langueCourante ? devinerLangue(texteDeBloc(bloc)) : null;
+    placerLaLangue();
+  }
+
+  /// Coin haut droit du bloc courant, dans le repere de `.corps`. Masquee quand le bloc sort de
+  /// la zone visible : elle flotterait sinon au-dessus de l'en-tete.
+  function placerLaLangue() {
+    if (!blocCourant?.isConnected || !corpsEl || !editorEl) { posLangue = null; return; }
+    const b = blocCourant.getBoundingClientRect();
+    const c = corpsEl.getBoundingClientRect();
+    const e = editorEl.getBoundingClientRect();
+    if (b.top < e.top || b.top > e.bottom - 24) { posLangue = null; return; }
+    posLangue = { top: b.top - c.top + 4, left: b.right - c.left - 4 };
+  }
+
+  /// Le choix vit dans la classe du `<code>`, que la conversion ecrit apres les accents graves
+  /// (« ```json ») : il survit donc a l'enregistrement sans rien ajouter.
+  function choisirLangue(langue: string) {
+    const bloc = blocCourant;
+    if (!bloc || !bloc.isConnected) return;
+    let code = bloc.querySelector("code");
+    if (!code) {
+      code = document.createElement("code");
+      while (bloc.firstChild) code.appendChild(bloc.firstChild);
+      bloc.appendChild(code);
+    }
+    code.className = langue ? `language-${langue}` : "";
+    langueCourante = langue;
+    langueDevinee = langue ? null : devinerLangue(texteDeBloc(bloc));
+    dirty = true;
+    scheduleSave();
+    void colorier();
+  }
+
+  /// « ```json » puis Entree, comme partout ailleurs : la ligne devient un bloc de code vide
+  /// dans cette langue, et le curseur y entre.
+  function ouvrirUnBlocTape(): boolean {
+    const sel = selectionDansEditeur();
+    if (!sel || !editorEl) return false;
+    let ligne: Node | null = sel.anchorNode;
+    while (ligne && ligne.parentNode !== editorEl) ligne = ligne.parentNode;
+    if (!ligne || (ligne.nodeName !== "P" && ligne.nodeName !== "DIV")) return false;
+    const langue = ouvertureDeBloc(ligne.textContent ?? "");
+    if (langue === null) return false;
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    if (langue) code.className = `language-${langue}`;
+    code.appendChild(document.createElement("br"));
+    pre.appendChild(code);
+    (ligne as HTMLElement).replaceWith(pre);
+    const r = document.createRange();
+    r.setStart(code, 0);
+    r.collapse(true);
+    poserSelection(r);
+    return true;
+  }
 </script>
 
 <svelte:window
-  onkeydown={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = true; onEchap(e); }}
+  onkeydown={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = true; onRaccourcis(e); onEchap(e); }}
   onkeyup={(e) => { if (e.key === "Control" || e.key === "Meta") ctrlEnfonce = false; }}
   onblur={() => (ctrlEnfonce = false)}
+  onresize={placerLaLangue}
 />
+<svelte:document onselectionchange={() => {
+  if (selectionDansEditeur()) suivreLeBlocCourant();
+  // Le curseur est parti ailleurs : la liste disparait, sauf si c'est elle qu'on manipule.
+  else if (document.activeElement !== langueEl) blocCourant = null;
+}} />
 
 <div class="editor-panel" class:lecture={$readingMode} bind:this={panneauEl}>
   <div class="editor-header">
@@ -592,14 +922,33 @@
     <!-- Le bouton reste a la MEME place dans les deux etats : c'est ce qui garantit qu'on
          retrouve le chemin du retour la ou on a replie. -->
     <ReadingToggle onToggle={basculerLecture} />
+    {#if !findOpen}
+      <button class="tb" onclick={ouvrirRecherche} title={$trad("note.find")}>🔍</button>
+    {/if}
   </div>
+  {#if findOpen}
+    <div class="find-bar">
+      <input
+        bind:this={findInputEl}
+        bind:value={findQuery}
+        class:no-match={findQuery.trim() && findCount === 0}
+        placeholder={$trad("note.findPlaceholder")}
+        oninput={() => { findIdx = 0; rafraichirRecherche(true); }}
+        onkeydown={onFindKeydown}
+      />
+      <span class="find-count">{findCount ? `${findIdx + 1}/${findCount}` : "0/0"}</span>
+      <button class="tb" onclick={() => allerA(-1)} title={$trad("files.prevMatch")}>↑</button>
+      <button class="tb" onclick={() => allerA(1)} title={$trad("files.nextMatch")}>↓</button>
+      <button class="tb" onclick={fermerRecherche} title={$trad("files.closeFind")}>×</button>
+    </div>
+  {/if}
 
   <!-- Zone d'edition : elle est deja focalisable et editable au clavier (contenteditable).
        Le clic sert uniquement a ouvrir un lien avec Ctrl, geste souris qui n'a pas
        d'equivalent clavier utile ici. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div class="corps">
+  <div class="corps" bind:this={corpsEl}>
   <div
     bind:this={editorEl}
     class="editor"
@@ -609,7 +958,27 @@
     oninput={onEditorInput}
     onkeydown={onEditorKeydown}
     onclick={onEditorClick}
+    onscroll={placerLaLangue}
   ></div>
+  {#if blocCourant && posLangue}
+    <!-- **LA LANGUE SE CHOISIT SUR LE BLOC, PAS DANS LA BARRE.** Posee dans la colonne de
+         droite, la liste l'elargissait des que le curseur entrait dans un bloc : la note
+         retrecissait et tout son texte se remettait en page sous les yeux. Ici, elle flotte
+         au coin du bloc, hors de la zone editee, et rien ne bouge. -->
+    <select
+      bind:this={langueEl}
+      class="langue-bloc"
+      style:top="{posLangue.top}px"
+      style:left="{posLangue.left}px"
+      value={langueCourante}
+      title={$trad("note.codeLanguage")}
+      onchange={(e) => choisirLangue((e.currentTarget as HTMLSelectElement).value)}
+    >
+      <option value="">{langueDevinee ? $trad("note.codeLanguageGuessed", { langue: langueDevinee }) : $trad("note.codeLanguageNone")}</option>
+      {#each LANGUES as l (l)}<option value={l}>{l}</option>{/each}
+      {#if langueCourante && !LANGUES.includes(langueCourante)}<option value={langueCourante}>{langueCourante}</option>{/if}
+    </select>
+  {/if}
   <!-- **LA BARRE DE MISE EN FORME EST UNE COLONNE A DROITE DE LA NOTE, ET ELLE SUIT LE
        DEFILEMENT.** En haut elle sortait de l'ecran sur une longue note ; posee en bas, elle
        mangeait la feuille. Sur le cote, elle reste a portee sans rien couvrir (demande du
@@ -648,7 +1017,7 @@
   .editor-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
   .file-title { font-weight: 600; font-size: 0.9rem; }
 
-  .corps { flex: 1; display: flex; gap: 0.5rem; align-items: stretch; min-height: 0; }
+  .corps { position: relative; flex: 1; display: flex; gap: 0.5rem; align-items: stretch; min-height: 0; }
   .corps .editor { flex: 1; min-width: 0; }
   /* Colonne a droite, collee en haut de la vue : une longue note fait defiler la PAGE, et la
      barre suit. Fond OPAQUE (regle des surfaces flottantes). */
@@ -664,6 +1033,20 @@
     line-height: 1; min-width: 24px; text-align: center;
   }
   .tb:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  .langue-bloc {
+    position: absolute; transform: translateX(-100%); z-index: 1;
+    font-size: 0.7rem; padding: 0.1rem 0.2rem; border-radius: 4px; opacity: 0.85;
+    background: var(--surface-base); color: var(--text-secondary); border: 1px solid var(--border-color);
+  }
+  .langue-bloc:hover, .langue-bloc:focus { opacity: 1; color: var(--text-primary); }
+  .find-bar { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem; }
+  .find-bar input {
+    flex: 0 1 16rem; min-width: 6rem; font-size: 0.8rem; padding: 0.2rem 0.45rem;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-primary); color: var(--text-primary);
+  }
+  .find-bar input.no-match { border-color: var(--error); }
+  .find-count { color: var(--text-muted); font-size: 0.72rem; min-width: 3.5ch; text-align: center; }
   .tb-sep { height: 1px; width: 100%; background: var(--border-color); margin: 0.15rem 0; }
 
   .editor {

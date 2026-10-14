@@ -12,6 +12,23 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Notes : un champ au-dessus de la liste cherche un mot dans le nom et le texte de toutes les
+  notes du projet, sans tenir compte des accents ni des majuscules. Chaque résultat montre
+  l'extrait trouvé, et la note s'ouvre avec les occurrences surlignées.
+- Notes : Ctrl+F cherche dans la note ouverte, avec un compteur et Entrée / Maj+Entrée pour
+  passer d'une occurrence à l'autre.
+- Notes : les blocs de code sont en couleur. JSON, SQL, YAML, HTML, XML, PHP et les commandes
+  shell sont reconnus seuls ; une liste au coin du bloc permet de choisir une autre langue.
+- Notes : taper « ```json » (ou une autre langue) puis Entrée ouvre un bloc de code, comme en
+  Markdown.
+
+### Fixed
+
+- Fichiers : les mots-clés SQL écrits en majuscules (SELECT, FROM, WHERE…) n'étaient pas en
+  couleur.
+
 ## [1.0.0] — 2026-10-06
 
 ### Changed

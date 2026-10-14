@@ -340,3 +340,9 @@ html.has-wallpaper .stack > .card {
   backdrop-filter: none;
   box-shadow: none;
 }
+
+/* Recherche dans une note (Ctrl+F). Peinte par `CSS.highlights`, sans balise dans le texte
+   edite : la regle doit donc etre globale, aucun composant ne porte ces morceaux de texte.
+   Memes teintes que la recherche dans un fichier. */
+::highlight(note-recherche) { background-color: color-mix(in srgb, var(--warning) 38%, transparent); }
+::highlight(note-recherche-courante) { background-color: color-mix(in srgb, var(--accent) 55%, transparent); }
