@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-16
+
 ### Added
 
 - Tâches : des listes hors projet, autant qu'on veut. « + Liste » en crée une, ✎ la renomme
