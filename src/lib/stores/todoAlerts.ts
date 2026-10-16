@@ -9,7 +9,7 @@
  */
 import { getPendingTodos } from "../api/storage";
 import { pushNotice, removeNotice } from "./notifications";
-import { selectProject, activeTab } from "./ui";
+import { selectProject, activeTab, openView } from "./ui";
 import { daysUntil, dueLabel } from "../utils/due";
 import { translate } from "../i18n";
 import { signalerErreur } from "./errors";
@@ -43,16 +43,23 @@ async function check() {
     const id = `todo-due:${t.id}:${t.due_date}`;
     next.add(id);
     const project = t.project;
+    // Une tache hors projet n'a pas de projet a ouvrir : on emmene au tableau de bord, qui
+    // les affiche en tete.
+    const horsProjet = project === "";
     pushNotice({
       id,
       kind: overdue ? "warning" : "info",
       title: overdue ? translate("alerts.todoOverdue") : translate("alerts.todoToday"),
-      body: `**${t.project}** — ${t.text} *(${dueLabel(t.due_date)})*`,
+      body: horsProjet
+        ? `${t.text} *(${dueLabel(t.due_date)})*`
+        : `**${t.project}** — ${t.text} *(${dueLabel(t.due_date)})*`,
       createdAt: new Date().toISOString(),
       dismissible: true,
       // Alerte d'echeance : on emmene sur l'onglet des taches, pas sur l'onglet memorise
       // du projet — c'est la tache que l'utilisateur vient voir.
-      action: { label: translate("alerts.seeProject"), run: () => { selectProject(project); activeTab.set("workspace"); } },
+      action: horsProjet
+        ? { label: translate("alerts.seeTasks"), run: () => openView("dashboard") }
+        : { label: translate("alerts.seeProject"), run: () => { selectProject(project); activeTab.set("workspace"); } },
     });
   }
 

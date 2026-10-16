@@ -391,6 +391,15 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.horsProjet")}</p>
+        <div class="demo">
+          <div class="d-input">{$trad("tasks.newPlaceholder")}</div>
+          <div class="d-section">{$trad("tasks.sansProjet")}</div>
+          <div class="d-row"><span class="d-check"></span> <span class="d-multi">{$trad("docs.tasks.horsProjetDemo")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.progress")}</p>
         <div class="demo">
           <div class="d-row"><span class="d-check"></span> {$trad("docs.tasks.demo1")} <span class="d-bar"><span class="d-bar-fill" style="width: 70%"></span></span> <span class="d-muted">70%</span></div>
@@ -732,6 +741,7 @@
     background: var(--bg-tertiary); border: 1px solid var(--border-color);
     border-radius: 8px; padding: 0 0.35rem; font-size: 0.68rem; color: var(--text-secondary);
   }
+  .d-multi { white-space: pre-line; }
   .d-note { color: var(--text-muted); font-size: 0.75rem; font-style: italic; }
   .d-caret { color: var(--text-muted); }
   .d-hover { margin-left: auto; opacity: 0.6; font-size: 0.75rem; }

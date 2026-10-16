@@ -31,7 +31,7 @@
     texte: string;
     /** Tache terminee : texte barre et grise. */
     done?: boolean;
-    /** Variante du tableau de bord : une seule ligne, marges rentrees. */
+    /** Variante du tableau de bord : lignes serrees, marges rentrees. */
     dense?: boolean;
     /** Empeche de demarrer un glisser depuis le texte (ligne deja draggable du tableau de bord). */
     sansGlisser?: boolean;
@@ -75,13 +75,14 @@
     background: none; border: 1px solid transparent; padding: 0.15rem 0.3rem;
     text-align: left; color: var(--text-primary); cursor: text;
     border-radius: 4px; font-size: inherit; font-family: inherit;
-    overflow: hidden; text-overflow: ellipsis;
+    /* Une tache peut tenir sur plusieurs lignes : ses retours a la ligne s'affichent. */
+    white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .todo-texte:hover { background: var(--bg-tertiary); border-color: var(--border-color); }
   .todo-texte.done { text-decoration: line-through; color: var(--text-muted); }
-  /* Tableau de bord : lignes serrees, texte sur une seule ligne, et la couleur de la ligne. */
+  /* Tableau de bord : lignes serrees, et la couleur de la ligne. */
   .todo-texte.dense {
-    color: inherit; line-height: 1.4; white-space: nowrap;
+    color: inherit; line-height: 1.4;
     padding: 0.1rem 0.3rem; margin: -0.1rem -0.3rem;
   }
   /* Le lien doit SE VOIR : souligne + accent. Sans ca personne ne devine qu'il est ouvrable. */

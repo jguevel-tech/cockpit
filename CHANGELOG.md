@@ -12,6 +12,18 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Tâches : un champ en haut du tableau de bord ajoute une tâche rattachée à aucun projet, pour
+  noter une idée au vol. Ces tâches s'affichent en tête, sous « Hors projet », et se glissent
+  sur un projet pour l'y ranger.
+- Tâches : une tâche peut tenir sur plusieurs lignes, à l'ajout comme à la modification.
+  Entrée ajoute, Maj+Entrée passe à la ligne.
+
+### Changed
+
+- Tâches : le texte long d'une tâche s'affiche en entier au lieu d'être coupé par « … ».
+
 ## [1.1.0] — 2026-10-14
 
 ### Added

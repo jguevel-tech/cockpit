@@ -328,6 +328,31 @@ fi
 
 # **PARTIR TOUT DE SUITE APRES AVOIR ECRIT NE PERD RIEN.** Signale le 2026-10-01 : une ligne
 # ajoutee puis l'onglet quitte aussitot, et au retour la ligne n'y etait plus.
+if [ -n "${COCKPIT_BANC_TODOS:-}" ]; then
+  # Taches hors projet et taches sur plusieurs lignes, depuis le tableau de bord.
+  python3 - "$COCKPIT_DB" <<'SQL'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("INSERT INTO todos (project, text, position) VALUES ('', ?, 0)",
+          ("Idee : un mode hors ligne\n- garder la file des changements\n- rejouer au retour du reseau",))
+c.commit()
+SQL
+  clic 900 472 1
+  clic "${COCKPIT_BANC_X_ACCUEIL:-52}" "${COCKPIT_BANC_Y_ACCUEIL:-28}" 3   # le tableau de bord
+  image todos-1-tableau
+  clic "${COCKPIT_BANC_X_SAISIE:-700}" "${COCKPIT_BANC_Y_SAISIE:-140}" 1
+  python3 "$OUTILS" taper "Relire le contrat" sans-entree 2>/dev/null || true
+  python3 "$OUTILS" raccourci "Shift_L+Return"
+  python3 "$OUTILS" taper "avant vendredi" 2>/dev/null || true
+  sleep 2
+  image todos-2-ajoutee
+  python3 - "$COCKPIT_DB" <<'SQL'
+import sqlite3, sys
+print("  taches hors projet :", sqlite3.connect(sys.argv[1]).execute("SELECT text FROM todos WHERE project='' ORDER BY id").fetchall())
+SQL
+  exit 0
+fi
+
 if [ -n "${COCKPIT_BANC_NOTES:-}" ]; then
   # Recherche dans les notes et coloration des blocs de code : deux notes en base, dont une
   # qui porte du JSON sans langue declaree (il doit etre devine) et du SQL declare.

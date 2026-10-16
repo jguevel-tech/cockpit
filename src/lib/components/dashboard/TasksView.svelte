@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo, setTodoDue, setTodoProgress } from "../../api/storage";
+  import { createTodo, getPendingTodos, reorderTodos, moveTodo, updateTodo, deleteTodo, setTodoDue, setTodoProgress } from "../../api/storage";
   import { reorderProjects } from "../../api/scanner";
   import { selectProject, activeTab } from "../../stores/ui";
   import { projects, loadProjects } from "../../stores/projects";
@@ -11,6 +11,7 @@
   import InlineEdit from "../ui/InlineEdit.svelte";
   import TodoText from "../todos/TodoText.svelte";
   import TodoProgress from "../todos/TodoProgress.svelte";
+  import TodoSaisie from "../todos/TodoSaisie.svelte";
   import type { Todo } from "../../types";
   import { trad, tradN } from "../../i18n";
   import { demanderConfirmation } from "../../stores/confirm";
@@ -29,6 +30,15 @@
 
   async function reload() {
     try { pendingTodos = await getPendingTodos(); } catch (e) { notify(String(e)); }
+  }
+
+  /// Projet des taches hors projet, le meme que `todos::SANS_PROJET` cote backend.
+  const SANS_PROJET = "";
+
+  /// Une idee notee au vol, sans projet : elle arrive en tete, dans le groupe « Hors projet ».
+  async function ajouterHorsProjet(texte: string): Promise<boolean> {
+    try { await createTodo(SANS_PROJET, texte); await reload(); return true; }
+    catch (e) { notify(String(e)); return false; }
   }
 
   async function toggleDone(todo: Todo) {
@@ -222,12 +232,17 @@
     <h3>{$trad("tasks.title")}</h3>
     <span class="task-count">{$tradN("tasks.count", totalTodoCount)}</span>
   </div>
+  <div class="saisie">
+    <TodoSaisie placeholder={$trad("tasks.newPlaceholder")} onAdd={ajouterHorsProjet} />
+  </div>
   <div class="todos-list">
     {#each groupedTodos as group, gi}
+      <!-- Le groupe hors projet ne se range pas parmi les projets : il n'en est pas un, et il
+           reste en tete, la ou on vient de l'ecrire. -->
       <div
         class="todo-group"
         role="listitem"
-        use:reorderable={{ index: gi, group: "task-groups", onDrop: onGroupReorder }}
+        use:reorderable={{ index: gi, group: "task-groups", onDrop: onGroupReorder, disabled: group.project === SANS_PROJET }}
       >
         <div
           class="group-header-wrap"
@@ -239,10 +254,19 @@
         >
           <!-- Depart depuis une tache : on va la voir, donc sur l'onglet qui porte les taches.
                Cette intention passe devant l'onglet memorise du projet. -->
-          <button class="group-header" onclick={() => { selectProject(group.project); activeTab.set("workspace"); }}>
-            <span class="group-name">{group.project}</span>
-            <span class="group-count">{group.todos.length}</span>
-          </button>
+          {#if group.project === SANS_PROJET}
+            <!-- Aucun projet a ouvrir : un en-tete qui ne mene nulle part ne doit pas se
+                 presenter comme un bouton. -->
+            <div class="group-header sans-projet" title={$trad("tasks.sansProjetHint")}>
+              <span class="group-name">{$trad("tasks.sansProjet")}</span>
+              <span class="group-count">{group.todos.length}</span>
+            </div>
+          {:else}
+            <button class="group-header" onclick={() => { selectProject(group.project); activeTab.set("workspace"); }}>
+              <span class="group-name">{group.project}</span>
+              <span class="group-count">{group.todos.length}</span>
+            </button>
+          {/if}
         </div>
         {#each group.todos as todo}
           <div
@@ -267,6 +291,7 @@
             ></button>
             {#if editingTodoId === todo.id}
               <InlineEdit
+                multiligne
                 value={todo.text}
                 onCommit={(v) => commitEditTodo(todo, v)}
                 onCancel={cancelEditTodo}
@@ -358,6 +383,9 @@
     cursor: pointer; text-align: left;
   }
   .group-header:hover { background: var(--bg-tertiary); }
+  .group-header.sans-projet { cursor: default; font-style: italic; }
+  .group-header.sans-projet:hover { background: none; }
+  .saisie { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border-color); }
   .group-count {
     background: var(--accent); color: white; font-size: 0.75rem;
     padding: 0.1rem 0.5rem; border-radius: 10px; font-weight: 600;
@@ -373,7 +401,7 @@
     border: 2px solid var(--text-muted);
     background: transparent;
     border-radius: 50%;
-    padding: 0; margin: 0;
+    padding: 0; margin: 0.1rem 0 0;
     cursor: pointer;
     transition: all 0.15s;
     position: relative;

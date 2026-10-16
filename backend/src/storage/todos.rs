@@ -1,6 +1,13 @@
 use super::db::Database;
 use serde::{Deserialize, Serialize};
 
+/// Projet des taches qui n'appartiennent a aucun projet : les idees notees au vol.
+///
+/// Une chaine VIDE et non une colonne nullable : la colonne est `NOT NULL` depuis toujours, la
+/// synchronisation et l'import la transportent deja comme du texte, et aucun projet ne peut
+/// porter ce nom (`create_project` et `rename_project` le refusent).
+pub const SANS_PROJET: &str = "";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Todo {
     pub id: i64,
@@ -150,7 +157,7 @@ impl Database {
                  FROM todos t
                  LEFT JOIN projects p ON t.project = p.name
                  WHERE t.done = 0
-                 ORDER BY COALESCE(p.position, 999), t.project, t.position, t.id",
+                 ORDER BY (t.project = '') DESC, COALESCE(p.position, 999), t.project, t.position, t.id",
             )
             .map_err(|e| e.to_string())?;
 
@@ -169,6 +176,28 @@ mod tests {
 
     /// L'avancement est BORNE en base, pas seulement dans l'interface : une commande Tauri est
     /// appelable depuis n'importe ou, et une barre a -30 % ou 400 % dessinerait n'importe quoi.
+    /// Les taches hors projet passent en tete du tableau de bord : c'est la qu'on les note,
+    /// et un projet qui n'existe pas les rangerait sinon tout en bas, apres les 999.
+    #[test]
+    fn les_taches_hors_projet_passent_en_tete() {
+        let db = Database::new(":memory:").unwrap();
+        db.create_project("alpha", "/tmp/alpha", "", "", &[]).unwrap();
+        db.create_todo("alpha", "dans un projet").unwrap();
+        db.create_todo(crate::storage::SANS_PROJET, "une idee\nsur deux lignes").unwrap();
+        let toutes = db.get_pending_todos().unwrap();
+        assert_eq!(toutes[0].project, "");
+        assert_eq!(toutes[0].text, "une idee\nsur deux lignes", "les sauts de ligne sont gardes");
+    }
+
+    /// Un projet au nom vide recevrait toutes les taches hors projet.
+    #[test]
+    fn un_projet_ne_peut_pas_porter_un_nom_vide() {
+        let db = Database::new(":memory:").unwrap();
+        assert!(db.create_project("  ", "/tmp/x", "", "", &[]).is_err());
+        db.create_project("beta", "/tmp/beta", "", "", &[]).unwrap();
+        assert!(db.rename_project("beta", "", None).is_err());
+    }
+
     #[test]
     fn l_avancement_est_borne_entre_0_et_100() {
         let db = Database::new(":memory:").unwrap();

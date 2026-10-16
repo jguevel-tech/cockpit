@@ -50,6 +50,11 @@ export const fr = {
   "todo.progressHint": "Avancement : glisse ou clique, par pas de 10 %. À 100 % la tâche est finie.",
   "tasks.title": "Tâches en cours",
   "tasks.empty": "Aucune tâche en attente",
+  "todos.add": "Ajouter la tâche (Entrée)",
+  "todos.saisieHint": "Entrée ajoute la tâche, Maj+Entrée passe à la ligne",
+  "tasks.sansProjet": "Hors projet",
+  "tasks.sansProjetHint": "Tâches rattachées à aucun projet. Glisse-en une sur un projet pour l'y ranger.",
+  "tasks.newPlaceholder": "Nouvelle tâche hors projet, une idée…",
   "tasks.count.one": "{n} tâche",
   "tasks.count.other": "{n} tâches",
   "due.overdue": "en retard de {n} j",
@@ -198,6 +203,7 @@ export const fr = {
   "alerts.gigabytes": "{n} Go",
   "alerts.seeMonitoring": "Voir le monitoring",
   "alerts.seeProject": "Voir le projet",
+  "alerts.seeTasks": "Voir les tâches",
 
   // Palettes de couleurs
   "theme.dark": "Sombre",
@@ -615,6 +621,8 @@ export const fr = {
   "docs.tasks.notesColorOpen": "ouvre un bloc de code JSON, comme dans un fichier Markdown",
   "docs.tasks.notesColorPick": "la langue du bloc, à changer au besoin",
   "docs.tasks.progress": "<strong>Avancement</strong> : chaque tâche porte un curseur de 0 à 100 %, par pas de 10. On voit d'un coup lesquelles sont en cours et où elles en sont, dans le projet comme dans le tableau de bord.",
+  "docs.tasks.horsProjet": "<strong>Tâches hors projet</strong> : le champ en haut du tableau de bord note une idée sans la rattacher à un projet. Glisse-la plus tard sur un projet pour l'y ranger. Une tâche peut tenir sur plusieurs lignes : <span class=\"kbd\">Maj</span>+<span class=\"kbd\">Entrée</span> passe à la ligne, <span class=\"kbd\">Entrée</span> ajoute.",
+  "docs.tasks.horsProjetDemo": "Idée : un mode hors ligne\n- garder les changements\n- les rejouer au retour du réseau",
   "docs.tasks.progressDemo": "👉 à 100 % la tâche passe en terminée · le curseur est réglable au clic ou aux flèches",
   "docs.title": "Documentation",
   "docs.menu.start": "Démarrer",

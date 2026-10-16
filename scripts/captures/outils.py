@@ -694,7 +694,9 @@ if __name__ == "__main__":
         glisser(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]),
                 maj="--maj" in sys.argv[6:])
     elif quoi == "taper":
-        taper(sys.argv[2])
+        # « sans-entree » en troisieme argument : frapper sans valider, pour enchainer une
+        # autre touche (Maj+Entree dans une zone de texte, par exemple).
+        taper(sys.argv[2], entree=not (len(sys.argv) > 3 and sys.argv[3] == "sans-entree"))
     elif quoi == "effacer":
         effacer()
     elif quoi == "raccourci":

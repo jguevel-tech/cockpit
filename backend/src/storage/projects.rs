@@ -9,6 +9,15 @@ pub const PROJECT_SCOPED_TABLES: &[&str] = &[
     "recordings", "terminals", "command_history", "project_commands",
 ];
 
+/// Un nom vide est celui des taches hors projet (`todos::SANS_PROJET`) : un projet qui le
+/// porterait les recevrait toutes, et les emporterait a sa suppression.
+fn nom_de_projet_valide(nom: &str) -> Result<(), String> {
+    if nom.trim().is_empty() {
+        return Err("Le nom du projet ne peut pas être vide.".into());
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: i64,
@@ -81,6 +90,7 @@ impl Database {
         description: &str,
         depends_on: &[String],
     ) -> Result<Project, String> {
+        nom_de_projet_valide(name)?;
         let conn = self.conn();
         let deps_json = serde_json::to_string(depends_on).unwrap_or_else(|_| "[]".into());
 
@@ -107,6 +117,7 @@ impl Database {
         description: &str,
         depends_on: &[String],
     ) -> Result<Project, String> {
+        nom_de_projet_valide(name)?;
         let conn = self.conn();
         let deps_json = serde_json::to_string(depends_on).unwrap_or_else(|_| "[]".into());
 
@@ -201,6 +212,7 @@ impl Database {
     /// si `old_name` ne correspond a aucune ligne (derive nom affiche <-> DB),
     /// retrouve la ligne par `path_hint` et utilise SON nom reel comme source.
     pub fn rename_project(&self, old_name: &str, new_name: &str, path_hint: Option<&str>) -> Result<(), String> {
+        nom_de_projet_valide(new_name)?;
         let conn = self.conn();
 
         // Nom reel en DB : par nom si trouve, sinon par chemin (identite stable)
