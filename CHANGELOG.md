@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-16
+
 ### Added
 
 - Tâches : un champ en haut du tableau de bord ajoute une tâche rattachée à aucun projet, pour
