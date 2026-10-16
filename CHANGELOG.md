@@ -12,6 +12,17 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Tâches : des listes hors projet, autant qu'on veut. « + Liste » en crée une, ✎ la renomme
+  (« Hors projet » compris), × la supprime avec ses tâches. Une liste à côté du champ d'ajout
+  dit où va la tâche, et une tâche se glisse d'une liste à l'autre ou vers un projet.
+
+### Changed
+
+- Projets : un nom de projet ne peut plus commencer par « liste: », réservé aux listes de
+  tâches.
+
 ## [1.2.0] — 2026-10-16
 
 ### Added

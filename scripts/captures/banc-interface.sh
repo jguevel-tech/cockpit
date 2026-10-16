@@ -346,9 +346,29 @@ SQL
   python3 "$OUTILS" taper "avant vendredi" 2>/dev/null || true
   sleep 2
   image todos-2-ajoutee
+  # Une liste nommee : « + Liste », son nom, puis une tache qui y va d'office.
+  clic "${COCKPIT_BANC_X_LISTE:-1330}" "${COCKPIT_BANC_Y_LISTE:-157}" 2
+  image todos-3-nom-de-liste
+  python3 "$OUTILS" taper "Idees" 2>/dev/null || true
+  sleep 1
+  clic "${COCKPIT_BANC_X_SAISIE:-700}" "${COCKPIT_BANC_Y_SAISIE:-140}" 1
+  python3 "$OUTILS" taper "Un mode hors ligne" 2>/dev/null || true
+  sleep 2
+  image todos-4-liste
+  # Renommer « Hors projet » : ses taches deviennent une liste nommee.
+  python3 "$OUTILS" survoler 900 206
+  sleep 1
+  image todos-5-survol
+  clic "${COCKPIT_BANC_X_RENOMMER:-1290}" 206 2
+  python3 "$OUTILS" effacer 2>/dev/null || true
+  python3 "$OUTILS" taper "A trier" 2>/dev/null || true
+  sleep 2
+  image todos-6-renommee
   python3 - "$COCKPIT_DB" <<'SQL'
 import sqlite3, sys
-print("  taches hors projet :", sqlite3.connect(sys.argv[1]).execute("SELECT text FROM todos WHERE project='' ORDER BY id").fetchall())
+c = sqlite3.connect(sys.argv[1])
+print("  taches hors projet :", c.execute("SELECT project, text FROM todos WHERE project='' OR project LIKE 'liste:%' ORDER BY id").fetchall())
+print("  listes retenues :", c.execute("SELECT value FROM settings WHERE key='taches.listes'").fetchall())
 SQL
   exit 0
 fi

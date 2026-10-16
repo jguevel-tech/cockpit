@@ -569,6 +569,19 @@ fn move_todo(state: &AppState, id: i64, new_project: String) -> Result<(), Strin
 
 /// La logique de `get_pending_todos`, appelable par TOUT hote. La commande Tauri
 /// ci-dessus n'en est que la facade, et le pont appelle celle-ci : une seule verite.
+/// Renomme une liste de taches hors projet. Le backend verifie que les deux cles designent
+/// des listes : un vrai projet ne se renomme jamais par ici.
+#[commande]
+fn renommer_liste_de_taches(state: &AppState, ancienne: String, nouvelle: String) -> Result<(), String> {
+    state.db.renommer_liste_de_taches(&ancienne, &nouvelle)
+}
+
+/// Supprime une liste de taches hors projet et toutes ses taches.
+#[commande]
+fn supprimer_liste_de_taches(state: &AppState, cle: String) -> Result<usize, String> {
+    state.db.supprimer_liste_de_taches(&cle)
+}
+
 #[commande]
 pub fn get_pending_todos(state: &AppState) -> Result<Vec<storage::Todo>, String> {
     state.db.get_pending_todos()

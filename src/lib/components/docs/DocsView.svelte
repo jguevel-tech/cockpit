@@ -393,8 +393,8 @@
       <div class="block">
         <p>{@html $trad("docs.tasks.horsProjet")}</p>
         <div class="demo">
-          <div class="d-input">{$trad("tasks.newPlaceholder")}</div>
-          <div class="d-section">{$trad("tasks.sansProjet")}</div>
+          <div class="d-tabs"><span class="d-input">{$trad("tasks.newPlaceholder")}</span><span class="d-btn small">{$trad("docs.tasks.listesDemoNom")} ▾</span><span class="d-btn small">{$trad("tasks.newList")}</span></div>
+          <div class="d-row"><span class="d-section">{$trad("docs.tasks.listesDemoNom")}</span> <span class="d-btn small">✎</span><span class="d-btn small">×</span></div>
           <div class="d-row"><span class="d-check"></span> <span class="d-multi">{$trad("docs.tasks.horsProjetDemo")}</span></div>
         </div>
       </div>

@@ -11,6 +11,9 @@ export const setTodoProgress = (id: number, progress: number) =>
 export const deleteTodo = (id: number) => invoke("delete_todo", { id });
 export const reorderTodos = (ids: number[]) => invoke("reorder_todos", { ids });
 export const moveTodo = (id: number, newProject: string) => invoke("move_todo", { id, newProject });
+export const renommerListeDeTaches = (ancienne: string, nouvelle: string) =>
+  invoke("renommer_liste_de_taches", { ancienne, nouvelle });
+export const supprimerListeDeTaches = (cle: string) => invoke<number>("supprimer_liste_de_taches", { cle });
 export const getPendingTodos = () => invoke<Todo[]>("get_pending_todos");
 
 // Notes

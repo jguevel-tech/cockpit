@@ -10,6 +10,7 @@
 import { getPendingTodos } from "../api/storage";
 import { pushNotice, removeNotice } from "./notifications";
 import { selectProject, activeTab, openView } from "./ui";
+import { estUneListe, nomDeListe } from "../todos/listes";
 import { daysUntil, dueLabel } from "../utils/due";
 import { translate } from "../i18n";
 import { signalerErreur } from "./errors";
@@ -45,13 +46,13 @@ async function check() {
     const project = t.project;
     // Une tache hors projet n'a pas de projet a ouvrir : on emmene au tableau de bord, qui
     // les affiche en tete.
-    const horsProjet = project === "";
+    const horsProjet = estUneListe(project);
     pushNotice({
       id,
       kind: overdue ? "warning" : "info",
       title: overdue ? translate("alerts.todoOverdue") : translate("alerts.todoToday"),
       body: horsProjet
-        ? `${t.text} *(${dueLabel(t.due_date)})*`
+        ? `${nomDeListe(project) ? `**${nomDeListe(project)}** — ` : ""}${t.text} *(${dueLabel(t.due_date)})*`
         : `**${t.project}** — ${t.text} *(${dueLabel(t.due_date)})*`,
       createdAt: new Date().toISOString(),
       dismissible: true,

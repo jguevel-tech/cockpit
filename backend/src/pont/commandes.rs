@@ -365,6 +365,22 @@ pub async fn appeler(
             )?))
         })
         .await,
+        "renommer_liste_de_taches" => typer(async {
+            valeur(serde_json::to_value(crate::renommer_liste_de_taches(etat,
+                serde_json::from_value(prendre(a, "ancienne", "ancienne"))
+                    .map_err(|e| format!("argument ancienne : {e}"))?,
+                serde_json::from_value(prendre(a, "nouvelle", "nouvelle"))
+                    .map_err(|e| format!("argument nouvelle : {e}"))?,
+            )?))
+        })
+        .await,
+        "supprimer_liste_de_taches" => typer(async {
+            valeur(serde_json::to_value(crate::supprimer_liste_de_taches(etat,
+                serde_json::from_value(prendre(a, "cle", "cle"))
+                    .map_err(|e| format!("argument cle : {e}"))?,
+            )?))
+        })
+        .await,
         "get_pending_todos" => typer(async {
             valeur(serde_json::to_value(crate::get_pending_todos(etat, 
             )?))

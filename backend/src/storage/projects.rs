@@ -9,11 +9,16 @@ pub const PROJECT_SCOPED_TABLES: &[&str] = &[
     "recordings", "terminals", "command_history", "project_commands",
 ];
 
-/// Un nom vide est celui des taches hors projet (`todos::SANS_PROJET`) : un projet qui le
-/// porterait les recevrait toutes, et les emporterait a sa suppression.
+/// Un nom vide est celui des taches hors projet (`todos::SANS_PROJET`), et `liste:` le prefixe
+/// des listes nommees : un projet qui les porterait recevrait ces taches, et les emporterait a
+/// sa suppression.
 fn nom_de_projet_valide(nom: &str) -> Result<(), String> {
     if nom.trim().is_empty() {
         return Err("Le nom du projet ne peut pas être vide.".into());
+    }
+    // Les listes de taches hors projet vivent sous ce prefixe (`todos::PREFIXE_LISTE`).
+    if nom.starts_with(super::todos::PREFIXE_LISTE) {
+        return Err(format!("Un nom de projet ne peut pas commencer par « {} ».", super::todos::PREFIXE_LISTE));
     }
     Ok(())
 }
