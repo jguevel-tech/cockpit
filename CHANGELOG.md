@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-19
+
 ### Added
 
 - Kubernetes : un bouton « Lancer maintenant » dans le détail d'une tâche planifiée la lance
