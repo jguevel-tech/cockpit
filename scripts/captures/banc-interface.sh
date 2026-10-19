@@ -593,6 +593,18 @@ if [ -n "${COCKPIT_BANC_K8S:-}" ]; then
   # taches DECLAREES, y compris celles qui ne se sont jamais declenchees et n'ont donc aucun pod.
   clic 632 240 3          # l onglet « Taches planifiees »
   image k8s-2-taches
+  # **LANCER UNE TACHE MAINTENANT** : on entre dans une tache jamais declenchee, on la lance,
+  # et son pod doit arriver par le flux, rangé sous elle.
+  if [ -n "${COCKPIT_BANC_LANCER:-}" ]; then
+    clic "${COCKPIT_BANC_X_TACHE:-600}" "${COCKPIT_BANC_Y_TACHE:-500}" 3
+    image k8s-lancer-1-tache
+    clic "${COCKPIT_BANC_X_LANCER:-1264}" "${COCKPIT_BANC_Y_LANCER:-331}" 2
+    image k8s-lancer-2-confirmation
+    clic "${COCKPIT_BANC_X_OK:-849}" "${COCKPIT_BANC_Y_OK:-501}" 8
+    image k8s-lancer-3-lancee
+    grep "travail recu" "$TRAVAIL/faux-cluster.out" | cut -c1-300 || echo "  aucun travail recu"
+    exit 0
+  fi
   # **LE MENAGE DE TOUT LE NAMESPACE EN UN GESTE**, a droite des onglets de vue.
   if [ -n "${COCKPIT_BANC_TOUT_NETTOYER:-}" ]; then
     clic "${COCKPIT_BANC_TOUT_X:-1300}" 240 3

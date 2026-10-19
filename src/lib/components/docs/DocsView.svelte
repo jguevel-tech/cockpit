@@ -266,6 +266,14 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.k8s.lancer")}</p>
+        <div class="demo">
+          <div class="d-tabs"><span class="d-section">{$trad("docs.k8s.demoTache")}</span><span class="d-muted">{$trad("k8s.jamaisLance")}</span><span class="d-spring"></span><span class="d-btn small primary">{$trad("k8s.lancer")}</span></div>
+          <div class="d-row"><span class="d-muted">{$trad("docs.k8s.demoTachePod")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.k8s.ressources")}</p>
         <div class="demo">
           <div class="d-tabs">

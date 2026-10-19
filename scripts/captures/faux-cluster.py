@@ -13,6 +13,9 @@ Il sert ce dont l'ecran a besoin, et rien de plus :
   GET  /api/v1/namespaces/<ns>/pods               la liste des pods
   GET  /apis/apps/v1/namespaces/<ns>/deployments  les services declares
   GET  /apis/batch/v1/namespaces/<ns>/cronjobs    les taches planifiees declarees
+  GET  .../cronjobs/<nom>                         une tache, pour la lancer
+  POST /apis/batch/v1/namespaces/<ns>/jobs        un travail lance a la main : son pod
+                                                  arrive par le flux, comme sur un vrai cluster
   GET  ...?watch=1                                le flux des changements
   GET  /apis/metrics.k8s.io/v1beta1/...           le CPU et la memoire
   GET  .../pods/<pod>/log                         les logs, en direct si `follow`
@@ -143,7 +146,7 @@ def tous_les_pods():
 def _cronjob(nom, planification, dernier, suspendu):
     """Un travail planifie declare. `dernier` a None veut dire « jamais declenche »."""
     return {
-        "metadata": {"name": nom, "creationTimestamp": "2026-09-16T06:00:00Z"},
+        "metadata": {"name": nom, "uid": f"uid-{nom}", "creationTimestamp": "2026-09-16T06:00:00Z"},
         "spec": {
             "schedule": planification,
             "suspend": suspendu,
@@ -160,6 +163,10 @@ PODS = tous_les_pods()
 # 200 a l'appel. Sans cette file, l'ecran gardait les pods supprimes affiches et on croyait
 # que la suppression n'avait rien fait.
 SUPPRIMES = []
+# Meme chose a l'arrivee : un travail lance a la main fait naitre un pod, annonce `ADDED`.
+AJOUTES = []
+# Les travaux recus, pour que le banc puisse dire ce qu'on lui a envoye.
+TRAVAUX = []
 
 
 class Faux(BaseHTTPRequestHandler):
@@ -178,7 +185,18 @@ class Faux(BaseHTTPRequestHandler):
 
     def do_POST(self):
         taille = int(self.headers.get("Content-Length", 0))
-        self.rfile.read(taille)
+        corps = self.rfile.read(taille)
+        if self.path.endswith("/jobs"):
+            travail = json.loads(corps or b"{}")
+            nom = travail.get("metadata", {}).get("name", "")
+            if not nom or any(t["metadata"]["name"] == nom for t in TRAVAUX):
+                return self._json({"kind": "Status", "message": "nom deja pris"}, 409)
+            TRAVAUX.append(travail)
+            nouveau = pod(f"{nom}-q7k2m", nom, "Job", "Running", 1, 1, 0)
+            PODS.append(nouveau)
+            AJOUTES.append(nouveau)
+            print("travail recu :", json.dumps(travail), flush=True)
+            return self._json(travail, 201)
         if "selfsubjectrulesreviews" in self.path:
             return self._json(
                 {
@@ -283,6 +301,12 @@ class Faux(BaseHTTPRequestHandler):
                 }
                 for nom, total, prets, _ in SERVICES
             ]})
+        if "/cronjobs/" in chemin:
+            nom = chemin.split("/cronjobs/")[1].split("?")[0]
+            toutes = TACHES + TACHES_JAMAIS + [TACHE_SUSPENDUE]
+            if nom not in toutes:
+                return self._json({"kind": "Status", "message": "tache inconnue"}, 404)
+            return self._json(_cronjob(nom, "0 3 * * *", None, nom == TACHE_SUSPENDUE))
         if "/cronjobs" in chemin:
             items = []
             for i, nom in enumerate(TACHES):
@@ -308,7 +332,10 @@ class Faux(BaseHTTPRequestHandler):
         try:
             for _ in range(60):
                 # Ce qui vient d'etre supprime part en premier, et une seule fois.
-                if SUPPRIMES:
+                if AJOUTES:
+                    p = AJOUTES.pop(0)
+                    sorte = "ADDED"
+                elif SUPPRIMES:
                     p = SUPPRIMES.pop(0)
                     sorte = "DELETED"
                 else:

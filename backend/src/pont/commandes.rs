@@ -156,6 +156,17 @@ pub async fn appeler(
             ).await?))
         })
         .await,
+        "k8s_lancer_une_tache" => typer(async {
+            valeur(serde_json::to_value(crate::k8s_lancer_une_tache(
+                serde_json::from_value(prendre(a, "contexte", "contexte"))
+                    .map_err(|e| format!("argument contexte : {e}"))?,
+                serde_json::from_value(prendre(a, "namespace", "namespace"))
+                    .map_err(|e| format!("argument namespace : {e}"))?,
+                serde_json::from_value(prendre(a, "tache", "tache"))
+                    .map_err(|e| format!("argument tache : {e}"))?,
+            ).await?))
+        })
+        .await,
         "k8s_supprimer_un_pod" => typer(async {
             valeur(serde_json::to_value(crate::k8s_supprimer_un_pod(
                 serde_json::from_value(prendre(a, "contexte", "contexte"))

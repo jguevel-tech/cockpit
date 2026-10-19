@@ -335,6 +335,12 @@ async fn k8s_yaml(contexte: String, namespace: String, pod: String) -> Result<St
 }
 
 /// Supprime un pod. Le cluster tranche : un refus revient tel quel a l'ecran.
+/// Lance une tache planifiee maintenant. Une commande qui parle au reseau : `async fn`.
+#[commande]
+async fn k8s_lancer_une_tache(contexte: String, namespace: String, tache: String) -> Result<String, String> {
+    k8s::lancer_une_tache(&contexte, &namespace, &tache).await
+}
+
 #[commande]
 async fn k8s_supprimer_un_pod(
     contexte: String,

@@ -271,6 +271,29 @@ pub async fn supprimer_un_pod(contexte: &str, namespace: &str, pod: &str) -> Res
         .map(|_| ())
 }
 
+/// Lance une tache planifiee maintenant, sans attendre sa planification. Rend le nom du
+/// travail cree.
+///
+/// Meme regle que la suppression : des NOMS valides avant d'entrer dans une URL, et le
+/// cluster tranche les droits (un refus remonte tel quel). On relit la tache au moment du
+/// geste, jamais une copie gardee par l'interface : le modele a pu changer depuis l'ouverture.
+pub async fn lancer_une_tache(contexte: &str, namespace: &str, tache: &str) -> Result<String, String> {
+    for nom in [namespace, tache] {
+        if !kubeconfig::nom_valide(nom) {
+            return Err(format!("nom refuse : {nom}"));
+        }
+    }
+    let (client, _) = client_de(contexte)?;
+    let lue = client.json(&format!("/apis/batch/v1/namespaces/{namespace}/cronjobs/{tache}")).await?;
+    let secondes = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    let travail = workloads::travail_depuis_tache(&lue, secondes)?;
+    let cree = client.poster(&format!("/apis/batch/v1/namespaces/{namespace}/jobs"), travail).await?;
+    Ok(cree.pointer("/metadata/name").and_then(Value::as_str).unwrap_or_default().to_string())
+}
+
 /// Les logs d'un conteneur. `lignes` borne ce qu'on demande : un pod bavard a des centaines de
 /// milliers de lignes, et les demander toutes bloquerait l'ecran le temps de les avaler.
 pub async fn logs(

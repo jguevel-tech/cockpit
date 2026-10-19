@@ -12,6 +12,12 @@ le script de release.
 
 ## [Unreleased]
 
+### Added
+
+- Kubernetes : un bouton « Lancer maintenant » dans le détail d'une tâche planifiée la lance
+  tout de suite, sans attendre sa planification. Une confirmation rappelle le cluster et le
+  namespace, et le pod du lancement apparaît sous la tâche.
+
 ## [1.3.0] — 2026-10-16
 
 ### Added
