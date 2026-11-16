@@ -12,6 +12,8 @@ le script de release.
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-11-16
+
 ### Removed
 
 - Le compte Cockpit et la synchronisation entre machines : plus de connexion (mot de passe ou
