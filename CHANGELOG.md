@@ -12,6 +12,15 @@ le script de release.
 
 ## [Unreleased]
 
+### Removed
+
+- Le compte Cockpit et la synchronisation entre machines : plus de connexion (mot de passe ou
+  Google), plus de bouton de compte en haut à droite, plus de page « Mon compte ». Vos projets,
+  notes et tâches restent sur cette machine, comme avant. L'écran de connexion du premier
+  lancement disparaît aussi.
+- L'envoi des erreurs aux mainteneurs, et sa case dans Paramètres → Général. Les erreurs restent
+  écrites dans le journal local (`logs/cockpit.log`) : plus rien ne quitte la machine.
+
 ## [1.4.0] — 2026-10-19
 
 ### Added

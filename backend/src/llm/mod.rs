@@ -188,6 +188,18 @@ pub static CATALOGUE: &[&dyn Fournisseur] = &[
     &fournisseurs::OLLAMA,
 ];
 
+/// Client HTTP partage des appels de consommation : un seul pool de connexions, et un delai
+/// borne pour qu'un reseau coupe ne laisse pas l'ecran attendre sans fin.
+pub(crate) fn client_http() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
+
 /// Le fournisseur portant cet identifiant.
 pub fn par_id(id: &str) -> Option<&'static dyn Fournisseur> {
     CATALOGUE.iter().copied().find(|f| f.id() == id)

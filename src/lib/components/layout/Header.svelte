@@ -4,7 +4,6 @@
   import { unreadCount } from "../../stores/notifications";
   import { trad, tradN } from "../../i18n";
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
-  import BoutonCompte from "../compte/BoutonCompte.svelte";
   import JaugeConsommation from "./JaugeConsommation.svelte";
 
   // Cloche TOUJOURS visible : c'est le point d'entree unique des notifications, l'utilisateur
@@ -44,7 +43,6 @@
     <button class="header-btn docs-btn" onclick={openDocs} title={$trad("header.docs")}>i</button>
     <button class="header-btn" onclick={openSettings} title={$trad("header.settings")}>&#9881;</button>
     <button class="header-btn" onclick={toggleBase} title={$trad("header.theme")}>&#9681;</button>
-    <BoutonCompte />
   </div>
 </header>
 

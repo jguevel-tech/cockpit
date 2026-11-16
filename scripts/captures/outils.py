@@ -619,9 +619,6 @@ def preparer(base: str, projets: str, langue: str = "fr") -> None:
     c = sqlite3.connect(base)
     x = c.cursor()
 
-    # L'ecran d'accueil masquerait la capture, et la remontee d'erreurs n'a rien a faire ici.
-    x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('compte_accueil_vu','1')")
-    x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('error_reporting','off')")
     # LE FOURNISSEUR D'IA EST FIXE, parce que la BARRE D'ONGLETS EN DEPEND : l'onglet Plugins
     # n'existe que pour un fournisseur dont les agents s'installent au format de Claude Code.
     # Sans cette ligne, changer le defaut du logiciel changerait le nombre d'onglets, et le

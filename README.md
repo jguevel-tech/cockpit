@@ -7,13 +7,11 @@
 </p>
 
 <p align="center">
-  <a href="https://cockpitdesktop.com"><strong>cockpitdesktop.com</strong></a> ·
-  <a href="https://cockpitdesktop.com/#telecharger">Download</a> ·
+  <a href="https://github.com/jguevel-tech/cockpit/releases/latest"><strong>Download</strong></a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 <p align="center">
-  <a href="https://cockpitdesktop.com"><img alt="Website" src="https://img.shields.io/badge/website-cockpitdesktop.com-f4531f?style=flat-square"></a>
   <a href="https://github.com/jguevel-tech/cockpit/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/jguevel-tech/cockpit?style=flat-square&color=2f81f7"></a>
   <a href="https://github.com/jguevel-tech/cockpit/actions/workflows/release.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/jguevel-tech/cockpit/release.yml?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20·%20macOS%20·%20Windows-informational?style=flat-square">
@@ -28,8 +26,8 @@
 
 ## Install
 
-Every platform's installer is on **[cockpitdesktop.com](https://cockpitdesktop.com/#telecharger)**,
-which reads them straight from the release below — same files, one page, with their sizes.
+Every platform's installer is attached to the
+**[latest release](https://github.com/jguevel-tech/cockpit/releases/latest)**.
 
 ### Linux
 
@@ -194,19 +192,6 @@ whichever one it is.
 For providers whose agents install as Claude Code plugins, a marketplace is available per project
 (**Plugins** tab) and globally (Settings → Agents): browse, install, and keep them up to date.
 Sign in with your subscription from the settings — no API key to paste.
-
-### An account, if you want one
-
-**Cockpit works without an account, and keeps working offline.** Syncing is an extra, never a
-condition: with the server unreachable, everything behaves the same — the local database stays the
-truth of this machine.
-
-Create one from the app or on [cockpitdesktop.com](https://cockpitdesktop.com/#compte), sign in
-with a password or with Google, and your projects, notes and tasks follow you to another machine.
-Each machine signs out on its own, and deletions travel — they do not come back at the next round.
-
-What does **not** travel, on purpose: project paths (they do not exist on the other machine, so a
-project arrives without a folder, to be pointed at yours), terminals, and recordings in progress.
 
 ### Monitoring & alerts
 
@@ -375,20 +360,12 @@ Cockpit is a local application: your projects, notes, terminals and files stay o
 It only connects to other systems for these reasons:
 
 - **Updates:** it checks this repository's releases on GitHub.
-- **Error reports:** when an error is shown, it is sent to the maintainers with the app version,
-  the operating system and distribution, the install format, the audio device, the machine's
-  account name, and the error message (which can contain a file path). Turn it off in
-  Settings → General → *Error reporting*.
-- **Account (optional):** if you create one and sign in, your projects, notes and tasks are
-  synced with `api.cockpitdesktop.com`. Without an account, nothing is synced.
 - **Services you configure yourself:** the AI providers, Jira, Kubernetes clusters and Git
   remotes you set up, with your own credentials, only when you use them.
 
-The full [privacy policy](https://cockpitdesktop.com/privacy) is on the website.
+Errors are written to a local log file only (`logs/cockpit.log` in the app's data folder). Nothing
+is sent to the maintainers, and there is no account and no sync server.
 
 ## License
 
 [MIT](LICENSE)
-
-The website also carries the [privacy policy](https://cockpitdesktop.com/privacy) and the
-[terms of use](https://cockpitdesktop.com/terms) that cover the optional account.

@@ -12,13 +12,3 @@ where
 {
     tokio::spawn(tache);
 }
-
-/// Lance un travail BLOQUANT sur un fil a lui, et rend de quoi attendre son resultat.
-pub fn lancer_bloquant<F, T>(travail: F) -> impl std::future::Future<Output = Result<T, String>>
-where
-    F: FnOnce() -> T + Send + 'static,
-    T: Send + 'static,
-{
-    let attente = tokio::task::spawn_blocking(travail);
-    async move { attente.await.map_err(|e| e.to_string()) }
-}

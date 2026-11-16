@@ -24,14 +24,13 @@
   import { forgetProjectTab } from "../../stores/ui";
   import { updateState, checkForUpdate } from "../../stores/update";
   import { trad, locale, setLocale, LOCALES, type Locale } from "../../i18n";
-  import { signalerErreur, reportingConsent, setReportingConsent } from "../../stores/errors";
+  import { signalerErreur } from "../../stores/errors";
   import { notify } from "../../stores/toast";
   import type { DbProject } from "../../types";
   import { onMount, onDestroy } from "svelte";
   import AppearanceSettings from "./AppearanceSettings.svelte";
   import KubernetesSettings from "./KubernetesSettings.svelte";
   import JiraSettings from "./JiraSettings.svelte";
-  import CarteCompte from "../compte/CarteCompte.svelte";
   import FournisseurDetail from "./FournisseurDetail.svelte";
   import { marked } from "marked";
   // Le CHANGELOG.md est embarque au build (Vite ?raw) : consultable hors ligne, et toujours
@@ -385,7 +384,6 @@
 
     <div class="settings-content stack">
       {#if view === "general"}
-        <CarteCompte />
         <section class="card">
           <div class="card-head">
             <h3>{$trad("settings.app.title")}</h3>
@@ -411,26 +409,6 @@
               <span class="feedback">{$trad("settings.app.updateAvailable", { version: $updateState.newVersion })}</span>
             {/if}
           </div>
-        </section>
-
-        <!-- **LA TRANSMISSION DES ERREURS SE COUPE ICI.** Retiree le 2026-08-26, remise le
-             2026-09-30 pour un partage hors de l'equipe : des inconnus doivent pouvoir dire non.
-             C'est le BACKEND qui refuse l'envoi quand la case est decochee (`report_error`),
-             pas l'interface ; le journal local, lui, s'ecrit toujours. -->
-        <section class="card">
-          <div class="card-head">
-            <h3>{$trad("settings.transmission.titre")}</h3>
-            <p>{$trad("settings.transmission.detail")}</p>
-          </div>
-          <label class="check-row">
-            <input
-              type="checkbox"
-              checked={$reportingConsent === "on"}
-              onchange={(e) => void setReportingConsent((e.currentTarget as HTMLInputElement).checked)
-                .catch((err) => notify(String(err)))}
-            />
-            <span>{$trad("settings.transmission.case")}</span>
-          </label>
         </section>
 
         <section class="card">

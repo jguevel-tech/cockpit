@@ -62,8 +62,6 @@ def analyser(chemin):
 # donc l'onglet compte mort sous la coquille, sans qu'aucune erreur ne le signale.
 SOURCES = [
     ('backend/src/lib.rs', 'crate::'),
-    ('backend/src/compte/mod.rs', 'crate::compte::'),
-    ('backend/src/compte/synchro.rs', 'crate::compte::synchro::'),
     ('backend/src/jira/mod.rs', 'crate::jira::'),
 ]
 def compter_les_attributs(chemin):

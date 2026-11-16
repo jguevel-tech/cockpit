@@ -102,9 +102,8 @@ function servirInterface() {
     // `index.html` serait perdue au prochain build de Vite, qui reecrit ce fichier.
     //
     // Ce que chaque directive paie : `style-src 'unsafe-inline'` parce que Svelte et xterm
-    // posent des styles a la volee ; `img-src data: blob:` parce que le fond d'ecran et les
-    // avatars sont des data URL ; `connect-src` pour les APIs des fournisseurs d'IA et la
-    // synchronisation. Il n'y a PAS de `script-src 'unsafe-eval'` : le code de la page est
+    // posent des styles a la volee ; `img-src data: blob:` parce que le fond d'ecran est
+    // une data URL ; `connect-src` pour les APIs des fournisseurs d'IA. Il n'y a PAS de `script-src 'unsafe-eval'` : le code de la page est
     // compile, et le pont ne fait rien evaluer. Pas davantage de `'wasm-unsafe-eval'` : la
     // coloration (Shiki) tourne sur son moteur JavaScript, voir `src/lib/shiki.ts`.
     const entetes = new Headers(reponse.headers)
