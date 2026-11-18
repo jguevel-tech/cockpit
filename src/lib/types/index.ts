@@ -427,17 +427,3 @@ export interface DockerImage {
   size: string;
   dangling: boolean;
 }
-
-/** Fiche technique de la machine, jointe aux erreurs remontees. */
-export interface MachineReport {
-  app_version: string;
-  distro: string;
-  /**
-   * Ce que la capture retiendrait : host audio, appareil et format natif des deux
-   * pistes. Remplace l'ancien couple serveur audio + version de pw-record, disparus
-   * avec les programmes externes.
-   */
-  audio: string;
-  /** "appimage" ou "binaire". */
-  packaging: string;
-}

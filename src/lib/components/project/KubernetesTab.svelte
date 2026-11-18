@@ -24,7 +24,7 @@
   import {
     k8sContextes, k8sNamespaces, k8sPods, k8sEvenements, k8sYaml,
     k8sKubectlPresent, k8sAjouterUnCluster, k8sSurveillanceLire, k8sSurveillanceEcrire,
-    k8sHistorique, k8sWorkloads, k8sSupprimerUnPod, type Contexte, type ReglagesSurveillance,
+    k8sHistorique, k8sWorkloads, k8sSupprimerUnPod, k8sLancerUneTache, type Contexte, type ReglagesSurveillance,
   } from "../../api/k8s";
   import {
     filtrer, grouper, formaterCpu, formaterRam, age, grouperLesNamespaces,
@@ -465,6 +465,22 @@
    * Le cluster tranche : un refus de droits remonte tel quel, pod par pod, parce qu'on ne sait
    * pas a l'avance ce qu'il permet.
    */
+  /// Lance une tache planifiee maintenant.
+  ///
+  /// **CA AGIT SUR LE CLUSTER, SOUVENT EN PRODUCTION** : la confirmation cite la tache, le
+  /// cluster et le namespace, pour qu'on ne lance pas sur la prod ce qu'on croyait lancer en
+  /// qualification. Le pod arrive ensuite par le flux, sous la tache.
+  async function lancerUneTache(tache: string) {
+    const message = $trad("k8s.lancerConfirmation", { nom: tache, contexte, namespace });
+    if (!(await demanderConfirmation({ message, action: $trad("k8s.lancer") }))) return;
+    try {
+      const travail = await k8sLancerUneTache(contexte, namespace, tache);
+      notify($trad("k8s.lancerFait", { nom: travail }), "info", 5000, { report: false });
+    } catch (e) {
+      notify($trad("k8s.lancerEchec", { nom: tache, erreur: String(e) }));
+    }
+  }
+
   async function supprimerDesPods(cibles: Pod[], message?: string) {
     if (cibles.length === 0) return;
     message ??=
@@ -739,6 +755,7 @@
             surOuvrirPod={(pod, volet) => void ouvrirLeDetail(pod, volet)}
             surShell={ouvrirUnShell}
             surSupprimer={(cibles) => void supprimerDesPods(cibles)}
+            surLancer={lancerUneTache}
             vide={recherche
               ? $trad("k8s.aucunResultat")
               : vue === "services" ? $trad("k8s.aucunService") : $trad("k8s.aucuneTache")}

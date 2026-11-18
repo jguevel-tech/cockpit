@@ -11,6 +11,7 @@
   import { trad } from "../../i18n";
   import { demanderConfirmation } from "../../stores/confirm";
   import { demanderTexte } from "../../stores/saisie";
+  import { chercherDansLesNotes } from "../../notes/recherche";
 
   let { project }: { project: string } = $props();
 
@@ -19,6 +20,32 @@
   let notesEl: HTMLDivElement | undefined = $state(undefined);
 
   onMount(() => loadTree());
+
+  // --- Recherche dans les notes du projet ---
+  // L'arbre porte deja le contenu de chaque note : chercher ne coute aucun aller-retour.
+  // La note ouverte le tient a jour a chaque enregistrement (`onSaved`).
+  let requete = $state("");
+  const resultats = $derived(chercherDansLesNotes(tree.files, requete));
+  const enRecherche = $derived(requete.trim().length > 0);
+
+  function noteEnregistree(id: number, content: string) {
+    const f = tree.files.find((x) => x.id === id);
+    if (f) f.content = content;
+  }
+
+  function onRequeteKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && requete) {
+      // Sinon l'Echap remonte a la fenetre et quitte aussi le mode lecture.
+      e.stopPropagation();
+      requete = "";
+    } else if (e.key === "Enter" && resultats[0]) {
+      openFile(resultats[0].note.id);
+    }
+  }
+
+  function dossierDe(folderId: number | null): string {
+    return folderId === null ? "" : tree.folders.find((d) => d.id === folderId)?.name ?? "";
+  }
 
   // Une reunion transcrite cree une note en arriere-plan : on recharge l'arbre
   $effect(() => {
@@ -271,6 +298,37 @@
       <button class="sm-btn" onclick={addFolder} title={$trad("notes.newFolder")}>📁+</button>
       <button class="sm-btn" onclick={() => addFile(null)} title={$trad("notes.newFile")}>📄+</button>
     </div>
+    <input
+      class="recherche"
+      type="search"
+      bind:value={requete}
+      placeholder={$trad("notes.searchPlaceholder")}
+      onkeydown={onRequeteKeydown}
+    />
+
+    {#if enRecherche}
+      <!-- Les resultats REMPLACENT l'arbre le temps de la recherche : vider le champ le rend tel
+           qu'il etait, dossiers et ordre compris. -->
+      {#each resultats as r (r.note.id)}
+        <button
+          type="button"
+          class="resultat"
+          class:active={selectedFile?.id === r.note.id}
+          onclick={() => openFile(r.note.id)}
+        >
+          <span class="resultat-nom">
+            📄 {r.note.name}
+            {#if r.nombre > 0}<span class="resultat-nombre">{r.nombre}</span>{/if}
+          </span>
+          {#if dossierDe(r.note.folder_id)}<span class="resultat-dossier">📁 {dossierDe(r.note.folder_id)}</span>{/if}
+          {#if r.extrait}
+            <span class="resultat-extrait">{r.extrait.avant}<mark>{r.extrait.trouve}</mark>{r.extrait.apres}</span>
+          {/if}
+        </button>
+      {:else}
+        <p class="aucun">{$trad("notes.searchNone", { requete: requete.trim() })}</p>
+      {/each}
+    {:else}
 
     {#each tree.folders as folder, fi}
       <div
@@ -381,10 +439,16 @@
         </div>
       {/each}
     </div>
+    {/if}
   </div>
 
   {#if selectedFile}
-    <NoteEditor file={selectedFile} onRename={(name) => renameFile(selectedFile!.id, name)} />
+    <NoteEditor
+      file={selectedFile}
+      onRename={(name) => renameFile(selectedFile!.id, name)}
+      onSaved={noteEnregistree}
+      recherche={enRecherche ? requete : ""}
+    />
   {:else}
     <div class="editor-panel empty-editor">
       <p>{$readingMode ? $trad("notes.readingNoFile") : $trad("notes.selectFile")}</p>
@@ -401,6 +465,25 @@
   .tree-panel.replie { display: none; }
   .tree-header { display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.5rem; }
   .tree-header h3 { flex: 1; margin: 0; font-size: 0.95rem; }
+  .recherche {
+    width: 100%; box-sizing: border-box; margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.25rem 0.45rem;
+    border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary);
+  }
+  .resultat {
+    display: flex; flex-direction: column; gap: 0.1rem; width: 100%; padding: 0.35rem 0.5rem; margin-bottom: 0.2rem;
+    border: none; border-radius: 4px; background: none; cursor: pointer; text-align: left; color: var(--text-primary);
+  }
+  .resultat:hover, .resultat.active { background: var(--bg-tertiary); }
+  .resultat.active .resultat-nom { color: var(--accent); }
+  .resultat-nom { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+  .resultat-nombre {
+    margin-left: auto; font-size: 0.7rem; color: var(--text-muted);
+    border: 1px solid var(--border-color); border-radius: 8px; padding: 0 0.35rem;
+  }
+  .resultat-dossier { font-size: 0.72rem; color: var(--text-muted); }
+  .resultat-extrait { font-size: 0.75rem; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .resultat-extrait mark { background: color-mix(in srgb, var(--warning) 38%, transparent); color: inherit; border-radius: 2px; }
+  .aucun { font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0; }
   .sm-btn { background: none; border: none; cursor: pointer; font-size: 0.8rem; padding: 0.1rem 0.3rem; color: var(--text-secondary); }
   .sm-btn:hover { color: var(--text-primary); }
   .sm-btn.danger:hover { color: var(--error); }

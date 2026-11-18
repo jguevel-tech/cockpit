@@ -5,7 +5,6 @@
   import { unreadCount } from "../../stores/notifications";
   import { trad, tradN } from "../../i18n";
   import NotificationPanel from "../notifications/NotificationPanel.svelte";
-  import BoutonCompte from "../compte/BoutonCompte.svelte";
   import JaugeConsommation from "./JaugeConsommation.svelte";
   import { choixDeProfilOuvert, profilCourant, chargerLeProfilCourant } from "../../stores/profil";
   import { signalerErreur } from "../../stores/errors";
@@ -60,7 +59,6 @@
     </button>
     <button class="header-btn" onclick={openSettings} title={$trad("header.settings")}>&#9881;</button>
     <button class="header-btn" onclick={toggleBase} title={$trad("header.theme")}>&#9681;</button>
-    <BoutonCompte />
   </div>
 </header>
 

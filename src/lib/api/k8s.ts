@@ -102,3 +102,8 @@ export const k8sWorkloads = (contexte: string, namespace: string) =>
  */
 export const k8sSupprimerUnPod = (contexte: string, namespace: string, pod: string) =>
   invoke<void>("k8s_supprimer_un_pod", { contexte, namespace, pod });
+
+/// Lance une tache planifiee maintenant ; rend le nom du travail cree. Memes regles : des
+/// noms, verifies par le backend, et le cluster qui tranche les droits.
+export const k8sLancerUneTache = (contexte: string, namespace: string, tache: string) =>
+  invoke<string>("k8s_lancer_une_tache", { contexte, namespace, tache });

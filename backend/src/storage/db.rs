@@ -312,11 +312,11 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_k8s_mesures_t ON k8s_mesures(t);",
         )?;
 
-        // Identifiants globaux et journal des changements. Pose EN DERNIER, quand toutes
-        // les tables existent : les declencheurs portent sur elles.
-        drop(conn);
-        self.preparer_la_synchro()?;
-        let conn = self.conn();
+        // La synchronisation entre machines est RETIREE (1.5.0), avec le serveur. Une base qui
+        // l'a connue garde des declencheurs qui ecriraient dans un journal a chaque
+        // modification, pour personne : on les retire, avec leurs tables et ce que le compte
+        // avait range dans les reglages (dont son jeton). Sans effet sur une base neuve.
+        retirer_la_synchro(&conn)?;
 
         // Migration: noms personnalises des conversations d'un agent, PAR FOURNISSEUR.
         //
@@ -360,6 +360,30 @@ impl Database {
     }
 }
 
+/// Les types que la synchronisation suivait : chacun avait trois declencheurs
+/// `sync_<type>_{insert,update,delete}`. Liste FIGEE : c'est ce qui a ete pose chez les gens.
+const TYPES_SYNCHRO_RETIRES: &[&str] = &[
+    "dossier_projet", "projet", "tache", "lien", "commande", "dossier_note", "fichier_note", "note",
+];
+
+/// Retire ce que la synchronisation avait pose dans une base. Rejouable sans effet.
+fn retirer_la_synchro(conn: &Connection) -> Result<()> {
+    let mut sql = String::new();
+    for type_ in TYPES_SYNCHRO_RETIRES {
+        for quand in ["insert", "update", "delete"] {
+            sql.push_str(&format!("DROP TRIGGER IF EXISTS sync_{type_}_{quand};\n"));
+        }
+    }
+    sql.push_str(
+        "DROP TABLE IF EXISTS sync_identite;
+         DROP TABLE IF EXISTS sync_journal;
+         DROP TABLE IF EXISTS sync_pause;
+         DELETE FROM settings WHERE key LIKE 'compte\\_%' ESCAPE '\\'
+            OR key IN ('sync_journal_amorce', 'error_reporting', 'error_reporting_user');",
+    );
+    conn.execute_batch(&sql)
+}
+
 impl Database {
     /// Sauvegarde la base VIVANTE vers `dest` via l'API backup de SQLite : coherent
     /// meme en mode WAL et pendant des ecritures, contrairement a une copie de fichier.
@@ -376,6 +400,48 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **UNE BASE QUI A CONNU LA SYNCHRO EN SORT PROPRE.** Ses declencheurs ecriraient sinon
+    /// dans un journal a chaque modification, et le jeton du compte resterait en base.
+    #[test]
+    fn la_synchro_d_une_ancienne_base_est_retiree() {
+        let chemin = std::env::temp_dir().join(format!("cockpit_sans_synchro_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&chemin);
+        {
+            let db = Database::new(chemin.to_str().unwrap()).unwrap();
+            let conn = db.conn();
+            conn.execute_batch(
+                "CREATE TABLE sync_journal (type TEXT);
+                 CREATE TABLE sync_identite (type TEXT);
+                 CREATE TABLE sync_pause (actif INTEGER);
+                 CREATE TRIGGER sync_projet_insert AFTER INSERT ON projects
+                   BEGIN INSERT INTO sync_journal VALUES ('projet'); END;
+                 CREATE TRIGGER sync_note_delete AFTER DELETE ON notes
+                   BEGIN INSERT INTO sync_journal VALUES ('note'); END;
+                 INSERT INTO settings (key, value) VALUES ('compte_jeton', 'secret'),
+                   ('compte_synchro_curseur', '12'), ('error_reporting', 'on'),
+                   ('compter_ceci', 'garde'), ('langue', 'fr');",
+            )
+            .unwrap();
+        }
+        let db = Database::new(chemin.to_str().unwrap()).unwrap();
+        let restes: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'sync%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(restes, 0, "declencheurs ou tables de synchro encore presents");
+        assert_eq!(db.get_setting("compte_jeton"), None, "le jeton du compte est reste en base");
+        assert_eq!(db.get_setting("compte_synchro_curseur"), None);
+        assert_eq!(db.get_setting("error_reporting"), None);
+        // Le motif ne mord pas a cote : `compter_` n'est pas `compte_`.
+        assert_eq!(db.get_setting("compter_ceci").as_deref(), Some("garde"));
+        assert_eq!(db.get_setting("langue").as_deref(), Some("fr"));
+        let _ = std::fs::remove_file(&chemin);
+    }
 
     #[test]
     fn test_backup_to() {

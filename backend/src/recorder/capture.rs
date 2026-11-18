@@ -766,11 +766,10 @@ fn enregistrer(
     Ok(())
 }
 
-/// Ce que la capture sait dire de la machine, sans enregistrer.
-///
-/// Remplace `pw_record_version()` et `audio_server_from_pactl()` de la fiche de
-/// diagnostic : le host retenu et les deux appareils, avec leur format natif.
-pub fn fiche_audio() -> String {
+/// Ce que la capture sait dire de la machine, sans enregistrer : le host retenu et les deux
+/// appareils, avec leur format natif. Affiche par l'essai sur materiel reel.
+#[cfg(test)]
+fn fiche_audio() -> String {
     [Role::Micro, Role::Systeme]
         .iter()
         .map(|role| {
@@ -918,7 +917,7 @@ mod tests {
     #[test]
     #[ignore = "demande une carte son"]
     fn capture_reelle() {
-        // La meme resolution d'appareils que celle qui accompagne les erreurs.
+        // La resolution d'appareils que la capture va suivre.
         println!("fiche : {}", fiche_audio());
         let dir = std::env::temp_dir().join(format!("cockpit-capture-{}", std::process::id()));
         let rt = tokio::runtime::Builder::new_multi_thread()

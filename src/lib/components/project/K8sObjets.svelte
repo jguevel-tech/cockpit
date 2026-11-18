@@ -15,7 +15,7 @@
 
   let {
     elements, maintenant, kubectl = false, choisi = null, surOuvrirPod, surShell, surSupprimer,
-    vide,
+    surLancer, vide,
   }: {
     elements: Element[];
     maintenant: number;
@@ -24,6 +24,8 @@
     surOuvrirPod: (pod: Pod, volet?: "logs" | "evenements" | "yaml") => void;
     surShell?: (pod: Pod) => void;
     surSupprimer?: (pods: Pod[]) => void;
+    /// Lance une tache planifiee maintenant. Rend quand le cluster a repondu.
+    surLancer?: (tache: string) => Promise<void>;
     vide: string;
   } = $props();
 
@@ -47,6 +49,15 @@
     if (e.ennuyeux) return "mauvais";
     if (e.suspendu) return "eteint";
     return e.pods.some((p) => p.etat === "Running") ? "bon" : "eteint";
+  }
+
+  /// Un lancement en cours : le bouton le dit et ne repart pas sur un second clic, qui
+  /// creerait un second travail.
+  let lancement = $state(false);
+  async function lancer(nom: string) {
+    if (!surLancer || lancement) return;
+    lancement = true;
+    try { await surLancer(nom); } finally { lancement = false; }
   }
 
   /// Les pods de l'objet ouvert qui ont echoue : ce sont eux qu'on vient nettoyer.
@@ -90,6 +101,14 @@
       {/if}
       {#each ouvert.versions as v (v)}<span class="version">{v}</span>{/each}
       <span class="espace"></span>
+      {#if surLancer && ouvert.sorte === "CronJob"}
+        <button
+          class="btn small primary"
+          disabled={lancement}
+          title={$trad("k8s.lancerHint")}
+          onclick={() => lancer(ouvert.nom)}
+        >{lancement ? $trad("k8s.lancement") : $trad("k8s.lancer")}</button>
+      {/if}
       <span class="mesure">{formaterCpu(ouvert.cpu)}</span>
       <span class="mesure">{formaterRam(ouvert.ram)}</span>
     </div>

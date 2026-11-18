@@ -185,3 +185,86 @@ mod tests {
         assert_eq!(sorte_de("inconnu"), "");
     }
 }
+
+/// Le travail a creer pour lancer une tache planifiee MAINTENANT, comme le fait
+/// `kubectl create job --from=cronjob/<nom>`.
+///
+/// **LE NOM EST `<tache>-<secondes>`.** Un lancement planifie s'appelle `<tache>-<minutes>` :
+/// meme forme, donc l'ecran range le pod sous sa tache sans rien savoir de plus, et jamais le
+/// meme nombre, donc jamais de collision avec un lancement du cluster dans la meme minute. Une
+/// tache planifiee ne depasse pas 52 caracteres, et 52 + 11 tiennent dans les 63 d'un nom.
+///
+/// Le proprietaire est la tache elle-meme : son historique et son nettoyage le comptent comme
+/// un des siens, et l'annotation dit qu'il a ete lance a la main.
+pub fn travail_depuis_tache(tache: &Value, secondes: u64) -> Result<Value, String> {
+    let nom = tache.pointer("/metadata/name").and_then(Value::as_str).ok_or("tache planifiee sans nom")?;
+    let uid = tache.pointer("/metadata/uid").and_then(Value::as_str).ok_or("tache planifiee sans uid")?;
+    let modele = tache.pointer("/spec/jobTemplate").ok_or("tache planifiee sans modele de travail")?;
+    let spec = modele.get("spec").cloned().ok_or("modele de travail sans spec")?;
+    let mut annotations = modele
+        .pointer("/metadata/annotations")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    annotations.insert("cronjob.kubernetes.io/instantiate".into(), Value::from("manual"));
+    let etiquettes = modele.pointer("/metadata/labels").cloned().unwrap_or_else(|| serde_json::json!({}));
+    Ok(serde_json::json!({
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {
+            "name": format!("{nom}-{secondes}"),
+            "labels": etiquettes,
+            "annotations": annotations,
+            "ownerReferences": [{
+                "apiVersion": "batch/v1",
+                "kind": "CronJob",
+                "name": nom,
+                "uid": uid,
+                "controller": true,
+                "blockOwnerDeletion": true,
+            }],
+        },
+        "spec": spec,
+    }))
+}
+
+#[cfg(test)]
+mod tests_lancement {
+    use super::*;
+    use serde_json::json;
+
+    fn tache() -> Value {
+        json!({
+            "metadata": { "name": "rapport", "uid": "u-1" },
+            "spec": { "schedule": "0 0 1 1 *", "jobTemplate": {
+                "metadata": { "labels": { "app": "rapport" }, "annotations": { "a": "b" } },
+                "spec": { "template": { "spec": { "containers": [{ "name": "c", "image": "i:1" }] } } }
+            }}
+        })
+    }
+
+    #[test]
+    fn le_travail_reprend_le_modele_de_la_tache() {
+        let t = travail_depuis_tache(&tache(), 1_760_000_000).unwrap();
+        assert_eq!(t["metadata"]["name"], "rapport-1760000000");
+        assert_eq!(t["spec"]["template"]["spec"]["containers"][0]["image"], "i:1");
+        assert_eq!(t["metadata"]["labels"]["app"], "rapport");
+        assert_eq!(t["metadata"]["annotations"]["a"], "b");
+        assert_eq!(t["metadata"]["annotations"]["cronjob.kubernetes.io/instantiate"], "manual");
+        assert_eq!(t["metadata"]["ownerReferences"][0]["uid"], "u-1");
+    }
+
+    /// Le pod du travail lance a la main doit se ranger sous SA tache, comme ceux du cluster.
+    #[test]
+    fn le_pod_lance_a_la_main_se_range_sous_sa_tache() {
+        let t = travail_depuis_tache(&tache(), 1_760_000_000).unwrap();
+        let pod = json!({ "metadata": { "name": "rapport-1760000000-abcde",
+            "ownerReferences": [{ "kind": "Job", "name": t["metadata"]["name"] }] } });
+        assert_eq!(crate::k8s::modele::groupe_de(&pod), ("rapport".to_string(), "CronJob".to_string()));
+    }
+
+    #[test]
+    fn une_tache_sans_modele_est_refusee() {
+        assert!(travail_depuis_tache(&json!({ "metadata": { "name": "x", "uid": "u" } }), 1).is_err());
+    }
+}

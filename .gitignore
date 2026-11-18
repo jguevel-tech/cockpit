@@ -28,3 +28,4 @@ docs/superpowers/
 
 # Les paquets produits par electron-builder : 123 Mo par AppImage, jamais versionnes.
 coquille/paquet/
+/.idea/

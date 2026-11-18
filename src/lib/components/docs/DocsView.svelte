@@ -9,7 +9,7 @@
    */
   type SectionId =
     | "demarrer" | "terminaux" | "fichiers" | "git" | "docker" | "kubernetes" | "jira"
-    | "taches" | "palette" | "dashboard" | "apparence" | "compte" | "maj" | "raccourcis";
+    | "taches" | "palette" | "dashboard" | "apparence" | "maj" | "raccourcis";
 
   const MENU: { id: SectionId; labelKey: Parameters<typeof translate>[0]; icon: string }[] = [
     { id: "demarrer", labelKey: "docs.menu.start", icon: "🚀" },
@@ -23,7 +23,6 @@
     { id: "taches", labelKey: "docs.menu.tasks", icon: "✓" },
     { id: "palette", labelKey: "docs.menu.palette", icon: "⌘" },
     { id: "apparence", labelKey: "docs.menu.appearance", icon: "🎨" },
-    { id: "compte", labelKey: "docs.menu.account", icon: "👤" },
     { id: "maj", labelKey: "docs.menu.updates", icon: "🔔" },
     { id: "raccourcis", labelKey: "docs.menu.shortcuts", icon: "⌨" },
   ];
@@ -266,6 +265,14 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.k8s.lancer")}</p>
+        <div class="demo">
+          <div class="d-tabs"><span class="d-section">{$trad("docs.k8s.demoTache")}</span><span class="d-muted">{$trad("k8s.jamaisLance")}</span><span class="d-spring"></span><span class="d-btn small primary">{$trad("k8s.lancer")}</span></div>
+          <div class="d-row"><span class="d-muted">{$trad("docs.k8s.demoTachePod")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.k8s.ressources")}</p>
         <div class="demo">
           <div class="d-tabs">
@@ -391,6 +398,15 @@
       </div>
 
       <div class="block">
+        <p>{@html $trad("docs.tasks.horsProjet")}</p>
+        <div class="demo">
+          <div class="d-tabs"><span class="d-input">{$trad("tasks.newPlaceholder")}</span><span class="d-btn small">{$trad("docs.tasks.listesDemoNom")} ▾</span><span class="d-btn small">{$trad("tasks.newList")}</span></div>
+          <div class="d-row"><span class="d-section">{$trad("docs.tasks.listesDemoNom")}</span> <span class="d-btn small">✎</span><span class="d-btn small">×</span></div>
+          <div class="d-row"><span class="d-check"></span> <span class="d-multi">{$trad("docs.tasks.horsProjetDemo")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
         <p>{@html $trad("docs.tasks.progress")}</p>
         <div class="demo">
           <div class="d-row"><span class="d-check"></span> {$trad("docs.tasks.demo1")} <span class="d-bar"><span class="d-bar-fill" style="width: 70%"></span></span> <span class="d-muted">70%</span></div>
@@ -430,6 +446,23 @@
         <div class="demo">
           <div class="d-note">const x = 1;</div>
           <div class="d-row"><span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span> <span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span> <span class="d-muted">{$trad("docs.tasks.notesCodeOut")}</span></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <p>{@html $trad("docs.tasks.notesSearch")}</p>
+        <div class="demo">
+          <div class="d-input">{$trad("docs.tasks.notesSearchDemoQuery")}</div>
+          <div class="d-row sel">📄 {$trad("docs.tasks.notesSearchDemoName")} <span class="d-count">2</span></div>
+          <div class="d-row indent d-muted">{$trad("docs.tasks.notesSearchDemoExtract")}</div>
+        </div>
+      </div>
+
+      <div class="block">
+        <p>{@html $trad("docs.tasks.notesColor")}</p>
+        <div class="demo">
+          <div class="d-row"><span class="kbd">```json</span> <span class="kbd">{$trad("docs.shortcuts.keyEnter")}</span> <span class="d-muted">{$trad("docs.tasks.notesColorOpen")}</span></div>
+          <div class="d-row"><span class="d-btn small">{$trad("note.codeLanguageGuessed", { langue: "json" })}</span> <span class="d-muted">{$trad("docs.tasks.notesColorPick")}</span></div>
         </div>
       </div>
 
@@ -550,37 +583,6 @@
             <span class="d-note">{$trad("docs.appearance.consoDemo")}</span>
           </div>
         </div>
-      </div>
-
-    {:else if section === "compte"}
-      <h3>{$trad("docs.account.heading")}</h3>
-
-      <div class="block">
-        <p>{@html $trad("docs.account.what")}</p>
-      </div>
-
-      <div class="block">
-        <p>{@html $trad("docs.account.where")}</p>
-        <div class="demo">
-          <div class="d-row">
-            <span class="d-muted">{$trad("docs.account.headerDemo")}</span>
-            <span class="d-btn small">{$trad("docs.account.initialsDemo")}</span>
-          </div>
-          <div class="d-note">{$trad("docs.account.menuDemo")}</div>
-        </div>
-      </div>
-
-      <div class="block">
-        <p>{@html $trad("docs.account.page")}</p>
-        <div class="demo">
-          <div class="d-row"><strong>{$trad("compte.profil.nom")}</strong><span class="d-muted">{$trad("docs.account.nameDemo")}</span></div>
-          <div class="d-row"><strong>{$trad("compte.profil.synchro")}</strong><span class="d-muted">{$trad("docs.account.syncDemo")}</span></div>
-          <div class="d-row"><strong>{$trad("compte.profil.machines")}</strong><span class="d-muted">{$trad("docs.account.machinesDemo")}</span></div>
-        </div>
-      </div>
-
-      <div class="block">
-        <p>{@html $trad("docs.account.offline")}</p>
       </div>
 
     {:else if section === "maj"}
@@ -715,6 +717,7 @@
     background: var(--bg-tertiary); border: 1px solid var(--border-color);
     border-radius: 8px; padding: 0 0.35rem; font-size: 0.68rem; color: var(--text-secondary);
   }
+  .d-multi { white-space: pre-line; }
   .d-note { color: var(--text-muted); font-size: 0.75rem; font-style: italic; }
   .d-caret { color: var(--text-muted); }
   .d-hover { margin-left: auto; opacity: 0.6; font-size: 0.75rem; }

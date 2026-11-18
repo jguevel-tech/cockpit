@@ -328,6 +328,89 @@ fi
 
 # **PARTIR TOUT DE SUITE APRES AVOIR ECRIT NE PERD RIEN.** Signale le 2026-10-01 : une ligne
 # ajoutee puis l'onglet quitte aussitot, et au retour la ligne n'y etait plus.
+if [ -n "${COCKPIT_BANC_TODOS:-}" ]; then
+  # Taches hors projet et taches sur plusieurs lignes, depuis le tableau de bord.
+  python3 - "$COCKPIT_DB" <<'SQL'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("INSERT INTO todos (project, text, position) VALUES ('', ?, 0)",
+          ("Idee : un mode hors ligne\n- garder la file des changements\n- rejouer au retour du reseau",))
+c.commit()
+SQL
+  clic 900 472 1
+  clic "${COCKPIT_BANC_X_ACCUEIL:-52}" "${COCKPIT_BANC_Y_ACCUEIL:-28}" 3   # le tableau de bord
+  image todos-1-tableau
+  clic "${COCKPIT_BANC_X_SAISIE:-700}" "${COCKPIT_BANC_Y_SAISIE:-140}" 1
+  python3 "$OUTILS" taper "Relire le contrat" sans-entree 2>/dev/null || true
+  python3 "$OUTILS" raccourci "Shift_L+Return"
+  python3 "$OUTILS" taper "avant vendredi" 2>/dev/null || true
+  sleep 2
+  image todos-2-ajoutee
+  # Une liste nommee : « + Liste », son nom, puis une tache qui y va d'office.
+  clic "${COCKPIT_BANC_X_LISTE:-1330}" "${COCKPIT_BANC_Y_LISTE:-157}" 2
+  image todos-3-nom-de-liste
+  python3 "$OUTILS" taper "Idees" 2>/dev/null || true
+  sleep 1
+  clic "${COCKPIT_BANC_X_SAISIE:-700}" "${COCKPIT_BANC_Y_SAISIE:-140}" 1
+  python3 "$OUTILS" taper "Un mode hors ligne" 2>/dev/null || true
+  sleep 2
+  image todos-4-liste
+  # Renommer « Hors projet » : ses taches deviennent une liste nommee.
+  python3 "$OUTILS" survoler 900 206
+  sleep 1
+  image todos-5-survol
+  clic "${COCKPIT_BANC_X_RENOMMER:-1290}" 206 2
+  python3 "$OUTILS" effacer 2>/dev/null || true
+  python3 "$OUTILS" taper "A trier" 2>/dev/null || true
+  sleep 2
+  image todos-6-renommee
+  python3 - "$COCKPIT_DB" <<'SQL'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print("  taches hors projet :", c.execute("SELECT project, text FROM todos WHERE project='' OR project LIKE 'liste:%' ORDER BY id").fetchall())
+print("  listes retenues :", c.execute("SELECT value FROM settings WHERE key='taches.listes'").fetchall())
+SQL
+  exit 0
+fi
+
+if [ -n "${COCKPIT_BANC_NOTES:-}" ]; then
+  # Recherche dans les notes et coloration des blocs de code : deux notes en base, dont une
+  # qui porte du JSON sans langue declaree (il doit etre devine) et du SQL declare.
+  python3 - "$COCKPIT_DB" <<'SQL'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("INSERT INTO note_files (project, folder_id, name, content, position) VALUES (?, NULL, ?, ?, 98)",
+          ("api-facturation", "Requetes", "La requete du rapport :\n\n```sql\nSELECT id, nom FROM clients WHERE actif = 1;\n```\n\nLa reponse de l'API :\n\n```\n{\n  \"id\": 42,\n  \"nom\": \"Durand\",\n  \"actif\": true\n}\n```\n\nPenser au cache des clients."))
+c.execute("INSERT INTO note_files (project, folder_id, name, content, position) VALUES (?, NULL, ?, ?, 99)",
+          ("api-facturation", "Clients", "Liste des clients a relancer.\n\nVoir le cache."))
+c.commit()
+SQL
+  clic 900 472 1
+  clic 539 98 4           # Workspace
+  image notes-1-liste
+  clic "${COCKPIT_BANC_X_RECHERCHE:-470}" "${COCKPIT_BANC_Y_RECHERCHE:-237}" 1
+  python3 "$OUTILS" taper "clients" 2>/dev/null || true
+  sleep 1
+  image notes-2-recherche
+  clic 400 330 2          # la note « Requetes », trouvee par son contenu
+  image notes-3-coloration
+  clic 700 470 2          # dans le bloc JSON : la barre propose sa langue
+  image notes-4-langue
+  # « ```yaml » puis Entree, au bout de la note : un bloc YAML s'ouvre et se colore.
+  clic 700 565 1
+  python3 "$OUTILS" raccourci "ctrl+End"
+  python3 "$OUTILS" raccourci "Return"
+  python3 "$OUTILS" taper '```yaml' 2>/dev/null || true
+  python3 "$OUTILS" taper "cle: valeur" 2>/dev/null || true
+  sleep 3
+  image notes-5-bloc-tape
+  python3 - "$COCKPIT_DB" <<'SQL'
+import sqlite3, sys
+print("  enregistre :", repr(sqlite3.connect(sys.argv[1]).execute("SELECT content FROM note_files WHERE name='Requetes'").fetchone()[0]))
+SQL
+  exit 0
+fi
+
 if [ -n "${COCKPIT_BANC_DEPART:-}" ]; then
   python3 - "$COCKPIT_DB" <<'SQL'
 import sqlite3, sys
@@ -510,6 +593,18 @@ if [ -n "${COCKPIT_BANC_K8S:-}" ]; then
   # taches DECLAREES, y compris celles qui ne se sont jamais declenchees et n'ont donc aucun pod.
   clic 632 240 3          # l onglet « Taches planifiees »
   image k8s-2-taches
+  # **LANCER UNE TACHE MAINTENANT** : on entre dans une tache jamais declenchee, on la lance,
+  # et son pod doit arriver par le flux, rangé sous elle.
+  if [ -n "${COCKPIT_BANC_LANCER:-}" ]; then
+    clic "${COCKPIT_BANC_X_TACHE:-600}" "${COCKPIT_BANC_Y_TACHE:-500}" 3
+    image k8s-lancer-1-tache
+    clic "${COCKPIT_BANC_X_LANCER:-1264}" "${COCKPIT_BANC_Y_LANCER:-331}" 2
+    image k8s-lancer-2-confirmation
+    clic "${COCKPIT_BANC_X_OK:-849}" "${COCKPIT_BANC_Y_OK:-501}" 8
+    image k8s-lancer-3-lancee
+    grep "travail recu" "$TRAVAIL/faux-cluster.out" | cut -c1-300 || echo "  aucun travail recu"
+    exit 0
+  fi
   # **LE MENAGE DE TOUT LE NAMESPACE EN UN GESTE**, a droite des onglets de vue.
   if [ -n "${COCKPIT_BANC_TOUT_NETTOYER:-}" ]; then
     clic "${COCKPIT_BANC_TOUT_X:-1300}" 240 3

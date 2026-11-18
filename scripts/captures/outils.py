@@ -240,7 +240,11 @@ def taper(texte: str, entree: bool = True) -> None:
 
     d = _ecran()
     noms = {" ": "space", "-": "minus", ".": "period", "/": "slash", "@": "at",
-            ":": "colon", "_": "underscore", "\n": "Return"}
+            ":": "colon", "_": "underscore", "\n": "Return",
+            # Sans leur nom X, ces symboles etaient sautes EN SILENCE : « ```yaml » arrivait
+            # « yaml », et l'on croyait l'editeur fautif.
+            "`": "grave", "{": "braceleft", "}": "braceright", '"': "quotedbl", ",": "comma",
+            ";": "semicolon", "=": "equal"}
 
     def touche(car: str):
         sym = XK.string_to_keysym(noms.get(car, car))
@@ -615,9 +619,6 @@ def preparer(base: str, projets: str, langue: str = "fr") -> None:
     c = sqlite3.connect(base)
     x = c.cursor()
 
-    # L'ecran d'accueil masquerait la capture, et la remontee d'erreurs n'a rien a faire ici.
-    x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('compte_accueil_vu','1')")
-    x.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('error_reporting','off')")
     # LE FOURNISSEUR D'IA EST FIXE, parce que la BARRE D'ONGLETS EN DEPEND : l'onglet Plugins
     # n'existe que pour un fournisseur dont les agents s'installent au format de Claude Code.
     # Sans cette ligne, changer le defaut du logiciel changerait le nombre d'onglets, et le
@@ -690,7 +691,9 @@ if __name__ == "__main__":
         glisser(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]),
                 maj="--maj" in sys.argv[6:])
     elif quoi == "taper":
-        taper(sys.argv[2])
+        # « sans-entree » en troisieme argument : frapper sans valider, pour enchainer une
+        # autre touche (Maj+Entree dans une zone de texte, par exemple).
+        taper(sys.argv[2], entree=not (len(sys.argv) > 3 and sys.argv[3] == "sans-entree"))
     elif quoi == "effacer":
         effacer()
     elif quoi == "raccourci":

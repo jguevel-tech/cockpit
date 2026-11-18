@@ -170,16 +170,6 @@ jobs:
       # quatre bibliotheques. C'est le DERNIER build qui est empaquete, d'ou cette etape
       # juste avant l'empaquetage.
       - name: Backend
-        env:
-          # L'adresse du serveur de suivi est figee DANS le binaire a la compilation
-          # (`option_env!`), pas ecrite dans le depot — il est public. Secrets absents = la
-          # remontee est simplement inactive, ce qui est le cas des builds locaux.
-          COCKPIT_GOOGLE_ID: ${{ secrets.COCKPIT_GOOGLE_ID }}
-          COCKPIT_GOOGLE_SECRET: ${{ secrets.COCKPIT_GOOGLE_SECRET }}
-          COCKPIT_REPORT_URL: ${{ secrets.COCKPIT_REPORT_URL }}
-          COCKPIT_REPORT_SITE: ${{ secrets.COCKPIT_REPORT_SITE }}
-          # Serveur maison sans certificat : le HTTP est assume ici, explicitement.
-          COCKPIT_REPORT_ALLOW_HTTP: ${{ secrets.COCKPIT_REPORT_ALLOW_HTTP }}
         run: cargo build --release --manifest-path backend/Cargo.toml
 
       - name: Interface

@@ -9,13 +9,13 @@
   import InlineEdit from "../ui/InlineEdit.svelte";
   import TodoText from "./TodoText.svelte";
   import TodoProgress from "./TodoProgress.svelte";
+  import TodoSaisie from "./TodoSaisie.svelte";
   import { trad } from "../../i18n";
   import { demanderConfirmation } from "../../stores/confirm";
 
   let { project }: { project: string } = $props();
 
   let todos: Todo[] = $state([]);
-  let newText = $state("");
   let showDone = $state(false);
   let editingId: number | null = $state(null);
   let editingDueId: number | null = $state(null);
@@ -30,9 +30,8 @@
     try { todos = await getTodos(project); } catch (e) { notify(String(e)); }
   }
 
-  async function add() {
-    if (!newText.trim()) return;
-    try { await createTodo(project, newText.trim()); newText = ""; await load(); } catch (e) { notify(String(e)); }
+  async function add(texte: string): Promise<boolean> {
+    try { await createTodo(project, texte); await load(); return true; } catch (e) { notify(String(e)); return false; }
   }
 
   async function toggle(t: Todo) {
@@ -65,8 +64,6 @@
     try { await setTodoProgress(t.id, valeur); await load(); } catch (e) { notify(String(e)); }
   }
 
-  function onKeydown(e: KeyboardEvent) { if (e.key === "Enter") add(); }
-
   function moveTodo(from: number, to: number, pos: DropPosition) {
     const items = reorder(pendingTodos, from, to, pos);
     // Recompose: pending reordonne + done inchanges
@@ -86,8 +83,7 @@
   </div>
   {#if !showDone}
     <div class="add-row">
-      <input type="text" bind:value={newText} placeholder={$trad("todos.newPlaceholder")} onkeydown={onKeydown} />
-      <button onclick={add}>+</button>
+      <TodoSaisie placeholder={$trad("todos.newPlaceholder")} onAdd={add} />
     </div>
   {/if}
   <ul>
@@ -105,6 +101,7 @@
         ></button>
         {#if editingId === todo.id}
           <InlineEdit
+            multiligne
             value={todo.text}
             onCommit={(v) => commitEdit(todo, v)}
             onCancel={() => (editingId = null)}
@@ -159,12 +156,10 @@
   }
   .toggle-done:hover { color: var(--text-primary); border-color: var(--text-secondary); }
   .toggle-done.active { background: var(--accent); color: white; border-color: var(--accent); }
-  .add-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-  .add-row input { flex: 1; padding: 0.35rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; }
-  .add-row button { padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--accent); color: white; cursor: pointer; font-size: 1rem; }
+  .add-row { margin-bottom: 0.5rem; }
   ul { list-style: none; padding: 0; margin: 0; }
   li {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.85rem;
+    display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.85rem;
   }
   .check {
     flex-shrink: 0;
@@ -177,6 +172,7 @@
     transition: all 0.15s;
     position: relative;
     display: inline-block;
+    margin-top: 0.2rem;
   }
   .check:hover {
     border-color: var(--success);

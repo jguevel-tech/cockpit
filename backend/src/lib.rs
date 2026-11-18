@@ -6,7 +6,6 @@ mod ouvrir;
 mod taches;
 pub mod pont;
 mod chemins;
-pub mod compte;
 mod commande;
 mod docker;
 mod gitdiff;
@@ -335,6 +334,12 @@ async fn k8s_yaml(contexte: String, namespace: String, pod: String) -> Result<St
 }
 
 /// Supprime un pod. Le cluster tranche : un refus revient tel quel a l'ecran.
+/// Lance une tache planifiee maintenant. Une commande qui parle au reseau : `async fn`.
+#[commande]
+async fn k8s_lancer_une_tache(contexte: String, namespace: String, tache: String) -> Result<String, String> {
+    k8s::lancer_une_tache(&contexte, &namespace, &tache).await
+}
+
 #[commande]
 async fn k8s_supprimer_un_pod(
     contexte: String,
@@ -569,6 +574,19 @@ fn move_todo(state: &AppState, id: i64, new_project: String) -> Result<(), Strin
 
 /// La logique de `get_pending_todos`, appelable par TOUT hote. La commande Tauri
 /// ci-dessus n'en est que la facade, et le pont appelle celle-ci : une seule verite.
+/// Renomme une liste de taches hors projet. Le backend verifie que les deux cles designent
+/// des listes : un vrai projet ne se renomme jamais par ici.
+#[commande]
+fn renommer_liste_de_taches(state: &AppState, ancienne: String, nouvelle: String) -> Result<(), String> {
+    state.db.renommer_liste_de_taches(&ancienne, &nouvelle)
+}
+
+/// Supprime une liste de taches hors projet et toutes ses taches.
+#[commande]
+fn supprimer_liste_de_taches(state: &AppState, cle: String) -> Result<usize, String> {
+    state.db.supprimer_liste_de_taches(&cle)
+}
+
 #[commande]
 pub fn get_pending_todos(state: &AppState) -> Result<Vec<storage::Todo>, String> {
     state.db.get_pending_todos()
@@ -1591,7 +1609,7 @@ async fn llm_consommation(
         probleme: None,
     };
     if let Some(capacite) = fournisseur.consommation() {
-        match capacite.fenetres(crate::compte::client()).await {
+        match capacite.fenetres(crate::llm::client_http()).await {
             Ok(fenetres) => etat.fenetres = fenetres,
             // Une panne se DIT : sans ce champ, un reseau coupe se lirait « tout va bien ».
             Err(e) => etat.probleme = Some(e),
@@ -1662,83 +1680,14 @@ fn ouvrir_phpstorm(state: &AppState, projet: String) -> Result<(), String> {
 }
 
 
-/// La logique de `report_error`, appelable par tout hote.
-///
-/// **L'`AppHandle` A DISPARU DE LA SIGNATURE.** Il n'y servait qu'a trouver le dossier de
-/// donnees, que `chemins::dossier_donnees()` connait deja, pose par l'hote au demarrage.
-/// C'est le meme decouplage que celui du journal des terminaux : garder le handle pour ca
-/// rendait la commande inutilisable ailleurs sans aucune raison.
+/// Ecrit une erreur dans le journal local. Rien ne quitte la machine.
 #[commande]
-async fn report_error(
-    state: &AppState,
-    scope: String,
-    message: String,
-) -> Result<(), String> {
-    // Tout ce qui touche la base est lu AVANT le point d'attente : la connexion n'est pas
-    // faite pour traverser un await.
-    let (autorise, utilisateur) = {
-        let db = &state.db;
-        let autorise = envoi_des_erreurs_autorise(db);
-        let utilisateur = db
-            .get_setting(report::USER_KEY)
-            .filter(|v| !v.trim().is_empty())
-            .unwrap_or_else(|| whoami_fallback());
-        (autorise, utilisateur)
-    };
-
+async fn report_error(scope: String, message: String) -> Result<(), String> {
     if let Some(dir) = crate::chemins::dossier_donnees() {
         let horodatage = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         report::append_log(dir, &report::format_log_line(&horodatage, &scope, &message));
     }
-
-    if autorise {
-        report::send(&scope, &message, &utilisateur).await;
-    }
     Ok(())
-}
-
-/// **RIEN NE PART SANS UN « on » EXPLICITE** : la case de Parametres -> General ecrit ce
-/// reglage, et c'est ICI, cote backend, que le refus s'applique. Absent, vide ou autre : non.
-fn envoi_des_erreurs_autorise(db: &storage::db::Database) -> bool {
-    db.get_setting(report::CONSENT_KEY).as_deref() == Some("on")
-}
-
-#[cfg(test)]
-mod tests_transmission {
-    use super::*;
-
-    #[test]
-    fn decocher_la_case_coupe_l_envoi() {
-        let db = storage::db::Database::new(":memory:").unwrap();
-        assert!(!envoi_des_erreurs_autorise(&db), "sans reglage, rien ne part");
-        db.set_setting(report::CONSENT_KEY, "on").unwrap();
-        assert!(envoi_des_erreurs_autorise(&db));
-        db.set_setting(report::CONSENT_KEY, "off").unwrap();
-        assert!(!envoi_des_erreurs_autorise(&db), "la case decochee coupe l'envoi");
-    }
-}
-
-/// Nom par defaut a cote des erreurs : le compte du systeme, faute de mieux.
-/// `USERNAME` est la variable de Windows, `USER`/`LOGNAME` celles d'Unix.
-fn whoami_fallback() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("LOGNAME"))
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "inconnu".to_string())
-}
-
-#[commande]
-/// Fiche technique de la machine, telle qu'elle accompagne les erreurs.
-/// Sert aussi a l'afficher a l'utilisateur : il doit pouvoir voir ce qui serait envoye.
-///
-/// `async fn` et non `fn` : la fiche interroge le serveur audio pour dire quel appareil
-/// serait retenu, et une commande sans `async` s'execute EN LIGNE dans la boucle
-/// principale GTK — l'interface ne repeint plus pendant ce temps. C'etait deja vrai
-/// avant, avec deux `Command::new` (`pactl`, `pw-record`) au meme endroit.
-async fn machine_report() -> report::MachineInfo {
-    taches::lancer_bloquant(|| report::machine_info().clone())
-        .await
-        .unwrap_or_else(|_| report::machine_info().clone())
 }
 
 /// Ecrit une ligne dans un fichier de mise au point, hors du journal de l'application.

@@ -1,6 +1,31 @@
 use super::db::Database;
 use serde::{Deserialize, Serialize};
 
+/// Projet des taches qui n'appartiennent a aucun projet : les idees notees au vol.
+///
+/// Une chaine VIDE et non une colonne nullable : la colonne est `NOT NULL` depuis toujours, la
+/// synchronisation et l'import la transportent deja comme du texte, et aucun projet ne peut
+/// porter ce nom (`create_project` et `rename_project` le refusent).
+pub const SANS_PROJET: &str = "";
+
+/// Prefixe des listes de taches nommees : une liste « Idees » range ses taches sous le projet
+/// `liste:Idees`. Meme raison que `SANS_PROJET` : la colonne voyage deja comme du texte, donc
+/// une liste creee ici arrive sur une autre machine sans rien changer a la synchronisation.
+/// Aucun projet ne peut commencer par ce prefixe (`nom_de_projet_valide`).
+pub const PREFIXE_LISTE: &str = "liste:";
+
+/// Une valeur de `todos.project` qui designe une liste hors projet : « Hors projet » ou une
+/// liste nommee. C'est ce que les commandes sur les listes exigent, pour ne JAMAIS renommer ou
+/// vider un vrai projet a partir d'une valeur envoyee par l'interface.
+pub fn est_une_liste(cle: &str) -> bool {
+    cle == SANS_PROJET || nom_de_liste(cle).is_some()
+}
+
+/// Le nom d'une liste nommee, sans son prefixe ; `None` pour tout le reste.
+fn nom_de_liste(cle: &str) -> Option<&str> {
+    cle.strip_prefix(PREFIXE_LISTE).filter(|n| !n.trim().is_empty())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Todo {
     pub id: i64,
@@ -141,6 +166,41 @@ impl Database {
         Ok(())
     }
 
+    /// Renomme une liste hors projet : ses taches passent sous le nouveau nom. Renommer
+    /// « Hors projet » en fait une liste nommee comme les autres.
+    ///
+    /// Refuse de fusionner deux listes : un renommage qui melangerait en silence les taches de
+    /// deux listes ne se defait pas.
+    pub fn renommer_liste_de_taches(&self, ancienne: &str, nouvelle: &str) -> Result<(), String> {
+        if !est_une_liste(ancienne) || nom_de_liste(nouvelle).is_none() {
+            return Err("Ce n'est pas une liste de tâches.".into());
+        }
+        if ancienne == nouvelle {
+            return Ok(());
+        }
+        let conn = self.conn();
+        let deja: i64 = conn
+            .query_row("SELECT COUNT(*) FROM todos WHERE project=?1", [nouvelle], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+        if deja > 0 {
+            return Err("Une liste porte déjà ce nom.".into());
+        }
+        conn.execute("UPDATE todos SET project=?1 WHERE project=?2", rusqlite::params![nouvelle, ancienne])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Supprime une liste hors projet et TOUTES ses taches, terminees comprises. Rend combien
+    /// ont ete supprimees.
+    pub fn supprimer_liste_de_taches(&self, cle: &str) -> Result<usize, String> {
+        if !est_une_liste(cle) {
+            return Err("Ce n'est pas une liste de tâches.".into());
+        }
+        self.conn()
+            .execute("DELETE FROM todos WHERE project=?1", [cle])
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_pending_todos(&self) -> Result<Vec<Todo>, String> {
         let conn = self.conn();
         let mut stmt = conn
@@ -150,7 +210,7 @@ impl Database {
                  FROM todos t
                  LEFT JOIN projects p ON t.project = p.name
                  WHERE t.done = 0
-                 ORDER BY COALESCE(p.position, 999), t.project, t.position, t.id",
+                 ORDER BY (t.project = '' OR t.project LIKE 'liste:%') DESC, COALESCE(p.position, 999), t.project, t.position, t.id",
             )
             .map_err(|e| e.to_string())?;
 
@@ -169,6 +229,53 @@ mod tests {
 
     /// L'avancement est BORNE en base, pas seulement dans l'interface : une commande Tauri est
     /// appelable depuis n'importe ou, et une barre a -30 % ou 400 % dessinerait n'importe quoi.
+    /// Les taches hors projet passent en tete du tableau de bord : c'est la qu'on les note,
+    /// et un projet qui n'existe pas les rangerait sinon tout en bas, apres les 999.
+    #[test]
+    fn les_taches_hors_projet_passent_en_tete() {
+        let db = Database::new(":memory:").unwrap();
+        db.create_project("alpha", "/tmp/alpha", "", "", &[]).unwrap();
+        db.create_todo("alpha", "dans un projet").unwrap();
+        db.create_todo(crate::storage::SANS_PROJET, "une idee\nsur deux lignes").unwrap();
+        let toutes = db.get_pending_todos().unwrap();
+        assert_eq!(toutes[0].project, "");
+        assert_eq!(toutes[0].text, "une idee\nsur deux lignes", "les sauts de ligne sont gardes");
+    }
+
+    /// Les commandes sur les listes ne touchent JAMAIS un vrai projet : la cle vient de
+    /// l'interface, et un renommage ou une suppression viderait sinon la liste d'un projet.
+    #[test]
+    fn une_liste_se_renomme_et_se_supprime_sans_toucher_aux_projets() {
+        let db = Database::new(":memory:").unwrap();
+        db.create_todo("alpha", "du projet").unwrap();
+        db.create_todo("", "une idee").unwrap();
+
+        db.renommer_liste_de_taches("", "liste:Idees").unwrap();
+        let toutes = db.get_pending_todos().unwrap();
+        assert_eq!(toutes[0].project, "liste:Idees", "les listes passent en tete");
+
+        assert!(db.renommer_liste_de_taches("alpha", "liste:Vol").is_err(), "un projet n'est pas une liste");
+        assert!(db.renommer_liste_de_taches("liste:Idees", "beta").is_err(), "une liste ne devient pas un projet");
+        assert!(db.renommer_liste_de_taches("liste:Idees", "liste:  ").is_err(), "nom vide refuse");
+        assert!(db.supprimer_liste_de_taches("alpha").is_err(), "on ne vide pas un projet");
+
+        db.create_todo("liste:Courses", "pain").unwrap();
+        assert!(db.renommer_liste_de_taches("liste:Courses", "liste:Idees").is_err(), "pas de fusion");
+
+        assert_eq!(db.supprimer_liste_de_taches("liste:Idees").unwrap(), 1);
+        assert_eq!(db.get_todos("alpha").unwrap().len(), 1, "le projet garde sa tache");
+    }
+
+    /// Un projet au nom vide recevrait toutes les taches hors projet.
+    #[test]
+    fn un_projet_ne_peut_pas_porter_un_nom_vide() {
+        let db = Database::new(":memory:").unwrap();
+        assert!(db.create_project("  ", "/tmp/x", "", "", &[]).is_err());
+        db.create_project("beta", "/tmp/beta", "", "", &[]).unwrap();
+        assert!(db.rename_project("beta", "", None).is_err());
+        assert!(db.create_project("liste:Idees", "/tmp/y", "", "", &[]).is_err(), "le prefixe des listes est reserve");
+    }
+
     #[test]
     fn l_avancement_est_borne_entre_0_et_100() {
         let db = Database::new(":memory:").unwrap();

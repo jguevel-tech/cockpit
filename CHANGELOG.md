@@ -23,6 +23,79 @@ le script de release.
   qui manque. Une carte « Branches sans ticket » liste les branches qui ne citent aucun
   ticket : « Créer un ticket » le crée et renomme la branche d'après le gabarit du projet.
 
+## [2.0.0] — 2026-11-16
+
+### Removed
+
+- Le compte Cockpit et la synchronisation entre machines : plus de connexion (mot de passe ou
+  Google), plus de bouton de compte en haut à droite, plus de page « Mon compte ». Vos projets,
+  notes et tâches restent sur cette machine, comme avant. L'écran de connexion du premier
+  lancement disparaît aussi.
+- L'envoi des erreurs aux mainteneurs, et sa case dans Paramètres → Général. Les erreurs restent
+  écrites dans le journal local (`logs/cockpit.log`) : plus rien ne quitte la machine.
+
+## [1.4.0] — 2026-10-19
+
+### Added
+
+- Kubernetes : un bouton « Lancer maintenant » dans le détail d'une tâche planifiée la lance
+  tout de suite, sans attendre sa planification. Une confirmation rappelle le cluster et le
+  namespace, et le pod du lancement apparaît sous la tâche.
+
+## [1.3.0] — 2026-10-16
+
+### Added
+
+- Tâches : des listes hors projet, autant qu'on veut. « + Liste » en crée une, ✎ la renomme
+  (« Hors projet » compris), × la supprime avec ses tâches. Une liste à côté du champ d'ajout
+  dit où va la tâche, et une tâche se glisse d'une liste à l'autre ou vers un projet.
+
+### Changed
+
+- Projets : un nom de projet ne peut plus commencer par « liste: », réservé aux listes de
+  tâches.
+
+## [1.2.0] — 2026-10-16
+
+### Added
+
+- Tâches : un champ en haut du tableau de bord ajoute une tâche rattachée à aucun projet, pour
+  noter une idée au vol. Ces tâches s'affichent en tête, sous « Hors projet », et se glissent
+  sur un projet pour l'y ranger.
+- Tâches : une tâche peut tenir sur plusieurs lignes, à l'ajout comme à la modification.
+  Entrée ajoute, Maj+Entrée passe à la ligne.
+
+### Changed
+
+- Tâches : le texte long d'une tâche s'affiche en entier au lieu d'être coupé par « … ».
+
+## [1.1.0] — 2026-10-14
+
+### Added
+
+- Notes : un champ au-dessus de la liste cherche un mot dans le nom et le texte de toutes les
+  notes du projet, sans tenir compte des accents ni des majuscules. Chaque résultat montre
+  l'extrait trouvé, et la note s'ouvre avec les occurrences surlignées.
+- Notes : Ctrl+F cherche dans la note ouverte, avec un compteur et Entrée / Maj+Entrée pour
+  passer d'une occurrence à l'autre.
+- Notes : les blocs de code sont en couleur. JSON, SQL, YAML, HTML, XML, PHP et les commandes
+  shell sont reconnus seuls ; une liste au coin du bloc permet de choisir une autre langue.
+- Notes : taper « ```json » (ou une autre langue) puis Entrée ouvre un bloc de code, comme en
+  Markdown.
+
+### Fixed
+
+- Fichiers : les mots-clés SQL écrits en majuscules (SELECT, FROM, WHERE…) n'étaient pas en
+  couleur.
+
+## [1.0.0] — 2026-10-06
+
+### Changed
+
+- Cockpit passe en version 1.0.0 : c'est la première version annoncée publiquement.
+- Windows : le service des terminaux affiche le nom « Cockpit » et sa version dans le
+  gestionnaire des tâches et dans les propriétés du fichier.
+
 ## [0.95.3] — 2026-10-01
 
 ### Fixed
